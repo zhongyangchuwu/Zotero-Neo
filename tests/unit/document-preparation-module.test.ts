@@ -1,4 +1,5 @@
-import { describe, expect, it, vi } from 'vitest';
+import type * as CredentialChecks from '../../src/platform/credential-check';
+import { beforeEach, describe, expect, it, vi } from 'vitest';
 import { ModuleHost } from '../../src/core/module-host';
 import {
   createDocumentPreparationModule,
@@ -15,27 +16,54 @@ const native = vi.hoisted(() => ({
   mounts: [] as Array<{
     dispatch: (command: { type: string }) => void;
     models: unknown[];
-    input: { value: string; focus(): void };
+    input: HTMLInputElement;
   }>,
 }));
 const credentials = vi.hoisted(() => ({
   read: vi.fn(() => 'saved-secret'),
+  readSettled: vi.fn<() => Promise<string>>(),
   save: vi.fn(async (_value: string) => {}),
+  check: vi.fn<(...args: [string, string, AbortSignal]) => Promise<string>>(),
+  help: vi.fn(),
 }));
 vi.mock('../../src/platform/document-credentials', () => ({
-  readMinerUToken: credentials.read,
+  readSettledMinerUToken: credentials.readSettled,
   saveMinerUToken: credentials.save,
 }));
+vi.mock('../../src/platform/credential-check', async (importOriginal) => ({
+  ...(await importOriginal<typeof CredentialChecks>()),
+  checkCredential: credentials.check,
+  CREDENTIAL_HELP_URLS: { mineru: 'https://mineru.net' },
+  openCredentialHelp: credentials.help,
+}));
+beforeEach(() => {
+  native.mounts.length = 0;
+  credentials.read.mockReset().mockReturnValue('saved-secret');
+  credentials.readSettled.mockReset().mockImplementation(async () => credentials.read());
+  credentials.save.mockReset().mockImplementation(async (value) => {
+    credentials.read.mockReturnValue(value);
+  });
+  credentials.check.mockReset().mockResolvedValue('valid');
+  credentials.help.mockReset();
+});
 vi.mock('../../src/platform/native-ui', () => ({
-  mountNativeReactView: (options: { dispatch: (command: { type: string }) => void }) => {
+  mountNativeReactView: (options: {
+    root: HTMLElement;
+    dispatch: (command: { type: string }) => void;
+  }) => {
+    const input = options.root.ownerDocument.createElementNS(
+      'http://www.w3.org/1999/xhtml',
+      'input',
+    ) as HTMLInputElement;
+    options.root.append(input);
     const mount = {
       dispatch: options.dispatch,
       models: [] as unknown[],
-      input: { value: '', focus: vi.fn() },
+      input,
     };
     native.mounts.push(mount);
     return {
-      ready: new Promise<void>(() => {}),
+      ready: Promise.resolve(),
       update: (model: unknown) => mount.models.push(model),
       getElement: (part: string) => (part === 'token' ? mount.input : null),
       dispose: vi.fn(),
@@ -130,38 +158,30 @@ describe('document preparation capability', () => {
     expect(service.queue.dispose).not.toHaveBeenCalled();
   });
 
-  it('keeps credentials out of presentation models and leaves admitted work running on close', async () => {
-    const doc = new DocumentFixture();
-    const window = {
-      document: doc,
-      addEventListener: vi.fn(),
-      removeEventListener: vi.fn(),
-    } as unknown as Window;
-    const service = new DocumentPreparationController(vi.fn(), preferences().store);
-    credentials.read.mockClear();
-    credentials.save.mockClear();
-    service.open({
-      window,
-      targets: [{ itemID: 1, libraryID: 1, key: 'ABCDEFGH', title: 'Paper' }],
-      language: () => 'en',
-      themeRoot: () => () => {},
-      isCurrent: () => true,
-    });
-    const mount = native.mounts.at(-1)!;
-    await Promise.resolve();
-    expect(credentials.read).not.toHaveBeenCalled();
+  it('prefills and autosaves without secret models, and leaves admitted parsing running on close', async () => {
+    const fixture = credentialFixture();
+    const { service, open } = fixture;
+    let mount = await open();
+    expect(mount.input.value).toBe('saved-secret');
+    expect(credentials.check).not.toHaveBeenCalled();
+    expect(service.queue.run).not.toHaveBeenCalled();
     mount.input.value = 'explicit-secret';
-    mount.dispatch({ type: 'save' });
+    mount.dispatch({ type: 'credential-change' });
     await Promise.resolve();
-    await Promise.resolve();
-    expect(credentials.save).toHaveBeenCalledWith('explicit-secret');
-    expect(JSON.stringify(mount.models)).not.toContain('explicit-secret');
+    expect(credentials.save).toHaveBeenLastCalledWith('explicit-secret');
+    mount.dispatch({ type: 'close' });
+    mount = await open();
+    expect(mount.input.value).toBe('explicit-secret');
+    expect(JSON.stringify(mount.models)).not.toMatch(/saved-secret|explicit-secret/);
     mount.input.value = '';
+    mount.dispatch({ type: 'credential-change' });
+    await Promise.resolve();
+    expect(credentials.save).toHaveBeenLastCalledWith('');
+    expect((mount.models.at(-1) as PreparationReactModel).credentialStatus).toBe('');
     mount.dispatch({ type: 'start' });
     await Promise.resolve();
-    expect(credentials.read).toHaveBeenCalledOnce();
-    expect(service.queue.run).toHaveBeenCalledWith('saved-secret', expect.any(Function));
-    expect(JSON.stringify(mount.models)).not.toContain('saved-secret');
+    expect(service.queue.run).toHaveBeenCalledWith('', expect.any(Function));
+    expect(credentials.check).not.toHaveBeenCalled();
     mount.dispatch({ type: 'close' });
     expect(service.queue.stop).not.toHaveBeenCalled();
     expect(service.queue.dispose).not.toHaveBeenCalled();
@@ -237,6 +257,246 @@ describe('document preparation capability', () => {
       queue.emit();
       expect(mount.models).toHaveLength(count);
       expect(service.queue.stop).not.toHaveBeenCalled();
+    },
+  );
+});
+
+function credentialFixture() {
+  const doc = new DocumentFixture();
+  const window = {
+    document: doc,
+    addEventListener: vi.fn(),
+    removeEventListener: vi.fn(),
+  } as unknown as Window;
+  const prefs = preferences();
+  const service = new DocumentPreparationController(vi.fn(), prefs.store);
+  const open = async () => {
+    service.open({
+      window,
+      targets: [{ itemID: 1, libraryID: 1, key: 'ABCDEFGH', title: 'Paper' }],
+      language: () => 'en',
+      themeRoot: () => () => {},
+      isCurrent: () => true,
+    });
+    await Promise.resolve();
+    await Promise.resolve();
+    return native.mounts.at(-1)!;
+  };
+  return { service, prefs, open };
+}
+
+describe('preparation credential lifecycle', () => {
+  it('admits rapid edits and deletion while storage is pending, including edits accepted before close', async () => {
+    const slow = Promise.withResolvers<void>();
+    credentials.save.mockReturnValue(slow.promise);
+    const { service, open } = credentialFixture();
+    const mount = await open();
+    for (const value of ['first-secret', 'second-secret', '']) {
+      mount.input.value = value;
+      mount.dispatch({ type: 'credential-change' });
+      expect((mount.models.at(-1) as PreparationReactModel).busy).toBe(false);
+    }
+    expect(credentials.save.mock.calls.map(([value]) => value)).toEqual([
+      'first-secret',
+      'second-secret',
+      '',
+    ]);
+    const count = mount.models.length;
+    service.close();
+    slow.resolve();
+    await Promise.resolve();
+    expect(mount.models).toHaveLength(count);
+    expect(credentials.check).not.toHaveBeenCalled();
+  });
+
+  it.each(['edit', 'close', 'replace', 'service'] as const)(
+    'retires explicit verification after %s',
+    async (action) => {
+      const late = Promise.withResolvers<string>();
+      credentials.check.mockReturnValue(late.promise);
+      const { service, prefs, open } = credentialFixture();
+      const mount = await open();
+      mount.dispatch({ type: 'credential-verify' });
+      expect(credentials.check).toHaveBeenCalledWith(
+        'mineru',
+        'saved-secret',
+        expect.any(AbortSignal),
+      );
+      const signal = credentials.check.mock.calls[0]![2];
+      if (action === 'edit') {
+        mount.input.value = 'replacement-secret';
+        mount.dispatch({ type: 'credential-change' });
+      } else if (action === 'close') {
+        service.close();
+      } else if (action === 'replace') {
+        await open();
+      } else {
+        prefs.change('oxr');
+      }
+      expect(signal.aborted).toBe(true);
+      const count = mount.models.length;
+      late.resolve('invalid');
+      await Promise.resolve();
+      await Promise.resolve();
+      expect(mount.models).toHaveLength(count);
+      expect(
+        (native.mounts.at(-1)!.models.at(-1) as PreparationReactModel).credentialStatus,
+      ).not.toBe(t('credentials.validation.invalid', 'en'));
+      expect(service.queue.run).not.toHaveBeenCalled();
+      service.close();
+    },
+  );
+
+  it('persists completed composition and checks only the explicitly requested visible value', async () => {
+    const { service, open } = credentialFixture();
+    const mount = await open();
+    mount.input.value = 'composing-secret';
+    mount.dispatch({ type: 'credential-composition' });
+    mount.dispatch({ type: 'credential-verify' });
+    expect(credentials.save).not.toHaveBeenCalled();
+    expect(credentials.check).not.toHaveBeenCalled();
+    mount.input.value = 'completed-secret';
+    mount.dispatch({ type: 'credential-change' });
+    expect(credentials.save).toHaveBeenLastCalledWith('completed-secret');
+    expect(credentials.check).not.toHaveBeenCalled();
+    mount.dispatch({ type: 'credential-verify' });
+    await vi.waitFor(() =>
+      expect((mount.models.at(-1) as PreparationReactModel).credentialStatus).toBe(
+        t('credentials.validation.valid', 'en'),
+      ),
+    );
+    expect(service.queue.run).not.toHaveBeenCalled();
+    mount.dispatch({ type: 'credential-help' });
+    expect(credentials.help).toHaveBeenCalledWith('mineru');
+    service.close();
+  });
+});
+
+describe('preparation settled credential storage', () => {
+  it.each(['new-secret', ''])(
+    'prefills another presentation from shared pending storage value %j',
+    async (value) => {
+      const first = credentialFixture();
+      const mount = await first.open();
+      const gate = Promise.withResolvers<void>();
+      const committed = gate.promise.then(() => {
+        credentials.read.mockReturnValue(value);
+      });
+      credentials.save.mockReturnValue(committed);
+      credentials.readSettled.mockImplementation(async () => {
+        await committed;
+        return credentials.read();
+      });
+      mount.input.value = value;
+      mount.dispatch({ type: 'credential-change' });
+      first.service.close();
+      const second = credentialFixture();
+      const reopened = await second.open();
+      expect(reopened.input.value).toBe('');
+      gate.resolve();
+      await committed;
+      await vi.waitFor(() => expect(reopened.input.value).toBe(value));
+      expect((reopened.models.at(-1) as PreparationReactModel).credentialStatus).toBe('');
+      expect(credentials.check).not.toHaveBeenCalled();
+      second.service.close();
+    },
+  );
+
+  it.each(['edit', 'close', 'replace', 'service'] as const)(
+    'does not publish a settled prefill after %s',
+    async (action) => {
+      const settled = Promise.withResolvers<string>();
+      credentials.readSettled.mockReturnValue(settled.promise);
+      const { service, prefs, open } = credentialFixture();
+      const mount = await open();
+      if (action === 'edit') {
+        mount.input.value = 'fresh-secret';
+        mount.dispatch({ type: 'credential-change' });
+      } else if (action === 'close') {
+        service.close();
+      } else if (action === 'replace') {
+        await open();
+        native.mounts.at(-1)!.input.value = 'replacement-secret';
+        native.mounts.at(-1)!.dispatch({ type: 'credential-change' });
+      } else {
+        prefs.change('oxr');
+      }
+      settled.resolve('stale-secret');
+      await settled.promise;
+      await Promise.resolve();
+      expect(mount.input.value).toBe(action === 'edit' ? 'fresh-secret' : '');
+      if (action === 'replace')
+        expect(native.mounts.at(-1)!.input.value).toBe('replacement-secret');
+      expect(credentials.check).not.toHaveBeenCalled();
+      service.close();
+    },
+  );
+
+  it.each(['resolve', 'reject'] as const)(
+    'waits for the current save to %s before processing one explicit verification',
+    async (outcome) => {
+      const { service, open } = credentialFixture();
+      const mount = await open();
+      const write = Promise.withResolvers<void>();
+      credentials.save.mockReturnValue(write.promise);
+      mount.input.value = 'unsaved-secret';
+      mount.dispatch({ type: 'credential-change' });
+      mount.dispatch({ type: 'credential-verify' });
+      mount.dispatch({ type: 'credential-verify' });
+      expect((mount.models.at(-1) as PreparationReactModel).busy).toBe(false);
+      expect(credentials.check).not.toHaveBeenCalled();
+      if (outcome === 'resolve') {
+        write.resolve();
+        await vi.waitFor(() =>
+          expect((mount.models.at(-1) as PreparationReactModel).credentialStatus).toBe(
+            t('credentials.validation.valid', 'en'),
+          ),
+        );
+        expect(credentials.check).toHaveBeenCalledOnce();
+      } else {
+        write.reject(new Error('storage locked'));
+        await vi.waitFor(() =>
+          expect((mount.models.at(-1) as PreparationReactModel).credentialStatus).toBe(
+            t('documentCredentials.unavailable', 'en'),
+          ),
+        );
+        mount.dispatch({ type: 'credential-verify' });
+        expect(credentials.check).not.toHaveBeenCalled();
+        expect((mount.models.at(-1) as PreparationReactModel).credentialStatus).toBe(
+          t('documentCredentials.unavailable', 'en'),
+        );
+      }
+      expect(service.queue.run).not.toHaveBeenCalled();
+      expect(JSON.stringify(mount.models)).not.toContain('unsaved-secret');
+      service.close();
+    },
+  );
+
+  it.each(['edit', 'close', 'replace', 'service'] as const)(
+    'retires verification waiting on storage after %s',
+    async (action) => {
+      const { service, prefs, open } = credentialFixture();
+      const mount = await open();
+      const write = Promise.withResolvers<void>();
+      credentials.save.mockReturnValue(write.promise);
+      mount.input.value = 'pending-secret';
+      mount.dispatch({ type: 'credential-change' });
+      mount.dispatch({ type: 'credential-verify' });
+      if (action === 'edit') {
+        mount.input.value = 'fresh-secret';
+        mount.dispatch({ type: 'credential-change' });
+      } else if (action === 'close') {
+        service.close();
+      } else if (action === 'replace') {
+        await open();
+      } else {
+        prefs.change('oxr');
+      }
+      write.resolve();
+      await write.promise;
+      await Promise.resolve();
+      expect(credentials.check).not.toHaveBeenCalled();
+      service.close();
     },
   );
 });

@@ -5,7 +5,13 @@ import { mineruDocumentCacheKey } from '../../document-analysis/mineru-client';
 import { DOCUMENT_PROVIDER_KEY, selectedDocumentCacheKey } from '../../document-analysis/settings';
 import { isDeadObject } from '../../platform/cross-compartment';
 import { asElement } from '../../platform/dom';
-import { readMinerUToken, saveMinerUToken } from '../../platform/document-credentials';
+import { readSettledMinerUToken, saveMinerUToken } from '../../platform/document-credentials';
+import {
+  checkCredential,
+  CREDENTIAL_HELP_URLS,
+  createCredentialAbortController,
+  openCredentialHelp,
+} from '../../platform/credential-check';
 import { mountNativeReactView } from '../../platform/native-ui';
 import type { NativeReactView } from '../../ui/react/types';
 import { t } from '../../i18n';
@@ -45,7 +51,11 @@ interface View {
   focus: HTMLElement | null;
   clean(): void;
   pending: boolean;
-  credentialPending: boolean;
+  credentialRevision: number;
+  credentialPrefillRevision: number;
+  credentialCheck?: AbortController;
+  credentialWrite?: Promise<boolean>;
+  credentialStorageError: boolean;
   credentialStatus: string;
   statusError: boolean;
 }
@@ -107,8 +117,10 @@ export class DocumentPreparationController implements DocumentPreparationPort {
       composition,
       focus,
       pending: true,
-      credentialPending: false,
-      credentialStatus: t('documentCredentials.hint', host.language()),
+      credentialRevision: 0,
+      credentialPrefillRevision: 0,
+      credentialStorageError: false,
+      credentialStatus: '',
       statusError: false,
       clean: () => {
         const failure = new CleanupFailure();
@@ -149,11 +161,20 @@ export class DocumentPreparationController implements DocumentPreparationPort {
           case 'retry':
             void this.#run(view, false);
             break;
-          case 'save':
-            void this.#save(view, false);
+          case 'credential-change':
+            view.composition.active = false;
+            void this.#save(view);
             break;
-          case 'clear':
-            void this.#save(view, true);
+          case 'credential-composition':
+            view.composition.active = true;
+            this.#retireCredential(view);
+            this.#render(view);
+            break;
+          case 'credential-verify':
+            void this.#verifyCredential(view);
+            break;
+          case 'credential-help':
+            openCredentialHelp('mineru');
             break;
         }
       },
@@ -161,7 +182,12 @@ export class DocumentPreparationController implements DocumentPreparationPort {
     view.react = react;
     unsubscribe = this.queue.subscribe(() => this.#render(view));
     unobserve =
-      this.#preferences.observe?.(DOCUMENT_PROVIDER_KEY, () => this.#render(view)) ?? (() => {});
+      this.#preferences.observe?.(DOCUMENT_PROVIDER_KEY, () => {
+        view.credentialPrefillRevision++;
+        this.#retireCredentialCheck(view);
+        if (!view.credentialStorageError) view.credentialStatus = '';
+        this.#render(view);
+      }) ?? (() => {});
     root.addEventListener('keydown', (event) => this.handleKey(event));
     host.window.addEventListener('unload', unload, { once: true });
     this.#render(view);
@@ -171,6 +197,7 @@ export class DocumentPreparationController implements DocumentPreparationPort {
         if (!this.#current(view)) return;
         const input = this.#part(view, 'token') as HTMLInputElement | null;
         if (input) unbind = bindCompositionState(input, composition);
+        if (view.credentialRevision === 0) void this.#loadCredential(view);
         (this.queue.running ? this.#part(view, 'stop') : input)?.focus();
       })
       .catch(() => {});
@@ -189,7 +216,7 @@ export class DocumentPreparationController implements DocumentPreparationPort {
     const rows = this.queue.rows;
     const done = rows.filter((r) => r.state === 'cached' || r.state === 'complete').length;
     const failed = rows.filter((r) => r.state === 'failed').length;
-    const busy = this.queue.running || view.pending || view.credentialPending;
+    const busy = this.queue.running || view.pending;
     let status =
       this.queue.storageFailed || view.statusError
         ? this.#text(view, 'storageError')
@@ -208,8 +235,11 @@ export class DocumentPreparationController implements DocumentPreparationPort {
       selection: `${this.#text(view, 'selection')} ${view.host.targets.length}`,
       names: view.host.targets.slice(0, MAX_PREPARATION_FILES + 1).map((target) => target.title),
       token: this.#credential(view, 'token'),
-      save: this.#credential(view, 'save'),
-      clear: this.#credential(view, 'clear'),
+      verify: this.#credential(view, 'verify'),
+      credentialHelp: this.#credential(view, 'help'),
+      credentialHelpURL: CREDENTIAL_HELP_URLS.mineru,
+      credentialHint: this.#credential(view, 'hint'),
+      credentialChecking: !!view.credentialCheck,
       credentialStatus: view.credentialStatus,
       start: this.#text(view, rows.length ? 'replace' : 'start'),
       retry: this.#text(view, 'retry'),
@@ -240,38 +270,96 @@ export class DocumentPreparationController implements DocumentPreparationPort {
   #render(view: View): void {
     if (this.#current(view)) view.react?.update(this.#model(view));
   }
-  async #save(view: View, clear: boolean): Promise<void> {
-    if (!this.#current(view) || view.pending || view.credentialPending || this.queue.running)
-      return;
+  #retireCredentialCheck(view: View): void {
+    view.credentialCheck?.abort();
+    view.credentialCheck = undefined;
+  }
+  #retireCredential(view: View): void {
+    view.credentialRevision++;
+    this.#retireCredentialCheck(view);
+    view.credentialWrite = undefined;
+    view.credentialStorageError = false;
+    view.credentialStatus = '';
+  }
+  async #loadCredential(view: View): Promise<void> {
     const input = this.#part(view, 'token') as HTMLInputElement | null;
     if (!input) return;
-    const doc = view.root.ownerDocument;
-    const ownedFocus = this.#part(view, 'credentials')?.contains(doc.activeElement) ?? false;
-    const forget = clear || !input.value.trim();
-    view.credentialPending = true;
-    this.#render(view);
+    const revision = view.credentialRevision;
+    const prefillRevision = view.credentialPrefillRevision;
+    const initial = input.value;
+    const current = () =>
+      this.#current(view) &&
+      view.credentialRevision === revision &&
+      view.credentialPrefillRevision === prefillRevision &&
+      this.#part(view, 'token') === input &&
+      input.value === initial;
     try {
-      await saveMinerUToken(forget ? '' : input.value);
-      if (this.#current(view)) {
-        if (forget) input.value = '';
-        view.credentialStatus = this.#credential(view, forget ? 'cleared' : 'saved');
-      }
+      const value = await readSettledMinerUToken();
+      if (!current()) return;
+      this.#retireCredentialCheck(view);
+      input.value = value;
+      view.credentialStatus = '';
     } catch {
-      if (this.#current(view)) view.credentialStatus = this.#credential(view, 'unavailable');
-    } finally {
-      if (this.#current(view)) {
-        view.credentialPending = false;
+      if (!current()) return;
+      this.#retireCredentialCheck(view);
+      view.credentialStorageError = true;
+      view.credentialStatus = this.#credential(view, 'unavailable');
+    }
+    this.#render(view);
+  }
+  #save(view: View): void {
+    this.#retireCredential(view);
+    const revision = view.credentialRevision;
+    const input = this.#part(view, 'token') as HTMLInputElement | null;
+    this.#render(view);
+    if (!input) return;
+    const value = input.value;
+    // Once admitted, storage writes survive presentation replacement and close.
+    view.credentialWrite = saveMinerUToken(value).then(
+      () => true,
+      () => {
+        if (this.#current(view) && view.credentialRevision === revision && input.value === value) {
+          view.credentialStorageError = true;
+          view.credentialStatus = this.#credential(view, 'unavailable');
+          this.#render(view);
+        }
+        return false;
+      },
+    );
+  }
+  async #verifyCredential(view: View): Promise<void> {
+    if (view.composition.active || view.credentialCheck || view.credentialStorageError) return;
+    const input = this.#part(view, 'token') as HTMLInputElement | null;
+    if (!input) return;
+    const revision = view.credentialRevision;
+    const value = input.value;
+    const check = createCredentialAbortController();
+    view.credentialCheck = check;
+    const current = () =>
+      this.#current(view) &&
+      !check.signal.aborted &&
+      view.credentialCheck === check &&
+      view.credentialRevision === revision &&
+      input.value === value;
+    view.credentialStatus = t('credentials.validation.checking', view.host.language());
+    this.#render(view);
+    if (view.credentialWrite) {
+      const saved = await view.credentialWrite;
+      if (!current()) return;
+      if (!saved) {
+        view.credentialCheck = undefined;
+        view.credentialStatus = this.#credential(view, 'unavailable');
         this.#render(view);
-        if (
-          ownedFocus &&
-          (!doc.activeElement ||
-            doc.activeElement === view.root ||
-            doc.activeElement === doc.body ||
-            doc.activeElement === doc.documentElement)
-        )
-          input.focus();
+        return;
       }
     }
+    if (!current()) return;
+    const result = await checkCredential('mineru', value, check.signal).catch(() => 'unavailable');
+    if (!current()) return;
+    view.credentialCheck = undefined;
+    view.credentialStatus =
+      result === 'cancelled' ? '' : t(`credentials.validation.${result}`, view.host.language());
+    this.#render(view);
   }
   async #run(view: View, replace: boolean): Promise<void> {
     if (
@@ -281,15 +369,7 @@ export class DocumentPreparationController implements DocumentPreparationPort {
       return;
     const input = this.#part(view, 'token') as HTMLInputElement | null;
     if (!input) return;
-    let token = input.value;
-    if (!token) {
-      try {
-        token = readMinerUToken();
-      } catch {
-        view.credentialStatus = this.#credential(view, 'unavailable');
-      }
-    }
-    input.value = '';
+    const token = input.value;
     view.pending = true;
     view.statusError = false;
     this.#render(view);
@@ -329,7 +409,9 @@ export class DocumentPreparationController implements DocumentPreparationPort {
       this.#part(view, 'close')?.focus();
     } else if (key === 'tab' || key === 'shift+tab') {
       const controls = (
-        Array.from(view.root.querySelectorAll<HTMLElement>('input,button,summary')) as HTMLElement[]
+        Array.from(
+          view.root.querySelectorAll<HTMLElement>('input,button,a[href],summary'),
+        ) as HTMLElement[]
       ).filter((n) => !(n as HTMLButtonElement).disabled && n.getClientRects().length > 0);
       if (key === 'tab' && event.target === controls.at(-1)) {
         event.preventDefault();
@@ -351,6 +433,7 @@ export class DocumentPreparationController implements DocumentPreparationPort {
     const alive = !isDeadObject(view.backdrop),
       restore = alive && focus && view.host.isCurrent();
     const failure = new CleanupFailure();
+    failure.run(() => this.#retireCredential(view));
     failure.run(view.clean);
     if (alive) failure.run(() => view.backdrop.remove());
     failure.rethrow();

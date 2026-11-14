@@ -16,6 +16,15 @@ import { computeSelectionPosition } from '../../src/toolkit/reader/selection-geo
 import { readerTextBoundaryPosition, readerTextSpans } from '../../src/toolkit/reader/text-source';
 import type { DocumentRegion } from '../../src/document-analysis/contracts';
 import { textAdmissionFixture } from '../fixtures/reader-text-admission';
+import { emptyDocumentCorrections } from '../../src/document-analysis/corrections';
+
+vi.mock('../../src/platform/document-corrections', () => ({
+  readAttachmentDocumentCorrections: async (
+    _id: number,
+    raw: Parameters<typeof emptyDocumentCorrections>[0],
+    key: Parameters<typeof emptyDocumentCorrections>[1],
+  ) => emptyDocumentCorrections(raw, key),
+}));
 
 const originalComponents = Reflect.get(globalThis, 'Components');
 const originalZotero = Reflect.get(globalThis, 'Zotero');

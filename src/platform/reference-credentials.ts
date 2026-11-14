@@ -20,8 +20,21 @@ export function readReferenceKey(): string {
 
 let mutationQueue: Promise<void> = Promise.resolve();
 
+/** Wait for all shared edits before prefilling a password input; callers still fence retired views and input. */
+export async function readSettledReferenceKey(): Promise<string> {
+  let pending: Promise<void>;
+  do {
+    pending = mutationQueue;
+    await pending;
+  } while (pending !== mutationQueue);
+  return readReferenceKey();
+}
+
 export function changeReferenceKey(value: string | null): Promise<void> {
-  const mutation = mutationQueue.then(() => updateReferenceKey(value));
+  const normalized = value?.trim() || null;
+  if (normalized && (normalized.length > 8192 || /[\r\n]/u.test(normalized)))
+    return Promise.reject(new Error('Invalid Semantic Scholar key'));
+  const mutation = mutationQueue.then(() => updateReferenceKey(normalized));
   mutationQueue = mutation.catch(() => {});
   return mutation;
 }
@@ -32,6 +45,7 @@ async function updateReferenceKey(value: string | null): Promise<void> {
     for (const login of previous) manager().removeLogin(login);
     return;
   }
+  if (previous.length === 1 && previous[0].password === value) return;
   const classes = Components.classes as unknown as Record<
     string,
     { createInstance(iid: unknown): nsILoginInfo }

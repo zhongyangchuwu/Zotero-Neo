@@ -27,6 +27,14 @@ import {
   observeAttachmentDocumentCache,
 } from '../../src/platform/document-analysis-cache';
 
+import {
+  readAttachmentDocumentCorrections,
+  saveAttachmentDocumentCorrections,
+} from '../../src/platform/document-corrections';
+import {
+  changeDocumentCorrection,
+  emptyDocumentCorrections,
+} from '../../src/document-analysis/corrections';
 const source: DocumentSource = {
   fingerprint: 'original',
   fileName: 'paper.pdf',
@@ -320,5 +328,215 @@ describe('attachment-owned cache files', () => {
     files.getContentsAsync.mockClear();
     expect(await cache.read(source, key)).toBeNull();
     expect(files.getContentsAsync).not.toHaveBeenCalled();
+  });
+});
+
+describe('attachment-owned correction sidecars', () => {
+  it('reopens and restores local edits without overwriting the original parser cache', async () => {
+    await attachmentDocumentCache(7).write(source, key, parsed, async () => true);
+    const previous = await readAttachmentDocumentCorrections(7, parsed, key);
+    const next = changeDocumentCorrection(previous, parsed, key, 'caption', {
+      type: 'caption',
+      regionID: 'caption',
+      bodyID: 'image',
+    });
+    expect(
+      await saveAttachmentDocumentCorrections({
+        itemID: 7,
+        parsed,
+        key,
+        previous,
+        next,
+        current: async () => true,
+      }),
+    ).toBe(true);
+    expect(await readAttachmentDocumentCorrections(7, parsed, key)).toEqual(next);
+    expect((await attachmentDocumentCache(7).read(source, key))?.parsed).toEqual(parsed);
+    expect(readdirSync(directory).filter((n) => n.includes('corrections'))).toHaveLength(1);
+    const restored = changeDocumentCorrection(next, parsed, key, 'caption', null);
+    await saveAttachmentDocumentCorrections({
+      itemID: 7,
+      parsed,
+      key,
+      previous: next,
+      next: restored,
+      current: async () => true,
+    });
+    expect((await readAttachmentDocumentCorrections(7, parsed, key)).edits).toEqual([]);
+  });
+
+  it('keeps changed PDFs, changed parse geometry with reused IDs, and different services inert', async () => {
+    const previous = emptyDocumentCorrections(parsed, key);
+    const next = changeDocumentCorrection(previous, parsed, key, 'caption', {
+      type: 'body',
+      regionID: 'caption',
+    });
+    await saveAttachmentDocumentCorrections({
+      itemID: 7,
+      parsed,
+      key,
+      previous,
+      next,
+      current: async () => true,
+    });
+    for (const changed of [
+      { ...parsed, sourceFingerprint: 'replacement' },
+      {
+        ...parsed,
+        regions: parsed.regions.map((r) => ({ ...r, rect: [20, 20, 100, 100] as const })),
+      },
+      { ...parsed, modelRevision: 'another-model' },
+    ])
+      expect((await readAttachmentDocumentCorrections(7, changed, key)).edits).toEqual([]);
+    expect(
+      (await readAttachmentDocumentCorrections(7, parsed, { ...key, configuration: 'other' }))
+        .edits,
+    ).toEqual([]);
+    expect(await readAttachmentDocumentCorrections(7, parsed, key)).toEqual(next);
+  });
+
+  it('serializes optimistic commits across windows instead of silently losing another saved edit', async () => {
+    const previous = emptyDocumentCorrections(parsed, key);
+    const first = changeDocumentCorrection(previous, parsed, key, 'caption', {
+      type: 'body',
+      regionID: 'caption',
+    });
+    const second = changeDocumentCorrection(previous, parsed, key, 'image', {
+      type: 'body',
+      regionID: 'image',
+    });
+    const results = await Promise.allSettled([
+      saveAttachmentDocumentCorrections({
+        itemID: 7,
+        parsed,
+        key,
+        previous,
+        next: first,
+        current: async () => true,
+      }),
+      saveAttachmentDocumentCorrections({
+        itemID: 7,
+        parsed,
+        key,
+        previous,
+        next: second,
+        current: async () => true,
+      }),
+    ]);
+    expect(results[0]).toMatchObject({ status: 'fulfilled', value: true });
+    expect(results[1]).toMatchObject({ status: 'rejected', reason: expect.any(Error) });
+    expect(await readAttachmentDocumentCorrections(7, parsed, key)).toEqual(first);
+  });
+
+  it('does not notify or replace data for a late invocation or failed atomic move, and removes staging files', async () => {
+    const previous = emptyDocumentCorrections(parsed, key);
+    const next = changeDocumentCorrection(previous, parsed, key, 'caption', {
+      type: 'body',
+      regionID: 'caption',
+    });
+    const saved = vi.fn();
+    const stop = observeAttachmentDocumentCache(7, saved);
+    try {
+      let calls = 0;
+      expect(
+        await saveAttachmentDocumentCorrections({
+          itemID: 7,
+          parsed,
+          key,
+          previous,
+          next,
+          current: async () => ++calls === 1,
+        }),
+      ).toBe(false);
+      expect(readdirSync(directory)).toEqual([]);
+      expect(saved).not.toHaveBeenCalled();
+      move.mockRejectedValueOnce(new Error('disk unavailable'));
+      await expect(
+        saveAttachmentDocumentCorrections({
+          itemID: 7,
+          parsed,
+          key,
+          previous,
+          next,
+          current: async () => true,
+        }),
+      ).rejects.toThrow('disk unavailable');
+      expect(readdirSync(directory)).toEqual([]);
+      expect(saved).not.toHaveBeenCalled();
+      await saveAttachmentDocumentCorrections({
+        itemID: 7,
+        parsed,
+        key,
+        previous,
+        next,
+        current: async () => true,
+      });
+      expect(saved).toHaveBeenCalledOnce();
+    } finally {
+      stop();
+    }
+  });
+
+  it('rejects malformed matching sidecars and bounds disk reads', async () => {
+    const previous = emptyDocumentCorrections(parsed, key);
+    const next = changeDocumentCorrection(previous, parsed, key, 'caption', {
+      type: 'body',
+      regionID: 'caption',
+    });
+    await saveAttachmentDocumentCorrections({
+      itemID: 7,
+      parsed,
+      key,
+      previous,
+      next,
+      current: async () => true,
+    });
+    const file = join(directory, readdirSync(directory)[0]!);
+    writeFileSync(
+      file,
+      JSON.stringify({ ...next, edits: [{ type: 'body', regionID: 'unknown' }] }),
+    );
+    await expect(readAttachmentDocumentCorrections(7, parsed, key)).rejects.toThrow('Invalid');
+    truncateSync(file, 32 * 1024 * 1024 + 1);
+    await expect(readAttachmentDocumentCorrections(7, parsed, key)).rejects.toThrow('size limit');
+  });
+  it('bounds pending correction commits and releases capacity after cancelled owners', async () => {
+    const previous = emptyDocumentCorrections(parsed, key);
+    const next = changeDocumentCorrection(previous, parsed, key, 'caption', {
+      type: 'body',
+      regionID: 'caption',
+    });
+    const started = Promise.withResolvers<void>();
+    const gate = Promise.withResolvers<boolean>();
+    const current = async () => {
+      started.resolve();
+      return gate.promise;
+    };
+    const writes = Array.from({ length: 4 }, () =>
+      saveAttachmentDocumentCorrections({ itemID: 7, parsed, key, previous, next, current }),
+    );
+    await started.promise;
+    await expect(
+      saveAttachmentDocumentCorrections({
+        itemID: 7,
+        parsed,
+        key,
+        previous,
+        next,
+        current: async () => true,
+      }),
+    ).rejects.toThrow('Too many pending');
+    gate.resolve(false);
+    expect(await Promise.all(writes)).toEqual([false, false, false, false]);
+    expect(
+      await saveAttachmentDocumentCorrections({
+        itemID: 7,
+        parsed,
+        key,
+        previous,
+        next,
+        current: async () => true,
+      }),
+    ).toBe(true);
   });
 });

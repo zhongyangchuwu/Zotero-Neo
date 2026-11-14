@@ -22,41 +22,50 @@ export function readMinerUToken(): string {
   return logins()[0]?.password ?? '';
 }
 
+/** Wait for all shared edits before prefilling a password input; callers still fence retired views and input. */
+export async function readSettledMinerUToken(): Promise<string> {
+  let pending: Promise<void>;
+  do {
+    pending = writing;
+    await pending;
+  } while (pending !== writing);
+  return readMinerUToken();
+}
+
 /** Store in Zotero's login manager, shared by single/batch analysis; never persist secrets as preferences or journal fields. */
 export function saveMinerUToken(value: string): Promise<void> {
   const token = value.trim();
   if (token.length > 8192 || /[\r\n]/u.test(token))
     return Promise.reject(new Error('Invalid MinerU token'));
-  const task = writing
-    .catch(() => {})
-    .then(async () => {
-      const previous = logins();
-      if (!token) {
-        for (const login of previous) manager().removeLogin(login);
-        return;
-      }
-      const classes = Components.classes as unknown as Record<
-        string,
-        { createInstance(iid: unknown): nsILoginInfo }
-      >;
-      const login = classes['@mozilla.org/login-manager/loginInfo;1'].createInstance(
-        Components.interfaces.nsILoginInfo,
-      );
-      // XPIDL-generated declarations omit nullable strings; this is an HTTP-realm login, not a form login.
-      const initialize = login.init as unknown as (
-        origin: string,
-        action: null,
-        realm: string,
-        username: string,
-        password: string,
-        userField: string,
-        passwordField: string,
-      ) => void;
-      initialize.call(login, ORIGIN, null, REALM, USERNAME, token, '', '');
-      if (previous[0]) manager().modifyLogin(previous[0], login);
-      else await manager().addLoginAsync(login);
-      for (const duplicate of previous.slice(1)) manager().removeLogin(duplicate);
-    });
-  writing = task;
+  const task = writing.then(async () => {
+    const previous = logins();
+    if (!token) {
+      for (const login of previous) manager().removeLogin(login);
+      return;
+    }
+    if (previous.length === 1 && previous[0].password === token) return;
+    const classes = Components.classes as unknown as Record<
+      string,
+      { createInstance(iid: unknown): nsILoginInfo }
+    >;
+    const login = classes['@mozilla.org/login-manager/loginInfo;1'].createInstance(
+      Components.interfaces.nsILoginInfo,
+    );
+    // XPIDL-generated declarations omit nullable strings; this is an HTTP-realm login, not a form login.
+    const initialize = login.init as unknown as (
+      origin: string,
+      action: null,
+      realm: string,
+      username: string,
+      password: string,
+      userField: string,
+      passwordField: string,
+    ) => void;
+    initialize.call(login, ORIGIN, null, REALM, USERNAME, token, '', '');
+    if (previous[0]) manager().modifyLogin(previous[0], login);
+    else await manager().addLoginAsync(login);
+    for (const duplicate of previous.slice(1)) manager().removeLogin(duplicate);
+  });
+  writing = task.catch(() => {});
   return task;
 }

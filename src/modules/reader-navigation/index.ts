@@ -13,7 +13,7 @@ import { ReaderNativeSidebar, type ReaderNativeSidebarHost } from './native-side
 import { ReaderCaptionTargets } from './caption-targets';
 import type { ReaderCaptionTarget } from './caption-targets';
 import type { PreferenceStore } from '../../core/preference-store';
-import { readReaderDocumentCache } from '../../reader/document-cache';
+import { readReaderDocument } from '../../reader/document-cache';
 import { observeAttachmentDocumentCache } from '../../platform/document-analysis-cache';
 import { DOCUMENT_PROVIDER_KEY, OXR_ENDPOINT_KEY } from '../../document-analysis/settings';
 import { t } from '../../i18n';
@@ -120,7 +120,7 @@ export function createReaderNavigationModule(
       ports.preferences
         ? {
             read: () =>
-              readReaderDocumentCache(ports.reader, ports.preferences!, () => scope.isCurrent()),
+              readReaderDocument(ports.reader, ports.preferences!, () => scope.isCurrent()),
             unnamedTitle: (kind, pageIndex) =>
               `${t(`reader.sidebar.${kind}`, ports.sidebar.language())} · ${pageIndex + 1}`,
           }

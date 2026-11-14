@@ -146,7 +146,7 @@ describe('native reference document', () => {
       paragraph('continued on next page. arXiv:1512.03385', 6, [10, 30, 80, 40]),
     ];
     const { document: result } = await readReaderReferenceDocument(reader, () => true, window);
-    expect(result.bibliographyCoverage).toBe('complete');
+    expect(result.bibliographyCoverage).toBe('numbered');
     expect(result.entries.map((entry) => entry.label)).toEqual(['1', '2', '3']);
     expect(result.entries[2].text).toContain('Uncited work: continued on next page');
     expect(result.entries[2].arxivID).toBe('1512.03385');

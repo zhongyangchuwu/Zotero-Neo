@@ -44,8 +44,6 @@ export interface ReferenceMetadataService {
     mode?: 'cache-only' | 'refresh',
   ): Promise<ReferenceLookupResult>;
   clearCache(): Promise<void>;
-  hasSemanticScholarKey(): Promise<boolean>;
-  setSemanticScholarKey(key: string | null): Promise<void>;
   dispose(): void;
 }
 

@@ -1,0 +1,4868 @@
+{
+  "schemaVersion": 1,
+  "run": {
+    "id": "mineru-authorized-1794632912622",
+    "sourceCommit": "61bcbdf415c1785fe925cd4d78024fdc2c0c4af1",
+    "sourceTree": "working-tree",
+    "harnessSha256": "5335ad672ffdc05305916e8cfe367d5816f75d012248e7dcf5cad8d083072971",
+    "startedAt": "2026-11-14T05:08:32.623Z",
+    "protocol": "Explicit user authorization: 24 fixed public PDFs. Real production DocumentPreparationQueue, host, protocol and cache. OmniDocBench was first uploaded using the installed real comparison UI and is reused without a second upload. Other 23 sources are first cloud parses. Cold duration is recorded upload/provider/queue/download elapsed; cache duration includes preparation, exact-source validation and cache read. No warm re-upload or AI QA request. No UI task PASS inferred.",
+    "host": "WINNT Zotero 10.0.8",
+    "cacheKey": {
+      "backend": "mineru",
+      "adapterVersion": 1,
+      "configuration": "{\"endpoint\":\"https://mineru.net/api/v4\",\"model_version\":\"vlm\",\"enable_table\":true,\"enable_formula\":true,\"language\":\"en\"}"
+    },
+    "finishedAt": "2026-11-14T05:12:20.906Z",
+    "rows": [
+      {
+        "itemID": 2,
+        "state": "complete",
+        "failure": null
+      },
+      {
+        "itemID": 3,
+        "state": "complete",
+        "failure": null
+      },
+      {
+        "itemID": 4,
+        "state": "complete",
+        "failure": null
+      },
+      {
+        "itemID": 5,
+        "state": "complete",
+        "failure": null
+      },
+      {
+        "itemID": 6,
+        "state": "complete",
+        "failure": null
+      },
+      {
+        "itemID": 7,
+        "state": "complete",
+        "failure": null
+      },
+      {
+        "itemID": 8,
+        "state": "complete",
+        "failure": null
+      },
+      {
+        "itemID": 9,
+        "state": "complete",
+        "failure": null
+      },
+      {
+        "itemID": 10,
+        "state": "complete",
+        "failure": null
+      },
+      {
+        "itemID": 11,
+        "state": "complete",
+        "failure": null
+      },
+      {
+        "itemID": 12,
+        "state": "complete",
+        "failure": null
+      },
+      {
+        "itemID": 13,
+        "state": "complete",
+        "failure": null
+      },
+      {
+        "itemID": 14,
+        "state": "complete",
+        "failure": null
+      },
+      {
+        "itemID": 26,
+        "state": "cached",
+        "failure": null
+      },
+      {
+        "itemID": 16,
+        "state": "complete",
+        "failure": null
+      },
+      {
+        "itemID": 17,
+        "state": "complete",
+        "failure": null
+      },
+      {
+        "itemID": 18,
+        "state": "complete",
+        "failure": null
+      },
+      {
+        "itemID": 19,
+        "state": "complete",
+        "failure": null
+      },
+      {
+        "itemID": 20,
+        "state": "complete",
+        "failure": null
+      },
+      {
+        "itemID": 21,
+        "state": "complete",
+        "failure": null
+      },
+      {
+        "itemID": 22,
+        "state": "complete",
+        "failure": null
+      },
+      {
+        "itemID": 23,
+        "state": "complete",
+        "failure": null
+      },
+      {
+        "itemID": 24,
+        "state": "complete",
+        "failure": null
+      },
+      {
+        "itemID": 25,
+        "state": "complete",
+        "failure": null
+      }
+    ]
+  },
+  "corpusDocuments": 24,
+  "corpus": [
+    {
+      "id": "attention",
+      "title": "Attention Is All You Need",
+      "pdf": {
+        "url": "https://arxiv.org/pdf/1706.03762v1",
+        "sha256": "0a9bff1be3575cf9fe26a4a3d3a9175bc791ecec90de8b9deba4cff75d2b9476",
+        "fileName": "attention.pdf",
+        "license": "Publicly available author deposit; no PDF redistribution. Rights and license information: https://arxiv.org/abs/1706.03762v1"
+      },
+      "strata": ["figure", "table", "formula", "numbered-references"],
+      "annotation": {
+        "kind": "agent-source-verified",
+        "sources": ["https://arxiv.org/pdf/1706.03762v1"],
+        "scope": "15 PDF pages; selected title, abstract, figure caption and bibliography entry only; no exhaustive annotation or bounding boxes."
+      },
+      "checks": [
+        {
+          "id": "title",
+          "kind": "text",
+          "pageIndex": 0,
+          "text": "Attention Is All You Need"
+        },
+        {
+          "id": "abstract",
+          "kind": "text",
+          "pageIndex": 0,
+          "text": "The dominant sequence transduction models are based on complex recurrent or convolutional neural networks in an encoder-decoder configuration."
+        },
+        {
+          "id": "figure-1",
+          "kind": "object",
+          "objectKind": "figure",
+          "pageIndex": 2,
+          "text": "Figure 1: The Transformer - model architecture."
+        },
+        {
+          "id": "reference-1",
+          "kind": "reference",
+          "pageIndex": 9,
+          "text": "Jimmy Lei Ba, Jamie Ryan Kiros, and Geoffrey E Hinton. Layer normalization. arXiv preprint arXiv:1607.06450, 2016.",
+          "arxivID": "1607.06450"
+        }
+      ]
+    },
+    {
+      "id": "bert",
+      "title": "BERT: Pre-training of Deep Bidirectional Transformers for Language Understanding",
+      "pdf": {
+        "url": "https://arxiv.org/pdf/1810.04805v1",
+        "sha256": "58534a3c000cbcc60ed64e999a2d9ed839edc2d9894e4449e9d79e1118b5e5ba",
+        "fileName": "bert.pdf",
+        "license": "Publicly available author deposit; no PDF redistribution. Rights and license information: https://arxiv.org/abs/1810.04805v1"
+      },
+      "strata": ["two-column", "figure", "table", "author-year-references"],
+      "annotation": {
+        "kind": "agent-source-verified",
+        "sources": ["https://arxiv.org/pdf/1810.04805v1"],
+        "scope": "14 PDF pages; selected title, abstract, figure caption and bibliography excerpt only; no exhaustive annotation or bounding boxes."
+      },
+      "checks": [
+        {
+          "id": "title",
+          "kind": "text",
+          "pageIndex": 0,
+          "text": "BERT: Pre-training of Deep Bidirectional Transformers for Language Understanding"
+        },
+        {
+          "id": "abstract",
+          "kind": "text",
+          "pageIndex": 0,
+          "text": "conditioning on both left and right context in all layers."
+        },
+        {
+          "id": "figure-1",
+          "kind": "object",
+          "objectKind": "figure",
+          "pageIndex": 2,
+          "text": "Figure 1: Differences in pre-training model architectures. BERT uses a bidirectional Transformer."
+        },
+        {
+          "id": "reference-entailment",
+          "kind": "reference",
+          "pageIndex": 12,
+          "text": "The fifth PASCAL recognizing textual entailment challenge. In TAC. NIST."
+        }
+      ]
+    },
+    {
+      "id": "resnet",
+      "title": "Deep Residual Learning for Image Recognition",
+      "pdf": {
+        "url": "https://arxiv.org/pdf/1512.03385v1",
+        "sha256": "1e0651b6810ecba34a3dbc5b5b0209226f889004607c1f203540a48d64e5a93a",
+        "fileName": "resnet.pdf",
+        "license": "Publicly available author deposit; no PDF redistribution. Rights and license information: https://arxiv.org/abs/1512.03385v1"
+      },
+      "strata": ["two-column", "figure", "formula", "numbered-references"],
+      "annotation": {
+        "kind": "agent-source-verified",
+        "sources": ["https://arxiv.org/pdf/1512.03385v1"],
+        "scope": "12 PDF pages; selected title, abstract, figure caption and bibliography entry only; no exhaustive annotation or bounding boxes."
+      },
+      "checks": [
+        {
+          "id": "title",
+          "kind": "text",
+          "pageIndex": 0,
+          "text": "Deep Residual Learning for Image Recognition"
+        },
+        {
+          "id": "abstract",
+          "kind": "text",
+          "pageIndex": 0,
+          "text": "Deeper neural networks are more difficult to train."
+        },
+        {
+          "id": "figure-2",
+          "kind": "object",
+          "objectKind": "figure",
+          "pageIndex": 1,
+          "text": "Figure 2. Residual learning: a building block."
+        },
+        {
+          "id": "reference-2",
+          "kind": "reference",
+          "pageIndex": 8,
+          "text": "C. M. Bishop. Neural networks for pattern recognition. Oxford university press, 1995."
+        }
+      ]
+    },
+    {
+      "id": "transformer-xl",
+      "title": "Transformer-XL: Attentive Language Models Beyond a Fixed-Length Context",
+      "pdf": {
+        "url": "https://arxiv.org/pdf/1901.02860v1",
+        "sha256": "6c772b056577040ba34522ebb44f104f66c82accf160972cc23c9792db275373",
+        "fileName": "transformer-xl.pdf",
+        "license": "Publicly available author deposit; no PDF redistribution. Rights and license information: https://arxiv.org/abs/1901.02860v1"
+      },
+      "strata": ["figure", "table", "formula", "author-year-references"],
+      "annotation": {
+        "kind": "agent-source-verified",
+        "sources": ["https://arxiv.org/pdf/1901.02860v1"],
+        "scope": "18 PDF pages; selected title, abstract, figure caption and bibliography entry only; no exhaustive annotation or bounding boxes."
+      },
+      "checks": [
+        {
+          "id": "title",
+          "kind": "text",
+          "pageIndex": 0,
+          "text": "TRANSFORMER-XL: ATTENTIVE LANGUAGE MODELS BEYOND A FIXED-LENGTH CONTEXT"
+        },
+        {
+          "id": "abstract",
+          "kind": "text",
+          "pageIndex": 0,
+          "text": "Concretely, it consists of a segment-level recurrence mechanism and a novel positional encoding scheme."
+        },
+        {
+          "id": "figure-1",
+          "kind": "object",
+          "objectKind": "figure",
+          "pageIndex": 2,
+          "text": "Figure 1: Illustration of the vanilla model with a segment length 4."
+        },
+        {
+          "id": "reference-baevski",
+          "kind": "reference",
+          "pageIndex": 9,
+          "text": "Alexei Baevski and Michael Auli. Adaptive input representations for neural language modeling. arXiv preprint arXiv:1809.10853, 2018.",
+          "arxivID": "1809.10853"
+        }
+      ]
+    },
+    {
+      "id": "vae",
+      "title": "Auto-Encoding Variational Bayes",
+      "pdf": {
+        "url": "https://arxiv.org/pdf/1312.6114v1",
+        "sha256": "1a320bb73327d1ccb5d8df2d290ade85f80a22e2131635b2d87b5df9b6994153",
+        "fileName": "vae.pdf",
+        "license": "Publicly available author deposit; no PDF redistribution. Rights and license information: https://arxiv.org/abs/1312.6114v1"
+      },
+      "strata": ["figure", "formula", "labelled-references"],
+      "annotation": {
+        "kind": "agent-source-verified",
+        "sources": ["https://arxiv.org/pdf/1312.6114v1"],
+        "scope": "9 PDF pages; selected title, abstract, figure caption and bibliography excerpt only; no exhaustive annotation or bounding boxes."
+      },
+      "checks": [
+        {
+          "id": "title",
+          "kind": "text",
+          "pageIndex": 0,
+          "text": "Auto-Encoding Variational Bayes"
+        },
+        {
+          "id": "abstract",
+          "kind": "text",
+          "pageIndex": 0,
+          "text": "These theoretical advantages are reflected in experimental results."
+        },
+        {
+          "id": "figure-1",
+          "kind": "object",
+          "objectKind": "figure",
+          "pageIndex": 6,
+          "text": "Figure 1: Comparison of our AEVB method to the wake-sleep algorithm, in terms of optimizing the lower bound"
+        },
+        {
+          "id": "reference-bjp12",
+          "kind": "reference",
+          "pageIndex": 8,
+          "text": "David M Blei, Michael I Jordan, and John W Paisley. Variational bayesian inference with stochastic search."
+        }
+      ]
+    },
+    {
+      "id": "adam",
+      "title": "Adam: A Method for Stochastic Optimization",
+      "pdf": {
+        "url": "https://arxiv.org/pdf/1412.6980v1",
+        "sha256": "935a5a15616961aff21529d86a754570028843407adfe858f1d18584b84293a7",
+        "fileName": "adam.pdf",
+        "license": "Publicly available author deposit; no PDF redistribution. Rights and license information: https://arxiv.org/abs/1412.6980v1"
+      },
+      "strata": ["figure", "formula", "author-year-references"],
+      "annotation": {
+        "kind": "agent-source-verified",
+        "sources": ["https://arxiv.org/pdf/1412.6980v1"],
+        "scope": "9 PDF pages; selected title, abstract, figure caption and bibliography entry only; no exhaustive annotation or bounding boxes."
+      },
+      "checks": [
+        {
+          "id": "title",
+          "kind": "text",
+          "pageIndex": 0,
+          "text": "ADAM: A METHOD FOR STOCHASTIC OPTIMIZATION"
+        },
+        {
+          "id": "abstract",
+          "kind": "text",
+          "pageIndex": 0,
+          "text": "We introduce Adam, an algorithm for first-order gradient-based optimization of stochastic objective functions."
+        },
+        {
+          "id": "figure-1",
+          "kind": "object",
+          "objectKind": "figure",
+          "pageIndex": 5,
+          "text": "Figure 1: Logistic regression training negative log likelihood on MNIST images and IMDB movie reviews with 10,000 bag-of-words (BoW) feature vectors."
+        },
+        {
+          "id": "reference-vae",
+          "kind": "reference",
+          "pageIndex": 8,
+          "text": "Kingma, Diederik P and Welling, Max. Auto-Encoding Variational Bayes. In The 2nd International Conference on Learning Representations (ICLR), 2013."
+        }
+      ]
+    },
+    {
+      "id": "gpt3",
+      "title": "Language Models are Few-Shot Learners",
+      "pdf": {
+        "url": "https://arxiv.org/pdf/2005.14165v1",
+        "sha256": "f756a2d3e23c2770a3e8c4354965e98d37411c18aab91556df0c335675dec396",
+        "fileName": "gpt3.pdf",
+        "license": "Publicly available author deposit; no PDF redistribution. Rights and license information: https://arxiv.org/abs/2005.14165v1"
+      },
+      "strata": ["figure", "labelled-references"],
+      "annotation": {
+        "kind": "agent-source-verified",
+        "sources": ["https://arxiv.org/pdf/2005.14165v1"],
+        "scope": "72 PDF pages; selected title, abstract, figure caption and bibliography entry only; no exhaustive annotation or bounding boxes."
+      },
+      "checks": [
+        {
+          "id": "title",
+          "kind": "text",
+          "pageIndex": 0,
+          "text": "Language Models are Few-Shot Learners"
+        },
+        {
+          "id": "abstract",
+          "kind": "text",
+          "pageIndex": 0,
+          "text": "For all tasks, GPT-3 is applied without any gradient updates or fine-tuning,"
+        },
+        {
+          "id": "figure-1-1",
+          "kind": "object",
+          "objectKind": "figure",
+          "pageIndex": 2,
+          "text": "Figure 1.1: Language model meta-learning."
+        },
+        {
+          "id": "reference-ai19",
+          "kind": "reference",
+          "pageIndex": 65,
+          "text": "WeChat AI. Tr-mt (ensemble), December 2019."
+        }
+      ]
+    },
+    {
+      "id": "clip",
+      "title": "Learning Transferable Visual Models From Natural Language Supervision",
+      "pdf": {
+        "url": "https://arxiv.org/pdf/2103.00020v1",
+        "sha256": "6478b6e571a7d6fcd846d8ef77bfd60c285f1986abb8f475eedc43de403074f5",
+        "fileName": "clip.pdf",
+        "license": "Publicly available author deposit; no PDF redistribution. Rights and license information: https://arxiv.org/abs/2103.00020v1"
+      },
+      "strata": ["two-column", "figure", "author-year-references"],
+      "annotation": {
+        "kind": "agent-source-verified",
+        "sources": ["https://arxiv.org/pdf/2103.00020v1"],
+        "scope": "48 PDF pages; selected title, abstract, figure caption and bibliography entry only; no exhaustive annotation or bounding boxes."
+      },
+      "checks": [
+        {
+          "id": "title",
+          "kind": "text",
+          "pageIndex": 0,
+          "text": "Learning Transferable Visual Models From Natural Language Supervision"
+        },
+        {
+          "id": "abstract",
+          "kind": "text",
+          "pageIndex": 0,
+          "text": "Learning directly from raw text about images is a promising alternative which leverages a much broader source of supervision."
+        },
+        {
+          "id": "figure-1",
+          "kind": "object",
+          "objectKind": "figure",
+          "pageIndex": 1,
+          "text": "Figure 1. Summary of our approach."
+        },
+        {
+          "id": "reference-andreas",
+          "kind": "reference",
+          "pageIndex": 26,
+          "text": "Andreas, J., Klein, D., and Levine, S. Learning with latent language. arXiv preprint arXiv:1711.00482, 2017.",
+          "arxivID": "1711.00482"
+        }
+      ]
+    },
+    {
+      "id": "vit",
+      "title": "An Image is Worth 16x16 Words: Transformers for Image Recognition at Scale",
+      "pdf": {
+        "url": "https://arxiv.org/pdf/2010.11929v1",
+        "sha256": "d33feb34fcf7aea256439a7f487197dcbb896e31a9d86e30e37d252672c4da78",
+        "fileName": "vit.pdf",
+        "license": "Publicly available author deposit; no PDF redistribution. Rights and license information: https://arxiv.org/abs/2010.11929v1"
+      },
+      "strata": ["figure", "table", "author-year-references"],
+      "annotation": {
+        "kind": "agent-source-verified",
+        "sources": ["https://arxiv.org/pdf/2010.11929v1"],
+        "scope": "21 PDF pages; selected title, abstract, figure caption and bibliography entry only; no exhaustive annotation or bounding boxes."
+      },
+      "checks": [
+        {
+          "id": "title",
+          "kind": "text",
+          "pageIndex": 0,
+          "text": "AN IMAGE IS WORTH 16X16 WORDS: TRANSFORMERS FOR IMAGE RECOGNITION AT SCALE"
+        },
+        {
+          "id": "abstract",
+          "kind": "text",
+          "pageIndex": 0,
+          "text": "We show that this reliance on CNNs is not necessary and a pure transformer applied directly to sequences of image patches can perform very well on image classification tasks."
+        },
+        {
+          "id": "figure-1",
+          "kind": "object",
+          "objectKind": "figure",
+          "pageIndex": 2,
+          "text": "Figure 1: Model overview. We split an image into fixed-size patches, linearly embed each of them,"
+        },
+        {
+          "id": "reference-abnar",
+          "kind": "reference",
+          "pageIndex": 8,
+          "text": "Samira Abnar and Willem Zuidema. Quantifying attention flow in transformers. In ACL, 2020."
+        }
+      ]
+    },
+    {
+      "id": "lora",
+      "title": "LoRA: Low-Rank Adaptation of Large Language Models",
+      "pdf": {
+        "url": "https://arxiv.org/pdf/2106.09685v1",
+        "sha256": "38a259c1926b724363fcfbd8e5f80fcadf0dd8d9ab6944fea8c00e74fd7590b0",
+        "fileName": "lora.pdf",
+        "license": "Publicly available author deposit; no PDF redistribution. Rights and license information: https://arxiv.org/abs/2106.09685v1"
+      },
+      "strata": ["figure", "table", "formula", "numbered-references"],
+      "annotation": {
+        "kind": "agent-source-verified",
+        "sources": ["https://arxiv.org/pdf/2106.09685v1"],
+        "scope": "20 PDF pages; selected title, abstract, table caption excerpt and bibliography entry only; no exhaustive annotation or bounding boxes."
+      },
+      "checks": [
+        {
+          "id": "title",
+          "kind": "text",
+          "pageIndex": 0,
+          "text": "LoRA: Low-Rank Adaptation of Large Language Models"
+        },
+        {
+          "id": "abstract",
+          "kind": "text",
+          "pageIndex": 0,
+          "text": "The dominant paradigm of natural language processing consists of large-scale pre-training on general domain data and adaptation to particular tasks or domains."
+        },
+        {
+          "id": "table-3",
+          "kind": "object",
+          "objectKind": "table",
+          "pageIndex": 6,
+          "text": "Table 3: Validation accuracy on WikiSQL and MultiNLI after applying LoRA to different types of"
+        },
+        {
+          "id": "reference-1",
+          "kind": "reference",
+          "pageIndex": 9,
+          "text": "Armen Aghajanyan, Luke Zettlemoyer, and Sonal Gupta. Intrinsic Dimensionality Explains the Effectiveness of Language Model Fine-Tuning. arXiv:2012.13255",
+          "arxivID": "2012.13255"
+        }
+      ]
+    },
+    {
+      "id": "rag",
+      "title": "Retrieval-Augmented Generation for Knowledge-Intensive NLP Tasks",
+      "pdf": {
+        "url": "https://arxiv.org/pdf/2005.11401v1",
+        "sha256": "25b55fd0f7c6c91cbe2c88690a33923077103e8f563d154faa1ce11d3527e601",
+        "fileName": "rag.pdf",
+        "license": "Publicly available author deposit; no PDF redistribution. Rights and license information: https://arxiv.org/abs/2005.11401v1"
+      },
+      "strata": ["figure", "table", "formula", "numbered-references"],
+      "annotation": {
+        "kind": "agent-source-verified",
+        "sources": ["https://arxiv.org/pdf/2005.11401v1"],
+        "scope": "18 PDF pages; selected title, abstract, table caption and bibliography entry excerpt only; no exhaustive annotation or bounding boxes."
+      },
+      "checks": [
+        {
+          "id": "title",
+          "kind": "text",
+          "pageIndex": 0,
+          "text": "Retrieval-Augmented Generation for Knowledge-Intensive NLP Tasks"
+        },
+        {
+          "id": "abstract",
+          "kind": "text",
+          "pageIndex": 0,
+          "text": "Large pre-trained language models have been shown to store factual knowledge in their parameters,"
+        },
+        {
+          "id": "table-3",
+          "kind": "object",
+          "objectKind": "table",
+          "pageIndex": 6,
+          "text": "Table 3: Human assessments for the Jeopardy Question Generation Task."
+        },
+        {
+          "id": "reference-bert",
+          "kind": "reference",
+          "pageIndex": 11,
+          "text": "Jacob Devlin, Ming-Wei Chang, Kenton Lee, and Kristina Toutanova. BERT: Pre-training of Deep Bidirectional Transformers for Language Understanding.",
+          "doi": "10.18653/v1/N19-1423"
+        }
+      ]
+    },
+    {
+      "id": "t5",
+      "title": "Exploring the Limits of Transfer Learning with a Unified Text-to-Text Transformer",
+      "pdf": {
+        "url": "https://arxiv.org/pdf/1910.10683v1",
+        "sha256": "b41ee513826361ff4d6076ded32e35fa6bc9dea19f6ba2b98feeb1a65c778483",
+        "fileName": "t5.pdf",
+        "license": "Publicly available author deposit; no PDF redistribution. Rights and license information: https://arxiv.org/abs/1910.10683v1"
+      },
+      "strata": ["figure", "table", "author-year-references"],
+      "annotation": {
+        "kind": "agent-source-verified",
+        "sources": ["https://arxiv.org/pdf/1910.10683v1"],
+        "scope": "52 PDF pages; selected title, abstract, figure caption and bibliography entry excerpt only; no exhaustive annotation or bounding boxes."
+      },
+      "checks": [
+        {
+          "id": "title",
+          "kind": "text",
+          "pageIndex": 0,
+          "text": "Exploring the Limits of Transfer Learning with a Unified Text-to-Text Transformer"
+        },
+        {
+          "id": "abstract",
+          "kind": "text",
+          "pageIndex": 0,
+          "text": "Transfer learning, where a model is first pre-trained on a data-rich task before being fine-tuned on a downstream task, has emerged as a powerful technique in natural language processing (NLP)."
+        },
+        {
+          "id": "figure-1",
+          "kind": "object",
+          "objectKind": "figure",
+          "pageIndex": 1,
+          "text": "Figure 1: A diagram of our text-to-text framework."
+        },
+        {
+          "id": "reference-anil",
+          "kind": "reference",
+          "pageIndex": 34,
+          "text": "Rohan Anil, Vineet Gupta, Tomer Koren, and Yoram Singer. Memory-efficient adaptive optimization for large-scale learning. arXiv preprint arXiv:1901.11150, 2019.",
+          "arxivID": "1901.11150"
+        }
+      ]
+    },
+    {
+      "id": "b-deepseek-ocr",
+      "title": "DeepSeek-OCR: Contexts Optical Compression",
+      "pdf": {
+        "url": "https://arxiv.org/pdf/2510.18234v1",
+        "sha256": "a7297788968f8ad9ed21bcd273110814e4889efbbc99bfea86dca12205797a90",
+        "fileName": "b-deepseek-ocr.pdf",
+        "license": "CC BY 4.0: http://creativecommons.org/licenses/by/4.0/"
+      },
+      "strata": ["document-parsing", "ocr", "single-column", "dense-tables"],
+      "annotation": {
+        "kind": "agent-source-verified",
+        "sources": ["https://arxiv.org/pdf/2510.18234v1", "https://arxiv.org/abs/2510.18234v1"],
+        "scope": "22 页；核验选定正文、图 3 题注和 Nougat 引用/书目，非全文穷尽；无人工复核或对象框。"
+      },
+      "checks": [
+        {
+          "id": "body-introduction",
+          "kind": "text",
+          "pageIndex": 0,
+          "text": "We present DeepSeek-OCR as an initial investigation into the feasibility of compressing long contexts via optical 2D mapping."
+        },
+        {
+          "id": "figure-3",
+          "kind": "object",
+          "objectKind": "figure",
+          "pageIndex": 4,
+          "text": "Figure 3 | The architecture of DeepSeek-OCR."
+        },
+        {
+          "id": "reference-nougat",
+          "kind": "reference",
+          "pageIndex": 19,
+          "text": "Nougat: Neural optical understanding for academic documents.",
+          "arxivID": "2308.13418"
+        },
+        {
+          "id": "citation-nougat",
+          "kind": "citation",
+          "pageIndex": 3,
+          "text": "[6]",
+          "arxivID": "2308.13418"
+        }
+      ]
+    },
+    {
+      "id": "b-omnidocbench",
+      "title": "OmniDocBench: Benchmarking Diverse PDF Document Parsing with Comprehensive Annotations",
+      "pdf": {
+        "url": "https://arxiv.org/pdf/2412.07626v1",
+        "sha256": "af246c0ca296221e6ec1e5b800f2c359689cc6921a97764e650b0b34686c1907",
+        "fileName": "b-omnidocbench.pdf",
+        "license": "arXiv non-exclusive distribution license: http://arxiv.org/licenses/nonexclusive-distrib/1.0/"
+      },
+      "strata": ["document-benchmark", "two-column", "dense-tables", "caption-association"],
+      "annotation": {
+        "kind": "agent-source-verified",
+        "sources": ["https://arxiv.org/pdf/2412.07626v1", "https://arxiv.org/abs/2412.07626v1"],
+        "scope": "30 页；选定正文、同页表 2/3 题注及 Nougat 引用/书目。第 6 物理页表 2/3 表体框由原 PDF 页面渲染图的表格外缘估计并换算为 PDF 用户坐标，排除题注；框为近似值，不含全文标注或人工复核。"
+      },
+      "checks": [
+        {
+          "id": "body-introduction",
+          "kind": "text",
+          "pageIndex": 0,
+          "text": "Document content extraction is crucial in computer"
+        },
+        {
+          "id": "table-2",
+          "kind": "object",
+          "objectKind": "table",
+          "pageIndex": 5,
+          "text": "Table 2. Comprehensive evaluation of document parsing algorithms on OmniDocBench: performance metrics for text, formula, table, and reading order extraction, with overall scores derived from ground truth comparisons.",
+          "rect": [78.82, 599.51, 532.14, 720.03]
+        },
+        {
+          "id": "table-3",
+          "kind": "object",
+          "objectKind": "table",
+          "pageIndex": 5,
+          "text": "Table 3. End-to-end text recognition performance on OmniDocBench: evaluation using edit distance across 9 PDF page types.",
+          "rect": [83.99, 445.24, 527.33, 563.7]
+        },
+        {
+          "id": "reference-nougat",
+          "kind": "reference",
+          "pageIndex": 8,
+          "text": "Nougat: Neural optical understanding for academic documents.",
+          "arxivID": "2308.13418"
+        },
+        {
+          "id": "citation-nougat",
+          "kind": "citation",
+          "pageIndex": 6,
+          "text": "[5]",
+          "arxivID": "2308.13418"
+        }
+      ]
+    },
+    {
+      "id": "b-openvla",
+      "title": "OpenVLA: An Open-Source Vision-Language-Action Model",
+      "pdf": {
+        "url": "https://arxiv.org/pdf/2406.09246v1",
+        "sha256": "9d44351d8ca2aafc11b28949c99d9a99bd1403598fcf9cca042bbfda2dceb706",
+        "fileName": "b-openvla.pdf",
+        "license": "CC BY 4.0: http://creativecommons.org/licenses/by/4.0/"
+      },
+      "strata": ["robotics", "vision-language-action", "single-column", "figures"],
+      "annotation": {
+        "kind": "agent-source-verified",
+        "sources": ["https://arxiv.org/pdf/2406.09246v1", "https://arxiv.org/abs/2406.09246v1"],
+        "scope": "32 页；核验选定正文、图 2 和 BridgeData V2 引用/书目，非全文穷尽；无人工复核或对象框。"
+      },
+      "checks": [
+        {
+          "id": "body-release",
+          "kind": "text",
+          "pageIndex": 1,
+          "text": "We release training data, code and model weights for reproducing OpenVLA"
+        },
+        {
+          "id": "figure-2",
+          "kind": "object",
+          "objectKind": "figure",
+          "pageIndex": 3,
+          "text": "Figure 2: OpenVLA model architecture."
+        },
+        {
+          "id": "reference-bridgedata",
+          "kind": "reference",
+          "pageIndex": 11,
+          "text": "Bridgedata v2: A dataset for robot learning at scale"
+        },
+        {
+          "id": "citation-bridgedata",
+          "kind": "citation",
+          "pageIndex": 4,
+          "text": "[6]",
+          "referenceText": "Bridgedata v2: A dataset for robot learning at scale"
+        }
+      ]
+    },
+    {
+      "id": "b-olmocr",
+      "title": "olmOCR: Unlocking Trillions of Tokens in PDFs with Vision Language Models",
+      "pdf": {
+        "url": "https://arxiv.org/pdf/2502.18443v1",
+        "sha256": "2b83caed3b300206bbf189ab83eb26d41afa8d2ad857bff3499589f38a8ab84a",
+        "fileName": "b-olmocr.pdf",
+        "license": "CC BY 4.0: http://creativecommons.org/licenses/by/4.0/"
+      },
+      "strata": ["document-parsing", "ocr", "single-column", "figures"],
+      "annotation": {
+        "kind": "agent-source-verified",
+        "sources": ["https://arxiv.org/pdf/2502.18443v1", "https://arxiv.org/abs/2502.18443v1"],
+        "scope": "20 页；核验选定正文、图 2 和 Nougat 引用/书目，非全文穷尽；无人工复核或对象框。"
+      },
+      "checks": [
+        {
+          "id": "body-anchoring",
+          "kind": "text",
+          "pageIndex": 2,
+          "text": "Figure 2 provides an overview of our method"
+        },
+        {
+          "id": "figure-2",
+          "kind": "object",
+          "objectKind": "figure",
+          "pageIndex": 3,
+          "text": "Figure 2 Example of how document-anchoring works for a typical page."
+        },
+        {
+          "id": "reference-nougat",
+          "kind": "reference",
+          "pageIndex": 10,
+          "text": "Nougat: Neural optical understanding for academic documents",
+          "arxivID": "2308.13418"
+        },
+        {
+          "id": "citation-nougat",
+          "kind": "citation",
+          "pageIndex": 2,
+          "text": "Blecher et al., 2023",
+          "arxivID": "2308.13418"
+        }
+      ]
+    },
+    {
+      "id": "b-donut",
+      "title": "Donut: Document Understanding Transformer without OCR",
+      "pdf": {
+        "url": "https://arxiv.org/pdf/2111.15664v1",
+        "sha256": "6743f93bb65a41f6522a3f64c4e5917d6397dc6fd993586b471c0b76c308b1ea",
+        "fileName": "b-donut.pdf",
+        "license": "arXiv non-exclusive distribution license: http://arxiv.org/licenses/nonexclusive-distrib/1.0/"
+      },
+      "strata": ["document-understanding", "ocr-free", "two-column", "figures"],
+      "annotation": {
+        "kind": "agent-source-verified",
+        "sources": ["https://arxiv.org/pdf/2111.15664v1", "https://arxiv.org/abs/2111.15664v1"],
+        "scope": "12 页；核验选定正文、图 3 和 BERT 引用/书目，非全文穷尽；无人工复核或对象框。"
+      },
+      "checks": [
+        {
+          "id": "body-receipts",
+          "kind": "text",
+          "pageIndex": 4,
+          "text": "Indonesian Receipts (Park et al., 2019)."
+        },
+        {
+          "id": "figure-3",
+          "kind": "object",
+          "objectKind": "figure",
+          "pageIndex": 2,
+          "text": "Figure 3: The overview of Donut."
+        },
+        {
+          "id": "reference-bert",
+          "kind": "reference",
+          "pageIndex": 8,
+          "text": "BERT: pre-training of deep bidirectional transformers for language understanding."
+        },
+        {
+          "id": "citation-bert",
+          "kind": "citation",
+          "pageIndex": 7,
+          "text": "Devlin et al., 2018",
+          "referenceText": "BERT: pre-training of deep bidirectional transformers for language understanding"
+        }
+      ]
+    },
+    {
+      "id": "b-layoutlm",
+      "title": "LayoutLM: Pre-training of Text and Layout for Document Image Understanding",
+      "pdf": {
+        "url": "https://arxiv.org/pdf/1912.13318v1",
+        "sha256": "2e4362ab545c37f4e802afd24346e8d11539dc4480dc68deb45afc4fe9e80d6f",
+        "fileName": "b-layoutlm.pdf",
+        "license": "arXiv non-exclusive distribution license: http://arxiv.org/licenses/nonexclusive-distrib/1.0/"
+      },
+      "strata": ["document-understanding", "layout-model", "single-column", "figures"],
+      "annotation": {
+        "kind": "agent-source-verified",
+        "sources": ["https://arxiv.org/pdf/1912.13318v1", "https://arxiv.org/abs/1912.13318v1"],
+        "scope": "13 页；核验选定正文、图 2 和 BERT 引用/书目，非全文穷尽；无人工复核或对象框。"
+      },
+      "checks": [
+        {
+          "id": "body-overview",
+          "kind": "text",
+          "pageIndex": 1,
+          "text": "Inspired by the BERT model (Devlin et al., 2019)"
+        },
+        {
+          "id": "figure-2",
+          "kind": "object",
+          "objectKind": "figure",
+          "pageIndex": 2,
+          "text": "Figure 2: An example of LayoutLM, where 2-D layout and image embeddings are added to the original BERT architecture"
+        },
+        {
+          "id": "reference-bert",
+          "kind": "reference",
+          "pageIndex": 11,
+          "text": "BERT: Pre-training of deep bidirectional transformers for language understanding.",
+          "doi": "10.18653/v1/N19-1423"
+        },
+        {
+          "id": "citation-bert",
+          "kind": "citation",
+          "pageIndex": 1,
+          "text": "Devlin et al., 2019",
+          "doi": "10.18653/v1/N19-1423"
+        }
+      ]
+    },
+    {
+      "id": "b-layoutlmv2",
+      "title": "LayoutLMv2: Multi-modal Pre-training for Visually-Rich Document Understanding",
+      "pdf": {
+        "url": "https://arxiv.org/pdf/2012.14740v1",
+        "sha256": "96c6e0dd3bae1707bb7483aba1bca7f967f1a520a1611eb614a48157e9b070eb",
+        "fileName": "b-layoutlmv2.pdf",
+        "license": "arXiv non-exclusive distribution license: http://arxiv.org/licenses/nonexclusive-distrib/1.0/"
+      },
+      "strata": ["document-understanding", "layout-model", "single-column", "figures"],
+      "annotation": {
+        "kind": "agent-source-verified",
+        "sources": ["https://arxiv.org/pdf/2012.14740v1", "https://arxiv.org/abs/2012.14740v1"],
+        "scope": "16 页；核验选定正文、图 2 和 BERT 引用/书目，非全文穷尽；无人工复核或对象框。"
+      },
+      "checks": [
+        {
+          "id": "body-pretraining",
+          "kind": "text",
+          "pageIndex": 0,
+          "text": "fully understand the relative positional relationship among different text blocks."
+        },
+        {
+          "id": "figure-2",
+          "kind": "object",
+          "objectKind": "figure",
+          "pageIndex": 2,
+          "text": "Figure 2: An illustration of the model architecture and pre-training strategies for LayoutLMv2"
+        },
+        {
+          "id": "reference-bert",
+          "kind": "reference",
+          "pageIndex": 12,
+          "text": "BERT: Pre-training of deep bidirectional transformers for language understanding.",
+          "doi": "10.18653/v1/N19-1423"
+        },
+        {
+          "id": "citation-bert",
+          "kind": "citation",
+          "pageIndex": 7,
+          "text": "Devlin et al., 2019",
+          "doi": "10.18653/v1/N19-1423"
+        }
+      ]
+    },
+    {
+      "id": "b-layoutlmv3",
+      "title": "LayoutLMv3: Pre-training for Document AI with Unified Text and Image Masking",
+      "pdf": {
+        "url": "https://arxiv.org/pdf/2204.08387v1",
+        "sha256": "69976d62a0b4935a4081a86ba8ae4a720d751fc3cef2cd9cb6e6a1ee2299dad7",
+        "fileName": "b-layoutlmv3.pdf",
+        "license": "CC BY-NC-SA 4.0: http://creativecommons.org/licenses/by-nc-sa/4.0/"
+      },
+      "strata": ["document-understanding", "layout-model", "two-column", "figures"],
+      "annotation": {
+        "kind": "agent-source-verified",
+        "sources": ["https://arxiv.org/pdf/2204.08387v1", "https://arxiv.org/abs/2204.08387v1"],
+        "scope": "11 页；核验选定正文、图 3 和 FUNSD 引用/书目，保留原题注的 LayoutLM3 拼写；非全文穷尽，无人工复核或对象框。"
+      },
+      "checks": [
+        {
+          "id": "body-funsd",
+          "kind": "text",
+          "pageIndex": 1,
+          "text": "FUNSD [19] for form understanding"
+        },
+        {
+          "id": "figure-3",
+          "kind": "object",
+          "objectKind": "figure",
+          "pageIndex": 2,
+          "text": "Figure 3. The architecture and pre-training objectives of LayoutLM3."
+        },
+        {
+          "id": "reference-funsd",
+          "kind": "reference",
+          "pageIndex": 9,
+          "text": "Funsd: A dataset for form understanding in noisy scanned documents."
+        },
+        {
+          "id": "citation-funsd",
+          "kind": "citation",
+          "pageIndex": 1,
+          "text": "[19]",
+          "referenceText": "Funsd: A dataset for form understanding in noisy scanned documents"
+        }
+      ]
+    },
+    {
+      "id": "b-nougat",
+      "title": "Nougat: Neural Optical Understanding for Academic Documents",
+      "pdf": {
+        "url": "https://arxiv.org/pdf/2308.13418v1",
+        "sha256": "679be336ce8010d3dc86b9530f0a30d4d5ea2a13153c6f274601b40f4382745b",
+        "fileName": "b-nougat.pdf",
+        "license": "CC BY-SA 4.0: http://creativecommons.org/licenses/by-sa/4.0/"
+      },
+      "strata": ["academic-document-parsing", "ocr-free", "single-column", "equations"],
+      "annotation": {
+        "kind": "agent-source-verified",
+        "sources": ["https://arxiv.org/pdf/2308.13418v1", "https://arxiv.org/abs/2308.13418v1"],
+        "scope": "17 页；核验选定正文、图 1 和 Donut 引用/书目，保留原题注 followin 拼写；非全文穷尽，无人工复核或对象框。"
+      },
+      "checks": [
+        {
+          "id": "body-decoding",
+          "kind": "text",
+          "pageIndex": 2,
+          "text": "During inference the text is generated using greedy decoding."
+        },
+        {
+          "id": "figure-1",
+          "kind": "object",
+          "objectKind": "figure",
+          "pageIndex": 1,
+          "text": "Figure 1: Our simple end-to-end architecture followin Donut [28]."
+        },
+        {
+          "id": "reference-donut",
+          "kind": "reference",
+          "pageIndex": 10,
+          "text": "OCR-free Document Understanding Transformer",
+          "arxivID": "2111.15664"
+        },
+        {
+          "id": "citation-donut",
+          "kind": "citation",
+          "pageIndex": 1,
+          "text": "[28]",
+          "arxivID": "2111.15664"
+        }
+      ]
+    },
+    {
+      "id": "b-docling",
+      "title": "Docling Technical Report",
+      "pdf": {
+        "url": "https://arxiv.org/pdf/2408.09869v1",
+        "sha256": "c2151058e77cd07f0802ba13c6a8bf4c37ad9578bf9d9404c8b0550b6a32d277",
+        "fileName": "b-docling.pdf",
+        "license": "CC BY 4.0: http://creativecommons.org/licenses/by/4.0/ (paper; distinct from the software license)"
+      },
+      "strata": ["document-parsing", "technical-report", "single-column", "figures"],
+      "annotation": {
+        "kind": "agent-source-verified",
+        "sources": ["https://arxiv.org/pdf/2408.09869v1", "https://arxiv.org/abs/2408.09869v1"],
+        "scope": "9 页；核验选定正文、报告本身的图 1 和 IBM Data Prep Kit 引用/书目；非全文穷尽，无人工复核或对象框。后续附录中的重复图 1 不属于此核验点。"
+      },
+      "checks": [
+        {
+          "id": "body-pdf",
+          "kind": "text",
+          "pageIndex": 0,
+          "text": "This technical report introduces Docling"
+        },
+        {
+          "id": "figure-1",
+          "kind": "object",
+          "objectKind": "figure",
+          "pageIndex": 2,
+          "text": "Figure 1: Sketch of Docling’s default processing pipeline."
+        },
+        {
+          "id": "reference-data-prep",
+          "kind": "reference",
+          "pageIndex": 5,
+          "text": "Data Prep Kit: a community project to democratize and accelerate unstructured data preparation for LLM app developers"
+        },
+        {
+          "id": "citation-data-prep",
+          "kind": "citation",
+          "pageIndex": 4,
+          "text": "[6]",
+          "referenceText": "Data Prep Kit: a community project to democratize and accelerate unstructured data preparation for LLM app developers"
+        }
+      ]
+    },
+    {
+      "id": "b-pix2struct",
+      "title": "Pix2Struct: Screenshot Parsing as Pretraining for Visual Language Understanding",
+      "pdf": {
+        "url": "https://arxiv.org/pdf/2210.03347v1",
+        "sha256": "71442a504efc377728a6853dd43db6a6f1be166e7e62f4be276041fbeecfdf2a",
+        "fileName": "b-pix2struct.pdf",
+        "license": "CC BY 4.0: http://creativecommons.org/licenses/by/4.0/"
+      },
+      "strata": ["visual-language", "document-understanding", "single-column", "figures"],
+      "annotation": {
+        "kind": "agent-source-verified",
+        "sources": ["https://arxiv.org/pdf/2210.03347v1", "https://arxiv.org/abs/2210.03347v1"],
+        "scope": "21 页；核验选定正文、图 2 和 DUE 引用/书目，非全文穷尽；无人工复核或对象框。"
+      },
+      "checks": [
+        {
+          "id": "body-pixel-models",
+          "kind": "text",
+          "pageIndex": 1,
+          "text": "Effective use of pixel-only models remains an open challenge."
+        },
+        {
+          "id": "figure-2",
+          "kind": "object",
+          "objectKind": "figure",
+          "pageIndex": 3,
+          "text": "Figure 2: Toy illustration of input-output pairs (right) sampled from the original web page (left)."
+        },
+        {
+          "id": "reference-due",
+          "kind": "reference",
+          "pageIndex": 9,
+          "text": "Due: End-to-end document understanding benchmark."
+        },
+        {
+          "id": "citation-due",
+          "kind": "citation",
+          "pageIndex": 9,
+          "text": "Borchmann et al., 2021",
+          "referenceText": "Due: End-to-end document understanding benchmark"
+        }
+      ]
+    },
+    {
+      "id": "b-trocr",
+      "title": "TrOCR: Transformer-based Optical Character Recognition with Pre-trained Models",
+      "pdf": {
+        "url": "https://arxiv.org/pdf/2109.10282v1",
+        "sha256": "c49b1a722227899375f2bae3571cb95a7f5b086647d481da7bab260e6ae10399",
+        "fileName": "b-trocr.pdf",
+        "license": "CC BY-NC-SA 4.0: http://creativecommons.org/licenses/by-nc-sa/4.0/"
+      },
+      "strata": ["ocr", "transformer", "two-column", "figures"],
+      "annotation": {
+        "kind": "agent-source-verified",
+        "sources": ["https://arxiv.org/pdf/2109.10282v1", "https://arxiv.org/abs/2109.10282v1"],
+        "scope": "10 页；核验选定正文、图 1 和 BERT 引用/书目，非全文穷尽；无人工复核或对象框。"
+      },
+      "checks": [
+        {
+          "id": "body-scope",
+          "kind": "text",
+          "pageIndex": 0,
+          "text": "leave text detection as the future work."
+        },
+        {
+          "id": "figure-1",
+          "kind": "object",
+          "objectKind": "figure",
+          "pageIndex": 1,
+          "text": "Figure 1: Model Architecture of TrOCR, where an encoder-decoder model is designed with a pre-trained image Transformer as the encoder and a pre-trained text Transformer as the decoder."
+        },
+        {
+          "id": "reference-bert",
+          "kind": "reference",
+          "pageIndex": 8,
+          "text": "Bert: Pre-training of deep bidirectional transformers for language"
+        },
+        {
+          "id": "citation-bert",
+          "kind": "citation",
+          "pageIndex": 3,
+          "text": "Devlin et al., 2019",
+          "referenceText": "Bert: Pre-training of deep bidirectional transformers for language"
+        }
+      ]
+    }
+  ],
+  "unobservedDocuments": [],
+  "unobservedChecks": {
+    "text": 0,
+    "object": 0,
+    "reference": 0,
+    "citation": 0,
+    "reading-order": 0
+  },
+  "objectIoUThreshold": 0.5,
+  "limitations": [
+    "Selected source-verified checks only; not exhaustive precision or recall.",
+    "Static matches do not establish end-to-end task success.",
+    "PDF hashes are compared to observation metadata; the evaluator does not read PDF bytes.",
+    "Object caption matches use provided object groups or explicit same-page provider membership; no geometry is inferred by this evaluator.",
+    "Without an annotated object rectangle, a match establishes localization only, not caption association correctness."
+  ],
+  "summary": {
+    "observations": 48,
+    "statuses": {
+      "completed": 48,
+      "failed": 0,
+      "unsupported": 0,
+      "not-performed": 0
+    },
+    "selectedChecks": {
+      "text": {
+        "passed": 68,
+        "measured": 72,
+        "notMeasured": 0,
+        "reasons": {}
+      },
+      "object": {
+        "passed": 46,
+        "measured": 50,
+        "notMeasured": 0,
+        "reasons": {}
+      },
+      "reference": {
+        "passed": 0,
+        "measured": 0,
+        "notMeasured": 48,
+        "reasons": {
+          "references-not-provided": 48
+        }
+      },
+      "citation": {
+        "passed": 0,
+        "measured": 0,
+        "notMeasured": 24,
+        "reasons": {
+          "references-not-provided": 24
+        }
+      },
+      "reading-order": {
+        "passed": 0,
+        "measured": 0,
+        "notMeasured": 0,
+        "reasons": {}
+      }
+    },
+    "actualTaskOutcomes": {
+      "passed": 0,
+      "failed": 0,
+      "unsupported": 0,
+      "not-performed": 194
+    },
+    "taskUnmeasuredReasons": {
+      "No actual task outcome provided": 194
+    },
+    "objectIoU": {
+      "measured": 4,
+      "notMeasured": 46,
+      "mean": 0,
+      "reasons": {
+        "annotation-rectangle-not-provided": 46
+      }
+    }
+  },
+  "groups": [
+    {
+      "backend": "mineru",
+      "mode": "cold",
+      "summary": {
+        "observations": 24,
+        "statuses": {
+          "completed": 24,
+          "failed": 0,
+          "unsupported": 0,
+          "not-performed": 0
+        },
+        "selectedChecks": {
+          "text": {
+            "passed": 34,
+            "measured": 36,
+            "notMeasured": 0,
+            "reasons": {}
+          },
+          "object": {
+            "passed": 23,
+            "measured": 25,
+            "notMeasured": 0,
+            "reasons": {}
+          },
+          "reference": {
+            "passed": 0,
+            "measured": 0,
+            "notMeasured": 24,
+            "reasons": {
+              "references-not-provided": 24
+            }
+          },
+          "citation": {
+            "passed": 0,
+            "measured": 0,
+            "notMeasured": 12,
+            "reasons": {
+              "references-not-provided": 12
+            }
+          },
+          "reading-order": {
+            "passed": 0,
+            "measured": 0,
+            "notMeasured": 0,
+            "reasons": {}
+          }
+        },
+        "actualTaskOutcomes": {
+          "passed": 0,
+          "failed": 0,
+          "unsupported": 0,
+          "not-performed": 97
+        },
+        "taskUnmeasuredReasons": {
+          "No actual task outcome provided": 97
+        },
+        "objectIoU": {
+          "measured": 2,
+          "notMeasured": 23,
+          "mean": 0,
+          "reasons": {
+            "annotation-rectangle-not-provided": 23
+          }
+        }
+      }
+    },
+    {
+      "backend": "mineru",
+      "mode": "warm",
+      "summary": {
+        "observations": 0,
+        "statuses": {
+          "completed": 0,
+          "failed": 0,
+          "unsupported": 0,
+          "not-performed": 0
+        },
+        "selectedChecks": {
+          "text": {
+            "passed": 0,
+            "measured": 0,
+            "notMeasured": 0,
+            "reasons": {}
+          },
+          "object": {
+            "passed": 0,
+            "measured": 0,
+            "notMeasured": 0,
+            "reasons": {}
+          },
+          "reference": {
+            "passed": 0,
+            "measured": 0,
+            "notMeasured": 0,
+            "reasons": {}
+          },
+          "citation": {
+            "passed": 0,
+            "measured": 0,
+            "notMeasured": 0,
+            "reasons": {}
+          },
+          "reading-order": {
+            "passed": 0,
+            "measured": 0,
+            "notMeasured": 0,
+            "reasons": {}
+          }
+        },
+        "actualTaskOutcomes": {
+          "passed": 0,
+          "failed": 0,
+          "unsupported": 0,
+          "not-performed": 0
+        },
+        "taskUnmeasuredReasons": {},
+        "objectIoU": {
+          "measured": 0,
+          "notMeasured": 0,
+          "mean": null,
+          "reasons": {}
+        }
+      }
+    },
+    {
+      "backend": "mineru",
+      "mode": "cache",
+      "summary": {
+        "observations": 24,
+        "statuses": {
+          "completed": 24,
+          "failed": 0,
+          "unsupported": 0,
+          "not-performed": 0
+        },
+        "selectedChecks": {
+          "text": {
+            "passed": 34,
+            "measured": 36,
+            "notMeasured": 0,
+            "reasons": {}
+          },
+          "object": {
+            "passed": 23,
+            "measured": 25,
+            "notMeasured": 0,
+            "reasons": {}
+          },
+          "reference": {
+            "passed": 0,
+            "measured": 0,
+            "notMeasured": 24,
+            "reasons": {
+              "references-not-provided": 24
+            }
+          },
+          "citation": {
+            "passed": 0,
+            "measured": 0,
+            "notMeasured": 12,
+            "reasons": {
+              "references-not-provided": 12
+            }
+          },
+          "reading-order": {
+            "passed": 0,
+            "measured": 0,
+            "notMeasured": 0,
+            "reasons": {}
+          }
+        },
+        "actualTaskOutcomes": {
+          "passed": 0,
+          "failed": 0,
+          "unsupported": 0,
+          "not-performed": 97
+        },
+        "taskUnmeasuredReasons": {
+          "No actual task outcome provided": 97
+        },
+        "objectIoU": {
+          "measured": 2,
+          "notMeasured": 23,
+          "mean": 0,
+          "reasons": {
+            "annotation-rectangle-not-provided": 23
+          }
+        }
+      }
+    }
+  ],
+  "observations": [
+    {
+      "documentId": "attention",
+      "backend": "mineru",
+      "mode": "cold",
+      "status": "completed",
+      "adapterVersion": "61bcbdf415c1785fe925cd4d78024fdc2c0c4af1",
+      "modelRevision": null,
+      "pdfSha256": "0a9bff1be3575cf9fe26a4a3d3a9175bc791ecec90de8b9deba4cff75d2b9476",
+      "durationMs": 25228,
+      "failure": null,
+      "bibliographyCoverage": null,
+      "checks": [
+        {
+          "checkId": "title",
+          "kind": "text",
+          "static": true,
+          "reason": null,
+          "iou": null,
+          "iouReason": "not-an-object-check",
+          "staticEvidence": null,
+          "task": {
+            "checkId": "title",
+            "status": "not-performed",
+            "detail": "No actual task outcome provided"
+          }
+        },
+        {
+          "checkId": "abstract",
+          "kind": "text",
+          "static": true,
+          "reason": null,
+          "iou": null,
+          "iouReason": "not-an-object-check",
+          "staticEvidence": null,
+          "task": {
+            "checkId": "abstract",
+            "status": "not-performed",
+            "detail": "No actual task outcome provided"
+          }
+        },
+        {
+          "checkId": "figure-1",
+          "kind": "object",
+          "static": true,
+          "reason": null,
+          "iou": null,
+          "iouReason": "annotation-rectangle-not-provided",
+          "staticEvidence": "localization-only",
+          "task": {
+            "checkId": "figure-1",
+            "status": "not-performed",
+            "detail": "No actual task outcome provided"
+          }
+        },
+        {
+          "checkId": "reference-1",
+          "kind": "reference",
+          "static": null,
+          "reason": "references-not-provided",
+          "iou": null,
+          "iouReason": "not-an-object-check",
+          "staticEvidence": null,
+          "task": {
+            "checkId": "reference-1",
+            "status": "not-performed",
+            "detail": "No actual task outcome provided"
+          }
+        }
+      ]
+    },
+    {
+      "documentId": "attention",
+      "backend": "mineru",
+      "mode": "cache",
+      "status": "completed",
+      "adapterVersion": "61bcbdf415c1785fe925cd4d78024fdc2c0c4af1",
+      "modelRevision": null,
+      "pdfSha256": "0a9bff1be3575cf9fe26a4a3d3a9175bc791ecec90de8b9deba4cff75d2b9476",
+      "durationMs": 614,
+      "failure": null,
+      "bibliographyCoverage": null,
+      "checks": [
+        {
+          "checkId": "title",
+          "kind": "text",
+          "static": true,
+          "reason": null,
+          "iou": null,
+          "iouReason": "not-an-object-check",
+          "staticEvidence": null,
+          "task": {
+            "checkId": "title",
+            "status": "not-performed",
+            "detail": "No actual task outcome provided"
+          }
+        },
+        {
+          "checkId": "abstract",
+          "kind": "text",
+          "static": true,
+          "reason": null,
+          "iou": null,
+          "iouReason": "not-an-object-check",
+          "staticEvidence": null,
+          "task": {
+            "checkId": "abstract",
+            "status": "not-performed",
+            "detail": "No actual task outcome provided"
+          }
+        },
+        {
+          "checkId": "figure-1",
+          "kind": "object",
+          "static": true,
+          "reason": null,
+          "iou": null,
+          "iouReason": "annotation-rectangle-not-provided",
+          "staticEvidence": "localization-only",
+          "task": {
+            "checkId": "figure-1",
+            "status": "not-performed",
+            "detail": "No actual task outcome provided"
+          }
+        },
+        {
+          "checkId": "reference-1",
+          "kind": "reference",
+          "static": null,
+          "reason": "references-not-provided",
+          "iou": null,
+          "iouReason": "not-an-object-check",
+          "staticEvidence": null,
+          "task": {
+            "checkId": "reference-1",
+            "status": "not-performed",
+            "detail": "No actual task outcome provided"
+          }
+        }
+      ]
+    },
+    {
+      "documentId": "bert",
+      "backend": "mineru",
+      "mode": "cold",
+      "status": "completed",
+      "adapterVersion": "61bcbdf415c1785fe925cd4d78024fdc2c0c4af1",
+      "modelRevision": null,
+      "pdfSha256": "58534a3c000cbcc60ed64e999a2d9ed839edc2d9894e4449e9d79e1118b5e5ba",
+      "durationMs": 24121,
+      "failure": null,
+      "bibliographyCoverage": null,
+      "checks": [
+        {
+          "checkId": "title",
+          "kind": "text",
+          "static": true,
+          "reason": null,
+          "iou": null,
+          "iouReason": "not-an-object-check",
+          "staticEvidence": null,
+          "task": {
+            "checkId": "title",
+            "status": "not-performed",
+            "detail": "No actual task outcome provided"
+          }
+        },
+        {
+          "checkId": "abstract",
+          "kind": "text",
+          "static": true,
+          "reason": null,
+          "iou": null,
+          "iouReason": "not-an-object-check",
+          "staticEvidence": null,
+          "task": {
+            "checkId": "abstract",
+            "status": "not-performed",
+            "detail": "No actual task outcome provided"
+          }
+        },
+        {
+          "checkId": "figure-1",
+          "kind": "object",
+          "static": true,
+          "reason": null,
+          "iou": null,
+          "iouReason": "annotation-rectangle-not-provided",
+          "staticEvidence": "localization-only",
+          "task": {
+            "checkId": "figure-1",
+            "status": "not-performed",
+            "detail": "No actual task outcome provided"
+          }
+        },
+        {
+          "checkId": "reference-entailment",
+          "kind": "reference",
+          "static": null,
+          "reason": "references-not-provided",
+          "iou": null,
+          "iouReason": "not-an-object-check",
+          "staticEvidence": null,
+          "task": {
+            "checkId": "reference-entailment",
+            "status": "not-performed",
+            "detail": "No actual task outcome provided"
+          }
+        }
+      ]
+    },
+    {
+      "documentId": "bert",
+      "backend": "mineru",
+      "mode": "cache",
+      "status": "completed",
+      "adapterVersion": "61bcbdf415c1785fe925cd4d78024fdc2c0c4af1",
+      "modelRevision": null,
+      "pdfSha256": "58534a3c000cbcc60ed64e999a2d9ed839edc2d9894e4449e9d79e1118b5e5ba",
+      "durationMs": 255,
+      "failure": null,
+      "bibliographyCoverage": null,
+      "checks": [
+        {
+          "checkId": "title",
+          "kind": "text",
+          "static": true,
+          "reason": null,
+          "iou": null,
+          "iouReason": "not-an-object-check",
+          "staticEvidence": null,
+          "task": {
+            "checkId": "title",
+            "status": "not-performed",
+            "detail": "No actual task outcome provided"
+          }
+        },
+        {
+          "checkId": "abstract",
+          "kind": "text",
+          "static": true,
+          "reason": null,
+          "iou": null,
+          "iouReason": "not-an-object-check",
+          "staticEvidence": null,
+          "task": {
+            "checkId": "abstract",
+            "status": "not-performed",
+            "detail": "No actual task outcome provided"
+          }
+        },
+        {
+          "checkId": "figure-1",
+          "kind": "object",
+          "static": true,
+          "reason": null,
+          "iou": null,
+          "iouReason": "annotation-rectangle-not-provided",
+          "staticEvidence": "localization-only",
+          "task": {
+            "checkId": "figure-1",
+            "status": "not-performed",
+            "detail": "No actual task outcome provided"
+          }
+        },
+        {
+          "checkId": "reference-entailment",
+          "kind": "reference",
+          "static": null,
+          "reason": "references-not-provided",
+          "iou": null,
+          "iouReason": "not-an-object-check",
+          "staticEvidence": null,
+          "task": {
+            "checkId": "reference-entailment",
+            "status": "not-performed",
+            "detail": "No actual task outcome provided"
+          }
+        }
+      ]
+    },
+    {
+      "documentId": "resnet",
+      "backend": "mineru",
+      "mode": "cold",
+      "status": "completed",
+      "adapterVersion": "61bcbdf415c1785fe925cd4d78024fdc2c0c4af1",
+      "modelRevision": null,
+      "pdfSha256": "1e0651b6810ecba34a3dbc5b5b0209226f889004607c1f203540a48d64e5a93a",
+      "durationMs": 32415,
+      "failure": null,
+      "bibliographyCoverage": null,
+      "checks": [
+        {
+          "checkId": "title",
+          "kind": "text",
+          "static": true,
+          "reason": null,
+          "iou": null,
+          "iouReason": "not-an-object-check",
+          "staticEvidence": null,
+          "task": {
+            "checkId": "title",
+            "status": "not-performed",
+            "detail": "No actual task outcome provided"
+          }
+        },
+        {
+          "checkId": "abstract",
+          "kind": "text",
+          "static": true,
+          "reason": null,
+          "iou": null,
+          "iouReason": "not-an-object-check",
+          "staticEvidence": null,
+          "task": {
+            "checkId": "abstract",
+            "status": "not-performed",
+            "detail": "No actual task outcome provided"
+          }
+        },
+        {
+          "checkId": "figure-2",
+          "kind": "object",
+          "static": true,
+          "reason": null,
+          "iou": null,
+          "iouReason": "annotation-rectangle-not-provided",
+          "staticEvidence": "localization-only",
+          "task": {
+            "checkId": "figure-2",
+            "status": "not-performed",
+            "detail": "No actual task outcome provided"
+          }
+        },
+        {
+          "checkId": "reference-2",
+          "kind": "reference",
+          "static": null,
+          "reason": "references-not-provided",
+          "iou": null,
+          "iouReason": "not-an-object-check",
+          "staticEvidence": null,
+          "task": {
+            "checkId": "reference-2",
+            "status": "not-performed",
+            "detail": "No actual task outcome provided"
+          }
+        }
+      ]
+    },
+    {
+      "documentId": "resnet",
+      "backend": "mineru",
+      "mode": "cache",
+      "status": "completed",
+      "adapterVersion": "61bcbdf415c1785fe925cd4d78024fdc2c0c4af1",
+      "modelRevision": null,
+      "pdfSha256": "1e0651b6810ecba34a3dbc5b5b0209226f889004607c1f203540a48d64e5a93a",
+      "durationMs": 306,
+      "failure": null,
+      "bibliographyCoverage": null,
+      "checks": [
+        {
+          "checkId": "title",
+          "kind": "text",
+          "static": true,
+          "reason": null,
+          "iou": null,
+          "iouReason": "not-an-object-check",
+          "staticEvidence": null,
+          "task": {
+            "checkId": "title",
+            "status": "not-performed",
+            "detail": "No actual task outcome provided"
+          }
+        },
+        {
+          "checkId": "abstract",
+          "kind": "text",
+          "static": true,
+          "reason": null,
+          "iou": null,
+          "iouReason": "not-an-object-check",
+          "staticEvidence": null,
+          "task": {
+            "checkId": "abstract",
+            "status": "not-performed",
+            "detail": "No actual task outcome provided"
+          }
+        },
+        {
+          "checkId": "figure-2",
+          "kind": "object",
+          "static": true,
+          "reason": null,
+          "iou": null,
+          "iouReason": "annotation-rectangle-not-provided",
+          "staticEvidence": "localization-only",
+          "task": {
+            "checkId": "figure-2",
+            "status": "not-performed",
+            "detail": "No actual task outcome provided"
+          }
+        },
+        {
+          "checkId": "reference-2",
+          "kind": "reference",
+          "static": null,
+          "reason": "references-not-provided",
+          "iou": null,
+          "iouReason": "not-an-object-check",
+          "staticEvidence": null,
+          "task": {
+            "checkId": "reference-2",
+            "status": "not-performed",
+            "detail": "No actual task outcome provided"
+          }
+        }
+      ]
+    },
+    {
+      "documentId": "transformer-xl",
+      "backend": "mineru",
+      "mode": "cold",
+      "status": "completed",
+      "adapterVersion": "61bcbdf415c1785fe925cd4d78024fdc2c0c4af1",
+      "modelRevision": null,
+      "pdfSha256": "6c772b056577040ba34522ebb44f104f66c82accf160972cc23c9792db275373",
+      "durationMs": 36801,
+      "failure": null,
+      "bibliographyCoverage": null,
+      "checks": [
+        {
+          "checkId": "title",
+          "kind": "text",
+          "static": true,
+          "reason": null,
+          "iou": null,
+          "iouReason": "not-an-object-check",
+          "staticEvidence": null,
+          "task": {
+            "checkId": "title",
+            "status": "not-performed",
+            "detail": "No actual task outcome provided"
+          }
+        },
+        {
+          "checkId": "abstract",
+          "kind": "text",
+          "static": true,
+          "reason": null,
+          "iou": null,
+          "iouReason": "not-an-object-check",
+          "staticEvidence": null,
+          "task": {
+            "checkId": "abstract",
+            "status": "not-performed",
+            "detail": "No actual task outcome provided"
+          }
+        },
+        {
+          "checkId": "figure-1",
+          "kind": "object",
+          "static": true,
+          "reason": null,
+          "iou": null,
+          "iouReason": "annotation-rectangle-not-provided",
+          "staticEvidence": "localization-only",
+          "task": {
+            "checkId": "figure-1",
+            "status": "not-performed",
+            "detail": "No actual task outcome provided"
+          }
+        },
+        {
+          "checkId": "reference-baevski",
+          "kind": "reference",
+          "static": null,
+          "reason": "references-not-provided",
+          "iou": null,
+          "iouReason": "not-an-object-check",
+          "staticEvidence": null,
+          "task": {
+            "checkId": "reference-baevski",
+            "status": "not-performed",
+            "detail": "No actual task outcome provided"
+          }
+        }
+      ]
+    },
+    {
+      "documentId": "transformer-xl",
+      "backend": "mineru",
+      "mode": "cache",
+      "status": "completed",
+      "adapterVersion": "61bcbdf415c1785fe925cd4d78024fdc2c0c4af1",
+      "modelRevision": null,
+      "pdfSha256": "6c772b056577040ba34522ebb44f104f66c82accf160972cc23c9792db275373",
+      "durationMs": 996,
+      "failure": null,
+      "bibliographyCoverage": null,
+      "checks": [
+        {
+          "checkId": "title",
+          "kind": "text",
+          "static": true,
+          "reason": null,
+          "iou": null,
+          "iouReason": "not-an-object-check",
+          "staticEvidence": null,
+          "task": {
+            "checkId": "title",
+            "status": "not-performed",
+            "detail": "No actual task outcome provided"
+          }
+        },
+        {
+          "checkId": "abstract",
+          "kind": "text",
+          "static": true,
+          "reason": null,
+          "iou": null,
+          "iouReason": "not-an-object-check",
+          "staticEvidence": null,
+          "task": {
+            "checkId": "abstract",
+            "status": "not-performed",
+            "detail": "No actual task outcome provided"
+          }
+        },
+        {
+          "checkId": "figure-1",
+          "kind": "object",
+          "static": true,
+          "reason": null,
+          "iou": null,
+          "iouReason": "annotation-rectangle-not-provided",
+          "staticEvidence": "localization-only",
+          "task": {
+            "checkId": "figure-1",
+            "status": "not-performed",
+            "detail": "No actual task outcome provided"
+          }
+        },
+        {
+          "checkId": "reference-baevski",
+          "kind": "reference",
+          "static": null,
+          "reason": "references-not-provided",
+          "iou": null,
+          "iouReason": "not-an-object-check",
+          "staticEvidence": null,
+          "task": {
+            "checkId": "reference-baevski",
+            "status": "not-performed",
+            "detail": "No actual task outcome provided"
+          }
+        }
+      ]
+    },
+    {
+      "documentId": "vae",
+      "backend": "mineru",
+      "mode": "cold",
+      "status": "completed",
+      "adapterVersion": "61bcbdf415c1785fe925cd4d78024fdc2c0c4af1",
+      "modelRevision": null,
+      "pdfSha256": "1a320bb73327d1ccb5d8df2d290ade85f80a22e2131635b2d87b5df9b6994153",
+      "durationMs": 48730,
+      "failure": null,
+      "bibliographyCoverage": null,
+      "checks": [
+        {
+          "checkId": "title",
+          "kind": "text",
+          "static": true,
+          "reason": null,
+          "iou": null,
+          "iouReason": "not-an-object-check",
+          "staticEvidence": null,
+          "task": {
+            "checkId": "title",
+            "status": "not-performed",
+            "detail": "No actual task outcome provided"
+          }
+        },
+        {
+          "checkId": "abstract",
+          "kind": "text",
+          "static": true,
+          "reason": null,
+          "iou": null,
+          "iouReason": "not-an-object-check",
+          "staticEvidence": null,
+          "task": {
+            "checkId": "abstract",
+            "status": "not-performed",
+            "detail": "No actual task outcome provided"
+          }
+        },
+        {
+          "checkId": "figure-1",
+          "kind": "object",
+          "static": true,
+          "reason": null,
+          "iou": null,
+          "iouReason": "annotation-rectangle-not-provided",
+          "staticEvidence": "localization-only",
+          "task": {
+            "checkId": "figure-1",
+            "status": "not-performed",
+            "detail": "No actual task outcome provided"
+          }
+        },
+        {
+          "checkId": "reference-bjp12",
+          "kind": "reference",
+          "static": null,
+          "reason": "references-not-provided",
+          "iou": null,
+          "iouReason": "not-an-object-check",
+          "staticEvidence": null,
+          "task": {
+            "checkId": "reference-bjp12",
+            "status": "not-performed",
+            "detail": "No actual task outcome provided"
+          }
+        }
+      ]
+    },
+    {
+      "documentId": "vae",
+      "backend": "mineru",
+      "mode": "cache",
+      "status": "completed",
+      "adapterVersion": "61bcbdf415c1785fe925cd4d78024fdc2c0c4af1",
+      "modelRevision": null,
+      "pdfSha256": "1a320bb73327d1ccb5d8df2d290ade85f80a22e2131635b2d87b5df9b6994153",
+      "durationMs": 809,
+      "failure": null,
+      "bibliographyCoverage": null,
+      "checks": [
+        {
+          "checkId": "title",
+          "kind": "text",
+          "static": true,
+          "reason": null,
+          "iou": null,
+          "iouReason": "not-an-object-check",
+          "staticEvidence": null,
+          "task": {
+            "checkId": "title",
+            "status": "not-performed",
+            "detail": "No actual task outcome provided"
+          }
+        },
+        {
+          "checkId": "abstract",
+          "kind": "text",
+          "static": true,
+          "reason": null,
+          "iou": null,
+          "iouReason": "not-an-object-check",
+          "staticEvidence": null,
+          "task": {
+            "checkId": "abstract",
+            "status": "not-performed",
+            "detail": "No actual task outcome provided"
+          }
+        },
+        {
+          "checkId": "figure-1",
+          "kind": "object",
+          "static": true,
+          "reason": null,
+          "iou": null,
+          "iouReason": "annotation-rectangle-not-provided",
+          "staticEvidence": "localization-only",
+          "task": {
+            "checkId": "figure-1",
+            "status": "not-performed",
+            "detail": "No actual task outcome provided"
+          }
+        },
+        {
+          "checkId": "reference-bjp12",
+          "kind": "reference",
+          "static": null,
+          "reason": "references-not-provided",
+          "iou": null,
+          "iouReason": "not-an-object-check",
+          "staticEvidence": null,
+          "task": {
+            "checkId": "reference-bjp12",
+            "status": "not-performed",
+            "detail": "No actual task outcome provided"
+          }
+        }
+      ]
+    },
+    {
+      "documentId": "adam",
+      "backend": "mineru",
+      "mode": "cold",
+      "status": "completed",
+      "adapterVersion": "61bcbdf415c1785fe925cd4d78024fdc2c0c4af1",
+      "modelRevision": null,
+      "pdfSha256": "935a5a15616961aff21529d86a754570028843407adfe858f1d18584b84293a7",
+      "durationMs": 41585,
+      "failure": null,
+      "bibliographyCoverage": null,
+      "checks": [
+        {
+          "checkId": "title",
+          "kind": "text",
+          "static": true,
+          "reason": null,
+          "iou": null,
+          "iouReason": "not-an-object-check",
+          "staticEvidence": null,
+          "task": {
+            "checkId": "title",
+            "status": "not-performed",
+            "detail": "No actual task outcome provided"
+          }
+        },
+        {
+          "checkId": "abstract",
+          "kind": "text",
+          "static": true,
+          "reason": null,
+          "iou": null,
+          "iouReason": "not-an-object-check",
+          "staticEvidence": null,
+          "task": {
+            "checkId": "abstract",
+            "status": "not-performed",
+            "detail": "No actual task outcome provided"
+          }
+        },
+        {
+          "checkId": "figure-1",
+          "kind": "object",
+          "static": true,
+          "reason": null,
+          "iou": null,
+          "iouReason": "annotation-rectangle-not-provided",
+          "staticEvidence": "localization-only",
+          "task": {
+            "checkId": "figure-1",
+            "status": "not-performed",
+            "detail": "No actual task outcome provided"
+          }
+        },
+        {
+          "checkId": "reference-vae",
+          "kind": "reference",
+          "static": null,
+          "reason": "references-not-provided",
+          "iou": null,
+          "iouReason": "not-an-object-check",
+          "staticEvidence": null,
+          "task": {
+            "checkId": "reference-vae",
+            "status": "not-performed",
+            "detail": "No actual task outcome provided"
+          }
+        }
+      ]
+    },
+    {
+      "documentId": "adam",
+      "backend": "mineru",
+      "mode": "cache",
+      "status": "completed",
+      "adapterVersion": "61bcbdf415c1785fe925cd4d78024fdc2c0c4af1",
+      "modelRevision": null,
+      "pdfSha256": "935a5a15616961aff21529d86a754570028843407adfe858f1d18584b84293a7",
+      "durationMs": 272,
+      "failure": null,
+      "bibliographyCoverage": null,
+      "checks": [
+        {
+          "checkId": "title",
+          "kind": "text",
+          "static": true,
+          "reason": null,
+          "iou": null,
+          "iouReason": "not-an-object-check",
+          "staticEvidence": null,
+          "task": {
+            "checkId": "title",
+            "status": "not-performed",
+            "detail": "No actual task outcome provided"
+          }
+        },
+        {
+          "checkId": "abstract",
+          "kind": "text",
+          "static": true,
+          "reason": null,
+          "iou": null,
+          "iouReason": "not-an-object-check",
+          "staticEvidence": null,
+          "task": {
+            "checkId": "abstract",
+            "status": "not-performed",
+            "detail": "No actual task outcome provided"
+          }
+        },
+        {
+          "checkId": "figure-1",
+          "kind": "object",
+          "static": true,
+          "reason": null,
+          "iou": null,
+          "iouReason": "annotation-rectangle-not-provided",
+          "staticEvidence": "localization-only",
+          "task": {
+            "checkId": "figure-1",
+            "status": "not-performed",
+            "detail": "No actual task outcome provided"
+          }
+        },
+        {
+          "checkId": "reference-vae",
+          "kind": "reference",
+          "static": null,
+          "reason": "references-not-provided",
+          "iou": null,
+          "iouReason": "not-an-object-check",
+          "staticEvidence": null,
+          "task": {
+            "checkId": "reference-vae",
+            "status": "not-performed",
+            "detail": "No actual task outcome provided"
+          }
+        }
+      ]
+    },
+    {
+      "documentId": "gpt3",
+      "backend": "mineru",
+      "mode": "cold",
+      "status": "completed",
+      "adapterVersion": "61bcbdf415c1785fe925cd4d78024fdc2c0c4af1",
+      "modelRevision": null,
+      "pdfSha256": "f756a2d3e23c2770a3e8c4354965e98d37411c18aab91556df0c335675dec396",
+      "durationMs": 147868,
+      "failure": null,
+      "bibliographyCoverage": null,
+      "checks": [
+        {
+          "checkId": "title",
+          "kind": "text",
+          "static": true,
+          "reason": null,
+          "iou": null,
+          "iouReason": "not-an-object-check",
+          "staticEvidence": null,
+          "task": {
+            "checkId": "title",
+            "status": "not-performed",
+            "detail": "No actual task outcome provided"
+          }
+        },
+        {
+          "checkId": "abstract",
+          "kind": "text",
+          "static": true,
+          "reason": null,
+          "iou": null,
+          "iouReason": "not-an-object-check",
+          "staticEvidence": null,
+          "task": {
+            "checkId": "abstract",
+            "status": "not-performed",
+            "detail": "No actual task outcome provided"
+          }
+        },
+        {
+          "checkId": "figure-1-1",
+          "kind": "object",
+          "static": true,
+          "reason": null,
+          "iou": null,
+          "iouReason": "annotation-rectangle-not-provided",
+          "staticEvidence": "localization-only",
+          "task": {
+            "checkId": "figure-1-1",
+            "status": "not-performed",
+            "detail": "No actual task outcome provided"
+          }
+        },
+        {
+          "checkId": "reference-ai19",
+          "kind": "reference",
+          "static": null,
+          "reason": "references-not-provided",
+          "iou": null,
+          "iouReason": "not-an-object-check",
+          "staticEvidence": null,
+          "task": {
+            "checkId": "reference-ai19",
+            "status": "not-performed",
+            "detail": "No actual task outcome provided"
+          }
+        }
+      ]
+    },
+    {
+      "documentId": "gpt3",
+      "backend": "mineru",
+      "mode": "cache",
+      "status": "completed",
+      "adapterVersion": "61bcbdf415c1785fe925cd4d78024fdc2c0c4af1",
+      "modelRevision": null,
+      "pdfSha256": "f756a2d3e23c2770a3e8c4354965e98d37411c18aab91556df0c335675dec396",
+      "durationMs": 1410,
+      "failure": null,
+      "bibliographyCoverage": null,
+      "checks": [
+        {
+          "checkId": "title",
+          "kind": "text",
+          "static": true,
+          "reason": null,
+          "iou": null,
+          "iouReason": "not-an-object-check",
+          "staticEvidence": null,
+          "task": {
+            "checkId": "title",
+            "status": "not-performed",
+            "detail": "No actual task outcome provided"
+          }
+        },
+        {
+          "checkId": "abstract",
+          "kind": "text",
+          "static": true,
+          "reason": null,
+          "iou": null,
+          "iouReason": "not-an-object-check",
+          "staticEvidence": null,
+          "task": {
+            "checkId": "abstract",
+            "status": "not-performed",
+            "detail": "No actual task outcome provided"
+          }
+        },
+        {
+          "checkId": "figure-1-1",
+          "kind": "object",
+          "static": true,
+          "reason": null,
+          "iou": null,
+          "iouReason": "annotation-rectangle-not-provided",
+          "staticEvidence": "localization-only",
+          "task": {
+            "checkId": "figure-1-1",
+            "status": "not-performed",
+            "detail": "No actual task outcome provided"
+          }
+        },
+        {
+          "checkId": "reference-ai19",
+          "kind": "reference",
+          "static": null,
+          "reason": "references-not-provided",
+          "iou": null,
+          "iouReason": "not-an-object-check",
+          "staticEvidence": null,
+          "task": {
+            "checkId": "reference-ai19",
+            "status": "not-performed",
+            "detail": "No actual task outcome provided"
+          }
+        }
+      ]
+    },
+    {
+      "documentId": "clip",
+      "backend": "mineru",
+      "mode": "cold",
+      "status": "completed",
+      "adapterVersion": "61bcbdf415c1785fe925cd4d78024fdc2c0c4af1",
+      "modelRevision": null,
+      "pdfSha256": "6478b6e571a7d6fcd846d8ef77bfd60c285f1986abb8f475eedc43de403074f5",
+      "durationMs": 145094,
+      "failure": null,
+      "bibliographyCoverage": null,
+      "checks": [
+        {
+          "checkId": "title",
+          "kind": "text",
+          "static": true,
+          "reason": null,
+          "iou": null,
+          "iouReason": "not-an-object-check",
+          "staticEvidence": null,
+          "task": {
+            "checkId": "title",
+            "status": "not-performed",
+            "detail": "No actual task outcome provided"
+          }
+        },
+        {
+          "checkId": "abstract",
+          "kind": "text",
+          "static": true,
+          "reason": null,
+          "iou": null,
+          "iouReason": "not-an-object-check",
+          "staticEvidence": null,
+          "task": {
+            "checkId": "abstract",
+            "status": "not-performed",
+            "detail": "No actual task outcome provided"
+          }
+        },
+        {
+          "checkId": "figure-1",
+          "kind": "object",
+          "static": true,
+          "reason": null,
+          "iou": null,
+          "iouReason": "annotation-rectangle-not-provided",
+          "staticEvidence": "localization-only",
+          "task": {
+            "checkId": "figure-1",
+            "status": "not-performed",
+            "detail": "No actual task outcome provided"
+          }
+        },
+        {
+          "checkId": "reference-andreas",
+          "kind": "reference",
+          "static": null,
+          "reason": "references-not-provided",
+          "iou": null,
+          "iouReason": "not-an-object-check",
+          "staticEvidence": null,
+          "task": {
+            "checkId": "reference-andreas",
+            "status": "not-performed",
+            "detail": "No actual task outcome provided"
+          }
+        }
+      ]
+    },
+    {
+      "documentId": "clip",
+      "backend": "mineru",
+      "mode": "cache",
+      "status": "completed",
+      "adapterVersion": "61bcbdf415c1785fe925cd4d78024fdc2c0c4af1",
+      "modelRevision": null,
+      "pdfSha256": "6478b6e571a7d6fcd846d8ef77bfd60c285f1986abb8f475eedc43de403074f5",
+      "durationMs": 1551,
+      "failure": null,
+      "bibliographyCoverage": null,
+      "checks": [
+        {
+          "checkId": "title",
+          "kind": "text",
+          "static": true,
+          "reason": null,
+          "iou": null,
+          "iouReason": "not-an-object-check",
+          "staticEvidence": null,
+          "task": {
+            "checkId": "title",
+            "status": "not-performed",
+            "detail": "No actual task outcome provided"
+          }
+        },
+        {
+          "checkId": "abstract",
+          "kind": "text",
+          "static": true,
+          "reason": null,
+          "iou": null,
+          "iouReason": "not-an-object-check",
+          "staticEvidence": null,
+          "task": {
+            "checkId": "abstract",
+            "status": "not-performed",
+            "detail": "No actual task outcome provided"
+          }
+        },
+        {
+          "checkId": "figure-1",
+          "kind": "object",
+          "static": true,
+          "reason": null,
+          "iou": null,
+          "iouReason": "annotation-rectangle-not-provided",
+          "staticEvidence": "localization-only",
+          "task": {
+            "checkId": "figure-1",
+            "status": "not-performed",
+            "detail": "No actual task outcome provided"
+          }
+        },
+        {
+          "checkId": "reference-andreas",
+          "kind": "reference",
+          "static": null,
+          "reason": "references-not-provided",
+          "iou": null,
+          "iouReason": "not-an-object-check",
+          "staticEvidence": null,
+          "task": {
+            "checkId": "reference-andreas",
+            "status": "not-performed",
+            "detail": "No actual task outcome provided"
+          }
+        }
+      ]
+    },
+    {
+      "documentId": "vit",
+      "backend": "mineru",
+      "mode": "cold",
+      "status": "completed",
+      "adapterVersion": "61bcbdf415c1785fe925cd4d78024fdc2c0c4af1",
+      "modelRevision": null,
+      "pdfSha256": "d33feb34fcf7aea256439a7f487197dcbb896e31a9d86e30e37d252672c4da78",
+      "durationMs": 50799,
+      "failure": null,
+      "bibliographyCoverage": null,
+      "checks": [
+        {
+          "checkId": "title",
+          "kind": "text",
+          "static": true,
+          "reason": null,
+          "iou": null,
+          "iouReason": "not-an-object-check",
+          "staticEvidence": null,
+          "task": {
+            "checkId": "title",
+            "status": "not-performed",
+            "detail": "No actual task outcome provided"
+          }
+        },
+        {
+          "checkId": "abstract",
+          "kind": "text",
+          "static": true,
+          "reason": null,
+          "iou": null,
+          "iouReason": "not-an-object-check",
+          "staticEvidence": null,
+          "task": {
+            "checkId": "abstract",
+            "status": "not-performed",
+            "detail": "No actual task outcome provided"
+          }
+        },
+        {
+          "checkId": "figure-1",
+          "kind": "object",
+          "static": true,
+          "reason": null,
+          "iou": null,
+          "iouReason": "annotation-rectangle-not-provided",
+          "staticEvidence": "localization-only",
+          "task": {
+            "checkId": "figure-1",
+            "status": "not-performed",
+            "detail": "No actual task outcome provided"
+          }
+        },
+        {
+          "checkId": "reference-abnar",
+          "kind": "reference",
+          "static": null,
+          "reason": "references-not-provided",
+          "iou": null,
+          "iouReason": "not-an-object-check",
+          "staticEvidence": null,
+          "task": {
+            "checkId": "reference-abnar",
+            "status": "not-performed",
+            "detail": "No actual task outcome provided"
+          }
+        }
+      ]
+    },
+    {
+      "documentId": "vit",
+      "backend": "mineru",
+      "mode": "cache",
+      "status": "completed",
+      "adapterVersion": "61bcbdf415c1785fe925cd4d78024fdc2c0c4af1",
+      "modelRevision": null,
+      "pdfSha256": "d33feb34fcf7aea256439a7f487197dcbb896e31a9d86e30e37d252672c4da78",
+      "durationMs": 835,
+      "failure": null,
+      "bibliographyCoverage": null,
+      "checks": [
+        {
+          "checkId": "title",
+          "kind": "text",
+          "static": true,
+          "reason": null,
+          "iou": null,
+          "iouReason": "not-an-object-check",
+          "staticEvidence": null,
+          "task": {
+            "checkId": "title",
+            "status": "not-performed",
+            "detail": "No actual task outcome provided"
+          }
+        },
+        {
+          "checkId": "abstract",
+          "kind": "text",
+          "static": true,
+          "reason": null,
+          "iou": null,
+          "iouReason": "not-an-object-check",
+          "staticEvidence": null,
+          "task": {
+            "checkId": "abstract",
+            "status": "not-performed",
+            "detail": "No actual task outcome provided"
+          }
+        },
+        {
+          "checkId": "figure-1",
+          "kind": "object",
+          "static": true,
+          "reason": null,
+          "iou": null,
+          "iouReason": "annotation-rectangle-not-provided",
+          "staticEvidence": "localization-only",
+          "task": {
+            "checkId": "figure-1",
+            "status": "not-performed",
+            "detail": "No actual task outcome provided"
+          }
+        },
+        {
+          "checkId": "reference-abnar",
+          "kind": "reference",
+          "static": null,
+          "reason": "references-not-provided",
+          "iou": null,
+          "iouReason": "not-an-object-check",
+          "staticEvidence": null,
+          "task": {
+            "checkId": "reference-abnar",
+            "status": "not-performed",
+            "detail": "No actual task outcome provided"
+          }
+        }
+      ]
+    },
+    {
+      "documentId": "lora",
+      "backend": "mineru",
+      "mode": "cold",
+      "status": "completed",
+      "adapterVersion": "61bcbdf415c1785fe925cd4d78024fdc2c0c4af1",
+      "modelRevision": null,
+      "pdfSha256": "38a259c1926b724363fcfbd8e5f80fcadf0dd8d9ab6944fea8c00e74fd7590b0",
+      "durationMs": 53478,
+      "failure": null,
+      "bibliographyCoverage": null,
+      "checks": [
+        {
+          "checkId": "title",
+          "kind": "text",
+          "static": true,
+          "reason": null,
+          "iou": null,
+          "iouReason": "not-an-object-check",
+          "staticEvidence": null,
+          "task": {
+            "checkId": "title",
+            "status": "not-performed",
+            "detail": "No actual task outcome provided"
+          }
+        },
+        {
+          "checkId": "abstract",
+          "kind": "text",
+          "static": true,
+          "reason": null,
+          "iou": null,
+          "iouReason": "not-an-object-check",
+          "staticEvidence": null,
+          "task": {
+            "checkId": "abstract",
+            "status": "not-performed",
+            "detail": "No actual task outcome provided"
+          }
+        },
+        {
+          "checkId": "table-3",
+          "kind": "object",
+          "static": true,
+          "reason": null,
+          "iou": null,
+          "iouReason": "annotation-rectangle-not-provided",
+          "staticEvidence": "localization-only",
+          "task": {
+            "checkId": "table-3",
+            "status": "not-performed",
+            "detail": "No actual task outcome provided"
+          }
+        },
+        {
+          "checkId": "reference-1",
+          "kind": "reference",
+          "static": null,
+          "reason": "references-not-provided",
+          "iou": null,
+          "iouReason": "not-an-object-check",
+          "staticEvidence": null,
+          "task": {
+            "checkId": "reference-1",
+            "status": "not-performed",
+            "detail": "No actual task outcome provided"
+          }
+        }
+      ]
+    },
+    {
+      "documentId": "lora",
+      "backend": "mineru",
+      "mode": "cache",
+      "status": "completed",
+      "adapterVersion": "61bcbdf415c1785fe925cd4d78024fdc2c0c4af1",
+      "modelRevision": null,
+      "pdfSha256": "38a259c1926b724363fcfbd8e5f80fcadf0dd8d9ab6944fea8c00e74fd7590b0",
+      "durationMs": 437,
+      "failure": null,
+      "bibliographyCoverage": null,
+      "checks": [
+        {
+          "checkId": "title",
+          "kind": "text",
+          "static": true,
+          "reason": null,
+          "iou": null,
+          "iouReason": "not-an-object-check",
+          "staticEvidence": null,
+          "task": {
+            "checkId": "title",
+            "status": "not-performed",
+            "detail": "No actual task outcome provided"
+          }
+        },
+        {
+          "checkId": "abstract",
+          "kind": "text",
+          "static": true,
+          "reason": null,
+          "iou": null,
+          "iouReason": "not-an-object-check",
+          "staticEvidence": null,
+          "task": {
+            "checkId": "abstract",
+            "status": "not-performed",
+            "detail": "No actual task outcome provided"
+          }
+        },
+        {
+          "checkId": "table-3",
+          "kind": "object",
+          "static": true,
+          "reason": null,
+          "iou": null,
+          "iouReason": "annotation-rectangle-not-provided",
+          "staticEvidence": "localization-only",
+          "task": {
+            "checkId": "table-3",
+            "status": "not-performed",
+            "detail": "No actual task outcome provided"
+          }
+        },
+        {
+          "checkId": "reference-1",
+          "kind": "reference",
+          "static": null,
+          "reason": "references-not-provided",
+          "iou": null,
+          "iouReason": "not-an-object-check",
+          "staticEvidence": null,
+          "task": {
+            "checkId": "reference-1",
+            "status": "not-performed",
+            "detail": "No actual task outcome provided"
+          }
+        }
+      ]
+    },
+    {
+      "documentId": "rag",
+      "backend": "mineru",
+      "mode": "cold",
+      "status": "completed",
+      "adapterVersion": "61bcbdf415c1785fe925cd4d78024fdc2c0c4af1",
+      "modelRevision": null,
+      "pdfSha256": "25b55fd0f7c6c91cbe2c88690a33923077103e8f563d154faa1ce11d3527e601",
+      "durationMs": 53971,
+      "failure": null,
+      "bibliographyCoverage": null,
+      "checks": [
+        {
+          "checkId": "title",
+          "kind": "text",
+          "static": true,
+          "reason": null,
+          "iou": null,
+          "iouReason": "not-an-object-check",
+          "staticEvidence": null,
+          "task": {
+            "checkId": "title",
+            "status": "not-performed",
+            "detail": "No actual task outcome provided"
+          }
+        },
+        {
+          "checkId": "abstract",
+          "kind": "text",
+          "static": true,
+          "reason": null,
+          "iou": null,
+          "iouReason": "not-an-object-check",
+          "staticEvidence": null,
+          "task": {
+            "checkId": "abstract",
+            "status": "not-performed",
+            "detail": "No actual task outcome provided"
+          }
+        },
+        {
+          "checkId": "table-3",
+          "kind": "object",
+          "static": true,
+          "reason": null,
+          "iou": null,
+          "iouReason": "annotation-rectangle-not-provided",
+          "staticEvidence": "localization-only",
+          "task": {
+            "checkId": "table-3",
+            "status": "not-performed",
+            "detail": "No actual task outcome provided"
+          }
+        },
+        {
+          "checkId": "reference-bert",
+          "kind": "reference",
+          "static": null,
+          "reason": "references-not-provided",
+          "iou": null,
+          "iouReason": "not-an-object-check",
+          "staticEvidence": null,
+          "task": {
+            "checkId": "reference-bert",
+            "status": "not-performed",
+            "detail": "No actual task outcome provided"
+          }
+        }
+      ]
+    },
+    {
+      "documentId": "rag",
+      "backend": "mineru",
+      "mode": "cache",
+      "status": "completed",
+      "adapterVersion": "61bcbdf415c1785fe925cd4d78024fdc2c0c4af1",
+      "modelRevision": null,
+      "pdfSha256": "25b55fd0f7c6c91cbe2c88690a33923077103e8f563d154faa1ce11d3527e601",
+      "durationMs": 303,
+      "failure": null,
+      "bibliographyCoverage": null,
+      "checks": [
+        {
+          "checkId": "title",
+          "kind": "text",
+          "static": true,
+          "reason": null,
+          "iou": null,
+          "iouReason": "not-an-object-check",
+          "staticEvidence": null,
+          "task": {
+            "checkId": "title",
+            "status": "not-performed",
+            "detail": "No actual task outcome provided"
+          }
+        },
+        {
+          "checkId": "abstract",
+          "kind": "text",
+          "static": true,
+          "reason": null,
+          "iou": null,
+          "iouReason": "not-an-object-check",
+          "staticEvidence": null,
+          "task": {
+            "checkId": "abstract",
+            "status": "not-performed",
+            "detail": "No actual task outcome provided"
+          }
+        },
+        {
+          "checkId": "table-3",
+          "kind": "object",
+          "static": true,
+          "reason": null,
+          "iou": null,
+          "iouReason": "annotation-rectangle-not-provided",
+          "staticEvidence": "localization-only",
+          "task": {
+            "checkId": "table-3",
+            "status": "not-performed",
+            "detail": "No actual task outcome provided"
+          }
+        },
+        {
+          "checkId": "reference-bert",
+          "kind": "reference",
+          "static": null,
+          "reason": "references-not-provided",
+          "iou": null,
+          "iouReason": "not-an-object-check",
+          "staticEvidence": null,
+          "task": {
+            "checkId": "reference-bert",
+            "status": "not-performed",
+            "detail": "No actual task outcome provided"
+          }
+        }
+      ]
+    },
+    {
+      "documentId": "t5",
+      "backend": "mineru",
+      "mode": "cold",
+      "status": "completed",
+      "adapterVersion": "61bcbdf415c1785fe925cd4d78024fdc2c0c4af1",
+      "modelRevision": null,
+      "pdfSha256": "b41ee513826361ff4d6076ded32e35fa6bc9dea19f6ba2b98feeb1a65c778483",
+      "durationMs": 152670,
+      "failure": null,
+      "bibliographyCoverage": null,
+      "checks": [
+        {
+          "checkId": "title",
+          "kind": "text",
+          "static": true,
+          "reason": null,
+          "iou": null,
+          "iouReason": "not-an-object-check",
+          "staticEvidence": null,
+          "task": {
+            "checkId": "title",
+            "status": "not-performed",
+            "detail": "No actual task outcome provided"
+          }
+        },
+        {
+          "checkId": "abstract",
+          "kind": "text",
+          "static": true,
+          "reason": null,
+          "iou": null,
+          "iouReason": "not-an-object-check",
+          "staticEvidence": null,
+          "task": {
+            "checkId": "abstract",
+            "status": "not-performed",
+            "detail": "No actual task outcome provided"
+          }
+        },
+        {
+          "checkId": "figure-1",
+          "kind": "object",
+          "static": true,
+          "reason": null,
+          "iou": null,
+          "iouReason": "annotation-rectangle-not-provided",
+          "staticEvidence": "localization-only",
+          "task": {
+            "checkId": "figure-1",
+            "status": "not-performed",
+            "detail": "No actual task outcome provided"
+          }
+        },
+        {
+          "checkId": "reference-anil",
+          "kind": "reference",
+          "static": null,
+          "reason": "references-not-provided",
+          "iou": null,
+          "iouReason": "not-an-object-check",
+          "staticEvidence": null,
+          "task": {
+            "checkId": "reference-anil",
+            "status": "not-performed",
+            "detail": "No actual task outcome provided"
+          }
+        }
+      ]
+    },
+    {
+      "documentId": "t5",
+      "backend": "mineru",
+      "mode": "cache",
+      "status": "completed",
+      "adapterVersion": "61bcbdf415c1785fe925cd4d78024fdc2c0c4af1",
+      "modelRevision": null,
+      "pdfSha256": "b41ee513826361ff4d6076ded32e35fa6bc9dea19f6ba2b98feeb1a65c778483",
+      "durationMs": 421,
+      "failure": null,
+      "bibliographyCoverage": null,
+      "checks": [
+        {
+          "checkId": "title",
+          "kind": "text",
+          "static": true,
+          "reason": null,
+          "iou": null,
+          "iouReason": "not-an-object-check",
+          "staticEvidence": null,
+          "task": {
+            "checkId": "title",
+            "status": "not-performed",
+            "detail": "No actual task outcome provided"
+          }
+        },
+        {
+          "checkId": "abstract",
+          "kind": "text",
+          "static": true,
+          "reason": null,
+          "iou": null,
+          "iouReason": "not-an-object-check",
+          "staticEvidence": null,
+          "task": {
+            "checkId": "abstract",
+            "status": "not-performed",
+            "detail": "No actual task outcome provided"
+          }
+        },
+        {
+          "checkId": "figure-1",
+          "kind": "object",
+          "static": true,
+          "reason": null,
+          "iou": null,
+          "iouReason": "annotation-rectangle-not-provided",
+          "staticEvidence": "localization-only",
+          "task": {
+            "checkId": "figure-1",
+            "status": "not-performed",
+            "detail": "No actual task outcome provided"
+          }
+        },
+        {
+          "checkId": "reference-anil",
+          "kind": "reference",
+          "static": null,
+          "reason": "references-not-provided",
+          "iou": null,
+          "iouReason": "not-an-object-check",
+          "staticEvidence": null,
+          "task": {
+            "checkId": "reference-anil",
+            "status": "not-performed",
+            "detail": "No actual task outcome provided"
+          }
+        }
+      ]
+    },
+    {
+      "documentId": "b-deepseek-ocr",
+      "backend": "mineru",
+      "mode": "cold",
+      "status": "completed",
+      "adapterVersion": "61bcbdf415c1785fe925cd4d78024fdc2c0c4af1",
+      "modelRevision": null,
+      "pdfSha256": "a7297788968f8ad9ed21bcd273110814e4889efbbc99bfea86dca12205797a90",
+      "durationMs": 86911,
+      "failure": null,
+      "bibliographyCoverage": null,
+      "checks": [
+        {
+          "checkId": "body-introduction",
+          "kind": "text",
+          "static": true,
+          "reason": null,
+          "iou": null,
+          "iouReason": "not-an-object-check",
+          "staticEvidence": null,
+          "task": {
+            "checkId": "body-introduction",
+            "status": "not-performed",
+            "detail": "No actual task outcome provided"
+          }
+        },
+        {
+          "checkId": "figure-3",
+          "kind": "object",
+          "static": true,
+          "reason": null,
+          "iou": null,
+          "iouReason": "annotation-rectangle-not-provided",
+          "staticEvidence": "localization-only",
+          "task": {
+            "checkId": "figure-3",
+            "status": "not-performed",
+            "detail": "No actual task outcome provided"
+          }
+        },
+        {
+          "checkId": "reference-nougat",
+          "kind": "reference",
+          "static": null,
+          "reason": "references-not-provided",
+          "iou": null,
+          "iouReason": "not-an-object-check",
+          "staticEvidence": null,
+          "task": {
+            "checkId": "reference-nougat",
+            "status": "not-performed",
+            "detail": "No actual task outcome provided"
+          }
+        },
+        {
+          "checkId": "citation-nougat",
+          "kind": "citation",
+          "static": null,
+          "reason": "references-not-provided",
+          "iou": null,
+          "iouReason": "not-an-object-check",
+          "staticEvidence": null,
+          "task": {
+            "checkId": "citation-nougat",
+            "status": "not-performed",
+            "detail": "No actual task outcome provided"
+          }
+        }
+      ]
+    },
+    {
+      "documentId": "b-deepseek-ocr",
+      "backend": "mineru",
+      "mode": "cache",
+      "status": "completed",
+      "adapterVersion": "61bcbdf415c1785fe925cd4d78024fdc2c0c4af1",
+      "modelRevision": null,
+      "pdfSha256": "a7297788968f8ad9ed21bcd273110814e4889efbbc99bfea86dca12205797a90",
+      "durationMs": 1667,
+      "failure": null,
+      "bibliographyCoverage": null,
+      "checks": [
+        {
+          "checkId": "body-introduction",
+          "kind": "text",
+          "static": true,
+          "reason": null,
+          "iou": null,
+          "iouReason": "not-an-object-check",
+          "staticEvidence": null,
+          "task": {
+            "checkId": "body-introduction",
+            "status": "not-performed",
+            "detail": "No actual task outcome provided"
+          }
+        },
+        {
+          "checkId": "figure-3",
+          "kind": "object",
+          "static": true,
+          "reason": null,
+          "iou": null,
+          "iouReason": "annotation-rectangle-not-provided",
+          "staticEvidence": "localization-only",
+          "task": {
+            "checkId": "figure-3",
+            "status": "not-performed",
+            "detail": "No actual task outcome provided"
+          }
+        },
+        {
+          "checkId": "reference-nougat",
+          "kind": "reference",
+          "static": null,
+          "reason": "references-not-provided",
+          "iou": null,
+          "iouReason": "not-an-object-check",
+          "staticEvidence": null,
+          "task": {
+            "checkId": "reference-nougat",
+            "status": "not-performed",
+            "detail": "No actual task outcome provided"
+          }
+        },
+        {
+          "checkId": "citation-nougat",
+          "kind": "citation",
+          "static": null,
+          "reason": "references-not-provided",
+          "iou": null,
+          "iouReason": "not-an-object-check",
+          "staticEvidence": null,
+          "task": {
+            "checkId": "citation-nougat",
+            "status": "not-performed",
+            "detail": "No actual task outcome provided"
+          }
+        }
+      ]
+    },
+    {
+      "documentId": "b-omnidocbench",
+      "backend": "mineru",
+      "mode": "cold",
+      "status": "completed",
+      "adapterVersion": "61bcbdf415c1785fe925cd4d78024fdc2c0c4af1",
+      "modelRevision": null,
+      "pdfSha256": "af246c0ca296221e6ec1e5b800f2c359689cc6921a97764e650b0b34686c1907",
+      "durationMs": 140238,
+      "failure": null,
+      "bibliographyCoverage": null,
+      "checks": [
+        {
+          "checkId": "body-introduction",
+          "kind": "text",
+          "static": true,
+          "reason": null,
+          "iou": null,
+          "iouReason": "not-an-object-check",
+          "staticEvidence": null,
+          "task": {
+            "checkId": "body-introduction",
+            "status": "not-performed",
+            "detail": "No actual task outcome provided"
+          }
+        },
+        {
+          "checkId": "table-2",
+          "kind": "object",
+          "static": false,
+          "reason": "object-iou-below-threshold",
+          "iou": 0,
+          "iouReason": null,
+          "staticEvidence": "caption-and-object-box",
+          "task": {
+            "checkId": "table-2",
+            "status": "not-performed",
+            "detail": "No actual task outcome provided"
+          }
+        },
+        {
+          "checkId": "table-3",
+          "kind": "object",
+          "static": false,
+          "reason": "object-iou-below-threshold",
+          "iou": 0,
+          "iouReason": null,
+          "staticEvidence": "caption-and-object-box",
+          "task": {
+            "checkId": "table-3",
+            "status": "not-performed",
+            "detail": "No actual task outcome provided"
+          }
+        },
+        {
+          "checkId": "reference-nougat",
+          "kind": "reference",
+          "static": null,
+          "reason": "references-not-provided",
+          "iou": null,
+          "iouReason": "not-an-object-check",
+          "staticEvidence": null,
+          "task": {
+            "checkId": "reference-nougat",
+            "status": "not-performed",
+            "detail": "No actual task outcome provided"
+          }
+        },
+        {
+          "checkId": "citation-nougat",
+          "kind": "citation",
+          "static": null,
+          "reason": "references-not-provided",
+          "iou": null,
+          "iouReason": "not-an-object-check",
+          "staticEvidence": null,
+          "task": {
+            "checkId": "citation-nougat",
+            "status": "not-performed",
+            "detail": "No actual task outcome provided"
+          }
+        }
+      ]
+    },
+    {
+      "documentId": "b-omnidocbench",
+      "backend": "mineru",
+      "mode": "cache",
+      "status": "completed",
+      "adapterVersion": "61bcbdf415c1785fe925cd4d78024fdc2c0c4af1",
+      "modelRevision": null,
+      "pdfSha256": "af246c0ca296221e6ec1e5b800f2c359689cc6921a97764e650b0b34686c1907",
+      "durationMs": 3103,
+      "failure": null,
+      "bibliographyCoverage": null,
+      "checks": [
+        {
+          "checkId": "body-introduction",
+          "kind": "text",
+          "static": true,
+          "reason": null,
+          "iou": null,
+          "iouReason": "not-an-object-check",
+          "staticEvidence": null,
+          "task": {
+            "checkId": "body-introduction",
+            "status": "not-performed",
+            "detail": "No actual task outcome provided"
+          }
+        },
+        {
+          "checkId": "table-2",
+          "kind": "object",
+          "static": false,
+          "reason": "object-iou-below-threshold",
+          "iou": 0,
+          "iouReason": null,
+          "staticEvidence": "caption-and-object-box",
+          "task": {
+            "checkId": "table-2",
+            "status": "not-performed",
+            "detail": "No actual task outcome provided"
+          }
+        },
+        {
+          "checkId": "table-3",
+          "kind": "object",
+          "static": false,
+          "reason": "object-iou-below-threshold",
+          "iou": 0,
+          "iouReason": null,
+          "staticEvidence": "caption-and-object-box",
+          "task": {
+            "checkId": "table-3",
+            "status": "not-performed",
+            "detail": "No actual task outcome provided"
+          }
+        },
+        {
+          "checkId": "reference-nougat",
+          "kind": "reference",
+          "static": null,
+          "reason": "references-not-provided",
+          "iou": null,
+          "iouReason": "not-an-object-check",
+          "staticEvidence": null,
+          "task": {
+            "checkId": "reference-nougat",
+            "status": "not-performed",
+            "detail": "No actual task outcome provided"
+          }
+        },
+        {
+          "checkId": "citation-nougat",
+          "kind": "citation",
+          "static": null,
+          "reason": "references-not-provided",
+          "iou": null,
+          "iouReason": "not-an-object-check",
+          "staticEvidence": null,
+          "task": {
+            "checkId": "citation-nougat",
+            "status": "not-performed",
+            "detail": "No actual task outcome provided"
+          }
+        }
+      ]
+    },
+    {
+      "documentId": "b-openvla",
+      "backend": "mineru",
+      "mode": "cold",
+      "status": "completed",
+      "adapterVersion": "61bcbdf415c1785fe925cd4d78024fdc2c0c4af1",
+      "modelRevision": null,
+      "pdfSha256": "9d44351d8ca2aafc11b28949c99d9a99bd1403598fcf9cca042bbfda2dceb706",
+      "durationMs": 96898,
+      "failure": null,
+      "bibliographyCoverage": null,
+      "checks": [
+        {
+          "checkId": "body-release",
+          "kind": "text",
+          "static": false,
+          "reason": null,
+          "iou": null,
+          "iouReason": "not-an-object-check",
+          "staticEvidence": null,
+          "task": {
+            "checkId": "body-release",
+            "status": "not-performed",
+            "detail": "No actual task outcome provided"
+          }
+        },
+        {
+          "checkId": "figure-2",
+          "kind": "object",
+          "static": true,
+          "reason": null,
+          "iou": null,
+          "iouReason": "annotation-rectangle-not-provided",
+          "staticEvidence": "localization-only",
+          "task": {
+            "checkId": "figure-2",
+            "status": "not-performed",
+            "detail": "No actual task outcome provided"
+          }
+        },
+        {
+          "checkId": "reference-bridgedata",
+          "kind": "reference",
+          "static": null,
+          "reason": "references-not-provided",
+          "iou": null,
+          "iouReason": "not-an-object-check",
+          "staticEvidence": null,
+          "task": {
+            "checkId": "reference-bridgedata",
+            "status": "not-performed",
+            "detail": "No actual task outcome provided"
+          }
+        },
+        {
+          "checkId": "citation-bridgedata",
+          "kind": "citation",
+          "static": null,
+          "reason": "references-not-provided",
+          "iou": null,
+          "iouReason": "not-an-object-check",
+          "staticEvidence": null,
+          "task": {
+            "checkId": "citation-bridgedata",
+            "status": "not-performed",
+            "detail": "No actual task outcome provided"
+          }
+        }
+      ]
+    },
+    {
+      "documentId": "b-openvla",
+      "backend": "mineru",
+      "mode": "cache",
+      "status": "completed",
+      "adapterVersion": "61bcbdf415c1785fe925cd4d78024fdc2c0c4af1",
+      "modelRevision": null,
+      "pdfSha256": "9d44351d8ca2aafc11b28949c99d9a99bd1403598fcf9cca042bbfda2dceb706",
+      "durationMs": 2818,
+      "failure": null,
+      "bibliographyCoverage": null,
+      "checks": [
+        {
+          "checkId": "body-release",
+          "kind": "text",
+          "static": false,
+          "reason": null,
+          "iou": null,
+          "iouReason": "not-an-object-check",
+          "staticEvidence": null,
+          "task": {
+            "checkId": "body-release",
+            "status": "not-performed",
+            "detail": "No actual task outcome provided"
+          }
+        },
+        {
+          "checkId": "figure-2",
+          "kind": "object",
+          "static": true,
+          "reason": null,
+          "iou": null,
+          "iouReason": "annotation-rectangle-not-provided",
+          "staticEvidence": "localization-only",
+          "task": {
+            "checkId": "figure-2",
+            "status": "not-performed",
+            "detail": "No actual task outcome provided"
+          }
+        },
+        {
+          "checkId": "reference-bridgedata",
+          "kind": "reference",
+          "static": null,
+          "reason": "references-not-provided",
+          "iou": null,
+          "iouReason": "not-an-object-check",
+          "staticEvidence": null,
+          "task": {
+            "checkId": "reference-bridgedata",
+            "status": "not-performed",
+            "detail": "No actual task outcome provided"
+          }
+        },
+        {
+          "checkId": "citation-bridgedata",
+          "kind": "citation",
+          "static": null,
+          "reason": "references-not-provided",
+          "iou": null,
+          "iouReason": "not-an-object-check",
+          "staticEvidence": null,
+          "task": {
+            "checkId": "citation-bridgedata",
+            "status": "not-performed",
+            "detail": "No actual task outcome provided"
+          }
+        }
+      ]
+    },
+    {
+      "documentId": "b-olmocr",
+      "backend": "mineru",
+      "mode": "cold",
+      "status": "completed",
+      "adapterVersion": "61bcbdf415c1785fe925cd4d78024fdc2c0c4af1",
+      "modelRevision": null,
+      "pdfSha256": "2b83caed3b300206bbf189ab83eb26d41afa8d2ad857bff3499589f38a8ab84a",
+      "durationMs": 62784,
+      "failure": null,
+      "bibliographyCoverage": null,
+      "checks": [
+        {
+          "checkId": "body-anchoring",
+          "kind": "text",
+          "static": true,
+          "reason": null,
+          "iou": null,
+          "iouReason": "not-an-object-check",
+          "staticEvidence": null,
+          "task": {
+            "checkId": "body-anchoring",
+            "status": "not-performed",
+            "detail": "No actual task outcome provided"
+          }
+        },
+        {
+          "checkId": "figure-2",
+          "kind": "object",
+          "static": true,
+          "reason": null,
+          "iou": null,
+          "iouReason": "annotation-rectangle-not-provided",
+          "staticEvidence": "localization-only",
+          "task": {
+            "checkId": "figure-2",
+            "status": "not-performed",
+            "detail": "No actual task outcome provided"
+          }
+        },
+        {
+          "checkId": "reference-nougat",
+          "kind": "reference",
+          "static": null,
+          "reason": "references-not-provided",
+          "iou": null,
+          "iouReason": "not-an-object-check",
+          "staticEvidence": null,
+          "task": {
+            "checkId": "reference-nougat",
+            "status": "not-performed",
+            "detail": "No actual task outcome provided"
+          }
+        },
+        {
+          "checkId": "citation-nougat",
+          "kind": "citation",
+          "static": null,
+          "reason": "references-not-provided",
+          "iou": null,
+          "iouReason": "not-an-object-check",
+          "staticEvidence": null,
+          "task": {
+            "checkId": "citation-nougat",
+            "status": "not-performed",
+            "detail": "No actual task outcome provided"
+          }
+        }
+      ]
+    },
+    {
+      "documentId": "b-olmocr",
+      "backend": "mineru",
+      "mode": "cache",
+      "status": "completed",
+      "adapterVersion": "61bcbdf415c1785fe925cd4d78024fdc2c0c4af1",
+      "modelRevision": null,
+      "pdfSha256": "2b83caed3b300206bbf189ab83eb26d41afa8d2ad857bff3499589f38a8ab84a",
+      "durationMs": 1187,
+      "failure": null,
+      "bibliographyCoverage": null,
+      "checks": [
+        {
+          "checkId": "body-anchoring",
+          "kind": "text",
+          "static": true,
+          "reason": null,
+          "iou": null,
+          "iouReason": "not-an-object-check",
+          "staticEvidence": null,
+          "task": {
+            "checkId": "body-anchoring",
+            "status": "not-performed",
+            "detail": "No actual task outcome provided"
+          }
+        },
+        {
+          "checkId": "figure-2",
+          "kind": "object",
+          "static": true,
+          "reason": null,
+          "iou": null,
+          "iouReason": "annotation-rectangle-not-provided",
+          "staticEvidence": "localization-only",
+          "task": {
+            "checkId": "figure-2",
+            "status": "not-performed",
+            "detail": "No actual task outcome provided"
+          }
+        },
+        {
+          "checkId": "reference-nougat",
+          "kind": "reference",
+          "static": null,
+          "reason": "references-not-provided",
+          "iou": null,
+          "iouReason": "not-an-object-check",
+          "staticEvidence": null,
+          "task": {
+            "checkId": "reference-nougat",
+            "status": "not-performed",
+            "detail": "No actual task outcome provided"
+          }
+        },
+        {
+          "checkId": "citation-nougat",
+          "kind": "citation",
+          "static": null,
+          "reason": "references-not-provided",
+          "iou": null,
+          "iouReason": "not-an-object-check",
+          "staticEvidence": null,
+          "task": {
+            "checkId": "citation-nougat",
+            "status": "not-performed",
+            "detail": "No actual task outcome provided"
+          }
+        }
+      ]
+    },
+    {
+      "documentId": "b-donut",
+      "backend": "mineru",
+      "mode": "cold",
+      "status": "completed",
+      "adapterVersion": "61bcbdf415c1785fe925cd4d78024fdc2c0c4af1",
+      "modelRevision": null,
+      "pdfSha256": "6743f93bb65a41f6522a3f64c4e5917d6397dc6fd993586b471c0b76c308b1ea",
+      "durationMs": 62650,
+      "failure": null,
+      "bibliographyCoverage": null,
+      "checks": [
+        {
+          "checkId": "body-receipts",
+          "kind": "text",
+          "static": true,
+          "reason": null,
+          "iou": null,
+          "iouReason": "not-an-object-check",
+          "staticEvidence": null,
+          "task": {
+            "checkId": "body-receipts",
+            "status": "not-performed",
+            "detail": "No actual task outcome provided"
+          }
+        },
+        {
+          "checkId": "figure-3",
+          "kind": "object",
+          "static": true,
+          "reason": null,
+          "iou": null,
+          "iouReason": "annotation-rectangle-not-provided",
+          "staticEvidence": "localization-only",
+          "task": {
+            "checkId": "figure-3",
+            "status": "not-performed",
+            "detail": "No actual task outcome provided"
+          }
+        },
+        {
+          "checkId": "reference-bert",
+          "kind": "reference",
+          "static": null,
+          "reason": "references-not-provided",
+          "iou": null,
+          "iouReason": "not-an-object-check",
+          "staticEvidence": null,
+          "task": {
+            "checkId": "reference-bert",
+            "status": "not-performed",
+            "detail": "No actual task outcome provided"
+          }
+        },
+        {
+          "checkId": "citation-bert",
+          "kind": "citation",
+          "static": null,
+          "reason": "references-not-provided",
+          "iou": null,
+          "iouReason": "not-an-object-check",
+          "staticEvidence": null,
+          "task": {
+            "checkId": "citation-bert",
+            "status": "not-performed",
+            "detail": "No actual task outcome provided"
+          }
+        }
+      ]
+    },
+    {
+      "documentId": "b-donut",
+      "backend": "mineru",
+      "mode": "cache",
+      "status": "completed",
+      "adapterVersion": "61bcbdf415c1785fe925cd4d78024fdc2c0c4af1",
+      "modelRevision": null,
+      "pdfSha256": "6743f93bb65a41f6522a3f64c4e5917d6397dc6fd993586b471c0b76c308b1ea",
+      "durationMs": 827,
+      "failure": null,
+      "bibliographyCoverage": null,
+      "checks": [
+        {
+          "checkId": "body-receipts",
+          "kind": "text",
+          "static": true,
+          "reason": null,
+          "iou": null,
+          "iouReason": "not-an-object-check",
+          "staticEvidence": null,
+          "task": {
+            "checkId": "body-receipts",
+            "status": "not-performed",
+            "detail": "No actual task outcome provided"
+          }
+        },
+        {
+          "checkId": "figure-3",
+          "kind": "object",
+          "static": true,
+          "reason": null,
+          "iou": null,
+          "iouReason": "annotation-rectangle-not-provided",
+          "staticEvidence": "localization-only",
+          "task": {
+            "checkId": "figure-3",
+            "status": "not-performed",
+            "detail": "No actual task outcome provided"
+          }
+        },
+        {
+          "checkId": "reference-bert",
+          "kind": "reference",
+          "static": null,
+          "reason": "references-not-provided",
+          "iou": null,
+          "iouReason": "not-an-object-check",
+          "staticEvidence": null,
+          "task": {
+            "checkId": "reference-bert",
+            "status": "not-performed",
+            "detail": "No actual task outcome provided"
+          }
+        },
+        {
+          "checkId": "citation-bert",
+          "kind": "citation",
+          "static": null,
+          "reason": "references-not-provided",
+          "iou": null,
+          "iouReason": "not-an-object-check",
+          "staticEvidence": null,
+          "task": {
+            "checkId": "citation-bert",
+            "status": "not-performed",
+            "detail": "No actual task outcome provided"
+          }
+        }
+      ]
+    },
+    {
+      "documentId": "b-layoutlm",
+      "backend": "mineru",
+      "mode": "cold",
+      "status": "completed",
+      "adapterVersion": "61bcbdf415c1785fe925cd4d78024fdc2c0c4af1",
+      "modelRevision": null,
+      "pdfSha256": "2e4362ab545c37f4e802afd24346e8d11539dc4480dc68deb45afc4fe9e80d6f",
+      "durationMs": 65518,
+      "failure": null,
+      "bibliographyCoverage": null,
+      "checks": [
+        {
+          "checkId": "body-overview",
+          "kind": "text",
+          "static": true,
+          "reason": null,
+          "iou": null,
+          "iouReason": "not-an-object-check",
+          "staticEvidence": null,
+          "task": {
+            "checkId": "body-overview",
+            "status": "not-performed",
+            "detail": "No actual task outcome provided"
+          }
+        },
+        {
+          "checkId": "figure-2",
+          "kind": "object",
+          "static": true,
+          "reason": null,
+          "iou": null,
+          "iouReason": "annotation-rectangle-not-provided",
+          "staticEvidence": "localization-only",
+          "task": {
+            "checkId": "figure-2",
+            "status": "not-performed",
+            "detail": "No actual task outcome provided"
+          }
+        },
+        {
+          "checkId": "reference-bert",
+          "kind": "reference",
+          "static": null,
+          "reason": "references-not-provided",
+          "iou": null,
+          "iouReason": "not-an-object-check",
+          "staticEvidence": null,
+          "task": {
+            "checkId": "reference-bert",
+            "status": "not-performed",
+            "detail": "No actual task outcome provided"
+          }
+        },
+        {
+          "checkId": "citation-bert",
+          "kind": "citation",
+          "static": null,
+          "reason": "references-not-provided",
+          "iou": null,
+          "iouReason": "not-an-object-check",
+          "staticEvidence": null,
+          "task": {
+            "checkId": "citation-bert",
+            "status": "not-performed",
+            "detail": "No actual task outcome provided"
+          }
+        }
+      ]
+    },
+    {
+      "documentId": "b-layoutlm",
+      "backend": "mineru",
+      "mode": "cache",
+      "status": "completed",
+      "adapterVersion": "61bcbdf415c1785fe925cd4d78024fdc2c0c4af1",
+      "modelRevision": null,
+      "pdfSha256": "2e4362ab545c37f4e802afd24346e8d11539dc4480dc68deb45afc4fe9e80d6f",
+      "durationMs": 291,
+      "failure": null,
+      "bibliographyCoverage": null,
+      "checks": [
+        {
+          "checkId": "body-overview",
+          "kind": "text",
+          "static": true,
+          "reason": null,
+          "iou": null,
+          "iouReason": "not-an-object-check",
+          "staticEvidence": null,
+          "task": {
+            "checkId": "body-overview",
+            "status": "not-performed",
+            "detail": "No actual task outcome provided"
+          }
+        },
+        {
+          "checkId": "figure-2",
+          "kind": "object",
+          "static": true,
+          "reason": null,
+          "iou": null,
+          "iouReason": "annotation-rectangle-not-provided",
+          "staticEvidence": "localization-only",
+          "task": {
+            "checkId": "figure-2",
+            "status": "not-performed",
+            "detail": "No actual task outcome provided"
+          }
+        },
+        {
+          "checkId": "reference-bert",
+          "kind": "reference",
+          "static": null,
+          "reason": "references-not-provided",
+          "iou": null,
+          "iouReason": "not-an-object-check",
+          "staticEvidence": null,
+          "task": {
+            "checkId": "reference-bert",
+            "status": "not-performed",
+            "detail": "No actual task outcome provided"
+          }
+        },
+        {
+          "checkId": "citation-bert",
+          "kind": "citation",
+          "static": null,
+          "reason": "references-not-provided",
+          "iou": null,
+          "iouReason": "not-an-object-check",
+          "staticEvidence": null,
+          "task": {
+            "checkId": "citation-bert",
+            "status": "not-performed",
+            "detail": "No actual task outcome provided"
+          }
+        }
+      ]
+    },
+    {
+      "documentId": "b-layoutlmv2",
+      "backend": "mineru",
+      "mode": "cold",
+      "status": "completed",
+      "adapterVersion": "61bcbdf415c1785fe925cd4d78024fdc2c0c4af1",
+      "modelRevision": null,
+      "pdfSha256": "96c6e0dd3bae1707bb7483aba1bca7f967f1a520a1611eb614a48157e9b070eb",
+      "durationMs": 97300,
+      "failure": null,
+      "bibliographyCoverage": null,
+      "checks": [
+        {
+          "checkId": "body-pretraining",
+          "kind": "text",
+          "static": true,
+          "reason": null,
+          "iou": null,
+          "iouReason": "not-an-object-check",
+          "staticEvidence": null,
+          "task": {
+            "checkId": "body-pretraining",
+            "status": "not-performed",
+            "detail": "No actual task outcome provided"
+          }
+        },
+        {
+          "checkId": "figure-2",
+          "kind": "object",
+          "static": true,
+          "reason": null,
+          "iou": null,
+          "iouReason": "annotation-rectangle-not-provided",
+          "staticEvidence": "localization-only",
+          "task": {
+            "checkId": "figure-2",
+            "status": "not-performed",
+            "detail": "No actual task outcome provided"
+          }
+        },
+        {
+          "checkId": "reference-bert",
+          "kind": "reference",
+          "static": null,
+          "reason": "references-not-provided",
+          "iou": null,
+          "iouReason": "not-an-object-check",
+          "staticEvidence": null,
+          "task": {
+            "checkId": "reference-bert",
+            "status": "not-performed",
+            "detail": "No actual task outcome provided"
+          }
+        },
+        {
+          "checkId": "citation-bert",
+          "kind": "citation",
+          "static": null,
+          "reason": "references-not-provided",
+          "iou": null,
+          "iouReason": "not-an-object-check",
+          "staticEvidence": null,
+          "task": {
+            "checkId": "citation-bert",
+            "status": "not-performed",
+            "detail": "No actual task outcome provided"
+          }
+        }
+      ]
+    },
+    {
+      "documentId": "b-layoutlmv2",
+      "backend": "mineru",
+      "mode": "cache",
+      "status": "completed",
+      "adapterVersion": "61bcbdf415c1785fe925cd4d78024fdc2c0c4af1",
+      "modelRevision": null,
+      "pdfSha256": "96c6e0dd3bae1707bb7483aba1bca7f967f1a520a1611eb614a48157e9b070eb",
+      "durationMs": 1205,
+      "failure": null,
+      "bibliographyCoverage": null,
+      "checks": [
+        {
+          "checkId": "body-pretraining",
+          "kind": "text",
+          "static": true,
+          "reason": null,
+          "iou": null,
+          "iouReason": "not-an-object-check",
+          "staticEvidence": null,
+          "task": {
+            "checkId": "body-pretraining",
+            "status": "not-performed",
+            "detail": "No actual task outcome provided"
+          }
+        },
+        {
+          "checkId": "figure-2",
+          "kind": "object",
+          "static": true,
+          "reason": null,
+          "iou": null,
+          "iouReason": "annotation-rectangle-not-provided",
+          "staticEvidence": "localization-only",
+          "task": {
+            "checkId": "figure-2",
+            "status": "not-performed",
+            "detail": "No actual task outcome provided"
+          }
+        },
+        {
+          "checkId": "reference-bert",
+          "kind": "reference",
+          "static": null,
+          "reason": "references-not-provided",
+          "iou": null,
+          "iouReason": "not-an-object-check",
+          "staticEvidence": null,
+          "task": {
+            "checkId": "reference-bert",
+            "status": "not-performed",
+            "detail": "No actual task outcome provided"
+          }
+        },
+        {
+          "checkId": "citation-bert",
+          "kind": "citation",
+          "static": null,
+          "reason": "references-not-provided",
+          "iou": null,
+          "iouReason": "not-an-object-check",
+          "staticEvidence": null,
+          "task": {
+            "checkId": "citation-bert",
+            "status": "not-performed",
+            "detail": "No actual task outcome provided"
+          }
+        }
+      ]
+    },
+    {
+      "documentId": "b-layoutlmv3",
+      "backend": "mineru",
+      "mode": "cold",
+      "status": "completed",
+      "adapterVersion": "61bcbdf415c1785fe925cd4d78024fdc2c0c4af1",
+      "modelRevision": null,
+      "pdfSha256": "69976d62a0b4935a4081a86ba8ae4a720d751fc3cef2cd9cb6e6a1ee2299dad7",
+      "durationMs": 101345,
+      "failure": null,
+      "bibliographyCoverage": null,
+      "checks": [
+        {
+          "checkId": "body-funsd",
+          "kind": "text",
+          "static": true,
+          "reason": null,
+          "iou": null,
+          "iouReason": "not-an-object-check",
+          "staticEvidence": null,
+          "task": {
+            "checkId": "body-funsd",
+            "status": "not-performed",
+            "detail": "No actual task outcome provided"
+          }
+        },
+        {
+          "checkId": "figure-3",
+          "kind": "object",
+          "static": true,
+          "reason": null,
+          "iou": null,
+          "iouReason": "annotation-rectangle-not-provided",
+          "staticEvidence": "localization-only",
+          "task": {
+            "checkId": "figure-3",
+            "status": "not-performed",
+            "detail": "No actual task outcome provided"
+          }
+        },
+        {
+          "checkId": "reference-funsd",
+          "kind": "reference",
+          "static": null,
+          "reason": "references-not-provided",
+          "iou": null,
+          "iouReason": "not-an-object-check",
+          "staticEvidence": null,
+          "task": {
+            "checkId": "reference-funsd",
+            "status": "not-performed",
+            "detail": "No actual task outcome provided"
+          }
+        },
+        {
+          "checkId": "citation-funsd",
+          "kind": "citation",
+          "static": null,
+          "reason": "references-not-provided",
+          "iou": null,
+          "iouReason": "not-an-object-check",
+          "staticEvidence": null,
+          "task": {
+            "checkId": "citation-funsd",
+            "status": "not-performed",
+            "detail": "No actual task outcome provided"
+          }
+        }
+      ]
+    },
+    {
+      "documentId": "b-layoutlmv3",
+      "backend": "mineru",
+      "mode": "cache",
+      "status": "completed",
+      "adapterVersion": "61bcbdf415c1785fe925cd4d78024fdc2c0c4af1",
+      "modelRevision": null,
+      "pdfSha256": "69976d62a0b4935a4081a86ba8ae4a720d751fc3cef2cd9cb6e6a1ee2299dad7",
+      "durationMs": 347,
+      "failure": null,
+      "bibliographyCoverage": null,
+      "checks": [
+        {
+          "checkId": "body-funsd",
+          "kind": "text",
+          "static": true,
+          "reason": null,
+          "iou": null,
+          "iouReason": "not-an-object-check",
+          "staticEvidence": null,
+          "task": {
+            "checkId": "body-funsd",
+            "status": "not-performed",
+            "detail": "No actual task outcome provided"
+          }
+        },
+        {
+          "checkId": "figure-3",
+          "kind": "object",
+          "static": true,
+          "reason": null,
+          "iou": null,
+          "iouReason": "annotation-rectangle-not-provided",
+          "staticEvidence": "localization-only",
+          "task": {
+            "checkId": "figure-3",
+            "status": "not-performed",
+            "detail": "No actual task outcome provided"
+          }
+        },
+        {
+          "checkId": "reference-funsd",
+          "kind": "reference",
+          "static": null,
+          "reason": "references-not-provided",
+          "iou": null,
+          "iouReason": "not-an-object-check",
+          "staticEvidence": null,
+          "task": {
+            "checkId": "reference-funsd",
+            "status": "not-performed",
+            "detail": "No actual task outcome provided"
+          }
+        },
+        {
+          "checkId": "citation-funsd",
+          "kind": "citation",
+          "static": null,
+          "reason": "references-not-provided",
+          "iou": null,
+          "iouReason": "not-an-object-check",
+          "staticEvidence": null,
+          "task": {
+            "checkId": "citation-funsd",
+            "status": "not-performed",
+            "detail": "No actual task outcome provided"
+          }
+        }
+      ]
+    },
+    {
+      "documentId": "b-nougat",
+      "backend": "mineru",
+      "mode": "cold",
+      "status": "completed",
+      "adapterVersion": "61bcbdf415c1785fe925cd4d78024fdc2c0c4af1",
+      "modelRevision": null,
+      "pdfSha256": "679be336ce8010d3dc86b9530f0a30d4d5ea2a13153c6f274601b40f4382745b",
+      "durationMs": 106688,
+      "failure": null,
+      "bibliographyCoverage": null,
+      "checks": [
+        {
+          "checkId": "body-decoding",
+          "kind": "text",
+          "static": true,
+          "reason": null,
+          "iou": null,
+          "iouReason": "not-an-object-check",
+          "staticEvidence": null,
+          "task": {
+            "checkId": "body-decoding",
+            "status": "not-performed",
+            "detail": "No actual task outcome provided"
+          }
+        },
+        {
+          "checkId": "figure-1",
+          "kind": "object",
+          "static": true,
+          "reason": null,
+          "iou": null,
+          "iouReason": "annotation-rectangle-not-provided",
+          "staticEvidence": "localization-only",
+          "task": {
+            "checkId": "figure-1",
+            "status": "not-performed",
+            "detail": "No actual task outcome provided"
+          }
+        },
+        {
+          "checkId": "reference-donut",
+          "kind": "reference",
+          "static": null,
+          "reason": "references-not-provided",
+          "iou": null,
+          "iouReason": "not-an-object-check",
+          "staticEvidence": null,
+          "task": {
+            "checkId": "reference-donut",
+            "status": "not-performed",
+            "detail": "No actual task outcome provided"
+          }
+        },
+        {
+          "checkId": "citation-donut",
+          "kind": "citation",
+          "static": null,
+          "reason": "references-not-provided",
+          "iou": null,
+          "iouReason": "not-an-object-check",
+          "staticEvidence": null,
+          "task": {
+            "checkId": "citation-donut",
+            "status": "not-performed",
+            "detail": "No actual task outcome provided"
+          }
+        }
+      ]
+    },
+    {
+      "documentId": "b-nougat",
+      "backend": "mineru",
+      "mode": "cache",
+      "status": "completed",
+      "adapterVersion": "61bcbdf415c1785fe925cd4d78024fdc2c0c4af1",
+      "modelRevision": null,
+      "pdfSha256": "679be336ce8010d3dc86b9530f0a30d4d5ea2a13153c6f274601b40f4382745b",
+      "durationMs": 933,
+      "failure": null,
+      "bibliographyCoverage": null,
+      "checks": [
+        {
+          "checkId": "body-decoding",
+          "kind": "text",
+          "static": true,
+          "reason": null,
+          "iou": null,
+          "iouReason": "not-an-object-check",
+          "staticEvidence": null,
+          "task": {
+            "checkId": "body-decoding",
+            "status": "not-performed",
+            "detail": "No actual task outcome provided"
+          }
+        },
+        {
+          "checkId": "figure-1",
+          "kind": "object",
+          "static": true,
+          "reason": null,
+          "iou": null,
+          "iouReason": "annotation-rectangle-not-provided",
+          "staticEvidence": "localization-only",
+          "task": {
+            "checkId": "figure-1",
+            "status": "not-performed",
+            "detail": "No actual task outcome provided"
+          }
+        },
+        {
+          "checkId": "reference-donut",
+          "kind": "reference",
+          "static": null,
+          "reason": "references-not-provided",
+          "iou": null,
+          "iouReason": "not-an-object-check",
+          "staticEvidence": null,
+          "task": {
+            "checkId": "reference-donut",
+            "status": "not-performed",
+            "detail": "No actual task outcome provided"
+          }
+        },
+        {
+          "checkId": "citation-donut",
+          "kind": "citation",
+          "static": null,
+          "reason": "references-not-provided",
+          "iou": null,
+          "iouReason": "not-an-object-check",
+          "staticEvidence": null,
+          "task": {
+            "checkId": "citation-donut",
+            "status": "not-performed",
+            "detail": "No actual task outcome provided"
+          }
+        }
+      ]
+    },
+    {
+      "documentId": "b-docling",
+      "backend": "mineru",
+      "mode": "cold",
+      "status": "completed",
+      "adapterVersion": "61bcbdf415c1785fe925cd4d78024fdc2c0c4af1",
+      "modelRevision": null,
+      "pdfSha256": "c2151058e77cd07f0802ba13c6a8bf4c37ad9578bf9d9404c8b0550b6a32d277",
+      "durationMs": 113253,
+      "failure": null,
+      "bibliographyCoverage": null,
+      "checks": [
+        {
+          "checkId": "body-pdf",
+          "kind": "text",
+          "static": true,
+          "reason": null,
+          "iou": null,
+          "iouReason": "not-an-object-check",
+          "staticEvidence": null,
+          "task": {
+            "checkId": "body-pdf",
+            "status": "not-performed",
+            "detail": "No actual task outcome provided"
+          }
+        },
+        {
+          "checkId": "figure-1",
+          "kind": "object",
+          "static": true,
+          "reason": null,
+          "iou": null,
+          "iouReason": "annotation-rectangle-not-provided",
+          "staticEvidence": "localization-only",
+          "task": {
+            "checkId": "figure-1",
+            "status": "not-performed",
+            "detail": "No actual task outcome provided"
+          }
+        },
+        {
+          "checkId": "reference-data-prep",
+          "kind": "reference",
+          "static": null,
+          "reason": "references-not-provided",
+          "iou": null,
+          "iouReason": "not-an-object-check",
+          "staticEvidence": null,
+          "task": {
+            "checkId": "reference-data-prep",
+            "status": "not-performed",
+            "detail": "No actual task outcome provided"
+          }
+        },
+        {
+          "checkId": "citation-data-prep",
+          "kind": "citation",
+          "static": null,
+          "reason": "references-not-provided",
+          "iou": null,
+          "iouReason": "not-an-object-check",
+          "staticEvidence": null,
+          "task": {
+            "checkId": "citation-data-prep",
+            "status": "not-performed",
+            "detail": "No actual task outcome provided"
+          }
+        }
+      ]
+    },
+    {
+      "documentId": "b-docling",
+      "backend": "mineru",
+      "mode": "cache",
+      "status": "completed",
+      "adapterVersion": "61bcbdf415c1785fe925cd4d78024fdc2c0c4af1",
+      "modelRevision": null,
+      "pdfSha256": "c2151058e77cd07f0802ba13c6a8bf4c37ad9578bf9d9404c8b0550b6a32d277",
+      "durationMs": 1204,
+      "failure": null,
+      "bibliographyCoverage": null,
+      "checks": [
+        {
+          "checkId": "body-pdf",
+          "kind": "text",
+          "static": true,
+          "reason": null,
+          "iou": null,
+          "iouReason": "not-an-object-check",
+          "staticEvidence": null,
+          "task": {
+            "checkId": "body-pdf",
+            "status": "not-performed",
+            "detail": "No actual task outcome provided"
+          }
+        },
+        {
+          "checkId": "figure-1",
+          "kind": "object",
+          "static": true,
+          "reason": null,
+          "iou": null,
+          "iouReason": "annotation-rectangle-not-provided",
+          "staticEvidence": "localization-only",
+          "task": {
+            "checkId": "figure-1",
+            "status": "not-performed",
+            "detail": "No actual task outcome provided"
+          }
+        },
+        {
+          "checkId": "reference-data-prep",
+          "kind": "reference",
+          "static": null,
+          "reason": "references-not-provided",
+          "iou": null,
+          "iouReason": "not-an-object-check",
+          "staticEvidence": null,
+          "task": {
+            "checkId": "reference-data-prep",
+            "status": "not-performed",
+            "detail": "No actual task outcome provided"
+          }
+        },
+        {
+          "checkId": "citation-data-prep",
+          "kind": "citation",
+          "static": null,
+          "reason": "references-not-provided",
+          "iou": null,
+          "iouReason": "not-an-object-check",
+          "staticEvidence": null,
+          "task": {
+            "checkId": "citation-data-prep",
+            "status": "not-performed",
+            "detail": "No actual task outcome provided"
+          }
+        }
+      ]
+    },
+    {
+      "documentId": "b-pix2struct",
+      "backend": "mineru",
+      "mode": "cold",
+      "status": "completed",
+      "adapterVersion": "61bcbdf415c1785fe925cd4d78024fdc2c0c4af1",
+      "modelRevision": null,
+      "pdfSha256": "71442a504efc377728a6853dd43db6a6f1be166e7e62f4be276041fbeecfdf2a",
+      "durationMs": 120213,
+      "failure": null,
+      "bibliographyCoverage": null,
+      "checks": [
+        {
+          "checkId": "body-pixel-models",
+          "kind": "text",
+          "static": false,
+          "reason": null,
+          "iou": null,
+          "iouReason": "not-an-object-check",
+          "staticEvidence": null,
+          "task": {
+            "checkId": "body-pixel-models",
+            "status": "not-performed",
+            "detail": "No actual task outcome provided"
+          }
+        },
+        {
+          "checkId": "figure-2",
+          "kind": "object",
+          "static": true,
+          "reason": null,
+          "iou": null,
+          "iouReason": "annotation-rectangle-not-provided",
+          "staticEvidence": "localization-only",
+          "task": {
+            "checkId": "figure-2",
+            "status": "not-performed",
+            "detail": "No actual task outcome provided"
+          }
+        },
+        {
+          "checkId": "reference-due",
+          "kind": "reference",
+          "static": null,
+          "reason": "references-not-provided",
+          "iou": null,
+          "iouReason": "not-an-object-check",
+          "staticEvidence": null,
+          "task": {
+            "checkId": "reference-due",
+            "status": "not-performed",
+            "detail": "No actual task outcome provided"
+          }
+        },
+        {
+          "checkId": "citation-due",
+          "kind": "citation",
+          "static": null,
+          "reason": "references-not-provided",
+          "iou": null,
+          "iouReason": "not-an-object-check",
+          "staticEvidence": null,
+          "task": {
+            "checkId": "citation-due",
+            "status": "not-performed",
+            "detail": "No actual task outcome provided"
+          }
+        }
+      ]
+    },
+    {
+      "documentId": "b-pix2struct",
+      "backend": "mineru",
+      "mode": "cache",
+      "status": "completed",
+      "adapterVersion": "61bcbdf415c1785fe925cd4d78024fdc2c0c4af1",
+      "modelRevision": null,
+      "pdfSha256": "71442a504efc377728a6853dd43db6a6f1be166e7e62f4be276041fbeecfdf2a",
+      "durationMs": 1373,
+      "failure": null,
+      "bibliographyCoverage": null,
+      "checks": [
+        {
+          "checkId": "body-pixel-models",
+          "kind": "text",
+          "static": false,
+          "reason": null,
+          "iou": null,
+          "iouReason": "not-an-object-check",
+          "staticEvidence": null,
+          "task": {
+            "checkId": "body-pixel-models",
+            "status": "not-performed",
+            "detail": "No actual task outcome provided"
+          }
+        },
+        {
+          "checkId": "figure-2",
+          "kind": "object",
+          "static": true,
+          "reason": null,
+          "iou": null,
+          "iouReason": "annotation-rectangle-not-provided",
+          "staticEvidence": "localization-only",
+          "task": {
+            "checkId": "figure-2",
+            "status": "not-performed",
+            "detail": "No actual task outcome provided"
+          }
+        },
+        {
+          "checkId": "reference-due",
+          "kind": "reference",
+          "static": null,
+          "reason": "references-not-provided",
+          "iou": null,
+          "iouReason": "not-an-object-check",
+          "staticEvidence": null,
+          "task": {
+            "checkId": "reference-due",
+            "status": "not-performed",
+            "detail": "No actual task outcome provided"
+          }
+        },
+        {
+          "checkId": "citation-due",
+          "kind": "citation",
+          "static": null,
+          "reason": "references-not-provided",
+          "iou": null,
+          "iouReason": "not-an-object-check",
+          "staticEvidence": null,
+          "task": {
+            "checkId": "citation-due",
+            "status": "not-performed",
+            "detail": "No actual task outcome provided"
+          }
+        }
+      ]
+    },
+    {
+      "documentId": "b-trocr",
+      "backend": "mineru",
+      "mode": "cold",
+      "status": "completed",
+      "adapterVersion": "61bcbdf415c1785fe925cd4d78024fdc2c0c4af1",
+      "modelRevision": null,
+      "pdfSha256": "c49b1a722227899375f2bae3571cb95a7f5b086647d481da7bab260e6ae10399",
+      "durationMs": 64502,
+      "failure": null,
+      "bibliographyCoverage": null,
+      "checks": [
+        {
+          "checkId": "body-scope",
+          "kind": "text",
+          "static": true,
+          "reason": null,
+          "iou": null,
+          "iouReason": "not-an-object-check",
+          "staticEvidence": null,
+          "task": {
+            "checkId": "body-scope",
+            "status": "not-performed",
+            "detail": "No actual task outcome provided"
+          }
+        },
+        {
+          "checkId": "figure-1",
+          "kind": "object",
+          "static": true,
+          "reason": null,
+          "iou": null,
+          "iouReason": "annotation-rectangle-not-provided",
+          "staticEvidence": "localization-only",
+          "task": {
+            "checkId": "figure-1",
+            "status": "not-performed",
+            "detail": "No actual task outcome provided"
+          }
+        },
+        {
+          "checkId": "reference-bert",
+          "kind": "reference",
+          "static": null,
+          "reason": "references-not-provided",
+          "iou": null,
+          "iouReason": "not-an-object-check",
+          "staticEvidence": null,
+          "task": {
+            "checkId": "reference-bert",
+            "status": "not-performed",
+            "detail": "No actual task outcome provided"
+          }
+        },
+        {
+          "checkId": "citation-bert",
+          "kind": "citation",
+          "static": null,
+          "reason": "references-not-provided",
+          "iou": null,
+          "iouReason": "not-an-object-check",
+          "staticEvidence": null,
+          "task": {
+            "checkId": "citation-bert",
+            "status": "not-performed",
+            "detail": "No actual task outcome provided"
+          }
+        }
+      ]
+    },
+    {
+      "documentId": "b-trocr",
+      "backend": "mineru",
+      "mode": "cache",
+      "status": "completed",
+      "adapterVersion": "61bcbdf415c1785fe925cd4d78024fdc2c0c4af1",
+      "modelRevision": null,
+      "pdfSha256": "c49b1a722227899375f2bae3571cb95a7f5b086647d481da7bab260e6ae10399",
+      "durationMs": 256,
+      "failure": null,
+      "bibliographyCoverage": null,
+      "checks": [
+        {
+          "checkId": "body-scope",
+          "kind": "text",
+          "static": true,
+          "reason": null,
+          "iou": null,
+          "iouReason": "not-an-object-check",
+          "staticEvidence": null,
+          "task": {
+            "checkId": "body-scope",
+            "status": "not-performed",
+            "detail": "No actual task outcome provided"
+          }
+        },
+        {
+          "checkId": "figure-1",
+          "kind": "object",
+          "static": true,
+          "reason": null,
+          "iou": null,
+          "iouReason": "annotation-rectangle-not-provided",
+          "staticEvidence": "localization-only",
+          "task": {
+            "checkId": "figure-1",
+            "status": "not-performed",
+            "detail": "No actual task outcome provided"
+          }
+        },
+        {
+          "checkId": "reference-bert",
+          "kind": "reference",
+          "static": null,
+          "reason": "references-not-provided",
+          "iou": null,
+          "iouReason": "not-an-object-check",
+          "staticEvidence": null,
+          "task": {
+            "checkId": "reference-bert",
+            "status": "not-performed",
+            "detail": "No actual task outcome provided"
+          }
+        },
+        {
+          "checkId": "citation-bert",
+          "kind": "citation",
+          "static": null,
+          "reason": "references-not-provided",
+          "iou": null,
+          "iouReason": "not-an-object-check",
+          "staticEvidence": null,
+          "task": {
+            "checkId": "citation-bert",
+            "status": "not-performed",
+            "detail": "No actual task outcome provided"
+          }
+        }
+      ]
+    }
+  ]
+}

@@ -6,15 +6,15 @@ import type {
 } from '../core/preferences';
 
 export interface ReaderCredentialModel {
-  readonly configured: boolean | null;
-  readonly pending: boolean;
+  readonly checking: boolean;
   readonly error: boolean;
   readonly status: string;
   readonly title: string;
   readonly hint: string;
   readonly inputLabel: string;
-  readonly saveLabel: string;
-  readonly forgetLabel: string;
+  readonly verifyLabel: string;
+  readonly helpLabel: string;
+  readonly helpURL: string;
 }
 
 export interface ReaderPageModel {
@@ -41,7 +41,6 @@ export interface ReaderPageModel {
     readonly colors: Record<HighlightColorName, string>;
     readonly on: string;
     readonly off: string;
-    readonly cancel: string;
   };
   readonly visual: boolean;
   readonly comment: boolean;
@@ -59,8 +58,11 @@ export type ReaderPageCommand =
   | { readonly type: 'color'; readonly value: HighlightColorName }
   | { readonly type: 'number'; readonly setting: ReaderScrollNumberSetting; readonly value: string }
   | {
-      readonly type: 'saveCredential';
+      readonly type:
+        | 'mountCredential'
+        | 'credentialEditing'
+        | 'credentialInput'
+        | 'verifyCredential'
+        | 'credentialHelp';
       readonly provider: 'mineru' | 'semanticScholar';
-      readonly value: string;
-    }
-  | { readonly type: 'forgetCredential'; readonly provider: 'mineru' | 'semanticScholar' };
+    };

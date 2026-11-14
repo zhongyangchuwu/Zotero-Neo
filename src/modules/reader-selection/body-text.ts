@@ -92,7 +92,16 @@ export function bodyTextAdmission(
   for (const [id, block] of nativeBlocks) {
     // Native identities and cloud identities cannot be interchanged. A cloud policy
     // may retire a native block only when every known source fragment is excluded.
-    if (block.every(excluded) || block.every(fullyExcluded)) excludedBlocks.add(id);
+    const restored = block.some((region) =>
+      pages
+        .get(region.pageIndex)
+        ?.body.some(
+          (box) =>
+            Math.min(region.rect[2], box[2]!) > Math.max(region.rect[0], box[0]!) &&
+            Math.min(region.rect[3], box[3]!) > Math.max(region.rect[1], box[1]!),
+        ),
+    );
+    if ((block.every(excluded) && !restored) || block.every(fullyExcluded)) excludedBlocks.add(id);
   }
   return (source) => {
     if (source.sourceBlockId) return !excludedBlocks.has(source.sourceBlockId);

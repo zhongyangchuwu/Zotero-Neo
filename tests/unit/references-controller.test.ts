@@ -103,7 +103,7 @@ import { ReferenceController } from '../../src/references/controller';
 const snapshot: ReaderReferenceDocument = {
   attachmentID: 7,
   sourceID: 'version-1',
-  bibliographyCoverage: 'complete',
+  bibliographyCoverage: 'numbered',
   entries: [
     {
       id: 'a',
@@ -655,11 +655,12 @@ describe('local reference handoff', () => {
     ui.controller.open();
     await flush();
     const newer = host.view!;
+    const newerStatus = newer.model.status;
     pending.reject(new Error('late failure'));
     await flush();
     expect(newer.disposed).toBe(false);
     expect(newer.model.scene).toBe('catalog');
-    expect(newer.model.status).toBe('');
+    expect(newer.model.status).toBe(newerStatus);
     expect(ui.restoreFocus).not.toHaveBeenCalled();
     ui.controller.dispose();
   });

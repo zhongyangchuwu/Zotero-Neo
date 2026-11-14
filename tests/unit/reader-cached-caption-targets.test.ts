@@ -24,7 +24,7 @@ const parsed: ParsedDocument = {
 };
 function harness() {
   const native = vi.fn(async () => ({
-    getTopLevelBlockCount: () => 1,
+    getTopLevelBlockCount: (): number => 1,
     getBlocks: async () => [
       {
         type: 'heading',
@@ -82,22 +82,57 @@ describe('cached graph targets', () => {
     expect(t.read).toHaveBeenCalledTimes(1);
     expect(t.native).toHaveBeenCalledTimes(1);
   });
-  it.each(['missing', 'unreadable', 'empty'] as const)(
-    'uses native fallback for %s cache',
+  it.each(['missing', 'unreadable'] as const)(
+    'keeps graph navigation unavailable for a %s shared document',
     async (failure) => {
       const t = harness();
       if (failure === 'unreadable') t.read.mockRejectedValue(new Error('unreadable'));
-      else
-        t.read.mockResolvedValue(
-          failure === 'missing'
-            ? null
-            : { parsed: { ...parsed, regions: [] }, isCurrent: t.current },
-        );
+      else t.read.mockResolvedValue(null);
       expect(await t.targets.load()).toEqual([]);
-      expect(t.targets.state).toBe('ready');
-      expect(t.native).toHaveBeenCalledTimes(1);
+      expect(t.targets.state).toBe('unavailable');
+      expect(t.targets.bodies).toEqual([]);
+      expect(t.native).not.toHaveBeenCalled();
     },
   );
+  it('keeps an empty effective layout authoritative instead of resurrecting corrected-away native bodies', async () => {
+    const t = harness();
+    t.read.mockResolvedValue({ parsed: { ...parsed, regions: [] }, isCurrent: t.current });
+    expect(await t.targets.load()).toEqual([]);
+    expect(t.targets.bodies).toEqual([]);
+    expect(t.native).not.toHaveBeenCalled();
+  });
+  it('never revives raw native figures after corrected native sidecar admission fails, while headings remain independent', async () => {
+    const t = harness();
+    t.native.mockResolvedValue({
+      getTopLevelBlockCount: () => 2,
+      getBlocks: async () => [
+        { type: 'table', content: [{ text: '' }], anchor: { pageRects: [[0, 50, 500, 500, 650]] } },
+        {
+          type: 'heading',
+          content: [{ text: '1 Methods' }],
+          anchor: { pageRects: [[0, 50, 720, 300, 750]] },
+        },
+      ],
+    });
+    t.read.mockResolvedValue({ parsed: { ...parsed, regions: [] }, isCurrent: t.current });
+    expect(await t.targets.load()).toEqual([]);
+    t.targets.invalidate();
+    t.read.mockRejectedValue(new Error('Native correction sidecar unreadable'));
+    expect(await t.targets.load()).toEqual([]);
+    expect(t.targets.state).toBe('unavailable');
+    expect(t.targets.bodies).toEqual([]);
+    expect(t.native).not.toHaveBeenCalled();
+    await t.targets.loadHeadings();
+    expect(
+      t.targets.headingPosition({
+        title: '1 Methods',
+        location: { position: { pageIndex: 0, rects: [[0, 700, 0, 700]] } },
+      }),
+    ).toEqual({ pageIndex: 0, rects: [[50, 720, 300, 750]] });
+    expect(t.targets.entries).toEqual([]);
+    expect(t.targets.bodies).toEqual([]);
+    expect(t.targets.state).toBe('unavailable');
+  });
   it('rechecks file/service identity before using cached targets and retires old choices', async () => {
     const t = harness(),
       old = (await t.targets.load())[0]!;
@@ -107,7 +142,8 @@ describe('cached graph targets', () => {
     t.read.mockResolvedValue(null);
     await t.targets.load();
     expect(t.targets.entries).toEqual([]);
-    expect(t.native).toHaveBeenCalledTimes(1);
+    expect(t.targets.state).toBe('unavailable');
+    expect(t.native).not.toHaveBeenCalled();
     expect(await t.targets.sourceCurrent(old)).toBe(false);
     expect(await t.targets.sourceCurrent(oldBody)).toBe(false);
     expect(t.targets.bodies).toEqual([]);

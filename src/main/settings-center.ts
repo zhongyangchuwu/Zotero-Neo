@@ -272,6 +272,9 @@ export class SettingsCenter {
       this.#mountedLanguage !== language
     ) {
       const epoch = ++this.#pageEpoch;
+      const panel = this.#panel;
+      const viewEpoch = this.#viewEpoch;
+      const document = this.#window.document;
       this.#activePage?.controller.dispose();
       this.#activePage = null;
       this.#mountedLanguage = language;
@@ -301,7 +304,26 @@ export class SettingsCenter {
         case 'Reader':
           this.#activePage = {
             section: 'Reader',
-            controller: new SettingsReader(this.#window, this.#preferences, language, changed),
+            controller: new SettingsReader(
+              this.#window,
+              this.#preferences,
+              language,
+              changed,
+              (provider) => {
+                if (
+                  this.#panel !== panel ||
+                  this.#pageEpoch !== epoch ||
+                  this.#viewEpoch !== viewEpoch ||
+                  this.#window.document !== document
+                )
+                  return null;
+                const input = this.#view?.getElement(`credential-${provider}`);
+                return input?.localName === 'input' &&
+                  (input as HTMLInputElement).type === 'password'
+                  ? (input as HTMLInputElement)
+                  : null;
+              },
+            ),
           };
           break;
         case 'Keybindings':

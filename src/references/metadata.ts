@@ -1,4 +1,4 @@
-import { changeReferenceKey, readReferenceKey } from '../platform/reference-credentials';
+import { readReferenceKey } from '../platform/reference-credentials';
 import {
   createReferenceAbortController,
   parseReferenceXML,
@@ -303,15 +303,6 @@ export function createReferenceMetadataService(): ReferenceMetadataService {
       }
     },
     clearCache: clearReferenceCache,
-    async hasSemanticScholarKey() {
-      return !!readReferenceKey();
-    },
-    async setSemanticScholarKey(key) {
-      if (disposed) throw new Error('Reference service disposed');
-      const trimmed = key?.trim() ?? '';
-      if (key !== null && !trimmed) throw new Error('Semantic Scholar key is empty');
-      await changeReferenceKey(key === null ? null : trimmed);
-    },
     dispose() {
       disposed = true;
       for (const controller of active) controller.abort();

@@ -520,13 +520,17 @@ export class ReferenceController {
         title: text('Bibliography', '参考文献'),
         rows,
         result: rows.length ? '' : text('No matching references.', '没有匹配的参考文献。'),
-        status:
-          data?.bibliographyCoverage === 'partial'
+        status: data
+          ? data.bibliographyCoverage === 'numbered'
             ? text(
-                'Bibliography is partial; other entries may be missing.',
-                '参考文献列表不完整，可能仍有遗漏。',
+                'Numbered bibliography recognized; completeness is unverified.',
+                '已识别编号参考文献清单；完整性尚未核验。',
               )
-            : '',
+            : text(
+                'Bibliography may be incomplete; other entries may be missing.',
+                '参考文献列表可能不完整，仍需核对遗漏。',
+              )
+          : '',
       });
       if (doc.activeElement === root) view?.getElement('query')?.focus();
     };

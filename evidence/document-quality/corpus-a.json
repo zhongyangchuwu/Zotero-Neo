@@ -1,0 +1,523 @@
+{
+  "schemaVersion": 1,
+  "description": "Exploratory corpus A: 12 public, fixed arXiv v1 papers. Checks are selected source-grounded examples, not exhaustive human annotations. Page indices are zero-based PDF page positions. No PDF bytes are redistributed. Layout strata describe observed paper pages, not inferred scan properties. No coordinates are asserted; object checks exercise selected caption/location matching, not IoU or full-document precision/recall.",
+  "documents": [
+    {
+      "id": "attention",
+      "title": "Attention Is All You Need",
+      "pdf": {
+        "url": "https://arxiv.org/pdf/1706.03762v1",
+        "sha256": "0a9bff1be3575cf9fe26a4a3d3a9175bc791ecec90de8b9deba4cff75d2b9476",
+        "fileName": "attention.pdf",
+        "license": "Publicly available author deposit; no PDF redistribution. Rights and license information: https://arxiv.org/abs/1706.03762v1"
+      },
+      "strata": ["figure", "table", "formula", "numbered-references"],
+      "annotation": {
+        "kind": "agent-source-verified",
+        "sources": ["https://arxiv.org/pdf/1706.03762v1"],
+        "scope": "15 PDF pages; selected title, abstract, figure caption and bibliography entry only; no exhaustive annotation or bounding boxes."
+      },
+      "checks": [
+        { "id": "title", "kind": "text", "pageIndex": 0, "text": "Attention Is All You Need" },
+        {
+          "id": "abstract",
+          "kind": "text",
+          "pageIndex": 0,
+          "text": "The dominant sequence transduction models are based on complex recurrent or convolutional neural networks in an encoder-decoder configuration."
+        },
+        {
+          "id": "figure-1",
+          "kind": "object",
+          "objectKind": "figure",
+          "pageIndex": 2,
+          "text": "Figure 1: The Transformer - model architecture."
+        },
+        {
+          "id": "reference-1",
+          "kind": "reference",
+          "pageIndex": 9,
+          "text": "Jimmy Lei Ba, Jamie Ryan Kiros, and Geoffrey E Hinton. Layer normalization. arXiv preprint arXiv:1607.06450, 2016.",
+          "arxivID": "1607.06450"
+        }
+      ]
+    },
+    {
+      "id": "bert",
+      "title": "BERT: Pre-training of Deep Bidirectional Transformers for Language Understanding",
+      "pdf": {
+        "url": "https://arxiv.org/pdf/1810.04805v1",
+        "sha256": "58534a3c000cbcc60ed64e999a2d9ed839edc2d9894e4449e9d79e1118b5e5ba",
+        "fileName": "bert.pdf",
+        "license": "Publicly available author deposit; no PDF redistribution. Rights and license information: https://arxiv.org/abs/1810.04805v1"
+      },
+      "strata": ["two-column", "figure", "table", "author-year-references"],
+      "annotation": {
+        "kind": "agent-source-verified",
+        "sources": ["https://arxiv.org/pdf/1810.04805v1"],
+        "scope": "14 PDF pages; selected title, abstract, figure caption and bibliography excerpt only; no exhaustive annotation or bounding boxes."
+      },
+      "checks": [
+        {
+          "id": "title",
+          "kind": "text",
+          "pageIndex": 0,
+          "text": "BERT: Pre-training of Deep Bidirectional Transformers for Language Understanding"
+        },
+        {
+          "id": "abstract",
+          "kind": "text",
+          "pageIndex": 0,
+          "text": "conditioning on both left and right context in all layers."
+        },
+        {
+          "id": "figure-1",
+          "kind": "object",
+          "objectKind": "figure",
+          "pageIndex": 2,
+          "text": "Figure 1: Differences in pre-training model architectures. BERT uses a bidirectional Transformer."
+        },
+        {
+          "id": "reference-entailment",
+          "kind": "reference",
+          "pageIndex": 12,
+          "text": "The fifth PASCAL recognizing textual entailment challenge. In TAC. NIST."
+        }
+      ]
+    },
+    {
+      "id": "resnet",
+      "title": "Deep Residual Learning for Image Recognition",
+      "pdf": {
+        "url": "https://arxiv.org/pdf/1512.03385v1",
+        "sha256": "1e0651b6810ecba34a3dbc5b5b0209226f889004607c1f203540a48d64e5a93a",
+        "fileName": "resnet.pdf",
+        "license": "Publicly available author deposit; no PDF redistribution. Rights and license information: https://arxiv.org/abs/1512.03385v1"
+      },
+      "strata": ["two-column", "figure", "formula", "numbered-references"],
+      "annotation": {
+        "kind": "agent-source-verified",
+        "sources": ["https://arxiv.org/pdf/1512.03385v1"],
+        "scope": "12 PDF pages; selected title, abstract, figure caption and bibliography entry only; no exhaustive annotation or bounding boxes."
+      },
+      "checks": [
+        {
+          "id": "title",
+          "kind": "text",
+          "pageIndex": 0,
+          "text": "Deep Residual Learning for Image Recognition"
+        },
+        {
+          "id": "abstract",
+          "kind": "text",
+          "pageIndex": 0,
+          "text": "Deeper neural networks are more difficult to train."
+        },
+        {
+          "id": "figure-2",
+          "kind": "object",
+          "objectKind": "figure",
+          "pageIndex": 1,
+          "text": "Figure 2. Residual learning: a building block."
+        },
+        {
+          "id": "reference-2",
+          "kind": "reference",
+          "pageIndex": 8,
+          "text": "C. M. Bishop. Neural networks for pattern recognition. Oxford university press, 1995."
+        }
+      ]
+    },
+    {
+      "id": "transformer-xl",
+      "title": "Transformer-XL: Attentive Language Models Beyond a Fixed-Length Context",
+      "pdf": {
+        "url": "https://arxiv.org/pdf/1901.02860v1",
+        "sha256": "6c772b056577040ba34522ebb44f104f66c82accf160972cc23c9792db275373",
+        "fileName": "transformer-xl.pdf",
+        "license": "Publicly available author deposit; no PDF redistribution. Rights and license information: https://arxiv.org/abs/1901.02860v1"
+      },
+      "strata": ["figure", "table", "formula", "author-year-references"],
+      "annotation": {
+        "kind": "agent-source-verified",
+        "sources": ["https://arxiv.org/pdf/1901.02860v1"],
+        "scope": "18 PDF pages; selected title, abstract, figure caption and bibliography entry only; no exhaustive annotation or bounding boxes."
+      },
+      "checks": [
+        {
+          "id": "title",
+          "kind": "text",
+          "pageIndex": 0,
+          "text": "TRANSFORMER-XL: ATTENTIVE LANGUAGE MODELS BEYOND A FIXED-LENGTH CONTEXT"
+        },
+        {
+          "id": "abstract",
+          "kind": "text",
+          "pageIndex": 0,
+          "text": "Concretely, it consists of a segment-level recurrence mechanism and a novel positional encoding scheme."
+        },
+        {
+          "id": "figure-1",
+          "kind": "object",
+          "objectKind": "figure",
+          "pageIndex": 2,
+          "text": "Figure 1: Illustration of the vanilla model with a segment length 4."
+        },
+        {
+          "id": "reference-baevski",
+          "kind": "reference",
+          "pageIndex": 9,
+          "text": "Alexei Baevski and Michael Auli. Adaptive input representations for neural language modeling. arXiv preprint arXiv:1809.10853, 2018.",
+          "arxivID": "1809.10853"
+        }
+      ]
+    },
+    {
+      "id": "vae",
+      "title": "Auto-Encoding Variational Bayes",
+      "pdf": {
+        "url": "https://arxiv.org/pdf/1312.6114v1",
+        "sha256": "1a320bb73327d1ccb5d8df2d290ade85f80a22e2131635b2d87b5df9b6994153",
+        "fileName": "vae.pdf",
+        "license": "Publicly available author deposit; no PDF redistribution. Rights and license information: https://arxiv.org/abs/1312.6114v1"
+      },
+      "strata": ["figure", "formula", "labelled-references"],
+      "annotation": {
+        "kind": "agent-source-verified",
+        "sources": ["https://arxiv.org/pdf/1312.6114v1"],
+        "scope": "9 PDF pages; selected title, abstract, figure caption and bibliography excerpt only; no exhaustive annotation or bounding boxes."
+      },
+      "checks": [
+        {
+          "id": "title",
+          "kind": "text",
+          "pageIndex": 0,
+          "text": "Auto-Encoding Variational Bayes"
+        },
+        {
+          "id": "abstract",
+          "kind": "text",
+          "pageIndex": 0,
+          "text": "These theoretical advantages are reflected in experimental results."
+        },
+        {
+          "id": "figure-1",
+          "kind": "object",
+          "objectKind": "figure",
+          "pageIndex": 6,
+          "text": "Figure 1: Comparison of our AEVB method to the wake-sleep algorithm, in terms of optimizing the lower bound"
+        },
+        {
+          "id": "reference-bjp12",
+          "kind": "reference",
+          "pageIndex": 8,
+          "text": "David M Blei, Michael I Jordan, and John W Paisley. Variational bayesian inference with stochastic search."
+        }
+      ]
+    },
+    {
+      "id": "adam",
+      "title": "Adam: A Method for Stochastic Optimization",
+      "pdf": {
+        "url": "https://arxiv.org/pdf/1412.6980v1",
+        "sha256": "935a5a15616961aff21529d86a754570028843407adfe858f1d18584b84293a7",
+        "fileName": "adam.pdf",
+        "license": "Publicly available author deposit; no PDF redistribution. Rights and license information: https://arxiv.org/abs/1412.6980v1"
+      },
+      "strata": ["figure", "formula", "author-year-references"],
+      "annotation": {
+        "kind": "agent-source-verified",
+        "sources": ["https://arxiv.org/pdf/1412.6980v1"],
+        "scope": "9 PDF pages; selected title, abstract, figure caption and bibliography entry only; no exhaustive annotation or bounding boxes."
+      },
+      "checks": [
+        {
+          "id": "title",
+          "kind": "text",
+          "pageIndex": 0,
+          "text": "ADAM: A METHOD FOR STOCHASTIC OPTIMIZATION"
+        },
+        {
+          "id": "abstract",
+          "kind": "text",
+          "pageIndex": 0,
+          "text": "We introduce Adam, an algorithm for first-order gradient-based optimization of stochastic objective functions."
+        },
+        {
+          "id": "figure-1",
+          "kind": "object",
+          "objectKind": "figure",
+          "pageIndex": 5,
+          "text": "Figure 1: Logistic regression training negative log likelihood on MNIST images and IMDB movie reviews with 10,000 bag-of-words (BoW) feature vectors."
+        },
+        {
+          "id": "reference-vae",
+          "kind": "reference",
+          "pageIndex": 8,
+          "text": "Kingma, Diederik P and Welling, Max. Auto-Encoding Variational Bayes. In The 2nd International Conference on Learning Representations (ICLR), 2013."
+        }
+      ]
+    },
+    {
+      "id": "gpt3",
+      "title": "Language Models are Few-Shot Learners",
+      "pdf": {
+        "url": "https://arxiv.org/pdf/2005.14165v1",
+        "sha256": "f756a2d3e23c2770a3e8c4354965e98d37411c18aab91556df0c335675dec396",
+        "fileName": "gpt3.pdf",
+        "license": "Publicly available author deposit; no PDF redistribution. Rights and license information: https://arxiv.org/abs/2005.14165v1"
+      },
+      "strata": ["figure", "labelled-references"],
+      "annotation": {
+        "kind": "agent-source-verified",
+        "sources": ["https://arxiv.org/pdf/2005.14165v1"],
+        "scope": "72 PDF pages; selected title, abstract, figure caption and bibliography entry only; no exhaustive annotation or bounding boxes."
+      },
+      "checks": [
+        {
+          "id": "title",
+          "kind": "text",
+          "pageIndex": 0,
+          "text": "Language Models are Few-Shot Learners"
+        },
+        {
+          "id": "abstract",
+          "kind": "text",
+          "pageIndex": 0,
+          "text": "For all tasks, GPT-3 is applied without any gradient updates or fine-tuning,"
+        },
+        {
+          "id": "figure-1-1",
+          "kind": "object",
+          "objectKind": "figure",
+          "pageIndex": 2,
+          "text": "Figure 1.1: Language model meta-learning."
+        },
+        {
+          "id": "reference-ai19",
+          "kind": "reference",
+          "pageIndex": 65,
+          "text": "WeChat AI. Tr-mt (ensemble), December 2019."
+        }
+      ]
+    },
+    {
+      "id": "clip",
+      "title": "Learning Transferable Visual Models From Natural Language Supervision",
+      "pdf": {
+        "url": "https://arxiv.org/pdf/2103.00020v1",
+        "sha256": "6478b6e571a7d6fcd846d8ef77bfd60c285f1986abb8f475eedc43de403074f5",
+        "fileName": "clip.pdf",
+        "license": "Publicly available author deposit; no PDF redistribution. Rights and license information: https://arxiv.org/abs/2103.00020v1"
+      },
+      "strata": ["two-column", "figure", "author-year-references"],
+      "annotation": {
+        "kind": "agent-source-verified",
+        "sources": ["https://arxiv.org/pdf/2103.00020v1"],
+        "scope": "48 PDF pages; selected title, abstract, figure caption and bibliography entry only; no exhaustive annotation or bounding boxes."
+      },
+      "checks": [
+        {
+          "id": "title",
+          "kind": "text",
+          "pageIndex": 0,
+          "text": "Learning Transferable Visual Models From Natural Language Supervision"
+        },
+        {
+          "id": "abstract",
+          "kind": "text",
+          "pageIndex": 0,
+          "text": "Learning directly from raw text about images is a promising alternative which leverages a much broader source of supervision."
+        },
+        {
+          "id": "figure-1",
+          "kind": "object",
+          "objectKind": "figure",
+          "pageIndex": 1,
+          "text": "Figure 1. Summary of our approach."
+        },
+        {
+          "id": "reference-andreas",
+          "kind": "reference",
+          "pageIndex": 26,
+          "text": "Andreas, J., Klein, D., and Levine, S. Learning with latent language. arXiv preprint arXiv:1711.00482, 2017.",
+          "arxivID": "1711.00482"
+        }
+      ]
+    },
+    {
+      "id": "vit",
+      "title": "An Image is Worth 16x16 Words: Transformers for Image Recognition at Scale",
+      "pdf": {
+        "url": "https://arxiv.org/pdf/2010.11929v1",
+        "sha256": "d33feb34fcf7aea256439a7f487197dcbb896e31a9d86e30e37d252672c4da78",
+        "fileName": "vit.pdf",
+        "license": "Publicly available author deposit; no PDF redistribution. Rights and license information: https://arxiv.org/abs/2010.11929v1"
+      },
+      "strata": ["figure", "table", "author-year-references"],
+      "annotation": {
+        "kind": "agent-source-verified",
+        "sources": ["https://arxiv.org/pdf/2010.11929v1"],
+        "scope": "21 PDF pages; selected title, abstract, figure caption and bibliography entry only; no exhaustive annotation or bounding boxes."
+      },
+      "checks": [
+        {
+          "id": "title",
+          "kind": "text",
+          "pageIndex": 0,
+          "text": "AN IMAGE IS WORTH 16X16 WORDS: TRANSFORMERS FOR IMAGE RECOGNITION AT SCALE"
+        },
+        {
+          "id": "abstract",
+          "kind": "text",
+          "pageIndex": 0,
+          "text": "We show that this reliance on CNNs is not necessary and a pure transformer applied directly to sequences of image patches can perform very well on image classification tasks."
+        },
+        {
+          "id": "figure-1",
+          "kind": "object",
+          "objectKind": "figure",
+          "pageIndex": 2,
+          "text": "Figure 1: Model overview. We split an image into fixed-size patches, linearly embed each of them,"
+        },
+        {
+          "id": "reference-abnar",
+          "kind": "reference",
+          "pageIndex": 8,
+          "text": "Samira Abnar and Willem Zuidema. Quantifying attention flow in transformers. In ACL, 2020."
+        }
+      ]
+    },
+    {
+      "id": "lora",
+      "title": "LoRA: Low-Rank Adaptation of Large Language Models",
+      "pdf": {
+        "url": "https://arxiv.org/pdf/2106.09685v1",
+        "sha256": "38a259c1926b724363fcfbd8e5f80fcadf0dd8d9ab6944fea8c00e74fd7590b0",
+        "fileName": "lora.pdf",
+        "license": "Publicly available author deposit; no PDF redistribution. Rights and license information: https://arxiv.org/abs/2106.09685v1"
+      },
+      "strata": ["figure", "table", "formula", "numbered-references"],
+      "annotation": {
+        "kind": "agent-source-verified",
+        "sources": ["https://arxiv.org/pdf/2106.09685v1"],
+        "scope": "20 PDF pages; selected title, abstract, table caption excerpt and bibliography entry only; no exhaustive annotation or bounding boxes."
+      },
+      "checks": [
+        {
+          "id": "title",
+          "kind": "text",
+          "pageIndex": 0,
+          "text": "LoRA: Low-Rank Adaptation of Large Language Models"
+        },
+        {
+          "id": "abstract",
+          "kind": "text",
+          "pageIndex": 0,
+          "text": "The dominant paradigm of natural language processing consists of large-scale pre-training on general domain data and adaptation to particular tasks or domains."
+        },
+        {
+          "id": "table-3",
+          "kind": "object",
+          "objectKind": "table",
+          "pageIndex": 6,
+          "text": "Table 3: Validation accuracy on WikiSQL and MultiNLI after applying LoRA to different types of"
+        },
+        {
+          "id": "reference-1",
+          "kind": "reference",
+          "pageIndex": 9,
+          "text": "Armen Aghajanyan, Luke Zettlemoyer, and Sonal Gupta. Intrinsic Dimensionality Explains the Effectiveness of Language Model Fine-Tuning. arXiv:2012.13255",
+          "arxivID": "2012.13255"
+        }
+      ]
+    },
+    {
+      "id": "rag",
+      "title": "Retrieval-Augmented Generation for Knowledge-Intensive NLP Tasks",
+      "pdf": {
+        "url": "https://arxiv.org/pdf/2005.11401v1",
+        "sha256": "25b55fd0f7c6c91cbe2c88690a33923077103e8f563d154faa1ce11d3527e601",
+        "fileName": "rag.pdf",
+        "license": "Publicly available author deposit; no PDF redistribution. Rights and license information: https://arxiv.org/abs/2005.11401v1"
+      },
+      "strata": ["figure", "table", "formula", "numbered-references"],
+      "annotation": {
+        "kind": "agent-source-verified",
+        "sources": ["https://arxiv.org/pdf/2005.11401v1"],
+        "scope": "18 PDF pages; selected title, abstract, table caption and bibliography entry excerpt only; no exhaustive annotation or bounding boxes."
+      },
+      "checks": [
+        {
+          "id": "title",
+          "kind": "text",
+          "pageIndex": 0,
+          "text": "Retrieval-Augmented Generation for Knowledge-Intensive NLP Tasks"
+        },
+        {
+          "id": "abstract",
+          "kind": "text",
+          "pageIndex": 0,
+          "text": "Large pre-trained language models have been shown to store factual knowledge in their parameters,"
+        },
+        {
+          "id": "table-3",
+          "kind": "object",
+          "objectKind": "table",
+          "pageIndex": 6,
+          "text": "Table 3: Human assessments for the Jeopardy Question Generation Task."
+        },
+        {
+          "id": "reference-bert",
+          "kind": "reference",
+          "pageIndex": 11,
+          "text": "Jacob Devlin, Ming-Wei Chang, Kenton Lee, and Kristina Toutanova. BERT: Pre-training of Deep Bidirectional Transformers for Language Understanding.",
+          "doi": "10.18653/v1/N19-1423"
+        }
+      ]
+    },
+    {
+      "id": "t5",
+      "title": "Exploring the Limits of Transfer Learning with a Unified Text-to-Text Transformer",
+      "pdf": {
+        "url": "https://arxiv.org/pdf/1910.10683v1",
+        "sha256": "b41ee513826361ff4d6076ded32e35fa6bc9dea19f6ba2b98feeb1a65c778483",
+        "fileName": "t5.pdf",
+        "license": "Publicly available author deposit; no PDF redistribution. Rights and license information: https://arxiv.org/abs/1910.10683v1"
+      },
+      "strata": ["figure", "table", "author-year-references"],
+      "annotation": {
+        "kind": "agent-source-verified",
+        "sources": ["https://arxiv.org/pdf/1910.10683v1"],
+        "scope": "52 PDF pages; selected title, abstract, figure caption and bibliography entry excerpt only; no exhaustive annotation or bounding boxes."
+      },
+      "checks": [
+        {
+          "id": "title",
+          "kind": "text",
+          "pageIndex": 0,
+          "text": "Exploring the Limits of Transfer Learning with a Unified Text-to-Text Transformer"
+        },
+        {
+          "id": "abstract",
+          "kind": "text",
+          "pageIndex": 0,
+          "text": "Transfer learning, where a model is first pre-trained on a data-rich task before being fine-tuned on a downstream task, has emerged as a powerful technique in natural language processing (NLP)."
+        },
+        {
+          "id": "figure-1",
+          "kind": "object",
+          "objectKind": "figure",
+          "pageIndex": 1,
+          "text": "Figure 1: A diagram of our text-to-text framework."
+        },
+        {
+          "id": "reference-anil",
+          "kind": "reference",
+          "pageIndex": 34,
+          "text": "Rohan Anil, Vineet Gupta, Tomer Koren, and Yoram Singer. Memory-efficient adaptive optimization for large-scale learning. arXiv preprint arXiv:1901.11150, 2019.",
+          "arxivID": "1901.11150"
+        }
+      ]
+    }
+  ]
+}

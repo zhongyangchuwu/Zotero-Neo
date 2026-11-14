@@ -113,7 +113,13 @@ DOI 或标题查询使用 Semantic Scholar 的免费 Graph API，arXiv ID 查询
 
 缓存保存在当前 Zotero 配置文件的 `zotero-neo-reference-cache.json`，格式版本为 1，最多 50 条、文件不超过 4 MiB。只保存成功取得的论文元数据；缓存满 30 分钟后标为已过期但不会因此删除。详情显示来源、原始获取时间以及已获取、缓存或已过期状态；刷新失败时显示错误并保留已有结果、来源和原始获取时间。缓存不含 PDF 文本、笔记、坐标或凭据。
 
-Semantic Scholar API 密钥为可选项；没有密钥时仍可匿名查询，但服务可能限流（429）或离线。在 **Neo 设置 → 阅读器 → Semantic Scholar** 中显式保存或忘记密钥；论文详情不提供密钥表单。密钥存入 Zotero 本机 Login Manager，不写入普通偏好、结果或日志，密码框不回显已有值。关闭设置会清空未提交的输入；保存或忘记密钥不会清除元数据缓存。点击**清除元数据缓存**只清缓存，不删除文库条目、已采纳记录或凭据。查询、读取或写入失败会如实显示，不自动重试。完整操作见[阅读器指南](READER_GUIDE.md#查找和核对参考文献)。
+Semantic Scholar API Key 是用于参考文献元数据查询的可选凭据，可从 [Semantic Scholar API 页面](https://www.semanticscholar.org/product/api)申请。没有密钥时仍可匿名查询，但服务可能限流；本机参考文献匹配不需要密钥。
+
+在 **Neo 设置 → 阅读器 → Semantic Scholar** 的密码框中填写或修改，输入会自动保存到 Zotero 本机 Login Manager；删空即清除，重开设置时已有值直接回填到密码框并保持掩码。关闭设置不会撤销已输入的改动。密钥不写入普通偏好、结果或日志，论文详情不提供密钥表单。
+
+只有点击**验证**才向只读 Graph API 发起检查；打开设置、输入、失焦均不联网验证，也不上传 PDF。无效凭据、拒绝访问、限流及网络／服务异常分别反馈；服务返回 403 时不能仅凭状态码区分错误密钥与接口权限不足。验证通过不保证后续请求额度或查询结果质量。
+
+保存或清除密钥不会清除元数据缓存。点击**清除元数据缓存**只清缓存，不删除文库条目、已采纳记录或凭据。查询、读取或写入失败会如实显示，不自动重试。完整操作见[阅读器指南](READER_GUIDE.md#查找和核对参考文献)。
 
 ## 配置 AI 问答（实验）
 
@@ -129,7 +135,11 @@ API 密钥按端点存入 Zotero 本机密码管理器，界面只显示是否�
 
 ## 文档解析对照
 
-Reader Normal 中按 `<Space>rd` 打开对照界面。默认服务是 MinerU 官方云端；服务选择保存为 `extensions.zotero-neo.documentAnalysis.provider`（`mineru` / `oxr`）。MinerU 使用官方 v4 API，需填写官网 Token。OXR API 地址在一次成功解析后保存为 `extensions.zotero-neo.documentAnalysis.oxr.endpoint`；MinerU Token 可在 Neo 设置 → Reader 或解析面板中保存至 Zotero 本机密码管理器，单篇与批量准备共用；支持清除。未保存的输入和 OXR 密钥只用于本次对话框。密钥不写入普通偏好、任务记录、解析缓存或复制报告。默认 OXR 免费接口使用 `dummy`，部署自己的兼容服务时可填写对应地址和密钥。
+Reader Normal 中按 `<Space>rd` 打开对照界面。默认服务是 MinerU 官方云端；服务选择保存为 `extensions.zotero-neo.documentAnalysis.provider`（`mineru` / `oxr`）。MinerU 使用官方 v4 API；OXR API 地址在一次成功解析后保存为 `extensions.zotero-neo.documentAnalysis.oxr.endpoint`。
+
+MinerU API Token 用于云端 PDF 解析，按 [MinerU API 文档](https://mineru.net/apiManage/docs)申请，与 Semantic Scholar 的元数据密钥无关。在 Neo 设置的阅读器页、单篇对照或批量准备面板填写后自动保存到 Zotero 本机密码管理器，三处共用；删空即清除，重开时密码框回填已有值。只有点击**验证**才发送只读任务状态请求，不创建解析任务、不上传 PDF，也不检查解析配额；打开面板、输入和失焦不会触发验证。
+
+OXR 密钥仍只用于本次对话框，不自动保存；默认 OXR 免费接口使用 `dummy`，部署自己的兼容服务时可填写对应地址和密钥。凭据不写入普通偏好、任务记录、解析缓存或复制报告。
 
 当前实现包含原生 SDT、MinerU 官方云端和 OXR 完整解析后端。云端解析由界面按钮显式发起；打开论文不会自动上传。接口返回的区域坐标会转换为原 PDF 用户坐标；原生文字批注继续要求精确的来源映射。
 
