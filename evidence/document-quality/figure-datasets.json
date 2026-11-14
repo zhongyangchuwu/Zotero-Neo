@@ -1,0 +1,124 @@
+{
+  "schemaVersion": 1,
+  "description": "Provenance and selection notes for corpus-c; PDFs are obtained separately and are not redistributed.",
+  "selectedDataset": {
+    "name": "PDFFigures2 Conference150 (CS-150)",
+    "datasetVersion": 2,
+    "repositoryCommit": "3d7ad46753d4a315cccd1c2bcab398380e88c534",
+    "annotationSource": "https://github.com/allenai/pdffigures2/blob/3d7ad46753d4a315cccd1c2bcab398380e88c534/evaluation/datasets/conference/annotations.json",
+    "upstreamDocumentList": "https://github.com/allenai/pdffigures2/blob/3d7ad46753d4a315cccd1c2bcab398380e88c534/evaluation/datasets/conference/doc_ids.txt",
+    "formatSource": "https://github.com/allenai/pdffigures2/blob/3d7ad46753d4a315cccd1c2bcab398380e88c534/evaluation/datasets/README.md",
+    "methodPaper": "https://doi.org/10.1145/2910896.2910904",
+    "repositoryLicense": "https://github.com/allenai/pdffigures2/blob/3d7ad46753d4a315cccd1c2bcab398380e88c534/LICENSE.txt",
+    "rights": "The upstream repository provides Apache-2.0 code licensing and distributes annotation records but not PDFs for copyright reasons. Each selected PDF carries its own author copyright notice; no blanket PDF reuse license is asserted. Captions quoted here are limited source excerpts.",
+    "labeling": "The dataset paper says annotators marked figure, table and caption boxes; marked rectangles were cropped to page foreground pixels. These published labels are independent of the extractor being evaluated here, although PDFFigures2 itself was evaluated on this dataset. Some captions are partial transcriptions and annotation tool components are not open source.",
+    "coordinates": "Upstream evaluation Figure.page is physical one-based; region_bb and caption_bb are top-left-origin boxes at 72 dpi, and this slice has 612 x 792 page boxes. Every selected PDF page has unrotated CropBox [0,0,612,792]. For either upstream box [l,t,r,b], pageIndex=page-1 and PDF user-space rectangle=[l,792-b,r,792-t]; decimals rounded to 0.01 pt. The region_bb produces rect (body) and caption_bb produces captionRect (caption), kept separate.",
+    "selection": "Purposive ICML 2010, 2013 and 2014 papers, chosen for available original PDFs, figures and tables, multiple objects on the same page, and composite panels; not a representative random sample. All published annotations on each selected page are included; unselected pages and unannotated or missed objects are outside scope. PDF identity was corroborated by selected caption text and page geometry, not historical upstream byte checksums.",
+    "documents": [
+      {
+        "id": "c-icml10_3",
+        "url": "https://icml.cc/Conferences/2010/papers/16.pdf",
+        "sha256": "71c86360b4672298bb70e83dd0359cc080f56711abed161f34b4ab7c04eba1af",
+        "selectedPhysicalPages1": [5, 7],
+        "objects": 5
+      },
+      {
+        "id": "c-icml10_4",
+        "url": "https://icml.cc/Conferences/2010/papers/175.pdf",
+        "sha256": "d8045d2534e6aa6349c66f7633078c86c1f4a4eabffed5e2f765e556eebbdc4c",
+        "selectedPhysicalPages1": [6, 7],
+        "objects": 7
+      },
+      {
+        "id": "c-icml10_5",
+        "url": "https://icml.cc/Conferences/2010/papers/227.pdf",
+        "sha256": "80ff40e0d7865d762680b4bbcce271f8ca045cb7236d4be57c44a43a1213d02a",
+        "selectedPhysicalPages1": [4, 5],
+        "objects": 5
+      },
+      {
+        "id": "c-icml10_8",
+        "url": "https://icml.cc/Conferences/2010/papers/238.pdf",
+        "sha256": "bb0d55dc5f7a156f56aaf5be31f16f5326c1eb1f22f3b43c953f0ac4e5603b76",
+        "selectedPhysicalPages1": [5, 6],
+        "objects": 6
+      },
+      {
+        "id": "c-icml13_2",
+        "url": "https://proceedings.mlr.press/v28/wang13f.pdf",
+        "sha256": "9c2fec72abba2629f6aa3164daffc2d3967bf260fe4d409da4c5f26a7f05f26a",
+        "selectedPhysicalPages1": [2, 8],
+        "objects": 4
+      },
+      {
+        "id": "c-icml13_3",
+        "url": "https://proceedings.mlr.press/v28/kadri13.pdf",
+        "sha256": "01003316b1b949b47db8f5d5d300bd9cac687693f9e331c883f546a2999ab200",
+        "selectedPhysicalPages1": [2, 8],
+        "objects": 3
+      },
+      {
+        "id": "c-icml13_4",
+        "url": "https://proceedings.mlr.press/v28/georgiev13.pdf",
+        "sha256": "85f3edc1b6b156fc56d2d87a9d86964be5f0658d277c96c2b22494ee3591c63d",
+        "selectedPhysicalPages1": [6, 7],
+        "objects": 5
+      },
+      {
+        "id": "c-icml13_6",
+        "url": "https://proceedings.mlr.press/v28/kim13.pdf",
+        "sha256": "185efd151e5991206a7dd50a1f36c0976f71e4367eb4ec038c907711cec16ea2",
+        "selectedPhysicalPages1": [2, 8],
+        "objects": 5
+      },
+      {
+        "id": "c-icml13_8",
+        "url": "https://proceedings.mlr.press/v28/bryan13.pdf",
+        "sha256": "fb60b5cea5a3f18de6a4e1ace58252296409db55faa7cc4769013974c4eb9dbd",
+        "selectedPhysicalPages1": [1, 8],
+        "objects": 4
+      },
+      {
+        "id": "c-icml14_9",
+        "url": "https://proceedings.mlr.press/v32/suna14.pdf",
+        "sha256": "7d4ef649618294cbdf79e1b5ff4a182d33432d8a5bc98c8311b51a135dbd3e5c",
+        "selectedPhysicalPages1": [5, 7],
+        "objects": 3
+      }
+    ],
+    "counts": {
+      "documents": 10,
+      "selectedPages": 20,
+      "figures": 30,
+      "tables": 17
+    }
+  },
+  "otherDatasets": [
+    {
+      "name": "PDFFigures2 S2Sample (CS-Large)",
+      "version": 8,
+      "source": "https://github.com/allenai/pdffigures2/tree/3d7ad46753d4a315cccd1c2bcab398380e88c534/evaluation/datasets/s2",
+      "limitations": "Approximately half of pages, up to nine per paper, were annotated. An upstream Semantic Scholar S3 URL probed returned HTTP 403; it was not used."
+    },
+    {
+      "name": "SCI-3000",
+      "version": "1.2",
+      "source": "https://zenodo.org/records/8357124",
+      "limitations": "Record describes figure, table and caption boxes across 3000 PDFs and 34791 pages; each listed archive is 6.8 GB. No archive, labels, page associations, or PDFs were inspected; not used."
+    },
+    {
+      "name": "DocLayNet",
+      "version": "1.0.0",
+      "source": "https://github.com/DS4SD/DocLayNet",
+      "license": "https://github.com/DS4SD/DocLayNet/blob/main/LICENSE",
+      "limitations": "Public COCO region classes and single-page PDFs are documented, but the COCO per-region records do not supply explicit figure-to-caption pairing. Core and extra downloads are 28 GiB and 7.5 GiB respectively; not used."
+    }
+  ],
+  "exclusions": [
+    {
+      "document": "icml13_2",
+      "physicalPage1": 7,
+      "reason": "Upstream Table 3 region_bb overlaps caption_bb by about 1.44 pt vertically; excluded the entire page rather than assert that rectangle is body-only."
+    }
+  ]
+}

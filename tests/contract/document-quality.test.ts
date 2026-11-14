@@ -300,6 +300,27 @@ describe('document quality CLI', () => {
       expect(readFileSync(join(directory, 'report.md'), 'utf8')).toContain('端到端');
     }));
 
+  it('scores published body-caption geometry without requiring an exact caption transcription, but rejects a wrong caption box', () => {
+    for (const correct of [true, false])
+      withDirectory((directory) => {
+        const { corpus, input } = fixture();
+        corpus.documents[0]!.annotation.kind = 'dataset-ground-truth';
+        const check = corpus.documents[0]!.checks.find((check) => check.id === 'object')!;
+        Object.assign(check, {
+          text: 'Figure 1: upstream partial transcription',
+          captionRect: correct ? [0, 51, 10, 55] : [60, 51, 70, 55],
+        });
+        const { result, output } = evaluate(directory, corpus, input);
+        expect(result.status, result.stderr).toBe(0);
+        const report = JSON.parse(readFileSync(output, 'utf8'));
+        const scored = report.observations[0].checks.find(
+          (check: { checkId: string }) => check.checkId === 'object',
+        );
+        expect(scored.static).toBe(correct);
+        if (correct) expect(scored).toMatchObject({ iou: 1, captionIoU: 1 });
+      });
+  });
+
   it('rejects wrong source, duplicate samples, invalid identities and empty corpora', () =>
     withDirectory((directory) => {
       const { corpus, input } = fixture();

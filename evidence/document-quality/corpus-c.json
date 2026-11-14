@@ -1,0 +1,688 @@
+{
+  "schemaVersion": 1,
+  "description": "Corpus C: a purposively selected, non-random slice of PDFFigures2 Conference150 v2. Captions and body boxes are upstream ground-truth annotations, not extractor predictions. Selected pages include every upstream annotated figure/table, but not unselected pages; no whole-document precision/recall or independently verified exhaustiveness is implied. Coordinates are PDF user-space [left, bottom, right, top], pageIndex is zero-based. PDFs are not redistributed.",
+  "documents": [
+    {
+      "id": "c-icml10_3",
+      "title": "Large Graph Construction for Scalable Semi-Supervised Learning",
+      "pdf": {
+        "url": "https://icml.cc/Conferences/2010/papers/16.pdf",
+        "sha256": "71c86360b4672298bb70e83dd0359cc080f56711abed161f34b4ab7c04eba1af",
+        "fileName": "c-icml10_3.pdf",
+        "license": "First-page notice: Copyright 2010 by the author(s)/owner(s). Public conference-hosted PDF; no PDF redistributed, reuse permissions not established by the dataset code license."
+      },
+      "strata": [
+        "computer-science",
+        "two-column",
+        "figure",
+        "table",
+        "same-page-objects",
+        "composite-panels"
+      ],
+      "annotation": {
+        "kind": "dataset-ground-truth",
+        "sources": [
+          "https://github.com/allenai/pdffigures2/blob/3d7ad46753d4a315cccd1c2bcab398380e88c534/evaluation/datasets/conference/annotations.json",
+          "https://github.com/allenai/pdffigures2/blob/3d7ad46753d4a315cccd1c2bcab398380e88c534/evaluation/datasets/README.md",
+          "https://doi.org/10.1145/2910896.2910904",
+          "https://icml.cc/Conferences/2010/papers/16.pdf"
+        ],
+        "scope": "PDFFigures2 conference v2 human-marked and foreground-cropped annotations. All upstream annotated objects on selected physical pages 5, 7 (one-based) are included; other pages are excluded. Text is the upstream caption transcription, sometimes a truncated excerpt or line-hyphenated; bounds are body-only labels. Selected pages are exhaustive only relative to published annotations, not independently established exhaustive truth."
+      },
+      "checks": [
+        {
+          "id": "figure-1",
+          "kind": "object",
+          "objectKind": "figure",
+          "pageIndex": 4,
+          "text": "Figure 1. A bipartite graph representation of data points v 1 , · · · , v 6 and anchor points u 1 , u 2 . Z ik captures the data-to-anchor relation- ship (Z 21 + Z 22 = 1).",
+          "captionRect": [59.04, 541.44, 156.96, 615.6],
+          "rect": [59.04, 621.36, 127.44, 722.88]
+        },
+        {
+          "id": "figure-2",
+          "kind": "object",
+          "objectKind": "figure",
+          "pageIndex": 4,
+          "text": "Figure 2. The two-moon problem of 1200 2D points. (a) 100 anchor points by k-means clus- tering (m = 100); (b) 10NN graph built on original points; (c) the proposed AnchorGraph with s = 2 built on original points.",
+          "captionRect": [172.8, 558.72, 537.12, 589.68],
+          "rect": [182.88, 613.44, 542.88, 704.88]
+        },
+        {
+          "id": "table-2",
+          "kind": "object",
+          "objectKind": "table",
+          "pageIndex": 6,
+          "text": "Table 2. Classification error rates (%) on USPS-Train (7,291 samples) with l = 100 labeled samples. m = 1000 for four versions of AGR. The running time of k-means clustering is 7.65 seconds.",
+          "captionRect": [54.72, 673.92, 288.72, 715.68],
+          "rect": [54.72, 574.56, 301.68, 667.44]
+        },
+        {
+          "id": "table-3",
+          "kind": "object",
+          "objectKind": "table",
+          "pageIndex": 6,
+          "text": "Table 3. Classification error rates (%) on MNIST (70,000 samples). m = 1000 for two versions of AGR.",
+          "captionRect": [307.44, 695.52, 540.72, 715.68],
+          "rect": [321.84, 596.88, 526.32, 689.04]
+        },
+        {
+          "id": "figure-3",
+          "kind": "object",
+          "objectKind": "figure",
+          "pageIndex": 6,
+          "text": "Figure 3. Average classification error rates vs. numbers of anchor points.",
+          "captionRect": [54.72, 396.0, 290.16, 414.72],
+          "rect": [79.92, 421.92, 258.48, 569.52]
+        }
+      ]
+    },
+    {
+      "id": "c-icml10_4",
+      "title": "Dynamical Products of Experts for Modeling Financial Time Series",
+      "pdf": {
+        "url": "https://icml.cc/Conferences/2010/papers/175.pdf",
+        "sha256": "d8045d2534e6aa6349c66f7633078c86c1f4a4eabffed5e2f765e556eebbdc4c",
+        "fileName": "c-icml10_4.pdf",
+        "license": "First-page notice: Copyright 2010 by the author(s)/owner(s). Public conference-hosted PDF; no PDF redistributed, reuse permissions not established by the dataset code license."
+      },
+      "strata": ["computer-science", "two-column", "figure", "table", "same-page-objects"],
+      "annotation": {
+        "kind": "dataset-ground-truth",
+        "sources": [
+          "https://github.com/allenai/pdffigures2/blob/3d7ad46753d4a315cccd1c2bcab398380e88c534/evaluation/datasets/conference/annotations.json",
+          "https://github.com/allenai/pdffigures2/blob/3d7ad46753d4a315cccd1c2bcab398380e88c534/evaluation/datasets/README.md",
+          "https://doi.org/10.1145/2910896.2910904",
+          "https://icml.cc/Conferences/2010/papers/175.pdf"
+        ],
+        "scope": "PDFFigures2 conference v2 human-marked and foreground-cropped annotations. All upstream annotated objects on selected physical pages 6, 7 (one-based) are included; other pages are excluded. Text is the upstream caption transcription, sometimes a truncated excerpt or line-hyphenated; bounds are body-only labels. Selected pages are exhaustive only relative to published annotations, not independently established exhaustive truth."
+      },
+      "checks": [
+        {
+          "id": "figure-6",
+          "kind": "object",
+          "objectKind": "figure",
+          "pageIndex": 5,
+          "text": "Figure 6. RMSE of VaR deviation on the S&P 500 index from 1960∼2005 for Garch(N) (circle), Garch(T) (diamond), SV(N) (x), SV(T) (plus), DPoT(N) (square) and DPoT(T) (triangle) model. The x axis is the VaR level in percentage.",
+          "captionRect": [307.44, 528.48, 540.72, 569.52],
+          "rect": [308.16, 584.64, 541.44, 724.32]
+        },
+        {
+          "id": "figure-3",
+          "kind": "object",
+          "objectKind": "figure",
+          "pageIndex": 5,
+          "text": "Figure 3. Prices and Percentage log-returns of S&P 500 index",
+          "captionRect": [54.72, 501.12, 288.0, 519.84],
+          "rect": [63.36, 539.28, 280.8, 706.32]
+        },
+        {
+          "id": "figure-4",
+          "kind": "object",
+          "objectKind": "figure",
+          "pageIndex": 5,
+          "text": "Figure 4. Estimated α for S&P 500 index from 1960∼2005. The time axis corresponds to the end of each sliding window.",
+          "captionRect": [55.44, 290.16, 288.72, 309.6],
+          "rect": [64.08, 326.16, 290.16, 501.84]
+        },
+        {
+          "id": "figure-5",
+          "kind": "object",
+          "objectKind": "figure",
+          "pageIndex": 5,
+          "text": "Figure 5. MAE of VaR deviation on the S&P 500 index from 1960∼2005 for Garch(N) (circle), Garch(T) (diamond), SV(N) (x), SV(T) (plus), DPoT(N) (square) and DPoT(T) (triangle) model. The x axis is the VaR level in percentage.",
+          "captionRect": [55.44, 92.16, 288.72, 133.2],
+          "rect": [56.16, 148.32, 289.44, 288.72]
+        },
+        {
+          "id": "table-1",
+          "kind": "object",
+          "objectKind": "table",
+          "pageIndex": 6,
+          "text": "Table 1. Mean ranks of models over 10 stocks and their final ranking (in parentheses) across models at each VaR level according to MAE",
+          "captionRect": [55.44, 698.4, 540.72, 715.68],
+          "rect": [66.96, 542.88, 529.92, 691.92]
+        },
+        {
+          "id": "figure-8",
+          "kind": "object",
+          "objectKind": "figure",
+          "pageIndex": 6,
+          "text": "Figure 8. Deviation plots on the entire dataset of 10 stocks for ICA-Garch(N) (triangle), PCA-Garch(N) (pentagram), ICA- Garch(T) (diamond) and PCA-Garch(T) (hexagram), MSV(N) (x), MSV(T) (plus), DPoT(N) (square), DPoT(T) (circle) model. F (λ) is the proportion of cdf s below λ in all the 10 stocks. The closer to the horizontal line, the better prediction a model makes.",
+          "captionRect": [306.72, 265.68, 540.72, 329.04],
+          "rect": [308.88, 344.88, 541.44, 516.96]
+        },
+        {
+          "id": "figure-7",
+          "kind": "object",
+          "objectKind": "figure",
+          "pageIndex": 6,
+          "text": "Figure 7. Deviation plots on the S&P 500 index from 1960∼2005 for Garch(N) (circle), Garch(T) (diamond), SV(N) (x), SV(T) (plus), DPoT(N) (square) and DPoT(T) (triangle) model. The x axis is the VaR level in percentage and the y axis is the deviation of the failure rate from the given level in percentage. The closer to the horizontal line, the better prediction a model makes.",
+          "captionRect": [54.72, 264.96, 288.72, 328.32],
+          "rect": [56.88, 344.88, 289.44, 516.96]
+        }
+      ]
+    },
+    {
+      "id": "c-icml10_5",
+      "title": "Learning Sparse SVM for Feature Selection on Very High Dimensional Datasets",
+      "pdf": {
+        "url": "https://icml.cc/Conferences/2010/papers/227.pdf",
+        "sha256": "80ff40e0d7865d762680b4bbcce271f8ca045cb7236d4be57c44a43a1213d02a",
+        "fileName": "c-icml10_5.pdf",
+        "license": "First-page notice: Copyright 2010 by the author(s)/owner(s). Public conference-hosted PDF; no PDF redistributed, reuse permissions not established by the dataset code license."
+      },
+      "strata": [
+        "computer-science",
+        "two-column",
+        "figure",
+        "table",
+        "same-page-objects",
+        "composite-panels"
+      ],
+      "annotation": {
+        "kind": "dataset-ground-truth",
+        "sources": [
+          "https://github.com/allenai/pdffigures2/blob/3d7ad46753d4a315cccd1c2bcab398380e88c534/evaluation/datasets/conference/annotations.json",
+          "https://github.com/allenai/pdffigures2/blob/3d7ad46753d4a315cccd1c2bcab398380e88c534/evaluation/datasets/README.md",
+          "https://doi.org/10.1145/2910896.2910904",
+          "https://icml.cc/Conferences/2010/papers/227.pdf"
+        ],
+        "scope": "PDFFigures2 conference v2 human-marked and foreground-cropped annotations. All upstream annotated objects on selected physical pages 4, 5 (one-based) are included; other pages are excluded. Text is the upstream caption transcription, sometimes a truncated excerpt or line-hyphenated; bounds are body-only labels. Selected pages are exhaustive only relative to published annotations, not independently established exhaustive truth."
+      },
+      "checks": [
+        {
+          "id": "table-1",
+          "kind": "object",
+          "objectKind": "table",
+          "pageIndex": 3,
+          "text": "Table 1. Datasets used in the experiments",
+          "captionRect": [97.92, 708.48, 246.24, 715.68],
+          "rect": [59.76, 604.8, 282.96, 707.76]
+        },
+        {
+          "id": "figure-1",
+          "kind": "object",
+          "objectKind": "figure",
+          "pageIndex": 3,
+          "text": "Figure 1. Detailed information of the synthetic dataset",
+          "captionRect": [326.88, 615.6, 521.28, 624.24],
+          "rect": [311.04, 632.88, 534.96, 724.32]
+        },
+        {
+          "id": "figure-2",
+          "kind": "object",
+          "objectKind": "figure",
+          "pageIndex": 4,
+          "text": "Figure 2. Results on synthetic dataset with varying noise features",
+          "captionRect": [180.72, 597.6, 414.72, 606.24],
+          "rect": [67.68, 611.28, 527.04, 721.44]
+        },
+        {
+          "id": "figure-3",
+          "kind": "object",
+          "objectKind": "figure",
+          "pageIndex": 4,
+          "text": "Figure 3. Results on synthetic dataset with varying training samples",
+          "captionRect": [176.4, 458.64, 419.04, 467.28],
+          "rect": [68.4, 472.32, 527.04, 581.76]
+        },
+        {
+          "id": "table-2",
+          "kind": "object",
+          "objectKind": "table",
+          "pageIndex": 4,
+          "text": "Table 2. Sparsity ratio of various methods on small datasets",
+          "captionRect": [56.16, 420.48, 267.84, 429.12],
+          "rect": [55.44, 265.68, 299.52, 411.84]
+        }
+      ]
+    },
+    {
+      "id": "c-icml10_8",
+      "title": "Online Streaming Feature Selection",
+      "pdf": {
+        "url": "https://icml.cc/Conferences/2010/papers/238.pdf",
+        "sha256": "bb0d55dc5f7a156f56aaf5be31f16f5326c1eb1f22f3b43c953f0ac4e5603b76",
+        "fileName": "c-icml10_8.pdf",
+        "license": "First-page notice: Copyright 2010 by the author(s)/owner(s). Public conference-hosted PDF; no PDF redistributed, reuse permissions not established by the dataset code license."
+      },
+      "strata": ["computer-science", "two-column", "figure", "table", "same-page-objects"],
+      "annotation": {
+        "kind": "dataset-ground-truth",
+        "sources": [
+          "https://github.com/allenai/pdffigures2/blob/3d7ad46753d4a315cccd1c2bcab398380e88c534/evaluation/datasets/conference/annotations.json",
+          "https://github.com/allenai/pdffigures2/blob/3d7ad46753d4a315cccd1c2bcab398380e88c534/evaluation/datasets/README.md",
+          "https://doi.org/10.1145/2910896.2910904",
+          "https://icml.cc/Conferences/2010/papers/238.pdf"
+        ],
+        "scope": "PDFFigures2 conference v2 human-marked and foreground-cropped annotations. All upstream annotated objects on selected physical pages 5, 6 (one-based) are included; other pages are excluded. Text is the upstream caption transcription, sometimes a truncated excerpt or line-hyphenated; bounds are body-only labels. Selected pages are exhaustive only relative to published annotations, not independently established exhaustive truth."
+      },
+      "checks": [
+        {
+          "id": "table-1",
+          "kind": "object",
+          "objectKind": "table",
+          "pageIndex": 4,
+          "text": "Table 1. Summary of UCI benchmark data sets",
+          "captionRect": [54.72, 589.68, 222.48, 598.32],
+          "rect": [58.32, 406.08, 288.0, 580.32]
+        },
+        {
+          "id": "figure-4",
+          "kind": "object",
+          "objectKind": "figure",
+          "pageIndex": 4,
+          "text": "Figure 4 The compactness and predictive accuracy of 4 algorithms (alpha=0.01)",
+          "captionRect": [306.0, 407.52, 539.28, 426.96],
+          "rect": [306.0, 437.76, 539.28, 718.56]
+        },
+        {
+          "id": "figure-5",
+          "kind": "object",
+          "objectKind": "figure",
+          "pageIndex": 4,
+          "text": "Figure 5 The compactness and predictive accuracy of 4 algorithms (alpha=0.05)",
+          "captionRect": [305.28, 77.04, 539.28, 97.2],
+          "rect": [305.28, 108.0, 538.56, 391.68]
+        },
+        {
+          "id": "figure-6",
+          "kind": "object",
+          "objectKind": "figure",
+          "pageIndex": 5,
+          "text": "Figure 6 OSFS performance with different alpha values",
+          "captionRect": [306.72, 395.28, 505.44, 403.92],
+          "rect": [306.72, 414.72, 536.4, 614.16]
+        },
+        {
+          "id": "table-2",
+          "kind": "object",
+          "objectKind": "table",
+          "pageIndex": 5,
+          "text": "Table 2. Summary of challenge datasets",
+          "captionRect": [54.72, 334.08, 197.28, 342.72],
+          "rect": [58.32, 94.32, 288.0, 324.72]
+        },
+        {
+          "id": "figure-7",
+          "kind": "object",
+          "objectKind": "figure",
+          "pageIndex": 5,
+          "text": "Figure 7 Fast-OSFS performance of with different alpha values",
+          "captionRect": [306.72, 170.64, 534.96, 178.56],
+          "rect": [306.0, 190.08, 534.96, 388.8]
+        }
+      ]
+    },
+    {
+      "id": "c-icml13_2",
+      "title": "A Fast and Exact Energy Minimization Algorithm for Cycle MRFs",
+      "pdf": {
+        "url": "https://proceedings.mlr.press/v28/wang13f.pdf",
+        "sha256": "9c2fec72abba2629f6aa3164daffc2d3967bf260fe4d409da4c5f26a7f05f26a",
+        "fileName": "c-icml13_2.pdf",
+        "license": "First-page notice: Copyright 2013 by the author(s). Public conference-hosted PDF; no PDF redistributed, reuse permissions not established by the dataset code license."
+      },
+      "strata": ["computer-science", "two-column", "figure", "table", "same-page-objects"],
+      "annotation": {
+        "kind": "dataset-ground-truth",
+        "sources": [
+          "https://github.com/allenai/pdffigures2/blob/3d7ad46753d4a315cccd1c2bcab398380e88c534/evaluation/datasets/conference/annotations.json",
+          "https://github.com/allenai/pdffigures2/blob/3d7ad46753d4a315cccd1c2bcab398380e88c534/evaluation/datasets/README.md",
+          "https://doi.org/10.1145/2910896.2910904",
+          "https://proceedings.mlr.press/v28/wang13f.pdf"
+        ],
+        "scope": "PDFFigures2 conference v2 human-marked and foreground-cropped annotations. All upstream annotated objects on selected physical pages 2, 8 (one-based) are included; other pages are excluded. Text is the upstream caption transcription, sometimes a truncated excerpt or line-hyphenated; bounds are body-only labels. Selected pages are exhaustive only relative to published annotations, not independently established exhaustive truth."
+      },
+      "checks": [
+        {
+          "id": "figure-1",
+          "kind": "object",
+          "objectKind": "figure",
+          "pageIndex": 1,
+          "text": "Figure 1. Messages passed in our fast cycle solver. Wide red arrows: messages in the clique tree (triangulated cycle). Narrow blue arrows: messages on cycle edges.",
+          "captionRect": [54.72, 600.48, 288.72, 630.72],
+          "rect": [56.88, 654.48, 284.4, 720.0]
+        },
+        {
+          "id": "table-1",
+          "kind": "object",
+          "objectKind": "table",
+          "pageIndex": 1,
+          "text": "Table 1. Summary of notations in Section 2",
+          "captionRect": [336.24, 609.12, 512.64, 616.32],
+          "rect": [313.92, 509.04, 530.64, 608.4]
+        },
+        {
+          "id": "figure-4",
+          "kind": "object",
+          "objectKind": "figure",
+          "pageIndex": 7,
+          "text": "Figure 4. Effect of reparametrization. See text for explanation",
+          "captionRect": [55.44, 560.16, 288.72, 578.88],
+          "rect": [85.68, 589.68, 243.36, 719.28]
+        },
+        {
+          "id": "figure-5",
+          "kind": "object",
+          "objectKind": "figure",
+          "pageIndex": 7,
+          "text": "Figure 5. In the Synthetic Grid experiment, applying Ω+ has a great impact on the cycle solver running time when the cycle potentials are iteratively updated in dual decomposition. See text for more explanation.",
+          "captionRect": [55.44, 408.24, 288.72, 448.56],
+          "rect": [104.4, 460.08, 230.4, 543.6]
+        }
+      ]
+    },
+    {
+      "id": "c-icml13_3",
+      "title": "A Generalized Kernel Approach to Structured Output Learning",
+      "pdf": {
+        "url": "https://proceedings.mlr.press/v28/kadri13.pdf",
+        "sha256": "01003316b1b949b47db8f5d5d300bd9cac687693f9e331c883f546a2999ab200",
+        "fileName": "c-icml13_3.pdf",
+        "license": "First-page notice: Copyright 2013 by the author(s). Public conference-hosted PDF; no PDF redistributed, reuse permissions not established by the dataset code license."
+      },
+      "strata": ["computer-science", "two-column", "figure", "table", "same-page-objects"],
+      "annotation": {
+        "kind": "dataset-ground-truth",
+        "sources": [
+          "https://github.com/allenai/pdffigures2/blob/3d7ad46753d4a315cccd1c2bcab398380e88c534/evaluation/datasets/conference/annotations.json",
+          "https://github.com/allenai/pdffigures2/blob/3d7ad46753d4a315cccd1c2bcab398380e88c534/evaluation/datasets/README.md",
+          "https://doi.org/10.1145/2910896.2910904",
+          "https://proceedings.mlr.press/v28/kadri13.pdf"
+        ],
+        "scope": "PDFFigures2 conference v2 human-marked and foreground-cropped annotations. All upstream annotated objects on selected physical pages 2, 8 (one-based) are included; other pages are excluded. Text is the upstream caption transcription, sometimes a truncated excerpt or line-hyphenated; bounds are body-only labels. Selected pages are exhaustive only relative to published annotations, not independently established exhaustive truth."
+      },
+      "checks": [
+        {
+          "id": "table-1",
+          "kind": "object",
+          "objectKind": "table",
+          "pageIndex": 1,
+          "text": "Table 1. This table summarizes the notations used in the paper.",
+          "captionRect": [168.48, 707.76, 426.96, 715.68],
+          "rect": [72.72, 614.16, 520.56, 699.12]
+        },
+        {
+          "id": "table-3",
+          "kind": "object",
+          "objectKind": "table",
+          "pageIndex": 7,
+          "text": "Table 3. Mean-squared errors (MSE) of the JKM algorithm of Weston et al. (2007), KDE algorithm of Cortes et al. (2005), and our KDE method with covariance operator- valued kernels on the face-to-face mapping problem.",
+          "captionRect": [55.44, 673.92, 288.72, 714.96],
+          "rect": [55.44, 600.48, 295.92, 662.4]
+        },
+        {
+          "id": "figure-2",
+          "kind": "object",
+          "objectKind": "figure",
+          "pageIndex": 7,
+          "text": "Figure 2. We compare the efficient implementation (using incomplete Cholesky decomposition) of our conditional co- variance operator-valued KDE method with the KDE al- gorithm of Cortes et al. (2005). While the parameter n is m1 = m2 = n in the incomplete Cholesky decompo- sition, it is the number of faces randomly selected from 1,200 training faces in the KDE algorithm of Cortes et al. (2005). The right-most point is the MSE of training on the full training set of n = 1, 200 examples.",
+          "captionRect": [306.72, 480.24, 540.72, 576.0],
+          "rect": [318.96, 594.72, 522.0, 716.4]
+        }
+      ]
+    },
+    {
+      "id": "c-icml13_4",
+      "title": "A non-IID Framework for Collaborative Filtering with Restricted Boltzmann Machines",
+      "pdf": {
+        "url": "https://proceedings.mlr.press/v28/georgiev13.pdf",
+        "sha256": "85f3edc1b6b156fc56d2d87a9d86964be5f0658d277c96c2b22494ee3591c63d",
+        "fileName": "c-icml13_4.pdf",
+        "license": "First-page notice: Copyright 2013 by the author(s). Public conference-hosted PDF; no PDF redistributed, reuse permissions not established by the dataset code license."
+      },
+      "strata": ["computer-science", "two-column", "figure", "table", "same-page-objects"],
+      "annotation": {
+        "kind": "dataset-ground-truth",
+        "sources": [
+          "https://github.com/allenai/pdffigures2/blob/3d7ad46753d4a315cccd1c2bcab398380e88c534/evaluation/datasets/conference/annotations.json",
+          "https://github.com/allenai/pdffigures2/blob/3d7ad46753d4a315cccd1c2bcab398380e88c534/evaluation/datasets/README.md",
+          "https://doi.org/10.1145/2910896.2910904",
+          "https://proceedings.mlr.press/v28/georgiev13.pdf"
+        ],
+        "scope": "PDFFigures2 conference v2 human-marked and foreground-cropped annotations. All upstream annotated objects on selected physical pages 6, 7 (one-based) are included; other pages are excluded. Text is the upstream caption transcription, sometimes a truncated excerpt or line-hyphenated; bounds are body-only labels. Selected pages are exhaustive only relative to published annotations, not independently established exhaustive truth."
+      },
+      "checks": [
+        {
+          "id": "figure-2",
+          "kind": "object",
+          "objectKind": "figure",
+          "pageIndex": 5,
+          "text": "Figure 2. MAE on 100k: user-based RBM (U-RBM), item-based RBM (I-RBM), neighborhood-based boosted with data from I-RBM (I-RBM+INB) and hybrid RBM model (UI-RBM), F U = 40, F I = 40 (right side only). On the left, the x-axis is hidden nodes, for 200 epochs. On the right, the x-axis is epochs, for the optimal hidden size from the left.",
+          "captionRect": [54.72, 558.0, 540.72, 588.24],
+          "rect": [55.44, 597.6, 527.04, 721.44]
+        },
+        {
+          "id": "table-1",
+          "kind": "object",
+          "objectKind": "table",
+          "pageIndex": 5,
+          "text": "Table 1. Comparison (on 100k) of the prediction quality of various CF models and our RBM-based models (in bold).",
+          "captionRect": [55.44, 357.12, 289.44, 376.56],
+          "rect": [56.16, 205.92, 288.72, 350.64]
+        },
+        {
+          "id": "figure-3",
+          "kind": "object",
+          "objectKind": "figure",
+          "pageIndex": 5,
+          "text": "Figure 3. MAE on 1M: a user-based RBM with a real- valued visible layer (Real U-RBM) vs. a user-based RBM with multinomial visible layer (Multinomial U-RBM).",
+          "captionRect": [308.16, 177.12, 540.72, 207.36],
+          "rect": [308.88, 221.76, 538.56, 344.16]
+        },
+        {
+          "id": "table-2",
+          "kind": "object",
+          "objectKind": "table",
+          "pageIndex": 6,
+          "text": "Table 2. Comparison (on 1M) of the prediction quality of various CF models and our RBM-based models (in bold). The values for (Truyen et al., 2009) are approximate and derived from the graphs in their work.",
+          "captionRect": [307.44, 673.92, 541.44, 714.96],
+          "rect": [307.44, 513.36, 556.56, 657.36]
+        },
+        {
+          "id": "figure-4",
+          "kind": "object",
+          "objectKind": "figure",
+          "pageIndex": 6,
+          "text": "Figure 4. MAE on 1M for two hybrid RBM models: with a real-valued visible layer, F U = 70, F I = 70 and with a multinomial visible layer, F U = 50, F I = 50.",
+          "captionRect": [55.44, 469.44, 288.72, 500.4],
+          "rect": [57.6, 515.52, 283.68, 637.2]
+        }
+      ]
+    },
+    {
+      "id": "c-icml13_6",
+      "title": "A Variational Approximation for Topic Modeling of Hierarchical Corpora",
+      "pdf": {
+        "url": "https://proceedings.mlr.press/v28/kim13.pdf",
+        "sha256": "185efd151e5991206a7dd50a1f36c0976f71e4367eb4ec038c907711cec16ea2",
+        "fileName": "c-icml13_6.pdf",
+        "license": "First-page notice: Copyright 2013 by the author(s). Public conference-hosted PDF; no PDF redistributed, reuse permissions not established by the dataset code license."
+      },
+      "strata": [
+        "computer-science",
+        "two-column",
+        "figure",
+        "table",
+        "same-page-objects",
+        "composite-panels"
+      ],
+      "annotation": {
+        "kind": "dataset-ground-truth",
+        "sources": [
+          "https://github.com/allenai/pdffigures2/blob/3d7ad46753d4a315cccd1c2bcab398380e88c534/evaluation/datasets/conference/annotations.json",
+          "https://github.com/allenai/pdffigures2/blob/3d7ad46753d4a315cccd1c2bcab398380e88c534/evaluation/datasets/README.md",
+          "https://doi.org/10.1145/2910896.2910904",
+          "https://proceedings.mlr.press/v28/kim13.pdf"
+        ],
+        "scope": "PDFFigures2 conference v2 human-marked and foreground-cropped annotations. All upstream annotated objects on selected physical pages 2, 8 (one-based) are included; other pages are excluded. Text is the upstream caption transcription, sometimes a truncated excerpt or line-hyphenated; bounds are body-only labels. Selected pages are exhaustive only relative to published annotations, not independently established exhaustive truth."
+      },
+      "checks": [
+        {
+          "id": "figure-1",
+          "kind": "object",
+          "objectKind": "figure",
+          "pageIndex": 1,
+          "text": "Figure 1. The hierarchy of buyers and job advertisements on Freelancer.com. The number of ads per buyer is indi- cated in parentheses. For brevity, only titles and dates of",
+          "captionRect": [307.44, 559.44, 541.44, 599.04],
+          "rect": [307.44, 613.44, 529.2, 725.04]
+        },
+        {
+          "id": "figure-2",
+          "kind": "object",
+          "objectKind": "figure",
+          "pageIndex": 1,
+          "text": "Figure 2. The hierarchy of subforums in the BlackHat- World Internet forum. The number of threads in each subforum is indicated in parentheses.",
+          "captionRect": [307.44, 333.36, 540.72, 363.6],
+          "rect": [307.44, 377.28, 529.2, 544.32]
+        },
+        {
+          "id": "figure-7",
+          "kind": "object",
+          "objectKind": "figure",
+          "pageIndex": 7,
+          "text": "Figure 7. Predictive likelihood on the NIPS, Freelancer, and BlackHatWorld corpora from deep (multi-level) and flat (two-level) models of tiLDA, with varying numbers of topics.",
+          "captionRect": [56.16, 574.56, 540.72, 594.72],
+          "rect": [66.24, 613.44, 518.4, 708.48]
+        },
+        {
+          "id": "table-1",
+          "kind": "object",
+          "objectKind": "table",
+          "pageIndex": 7,
+          "text": "Table 1. Four examples of the K = 60 topics discovered by tiLDA on the Freelancer corpus; training time was 60 hours. Shown are the six most probable words for each topic. Capitalized terms indicate project keywords.",
+          "captionRect": [55.44, 510.48, 288.72, 552.24],
+          "rect": [55.44, 409.68, 301.68, 496.08]
+        },
+        {
+          "id": "table-2",
+          "kind": "object",
+          "objectKind": "table",
+          "pageIndex": 7,
+          "text": "Table 2. Four examples of the K = 9 topics discovered by tiLDA on the BlackHatWorld corpus; training time was 30 minutes. Shown are the six most probable words for each topic. We replaced dollar amounts by the token DOLLAR.",
+          "captionRect": [308.16, 510.48, 540.72, 552.24],
+          "rect": [307.44, 408.24, 550.08, 496.08]
+        }
+      ]
+    },
+    {
+      "id": "c-icml13_8",
+      "title": "An Efficient Posterior Regularized Latent Variable Model for Interactive Sound Source Separation",
+      "pdf": {
+        "url": "https://proceedings.mlr.press/v28/bryan13.pdf",
+        "sha256": "fb60b5cea5a3f18de6a4e1ace58252296409db55faa7cc4769013974c4eb9dbd",
+        "fileName": "c-icml13_8.pdf",
+        "license": "First-page notice: Copyright 2013 by the author(s). Public conference-hosted PDF; no PDF redistributed, reuse permissions not established by the dataset code license."
+      },
+      "strata": ["computer-science", "two-column", "figure", "table", "same-page-objects"],
+      "annotation": {
+        "kind": "dataset-ground-truth",
+        "sources": [
+          "https://github.com/allenai/pdffigures2/blob/3d7ad46753d4a315cccd1c2bcab398380e88c534/evaluation/datasets/conference/annotations.json",
+          "https://github.com/allenai/pdffigures2/blob/3d7ad46753d4a315cccd1c2bcab398380e88c534/evaluation/datasets/README.md",
+          "https://doi.org/10.1145/2910896.2910904",
+          "https://proceedings.mlr.press/v28/bryan13.pdf"
+        ],
+        "scope": "PDFFigures2 conference v2 human-marked and foreground-cropped annotations. All upstream annotated objects on selected physical pages 1, 8 (one-based) are included; other pages are excluded. Text is the upstream caption transcription, sometimes a truncated excerpt or line-hyphenated; bounds are body-only labels. Selected pages are exhaustive only relative to published annotations, not independently established exhaustive truth."
+      },
+      "checks": [
+        {
+          "id": "figure-1",
+          "kind": "object",
+          "objectKind": "figure",
+          "pageIndex": 0,
+          "text": "Figure 1. (a) Given a mixture recording, a user separates distinct sounds by roughly painting on a time-frequency display. (b) Once initially separated, fine-tuning is per- formed by painting on the output results. Painting on one output track at a particular time-frequency point pushes the sound into the other track(s).",
+          "captionRect": [307.44, 272.16, 540.72, 335.52],
+          "rect": [307.44, 352.08, 547.2, 549.36]
+        },
+        {
+          "id": "table-1",
+          "kind": "object",
+          "objectKind": "table",
+          "pageIndex": 7,
+          "text": "Table 1. SDR, SIR, and SAR (in dB) for the first five ex- ample recordings using 100 dictionary elements/source.",
+          "captionRect": [56.16, 695.52, 288.72, 714.96],
+          "rect": [55.44, 575.28, 295.92, 679.68]
+        },
+        {
+          "id": "table-2",
+          "kind": "object",
+          "objectKind": "table",
+          "pageIndex": 7,
+          "text": "Table 2. SDR, SIR, and SAR (in dB) results for the four SiSEC rock/pop songs.",
+          "captionRect": [308.16, 695.52, 540.72, 714.96],
+          "rect": [317.52, 522.72, 527.76, 689.04]
+        },
+        {
+          "id": "figure-5",
+          "kind": "object",
+          "objectKind": "figure",
+          "pageIndex": 7,
+          "text": "Figure 5. Comparison of SDR (in dB) to the number of basis vectors per source. Examples include Phone (blue, circle), Drum (red, x-mark), Orchestra (black, plus), Piano (green, star), and Siren (magenta, square).",
+          "captionRect": [307.44, 325.44, 541.44, 367.2],
+          "rect": [316.08, 382.32, 539.28, 493.2]
+        }
+      ]
+    },
+    {
+      "id": "c-icml14_9",
+      "title": "An Information Geometry of Statistical Manifold Learning",
+      "pdf": {
+        "url": "https://proceedings.mlr.press/v32/suna14.pdf",
+        "sha256": "7d4ef649618294cbdf79e1b5ff4a182d33432d8a5bc98c8311b51a135dbd3e5c",
+        "fileName": "c-icml14_9.pdf",
+        "license": "First-page notice: Copyright 2014 by the author(s). Public conference-hosted PDF; no PDF redistributed, reuse permissions not established by the dataset code license."
+      },
+      "strata": [
+        "computer-science",
+        "two-column",
+        "figure",
+        "table",
+        "same-page-objects",
+        "composite-panels",
+        "same-line-captions"
+      ],
+      "annotation": {
+        "kind": "dataset-ground-truth",
+        "sources": [
+          "https://github.com/allenai/pdffigures2/blob/3d7ad46753d4a315cccd1c2bcab398380e88c534/evaluation/datasets/conference/annotations.json",
+          "https://github.com/allenai/pdffigures2/blob/3d7ad46753d4a315cccd1c2bcab398380e88c534/evaluation/datasets/README.md",
+          "https://doi.org/10.1145/2910896.2910904",
+          "https://proceedings.mlr.press/v32/suna14.pdf"
+        ],
+        "scope": "PDFFigures2 conference v2 human-marked and foreground-cropped annotations. All upstream annotated objects on selected physical pages 5, 7 (one-based) are included; other pages are excluded. Text is the upstream caption transcription, sometimes a truncated excerpt or line-hyphenated; bounds are body-only labels. Selected pages are exhaustive only relative to published annotations, not independently established exhaustive truth."
+      },
+      "checks": [
+        {
+          "id": "table-1",
+          "kind": "object",
+          "objectKind": "table",
+          "pageIndex": 4,
+          "text": "Table 1. Estimated intrinsic dimension (avg. ± std.) for each k ∈ {5, 10, . . . , 100}.",
+          "captionRect": [73.44, 600.48, 375.84, 609.12],
+          "rect": [57.6, 640.08, 392.4, 712.8]
+        },
+        {
+          "id": "figure-2",
+          "kind": "object",
+          "objectKind": "figure",
+          "pageIndex": 4,
+          "text": "Figure 2. Local dimension estimation.",
+          "captionRect": [403.92, 601.2, 540.0, 609.12],
+          "rect": [433.44, 630.0, 521.28, 725.04]
+        },
+        {
+          "id": "figure-3",
+          "kind": "object",
+          "objectKind": "figure",
+          "pageIndex": 6,
+          "text": "Figure 3. Performance measurements of different embeddings. In each sub-figure, the color-map shows the local densities vol(a, b)dσ(a, b) over Ω. From left to right (resp. bottom to up), the input (resp. output) observation radius expands from 5 to 50. The x-axis (resp. y-axis) is linear in 1/a (resp. 1/b). The number below each square shows the volume, i.e. the integration of local densities in the corresponding color-map. Note, the colors are different between the two datasets.",
+          "captionRect": [54.72, 449.28, 540.72, 491.04],
+          "rect": [55.44, 500.4, 529.92, 734.4]
+        }
+      ]
+    }
+  ]
+}

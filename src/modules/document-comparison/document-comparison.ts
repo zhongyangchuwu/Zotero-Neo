@@ -43,6 +43,7 @@ import {
 } from '../../document-analysis/native';
 import { oxrDocumentParser } from '../../document-analysis/oxr';
 import { mineruDocumentParser } from '../../document-analysis/mineru';
+import { localDocumentParser } from '../../document-analysis/local';
 import {
   analysisPDF,
   requestDocumentJSON,
@@ -58,6 +59,7 @@ import {
   readerWindow,
   readerDocumentPageGeometry,
   structuredDocumentData,
+  pdfSourceFigurePages,
   type ReaderRuntime,
 } from '../../toolkit/reader';
 import { COMPARISON_BACKDROP_STYLE, COMPARISON_PANEL_STYLE } from '../../ui/react/shells/reader';
@@ -65,6 +67,8 @@ import {
   DOCUMENT_PROVIDER_KEY,
   OXR_ENDPOINT_KEY,
   selectedDocumentCacheKey,
+  selectedDocumentProvider,
+  type DocumentProvider,
   DEFAULT_OXR_ENDPOINT,
 } from '../../document-analysis/settings';
 import { mountNativeReactView } from '../../platform/native-ui';
@@ -105,7 +109,7 @@ interface ComparisonView {
   readonly cloudButton: { disabled: boolean };
   readonly refreshButton: { disabled: boolean };
   readonly endpoint: { value: string; disabled: boolean };
-  readonly provider: { value: 'mineru' | 'oxr'; disabled: boolean };
+  readonly provider: { value: DocumentProvider; disabled: boolean };
   credentialStatus: string;
   credentialRevision: number;
   credentialComposing: boolean;
@@ -132,6 +136,7 @@ interface ComparisonView {
   cloudNotice?: string;
   cloudPending?: boolean;
   native?: AnalyzedDocument;
+  nativePending?: boolean;
   nativeError?: string;
   cloud?: AnalyzedDocument;
   readonly corrections: Map<number, CorrectionSource>;
@@ -184,8 +189,7 @@ export class ReaderDocumentComparison {
     root.style.cssText = COMPARISON_PANEL_STYLE;
     const content = element('div');
     const provider: ComparisonView['provider'] = {
-      value:
-        this.#host.preferences.get(DOCUMENT_PROVIDER_KEY, 'mineru') === 'oxr' ? 'oxr' : 'mineru',
+      value: selectedDocumentProvider(this.#host.preferences),
       disabled: false,
     };
     root.append(content);
@@ -292,6 +296,9 @@ export class ReaderDocumentComparison {
       case 'refresh':
         void this.#cloud(view, true);
         break;
+      case 'read-native':
+        if (!view.cloudPending && !view.correctionPending) void this.#readNative(view);
+        break;
       case 'credential-change':
         view.credentialComposing = false;
         void this.#saveCredential(view);
@@ -367,8 +374,7 @@ export class ReaderDocumentComparison {
     view.preferenceSlot = slot;
     // Retire old reads/writes and their controls immediately. Reload remains an explicit local lookup/parse action.
     view.cloudRevision++;
-    view.provider.value =
-      this.#host.preferences.get(DOCUMENT_PROVIDER_KEY, 'mineru') === 'oxr' ? 'oxr' : 'mineru';
+    view.provider.value = selectedDocumentProvider(this.#host.preferences);
     view.endpoint.value = this.#host.preferences.get(OXR_ENDPOINT_KEY, DEFAULT_OXR_ENDPOINT);
     view.cloud = undefined;
     view.cloudState = undefined;
@@ -401,7 +407,7 @@ export class ReaderDocumentComparison {
     const provider = view.provider.value;
     const input = view.react?.getElement('credential') as HTMLInputElement | null;
     if (!input) return;
-    input.value = provider === 'mineru' ? '' : 'dummy';
+    input.value = provider === 'oxr' ? 'dummy' : '';
     this.#render(view);
     if (provider !== 'mineru') return;
     const current = () =>
@@ -559,6 +565,25 @@ export class ReaderDocumentComparison {
       };
       view.prepared = { source, pdf, cache: attachmentDocumentCache(this.#host.reader.itemID!) };
       void this.#restoreCloud(view);
+      if (view.provider.value !== 'local') await this.#readNative(view);
+    } catch (error) {
+      if (this.#current(view)) {
+        view.nativeError = String(error);
+        view.status.textContent = view.nativeError;
+        this.#render(view);
+      }
+    }
+  }
+
+  /** Local mode never prepares SDT implicitly; this explicit comparison may invoke Zotero models. */
+  async #readNative(view: ComparisonView): Promise<void> {
+    const prepared = view.prepared;
+    if (!prepared || view.nativePending || !this.#current(view)) return;
+    view.nativePending = true;
+    view.nativeError = undefined;
+    this.#render(view);
+    const { source, pdf } = prepared;
+    try {
       const native = await analyzeDocument(
         nativeDocumentParser(async (signal) => {
           const data = await structuredDocumentData(
@@ -592,12 +617,15 @@ export class ReaderDocumentComparison {
             view.cloud || view.cloudNotice ? this.#readyText(view) : view.nativeError;
         this.#render(view);
       }
+    } finally {
+      view.nativePending = false;
+      if (this.#current(view)) this.#render(view);
     }
   }
 
   #readyText(view: ComparisonView): string {
     if (view.cloudNotice) return view.cloudNotice;
-    if (!view.cloud) return this.#text('nativeReady');
+    if (!view.cloud) return this.#text(view.native ? 'nativeReady' : 'localReady');
     return this.#text(
       view.cloudState === 'cached'
         ? 'cacheReady'
@@ -615,6 +643,15 @@ export class ReaderDocumentComparison {
   }
 
   #parser(view: ComparisonView, credential = ''): DocumentParser {
+    if (view.provider.value === 'local')
+      return localDocumentParser((signal) =>
+        pdfSourceFigurePages(
+          () => view.prepared!.pdf.read(),
+          signal,
+          view.prepared!.source.pages.length,
+          () => this.#current(view),
+        ),
+      );
     if (view.provider.value === 'mineru')
       return mineruDocumentParser({
         apiKey: credential,
@@ -737,7 +774,9 @@ export class ReaderDocumentComparison {
     const revision = ++view.cloudRevision;
     this.#busy(view, true);
     view.cloudNotice = undefined;
-    view.status.textContent = this.#text('processing');
+    view.status.textContent = this.#text(
+      view.provider.value === 'local' ? 'processingLocal' : 'processing',
+    );
     try {
       const endpoint = view.endpoint.value.trim();
       const parser = this.#parser(view, credential);
@@ -907,7 +946,16 @@ export class ReaderDocumentComparison {
     const columns: ComparisonColumn[] = [];
     for (const [index, label, result, error] of [
       [0, this.#text('native'), view.native, view.nativeError],
-      [1, view.provider.value === 'mineru' ? 'MinerU' : 'OXR', view.cloud, undefined],
+      [
+        1,
+        view.provider.value === 'local'
+          ? this.#text('local')
+          : view.provider.value === 'mineru'
+            ? 'MinerU'
+            : 'OXR',
+        view.cloud,
+        undefined,
+      ],
     ] as const) {
       const pageCount = Math.max(1, Math.ceil((result?.regions.length ?? 0) / 500));
       const page = Math.min(view.regionPages.get(index) ?? 0, pageCount - 1);
@@ -965,6 +1013,7 @@ export class ReaderDocumentComparison {
       }
       columns.push({
         label,
+        ...(index === 0 && !result ? { prepareLabel: this.#text('readNative') } : {}),
         page,
         pageCount,
         previousLabel: this.#text('corrections.previous'),
@@ -973,7 +1022,9 @@ export class ReaderDocumentComparison {
         targets,
         summary: result
           ? `${result.pages.length} ${this.#text('pages')} · ${result.regions.length} ${this.#text('regions')} · ${this.#text('elapsed')} ${(result.durationMs / 1000).toFixed(1)}s`
-          : '',
+          : index === 0
+            ? this.#text('nativeNotPrepared')
+            : '',
         cache:
           result && index === 1 && view.cloudState
             ? this.#readyText(view) +
@@ -990,6 +1041,7 @@ export class ReaderDocumentComparison {
       providerLabel: this.#text('provider'),
       endpointLabel: this.#text('endpoint'),
       provider: view.provider.value,
+      localLabel: this.#text('local'),
       endpoint: view.endpoint.value,
       credentialLabel:
         view.provider.value === 'mineru'
@@ -1004,10 +1056,10 @@ export class ReaderDocumentComparison {
           : '',
       credentialStatus: view.credentialStatus,
       credentialChecking: !!view.credentialCheck,
-      busy: !!view.cloudPending || !!view.correctionPending,
+      busy: !!view.cloudPending || !!view.nativePending || !!view.correctionPending,
       ready: !!view.prepared,
-      parseLabel: this.#text('parseCloud'),
-      refreshLabel: this.#text('refreshCloud'),
+      parseLabel: this.#text(view.provider.value === 'local' ? 'parseLocal' : 'parseCloud'),
+      refreshLabel: this.#text(view.provider.value === 'local' ? 'refreshLocal' : 'refreshCloud'),
       copyLabel: this.#text('copyReport'),
       closeLabel: this.#text('close'),
       status: view.status.textContent,
@@ -1027,7 +1079,7 @@ export class ReaderDocumentComparison {
         undoColumns: [...view.corrections]
           .filter(([, source]) => source.undo.length > 0)
           .map(([index]) => index),
-        busy: !!view.cloudPending || !!view.correctionPending,
+        busy: !!view.cloudPending || !!view.nativePending || !!view.correctionPending,
       },
       columns,
     };

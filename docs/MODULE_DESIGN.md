@@ -1,46 +1,46 @@
 # 模块拆分与基座能力设计
 
-本文说明当前模块边界。代码按可组合能力划分内部模块；当前共有 21 个模块，其中 15 个核心模块固定启用，6 个可选增强，完整目录见下文的模块所有权表。
+代码按可组合能力划分内部模块；当前共有 21 个模块，其中 15 个核心模块固定启用，6 个可选增强，完整目录见下文的模块所有权表。
 `reader-hints`（链接与复制提示）、`extensions`（扩展管理面板）、`references`（引用增强）、`translation`（翻译增强）、`ai-qa`（AI 问答（实验））与 `tab-enhancements`（标签页增强）是六项可选增强；前三项默认开启，后三项对新配置默认关闭。运行时所有权见[架构](ARCHITECTURE.md)；可选项配置见[模块设置](SETTINGS_GUIDE.md#开关可选功能)，Reader 操作见[Reader 指南](READER_GUIDE.md)。
 
 ## 范围与取舍
 
-采用单 XPI、静态内置模块、统一版本和发布周期。模块表示内部功能所有权分区，不等同于可关闭插件；用户只能选择是否启用六项可选增强。模块化用于隔离功能所有权与生命周期，不建设另一个插件平台。
+采用单 XPI、静态内置模块、统一版本和发布周期。模块划分内部功能所有权及生命周期；用户可选择是否启用六项可选增强，核心模块固定启用。模块化沿用现有发布方式，独立插件平台不在范围内。
 
-不引入 Actions & Tags 硬依赖或脚本执行机制。安装该插件时，Neo 命令面板可以将动作和明确目标交给它执行；未安装或接口不可用时，Neo 仍可独立运行。
+安装 Actions & Tags 时，Neo 命令面板可以将动作和明确目标交给它执行；未安装或接口不可用时，Neo 仍可独立运行。该集成不引入硬依赖或脚本执行机制。
 
-基座接口服务实际功能调用，不建立没有消费者的空框架。内部模块数量不决定可选项范围。
+基座接口服务实际功能调用，按已有消费者的需要提供能力。内部模块数量与可选项范围分别确定。
 
 需要区分三种边界：
 
 - **Surface** 决定输入和目标来自哪里：Main、Reader、Note。一个模块可以服务多个 Surface。
-- **模块** 拥有一项可组合的用户能力及其动作、状态和资源，不因共用文档后端、面板容器或 Surface 而合并成一个大域。
-- **基座** 提供已有功能共同需要的机制与宿主能力，不接管各模块的目标选择、确认、写入策略和反馈。
+- **模块** 拥有一项可组合的用户能力及其动作、状态和资源；共用文档后端、面板容器或 Surface 的模块仍各自管理职责。
+- **基座** 提供已有功能共同需要的机制与宿主能力；目标选择、确认、写入策略和反馈由各模块负责。
 
 ## 当前已落地的接口
 
 - `src/core/module-host.ts`：`ModuleHost.activate()` 同步组合真实模块，失败时释放部分资源并保留原始错误；`bind()` 为既有上下文/动作登记唯一贡献并返回类型化调用入口；`dispose()` 先退休所有回调，再完成各模块释放。
-- `ModuleScope` 只表达模块 ID、当前性与自有 cleanup 注册。复用现有 `CleanupScope` / `CleanupFailure`，释放句柄只执行一次，失败记录到共享 logger。宿主当前性由实际 MainWindow 或 ReaderSession 生命周期提供，不新增全局 ActiveSurface。
-- `src/modules/tags/`：在每个 MainWindow 中接入 Main/Reader/Note 的 Add/Remove Tag，以及 Main 的 Toggle/Clear Tag Filter。标签模块只取得明确目标与具名端口，不直接持有整个 Main session。
-- Main controller 的 Picker 端口返回精确调用代次的释放句柄；模块在确认前检查作用域，已接纳保存完成后只在原作用域仍有效时显示反馈。旧输入不能触发新窗口或新模块的写入。
-- `src/modules/extensions/`：第二条真实接入路径，拥有按窗口隔离的 Plugin Manager 状态与 UI 生命周期。复用现有基座和局部输入机制，不扩张 `ModuleHost` 接口；原生扩展适配仍由 Toolkit 提供。资源获取失败会释放部分界面，模块退休后旧 DOM 与异步完成不能重画或关闭替换界面。
+- `ModuleScope` 只表达模块 ID、当前性与自有 cleanup 注册。复用现有 `CleanupScope` / `CleanupFailure`，释放句柄只执行一次，失败记录到共享 logger。宿主当前性由实际 MainWindow 或 ReaderSession 生命周期提供，无全局 ActiveSurface。
+- `src/modules/tags/`：在每个 MainWindow 中接入 Main/Reader/Note 的 Add/Remove Tag，以及 Main 的 Toggle/Clear Tag Filter。标签模块取得明确目标与具名端口，Main session 由宿主持有。
+- Main controller 的 Picker 端口返回精确调用代次的释放句柄；模块在确认前检查作用域，已接纳保存完成后只在原作用域仍有效时显示反馈。旧输入的写入权限随原作用域退休。
+- `src/modules/extensions/`：第二条真实接入路径，拥有按窗口隔离的 Plugin Manager 状态与 UI 生命周期。复用现有基座和局部输入机制，`ModuleHost` 接口保持不变；原生扩展适配仍由 Toolkit 提供。资源获取失败会释放部分界面，模块退休后旧 DOM 与异步完成不能重画或关闭替换界面。
 - `src/modules/collections/`：按窗口拥有分类工作流、候选来源与重命名草稿，保留 Main/Reader 的原有贡献。多步骤 Picker 和原生对话框使用精确交互当前性；复用现有 Operations 的事务重验证、回滚和真实提交回执，不把分类写入改为通用“已接纳就不可取消”。
-- `src/modules/reader-hints/`：按 ReaderSession 拥有 copy/link hints、候选与临时 UI，登记原有两个 Reader Normal 动作。精确视图路由、输入与模式策略仍由 Reader Surface 提供；异步导航意图同时检查模块作用域，不创建第二份历史。共享标签辅助保留给 Flash，读取原生批注不依赖 Neo 批注功能。
-- `src/modules/worksets/`：按 MainWindow 拥有 Persistent Selection、Visual 和 Selection Panel，登记原有 Normal/Select 贡献。Main 保留 Cursor、原生多目标取消和共享行渲染；目标解析与成功操作后的成员移除只消费明确 Selection 端口，Reveal 沿用原导航协调器。模块退休后旧端口不读取存量 Selection，外观/主题的晚到句柄立即释放。
-- `src/modules/library/`：按 MainWindow 拥有树导航、Local Find、搜索入口、条目候选、打开、标识符录入及最近回收批次；Reader citekey 贡献按 ReaderSession 登记。共享焦点、原生 View 端口、Picker 和唯一历史留在基座，Library 不成为工作集 Reveal、标签过滤或 Workspace 的硬依赖。
-- `src/modules/notes/`：按 MainWindow 拥有 Note 候选、打开编排、可选 Vim 编辑模式/寄存器及 caret UI。Surface 保留精确编辑器身份、输入 runtime、原生/IME 仲裁及共享焦点；Palette 和计时器绑定实际编辑器身份。Vim 关闭不影响 Note 查找，候选 provider 不负责导航或写入。
-- `src/modules/reader-navigation/`：按 ReaderSession 拥有导航动作、平滑滚动、marks、按需结构分析及原生侧栏增强；Normal 和四个侧栏上下文登记真实贡献。Surface 继续拥有精确视图、输入与唯一历史策略；分屏/焦点直接使用共享 Toolkit。已接纳 marks 保存继续完成，过期交互不再覆盖新状态；退出排空旧 RAF 与完成回调，不阻塞新视图。
-- `src/modules/reader-selection/`：按 ReaderSession 拥有 Select/DOM 范围与 motions、Flash、复制/搜索和选择动作面板；外部注册定义保持应用级寿命。交互绑定原 ReaderView/Document，作用域与原生 Find 状态共同阻止旧输入或延迟查询覆盖后继界面。Surface 保留模式、输入、精确视图、共享滚动和历史；Note/批注写入仍由具名贡献负责。
+- `src/modules/reader-hints/`：按 ReaderSession 拥有 copy/link hints、候选与临时 UI，登记原有两个 Reader Normal 动作。精确视图路由、输入与模式策略仍由 Reader Surface 提供；异步导航意图同时检查模块作用域，沿用已有历史。共享标签辅助保留给 Flash，读取原生批注不依赖 Neo 批注功能。
+- `src/modules/worksets/`：按 MainWindow 拥有 Persistent Selection、Visual 和 Selection Panel，登记原有 Normal/Select 贡献。Main 保留 Cursor、原生多目标取消和共享行渲染；目标解析与成功操作后的成员移除只消费明确 Selection 端口，Reveal 沿用原导航协调器。模块退休后旧端口的 Selection 读取权限失效，外观/主题的晚到句柄立即释放。
+- `src/modules/library/`：按 MainWindow 拥有树导航、Local Find、搜索入口、条目候选、打开、标识符录入及最近回收批次；Reader citekey 贡献按 ReaderSession 登记。共享焦点、原生 View 端口、Picker 和唯一历史留在基座，工作集 Reveal、标签过滤和 Workspace 可独立于 Library 使用。
+- `src/modules/notes/`：按 MainWindow 拥有 Note 候选、打开编排、可选 Vim 编辑模式/寄存器及 caret UI。Surface 保留精确编辑器身份、输入 runtime、原生/IME 仲裁及共享焦点；Palette 和计时器绑定实际编辑器身份。Note 查找独立于 Vim 设置；候选 provider 提供候选，导航和写入由各自负责方处理。
+- `src/modules/reader-navigation/`：按 ReaderSession 拥有导航动作、平滑滚动、marks、按需结构分析及原生侧栏增强；Normal 和四个侧栏上下文登记真实贡献。Surface 继续拥有精确视图、输入与唯一历史策略；分屏/焦点直接使用共享 Toolkit。已接纳 marks 保存继续完成，过期交互保留新状态；退出排空旧 RAF 与完成回调，让新视图继续运行。
+- `src/modules/reader-selection/`：按 ReaderSession 拥有 Select/DOM 范围与 motions、Flash、复制/搜索和选择动作面板；外部注册定义保持应用级寿命。交互绑定原 ReaderView/Document，作用域与原生 Find 状态共同保护后继界面，防止旧输入或延迟查询覆盖它。Surface 保留模式、输入、精确视图、共享滚动和历史；Note/批注写入仍由具名贡献负责。
 - `src/modules/reader-annotations/`：按 ReaderSession 拥有批注创建、删除、改色、过滤、复制及精确视图的评论编辑器，并向 Select 注入下划线和 Add note。Surface 保留 CurrentTarget、NativeInput 与 `i` / `zb` 的混合仲裁；已接纳保存继续完成，旧交互不恢复状态、选择或焦点。
 - `src/modules/translation/`：按 ReaderSession 拥有手动 `pdf-translate.translate` 选择动作、自动译文保存与侧栏角色；硬依赖核心 `reader-selection`。上游负责翻译服务与凭据，Toolkit 封装精确 popup 来源、2.4.8 私有结果读取和原生侧栏接缝；保存 Operation 只接收已捕获并重新验证的明确来源。
-- `reader-chapters`、`reader-figures`、`document-comparison`、`reader-excerpts` 与 `chapter-notes` 分别通过自己的 `index.ts` 接入 ReaderSession，登记原有动作并拥有界面和释放；来源失效订阅随实际消费者归属。Reader Surface 直接组合这些能力，不再经 Navigation、Select 或 Main Notes 转发。
-- `document-preparation` 提供应用级 controller 与 Main/Reader 的局部入口。模块作用域只保留本次界面的精确释放句柄，不取得共享队列的停止或销毁权。
+- `reader-chapters`、`reader-figures`、`document-comparison`、`reader-excerpts` 与 `chapter-notes` 分别通过自己的 `index.ts` 接入 ReaderSession，登记原有动作并拥有界面和释放；来源失效订阅随实际消费者归属。Reader Surface 直接组合这些能力。
+- `document-preparation` 提供应用级 controller 与 Main/Reader 的局部入口。模块作用域只保留本次界面的精确释放句柄，共享队列的停止和销毁权留在应用级。
 - `src/modules/workspace/`：MainWindow 拥有三个 Surface 的标签页候选、切换、循环、关闭及 Reader/Note 的 Show in Library；ReaderSession 拥有分屏切换与方向焦点。共享历史、原生标签页重扫、精确视图发现、NativeInput 及 Main/Note 通用面板焦点仍在基座；方向焦点实际成功才消费按键。
 - `src/modules/tab-enhancements/`：按 MainWindow 拥有左／右侧栏或上方横向模式的标签页增强界面、标题展示与分组交互；默认位置为左侧。上方栏由 Neo 绘制，保留 Zotero 原生工具栏，并逐项适配原生标签操作。应用共享的 `TabGroupManager` 管理打开视图的分组，依赖核心 `workspace` 激活原生标签页并复用共享历史。分组不按 Zotero 分类自动生成；Main 创建／追加动作确认后打开 PDF 并分组成功视图，Reader／Note 不提供导入。成员以原生 `viewID` 区分，关闭时移除，空组保留；关闭和排序只作用于发起窗口，跨窗口激活委托给所属宿主。Toolkit 负责原生清单同步和布局接缝，不重挂 Reader/PDF 内容或 Note editor。
 
-`src/modules/index.ts` 提供静态描述与依赖校验，`src/core/module-runtime.ts` 组合实际宿主实例、失败状态和结构能力过滤。核心模块固定启用，旧核心偏好 `extensions.zotero-neo.modules.<core>.enabled=false` 不再关闭核心功能；六项模块偏好控制可选增强。`translation` 与 `ai-qa` 硬依赖 `reader-selection`，`references` 没有 AI 模块依赖，`tab-enhancements` 依赖核心 `workspace`。
+`src/modules/index.ts` 提供静态描述与依赖校验，`src/core/module-runtime.ts` 组合实际宿主实例、失败状态和结构能力过滤。核心模块固定启用，旧核心偏好 `extensions.zotero-neo.modules.<core>.enabled=false` 被忽略；六项模块偏好控制可选增强。`translation` 与 `ai-qa` 硬依赖 `reader-selection`，`references` 没有 AI 模块依赖，`tab-enhancements` 依赖核心 `workspace`。
 
-保存的可选模块请求需真正重启 Zotero 后才应用；Neo 重载沿用本进程已应用快照。旧启动快照缺少某个可选字段时，该进程将对应已应用值视为关闭；规范默认值见[设置参考](SETTINGS_REFERENCE.md#模块)。只有已保存请求与当前已应用值不同时，Settings 才显示待重启状态。现有绑定、行为偏好与公共插件接口保持原义。
+保存的可选模块请求需真正重启 Zotero 后才应用；Neo 重载沿用本进程已应用快照。旧启动快照缺少某个可选字段时，该进程将对应已应用值视为关闭；规范默认值见[设置参考](SETTINGS_REFERENCE.md#模块)。Settings 在已保存请求与当前已应用值不同时显示待重启状态。现有绑定、行为偏好与公共插件接口保持原义。
 
 ## Actions & Tags 提供了什么
 
@@ -71,7 +71,7 @@ AT 菜单分发先对整批目标执行一次，再逐项执行；Neo 委托 AT 
 | `reader-navigation` | 页面、滚动、缩放、平移、PDF 搜索、批注位置遍历、Outline、标题/图表导航、原生侧栏增强和命名 marks。marks 数据及持久化策略归本模块。 | `src/modules/reader-navigation/` | 已按 ReaderSession 接入，调用与异步结果绑定精确 ReaderView。结构分析仍按需进行，不在启动时分析全部 PDF；输入、CurrentTarget 与共享历史留在 Surface/基座，分屏与方向焦点归 Workspace。 |
 | `reader-chapters` | 章节范围选择、字面查找、结果预览与原文定位。 | `src/modules/reader-chapters/` | 按 ReaderSession 接入，查询绑定精确 ReaderView；复用共享文档快照与导航端口，不改写原生 Find。 |
 | `reader-figures` | 图表候选筛选、整组或独立主体选择、原图预览与确认定位。 | `src/modules/reader-figures/` | 按 ReaderSession 接入，硬依赖 `reader-navigation`；只借用既有 caption 来源与定位端口，不复制目标引擎或历史。 |
-| `document-comparison` | 原生／云端解析对照、显式解析、缓存及区域定位界面。 | `src/modules/document-comparison/` | 按 ReaderSession 接入；复用共享解析后端、缓存与平台传输。打开只准备原生数据并读取已有缓存，上传仍需明确操作。 |
+| `document-comparison` | 本地无模型／原生 SDT／云端解析对照、显式解析、缓存及区域定位界面。 | `src/modules/document-comparison/` | 按 ReaderSession 接入；默认本地规则，复用共享区域契约和缓存。本地模式打开只准备来源与读取缓存，SDT 需单独读取，云端上传仍需明确操作。 |
 | `reader-selection` | Reader Select、DOM 范围与 motions、Flash、复制/搜索所选文本、Selection Actions 展示及现有公共选择接口的领域实现。 | `src/modules/reader-selection/` | 已按 ReaderSession 接入；范围和界面绑定精确 ReaderView/Document，外部定义由应用级注册表保留。翻译与批注贡献具名注入，复制/搜索不依赖导航或批注模块。 |
 | `translation` | 可选翻译增强：手动选择动作、当前自动译文保存与侧栏角色，不新增 Reader mode。 | `src/modules/translation/`、`src/operations/save-translation.ts`、Toolkit 的翻译宿主能力 | 按 ReaderSession / 精确 ReaderView 接入，硬依赖 `reader-selection`；保存当前显示结果及用户修订，服务与凭据归上游。首次依赖准备见[设置指南](SETTINGS_GUIDE.md#准备翻译增强)。 |
 | `reader-annotations` | 原生批注创建、删除、改色、颜色过滤、选中批注评论编辑；向 Select 提供高亮、下划线、Add note 等动作。 | `src/modules/reader-annotations/`、`src/operations/delete-annotation.ts` | 已按 ReaderSession 接入，评论交互绑定精确 ReaderView / Document；Select 贡献具名注入，原生批注操作本身不依赖选择模块。CurrentTarget 与 NativeInput 始终由 Surface 提供。 |
@@ -102,21 +102,21 @@ Neo 标签页增强界面默认以 `{title}` 显示标题，模板支持 `{title
 
 `src/toolkit/main/tab-enhancements/` 负责私有原生接口、左右侧栏布局、上方模式接入和原生工具栏的可逆租约。上方模式由 Neo 绘制横向标签栏并保留原生工具栏；Neo 自有 UI 使用共享 React UI，Toolkit 独占私有 DOM 与宿主布局接缝。顶部模式以鼠标交互为主，不增加快捷键，保留原生键盘输入。需要支持的原生标签操作逐项适配；未逐项验证的拖放、菜单或其他原生行为不作为已支持能力。若挂载失败，恢复原生标签栏和工具栏；任何模式都不重挂原生内容、Reader/PDF iframe 或 Note editor，不重载 Reader、PDF 或 Note。标签页切换继续使用核心 `workspace.activateTab` 与既有共享历史，不创建另一套导航栈。
 
-`references` 不调用 AI。Toolkit 只把 PDF 原生全文数据投影为无宿主句柄的快照；只有来源版本匹配时才用 SDT 补充，编号参考文献提取不完整时保留 `partial` 状态。文库查询不访问网络；添加只在用户明确操作后执行，精确重复项不重写，已有同名但身份不明确时不自动选定。详细 Reader 与来源边界见[架构](ARCHITECTURE.md)和[开发指南](DEVELOPMENT.md#宿主能力-toolkit)。
+`references` 使用本地分析和用户明确发起的来源查询，不调用 AI。Toolkit 只把 PDF 原生全文数据投影为无宿主句柄的快照；只有来源版本匹配时才用 SDT 补充，编号参考文献提取不完整时保留 `partial` 状态。文库查询在本地进行；添加只在用户明确操作后执行，精确重复项保留原样，已有同名但身份不明确时不自动选定。详细 Reader 与来源边界见[架构](ARCHITECTURE.md)和[开发指南](DEVELOPMENT.md#宿主能力-toolkit)。
 
 ### 跨模块协作规则
 
-模块之间只注入确有调用者的命名能力，不通过字符串查找任意服务，也不调用另一个 Surface 的 `ActionId` 来绕过其上下文。
+模块之间注入确有调用者的命名能力。各 Surface 使用自己的上下文，模块间协作通过具名端口完成，不按字符串查找任意服务，也不调用另一个 Surface 的 `ActionId` 绕过其上下文。
 
-- Main EffectiveSelection 仍由 Main Surface 解析器决定：核心 `worksets` 始终负责 Main Visual 与 Persistent Selection；当前目标规则仍由 Surface 决定。`tags`、`collections`、`library` 的目标解析不依赖工作集动作处理器。Reader/Note 始终使用自己的目标解析器。
-- `reader-annotations` 与 `reader-selection` 都是核心模块，用户不能关闭其中之一来停用另一项；两者的具名贡献和失败隔离仍保持独立，批注或选择实例故障不会改变其他能力的配置。
-- 图表浏览只通过具名端口依赖导航的 caption 来源与定位；章节查找、解析对照、对象摘录及章节笔记各自拥有动作和资源，不挂回 Navigation、Select 或 Main Notes 的生命周期。
-- 一个动作的处理器按 **`(BindingContext, ActionId)`** 唯一归属。相同 `ActionId` 在 Main 与 Reader 可以有不同实现；不能按全局 ActionId 强行合并，也不能由两个模块抢同一上下文的处理器。
-- Note/Reader 的某些命令需要关联 MainWindow 的 Picker。无法确定实际所属窗口时返回不可用，不借用任意其他 MainWindow 的 Selection、历史或面板。
+- Main EffectiveSelection 仍由 Main Surface 解析器决定：核心 `worksets` 始终负责 Main Visual 与 Persistent Selection；当前目标规则仍由 Surface 决定。`tags`、`collections`、`library` 的目标解析独立于工作集动作处理器。Reader/Note 始终使用自己的目标解析器。
+- `reader-annotations` 与 `reader-selection` 都是固定启用的核心模块；两者的具名贡献和失败隔离保持独立，批注或选择实例故障不会改变其他能力的配置。
+- 图表浏览只通过具名端口依赖导航的 caption 来源与定位；章节查找、解析对照、对象摘录及章节笔记各自拥有动作和资源，生命周期独立于 Navigation、Select 和 Main Notes。
+- 一个动作的处理器按 **`(BindingContext, ActionId)`** 唯一归属。相同 `ActionId` 在 Main 与 Reader 可以有不同实现；每个精确上下文中的动作只能由一个模块处理。
+- Note/Reader 的某些命令需要关联 MainWindow 的 Picker。无法确定实际所属窗口时返回不可用，Selection、历史和面板均取自所属窗口。
 
 ## 基座提供的能力
 
-基座是职责边界，不是把所有共享代码搬进 `src/core/`。宿主能力保留在 Toolkit，领域写操作保留在 Operations。
+基座提供共享机制；宿主能力保留在 Toolkit，领域写操作保留在 Operations，共享代码按职责分布在各自目录，无需全部搬进 `src/core/`。
 
 | 能力 | 契约与所有权 | 不包含什么 |
 | --- | --- | --- |
@@ -135,9 +135,9 @@ Neo 标签页增强界面默认以 `{title}` 显示标题，模板支持 `{title
 
 ### 内部模块接入接口
 
-这里的“插件接入”首先指单 XPI 内的功能模块接入，不要求单独安装。它与其他 Zotero 插件使用的公共 API 分开设计；二者不能共享一个能访问所有内部服务的总对象。
+这里的“插件接入”指单 XPI 内的功能模块接入，无需单独安装。它与其他 Zotero 插件使用的公共 API 分开设计，各自只获得所需能力。
 
-下表记录各现有类型、静态描述、具名端口和模块作用域共同实现的约束，不是一个统一的公共 SDK 导出。只有真实调用需要新契约时才增加类型。
+下表记录各现有类型、静态描述、具名端口和模块作用域共同实现的约束。只有真实调用需要新契约时才增加类型；这些内部接口并非统一的公共 SDK 导出。
 
 | 接口组成 | 必须表达的内容 | 约束 |
 | --- | --- | --- |
@@ -149,13 +149,13 @@ Neo 标签页增强界面默认以 `{title}` 显示标题，模板支持 `{title
 | 提供能力 | 由调用双方定义的具体端口及返回结果 | 只向组合根声明依赖，组合根通过普通 TypeScript 参数注入；模块不能运行时查找任意其他模块实例。 |
 | 释放句柄 | 获取资源后立即登记的清理函数 | 原生注册返回的句柄应可重复释放且不误删后来的注册；基座负责退休顺序，模块负责释放自己获取的资源。 |
 
-基座等待原生宿主就绪后才调用激活入口。激活本身同步完成资源登记；按需查询、预览和业务操作仍可异步执行，归对应交互 scope 管理。不引入异步模块激活或等待任意 Promise 的退出协议，避免把宿主装卸和数据加载混为一个阶段。
+基座等待原生宿主就绪后才调用激活入口。激活同步完成资源登记；按需查询、预览和业务操作可异步执行，归对应交互 scope 管理。退出沿用同步契约，宿主装卸与数据加载各自管理，不引入异步模块激活或等待任意 Promise 的退出协议。
 
-依赖分两次验证：启动时验证静态图、依赖环与贡献冲突；附着时验证当前宿主中的依赖实例。一个 MainWindow 的模块能力失败，只影响该窗口的相应实例，不会将另一个健康窗口的模块全局标为失败。模块不得因为自己需要依赖，就修改用户的启用配置。
+依赖分两次验证：启动时验证静态图、依赖环与贡献冲突；附着时验证当前宿主中的依赖实例。一个 MainWindow 的模块能力失败，只影响该窗口的相应实例，其他健康窗口保持原状态。模块依赖关系由组合根处理，用户的启用配置保持原值。
 
 ### 基座调用契约
 
-基座机制沿用当前负责方，不通过一个庞大的 `context.services` 暴露全部能力。
+基座机制沿用当前负责方，各调用方通过具名端口取得所需能力，`context.services` 不承载全部能力。
 
 | 调用边界 | 输入与输出 | 谁保留决定权 |
 | --- | --- | --- |
@@ -171,11 +171,11 @@ Neo 标签页增强界面默认以 `{title}` 显示标题，模板支持 `{title
 - **结构可用性**：已应用启用图、作用域实例、上下文及必需宿主能力。结构不可用的贡献在按键匹配、count/前缀等待和 Guide 之前移除，元数据和用户绑定仍保留。
 - **调用可用性**：本次是否有目标、是否可写、身份是否仍有效。执行时检查，按现有语义反馈；不能把这些条件一概变成新的全局吞键/透传规则。Palette 可以说明当前不可执行的原因，但不能以一次 UI 检查代替写入前重验证。
 
-现有 `ReaderMainOperations` 是整理具名端口的起点，不整体导出给所有模块，也不一次性改成通用 `dispatch()`。先按实际调用关系确定哪些方法属于基座、哪些属于业务能力，再随对应功能迁移缩小依赖。
+现有 `ReaderMainOperations` 是整理具名端口的起点。按实际调用关系确定哪些方法属于基座、哪些属于业务能力，再随对应功能迁移缩小依赖；它既不整体导出给所有模块，也不一次性改成通用 `dispatch()`。
 
 ### 对其他 Zotero 插件的公共接口
 
-内部模块接口可以随单 XPI 的一次干净迁移同步更新；公共插件接口不能因内部重组被移除或改签名。当前公开入口来自 `src/addon.ts` 的 `ZoteroNeoPublicApi` 和 `src/core/contracts.ts` 的 `ReaderSelectionApi`。
+内部模块接口可以随单 XPI 的一次干净迁移同步更新；公共插件接口保留原有签名和可用性。当前公开入口来自 `src/addon.ts` 的 `ZoteroNeoPublicApi` 和 `src/core/contracts.ts` 的 `ReaderSelectionApi`。
 
 | 现有入口 | 保留的契约 | 生命周期与能力边界 |
 | --- | --- | --- |
@@ -183,11 +183,11 @@ Neo 标签页增强界面默认以 `{title}` 显示标题，模板支持 `{title
 | `Zotero.Neo.reader.getSelection(): ReaderSelectionContext \| null` | 返回无 DOM 的选择快照；无可用选择时为 `null` | 模块未运行或视图不再适用时不能返回旧选择；外部调用方不能由快照取得 PDF 私有对象。 |
 | `Zotero.Neo.reader.registerSelectionAction(definition): () => void` | 保留 `id`、`label`、可选 `isAvailable(context)` 与 `run(context)`，以及原有返回值类型 | 注册属于当前 Neo 实例；外部插件持有 disposer，并在自己卸载时释放。停用选择功能不执行已注册回调，但不把静态注册误当活跃视图资源。 |
 
-`ReaderSelectionContext` 继续只有 `text`、`itemID`、`pageLabel`、`position`；选择动作继续使用现有 `ReaderSelectionActionOutcome`。不加入 Main Selection、私有 editor/PDF 对象或能访问任意宿主服务的 `require`。外部动作 ID 不需要迁移成内部 `ActionId`，已有领域注册表与内部命令目录是两个不同用途的接口。
+`ReaderSelectionContext` 继续只有 `text`、`itemID`、`pageLabel`、`position`；选择动作继续使用现有 `ReaderSelectionActionOutcome`。Main Selection、私有 editor/PDF 对象和任意宿主服务 `require` 均留在接口之外。外部动作 ID 沿用原值，已有领域注册表与内部 `ActionId` 命令目录用途不同。
 
-现有注册约束保留：空 ID/label 或无效 `run` 被拒绝；重复 ID 不覆盖现有动作；旧 disposer 不能移除后来同 ID 的另一条注册。可用性判定失败只隔离该条动作，不破坏其他选择动作。内部重组不得为所有调用方新增必填 pluginID、版本握手或其他参数。
+现有注册约束保留：空 ID/label 或无效 `run` 被拒绝；重复 ID 保留现有动作；disposer 只移除自己的注册，保护后来同 ID 的另一条注册。可用性判定失败只隔离该条动作，其他选择动作继续可用。内部重组保留现有调用参数，无需新增必填 pluginID、版本握手或其他参数。
 
-外部插件应在 Neo 存在时获取当前公共入口，不缓存跨 Neo 重启的旧对象；Neo 退出时清理该实例的注册。接口只提供受约束的数据与调用约定，不是安全沙箱，也不授予外部插件内部模块的所有权。当前没有通用第三方模块加载 SDK，内部组合根不是公共插件接口。
+外部插件应在 Neo 存在时获取当前公共入口，并在 Neo 重启后重新获取；Neo 退出时清理该实例的注册。接口提供受约束的数据与调用约定，既不是安全沙箱，也不授予外部插件内部模块的所有权。当前没有通用第三方模块加载 SDK，内部组合根属于内部实现。
 
 ### 与 Zotero 接口的结合
 
@@ -205,7 +205,7 @@ Neo 标签页增强界面默认以 `{title}` 显示标题，模板支持 `{title
 
 ## 作用域、启动与退出
 
-模块描述是静态的，运行实例按实际宿主创建，不能用一个全局模块对象保存所有窗口状态。
+模块描述是静态的，运行实例按实际宿主创建，各窗口状态由所属实例保存。
 
 | scope | 身份和资源边界 |
 | --- | --- |
@@ -216,13 +216,13 @@ Neo 标签页增强界面默认以 `{title}` 显示标题，模板支持 `{title
 | NoteEditor | editor Window、Document、Note ID；任一替换即退休旧输入所有者。 |
 | Interaction | 一次 Picker、Select、提示或编辑交互的子 scope；替换或取消后旧异步工作不能再更新新 UI。 |
 
-启动按硬依赖顺序进行；核心模块固定加入应用图，可选增强只在用户请求及实际宿主依赖允许时挂接。构造只描述依赖，激活才获取监听器、patch、UI 和后台工作。关闭可选增强可保留静态元数据、配置及公共 API 的外部注册定义，但不创建其功能会话。
+启动按硬依赖顺序进行；核心模块固定加入应用图，可选增强只在用户请求及实际宿主依赖允许时挂接。构造只描述依赖，激活才获取监听器、patch、UI 和后台工作。关闭可选增强可保留静态元数据、配置及公共 API 的外部注册定义，其功能会话则不会创建。
 
-激活失败时立即退休该实例的回调、释放已获取资源并记录失败；实际硬依赖未就绪时，相关实例可显示 blocked，不自动更改设置或反复重试。核心分区固定启用不代表忽略宿主故障：核心实例失败仍按实际宿主隔离和报告，但没有用户关闭核心模块的配置。
+激活失败时立即退休该实例的回调、释放已获取资源并记录失败；实际硬依赖未就绪时，相关实例可显示 blocked，设置保持原值，也不会反复重试。核心实例失败仍按实际宿主隔离和报告；核心分区固定启用，用户无法将其关闭。
 
-退出顺序为：先退休 scope / generation，再移除动作入口、取消未接纳交互、注销原生回调与恢复自己拥有的 patch，最后释放其余资源。单个释放失败不能阻止其他资源释放；意外错误记录到共享 logger，不能把失败状态报告为已成功清理。
+退出顺序为：先退休 scope / generation，再移除动作入口、取消未接纳交互、注销原生回调与恢复自己拥有的 patch，最后释放其余资源。单个释放失败时继续释放其他资源；意外错误记录到共享 logger，清理状态如实报告。
 
-共享原生桥接由基座按活跃消费者集合保有。关闭一项可选增强只释放它的消费关系，不能注销其他功能仍使用的桥接。基座自身也是消费者，因此关闭全部六项可选增强不等于整个插件不再有任何宿主监听器。
+共享原生桥接由基座按活跃消费者集合保有。关闭一项可选增强只释放它的消费关系，其他消费者继续使用桥接。基座自身也是消费者，因此关闭全部六项可选增强后，插件仍可能保有宿主监听器。
 
 ## 可选增强与设置语义
 
@@ -242,15 +242,15 @@ Settings 的模块区域只管理六项可选增强。核心分区始终开启�
 
 ### 异步写入与可用性
 
-- 动作是否可执行，取决于实际启用图、精确上下文、目标、权限及来源当前性，不能只检查一个 enabled 布尔值。Settings/Palette 应区分模块停用、依赖失败、宿主不支持与当前无目标；执行时仍重新验证。
-- 取消尚未确认的交互不写入。Enter 接纳时冻结所选身份及来源，不能在队列执行时改用新的候选或当前选择。
-- 已接纳的原生保存可能继续完成。关闭/替换 UI 只能退休其反馈与焦点权，不能声称撤销已提交数据；保存回执与当前 UI 是否存在分开处理。
-- 分类操作的事务回调结果、恢复串行化及已提交结果判定仍由现有操作和 Toolkit 接缝保证；模块化不能用一个通用的“异常即未写入”规则替代它们。
-- Bootstrap 使用同步退出契约。插件关闭或应用退出时遇到在途原生写入，应按[验收规范](ACCEPTANCE.md)验证其实际结果，不能仅凭模块作用域承诺宿主会等待任意 Promise。
+- 动作是否可执行，取决于实际启用图、精确上下文、目标、权限及来源当前性，enabled 布尔值只是其中一项。Settings/Palette 应区分模块停用、依赖失败、宿主不支持与当前无目标；执行时仍重新验证。
+- 尚未确认的交互可以取消，取消后不写入。Enter 接纳时冻结所选身份及来源，队列执行时继续使用这些身份。
+- 已接纳的原生保存可能继续完成。关闭/替换 UI 会退休其反馈与焦点权；保存回执与当前 UI 是否存在分开处理，已提交数据不会因此撤销。
+- 分类操作的事务回调结果、恢复串行化及已提交结果判定仍由现有操作和 Toolkit 接缝保证；异常与写入结果须按各操作的实际语义判断。
+- Bootstrap 使用同步退出契约。插件关闭或应用退出时遇到在途原生写入，应按[验收规范](ACCEPTANCE.md)验证其实际结果；模块作用域无法承诺宿主等待任意 Promise。
 
 ## 源码组织
 
-当前代码按以下职责组织。目录表示所有权，不要求每个分区拥有相同的一组文件，也不直接对应用户开关：
+当前代码按以下职责组织。目录表示所有权，各分区按实际需要组织文件，用户开关另按可选增强定义：
 
 ```text
 src/
@@ -271,13 +271,13 @@ src/
   i18n/                    共享本地化目录
 ```
 
-共享 Picker 实现位于 `src/main/picker/`，负责候选搜索、排序、展示、预览与输入；候选来源提供数据和展示，发起交互的功能负责确认语义与领域操作。它位于 MainWindow 不代表其机制属于 `library`。Main/Reader controller 协调输入、宿主、目标和功能组合；`src/input/note-actions.ts` 等领域专用命令保留在输入层的唯一目录，由 `notes` 实现，不另建命令副本。
+共享 Picker 实现位于 `src/main/picker/`，负责候选搜索、排序、展示、预览与输入；候选来源提供数据和展示，发起交互的功能负责确认语义与领域操作。它位于 MainWindow，由基座共享使用，机制不属于 `library`。Main/Reader controller 协调输入、宿主、目标和功能组合；`src/input/note-actions.ts` 等领域专用命令保留在输入层的唯一目录，由 `notes` 实现。
 
-调整职责时采用干净切换：同步更新调用者、删除旧实现及转发导出，不建立内部兼容层。公共 API 和持久化键的兼容要求与内部源码路径分开维护。
+调整职责时采用干净切换：同步更新调用者、删除旧实现及转发导出。公共 API 和持久化键的兼容要求与内部源码路径分开维护，内部实现不建立兼容层。
 
 ## 用现有功能走读接口
 
-这些场景用于核对现有实现的输入、输出与资源边界。依据是 `src/core/contracts.ts`、Surface 目标解析器、Picker 工作流与 `src/modules/reader-selection/selection-actions.ts`；不通过空实现或模拟模块证明能力可用。
+这些场景用于核对现有实现的输入、输出与资源边界。依据是 `src/core/contracts.ts`、Surface 目标解析器、Picker 工作流与 `src/modules/reader-selection/selection-actions.ts`；能力以实际实现为准，空实现或模拟模块不能证明其可用。
 
 | 场景 | 契约如何组合 | 必须保留的边界 |
 | --- | --- | --- |
@@ -286,11 +286,11 @@ src/
 | 原生输入与 Note Normal | Surface 输入宿主判定 IME/原生输入/显式 Note Normal → 当前上下文有效绑定 → 单一动作处理器 | 不让模块各自抢全局 keydown；不靠增加 Reader mode 处理评论输入，也不把所有 editable 都归 Neo。 |
 | 外部插件注册选择动作 | 当前公共 API → 领域注册表 → 当前选择快照 → 可用性判定与本次执行 → disposer | 不进入内部 ActionId 目录；外部插件释放自己的注册，旧 disposer 不能误删后来注册，Neo 私有宿主对象不外泄。 |
 
-契约评审通过的条件是：这些现有路径均有明确的输入、输出、资源负责方和失败结果；没有流程需要退回全局 Selection、任意服务查找或跨 Surface 动作重分发。若某条路径必须增加业务能力，只给真实调用双方增加具名端口，不先扩充通用插件协议。
+契约评审要求这些现有路径均有明确的输入、输出、资源负责方和失败结果，并使用各 Surface 自己的目标及具名端口。若某条路径必须增加业务能力，只给真实调用双方增加具名端口，通用插件协议保持原范围。
 
 ## 维护与验收
 
-修改模块时沿用现有具名端口、Operations 和 Toolkit，核对输入、目标、资源、写入结果及 `(BindingContext, ActionId)` 的唯一负责方。只为真实调用增加能力，不按目录或源码文件新增用户开关。
+修改模块时沿用现有具名端口、Operations 和 Toolkit，核对输入、目标、资源、写入结果及 `(BindingContext, ActionId)` 的唯一负责方。只为真实调用增加能力；用户开关按可选增强定义，独立于目录或源码文件。
 
 每次变更按[main 验收规范](ACCEPTANCE.md)记录受影响行为的实际结果。当前边界必须满足：
 

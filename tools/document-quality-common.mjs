@@ -87,7 +87,7 @@ export function loadCorpus(paths) {
         `Invalid strata: ${doc.id}`,
       );
       assert(
-        doc.annotation?.kind === 'agent-source-verified' &&
+        ['agent-source-verified', 'dataset-ground-truth'].includes(doc.annotation?.kind) &&
           Array.isArray(doc.annotation.sources) &&
           doc.annotation.sources.length > 0 &&
           doc.annotation.sources.every(nonempty) &&
@@ -115,6 +115,8 @@ export function loadCorpus(paths) {
           );
         if (check.rect !== undefined)
           assert(validRect(check.rect), `Invalid rectangle: ${doc.id}/${check.id}`);
+        if (check.captionRect !== undefined)
+          assert(validRect(check.captionRect), `Invalid caption rectangle: ${doc.id}/${check.id}`);
         for (const key of ['doi', 'arxivID', 'referenceText'])
           if (check[key] !== undefined)
             assert(nonempty(check[key]), `Invalid ${key}: ${doc.id}/${check.id}`);

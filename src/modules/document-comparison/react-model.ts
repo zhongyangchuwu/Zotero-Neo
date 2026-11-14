@@ -13,6 +13,7 @@ export interface ComparisonTarget {
 
 export interface ComparisonColumn {
   readonly label: string;
+  readonly prepareLabel?: string;
   readonly error: string;
   readonly summary: string;
   readonly cache: string;
@@ -30,7 +31,8 @@ export interface DocumentComparisonModel {
   readonly description: string;
   readonly providerLabel: string;
   readonly endpointLabel: string;
-  readonly provider: 'mineru' | 'oxr';
+  readonly provider: 'local' | 'mineru' | 'oxr';
+  readonly localLabel: string;
   readonly endpoint: string;
   readonly credentialLabel: string;
   readonly credentialVerifyLabel: string;
@@ -69,13 +71,14 @@ export type DocumentComparisonCommand =
         | 'close'
         | 'parse'
         | 'refresh'
+        | 'read-native'
         | 'copy'
         | 'credential-change'
         | 'credential-composition'
         | 'credential-verify'
         | 'credential-help';
     }
-  | { readonly type: 'provider'; readonly value: 'mineru' | 'oxr' }
+  | { readonly type: 'provider'; readonly value: 'local' | 'mineru' | 'oxr' }
   | { readonly type: 'endpoint'; readonly value: string }
   | {
       readonly type: 'correct-body' | 'correct-restore';

@@ -1,8 +1,6 @@
 import { CleanupFailure, type Cleanup } from '../../core/cleanup';
 import type { PreferenceStore } from '../../core/preference-store';
-import { documentCacheSlot } from '../../document-analysis/cache';
-import { mineruDocumentCacheKey } from '../../document-analysis/mineru-client';
-import { DOCUMENT_PROVIDER_KEY, selectedDocumentCacheKey } from '../../document-analysis/settings';
+import { DOCUMENT_PROVIDER_KEY, selectedDocumentProvider } from '../../document-analysis/settings';
 import { isDeadObject } from '../../platform/cross-compartment';
 import { asElement } from '../../platform/dom';
 import { readSettledMinerUToken, saveMinerUToken } from '../../platform/document-credentials';
@@ -227,10 +225,11 @@ export class DocumentPreparationController implements DocumentPreparationPort {
       title: this.#text(view, 'title'),
       help: `${this.#text(view, 'help')}\n${this.#text(
         view,
-        documentCacheSlot(selectedDocumentCacheKey(this.#preferences)) ===
-          documentCacheSlot(mineruDocumentCacheKey())
-          ? 'readerMineru'
-          : 'readerOxr',
+        selectedDocumentProvider(this.#preferences) === 'local'
+          ? 'readerLocal'
+          : selectedDocumentProvider(this.#preferences) === 'mineru'
+            ? 'readerMineru'
+            : 'readerOxr',
       )}`,
       selection: `${this.#text(view, 'selection')} ${view.host.targets.length}`,
       names: view.host.targets.slice(0, MAX_PREPARATION_FILES + 1).map((target) => target.title),

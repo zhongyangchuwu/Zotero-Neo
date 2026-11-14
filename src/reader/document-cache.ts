@@ -6,6 +6,9 @@ import {
   nativeParsedDocument,
   nativeDocumentTextRegions,
 } from '../document-analysis/native';
+import { localDocumentCacheKey, localDocumentParser } from '../document-analysis/local';
+import { analyzeDocument } from '../document-analysis/analyze';
+import { documentPreparationAbort } from '../platform/document-preparation';
 import { analysisPDF } from '../platform/document-analysis';
 import {
   attachmentDocumentCache,
@@ -19,6 +22,7 @@ import {
 } from '../document-analysis/corrections';
 import {
   readerDocumentPageGeometry,
+  pdfSourceFigurePages,
   structuredDocumentData,
   type ReaderRuntime,
 } from '../toolkit/reader';
@@ -31,7 +35,7 @@ export interface ReaderCachedDocument {
 }
 
 export interface ReaderDocumentSnapshot extends ReaderCachedDocument {
-  readonly origin: 'cache' | 'native';
+  readonly origin: 'cache' | 'native' | 'local';
   readonly textRegions: readonly DocumentRegion[];
 }
 
@@ -74,6 +78,43 @@ export async function readNativeReaderDocument(
     : null;
 }
 
+/** Prepare model-free structure on demand; the explicit comparison action owns persistent cache commits. */
+export async function readLocalReaderDocument(
+  reader: ReaderRuntime,
+  current: () => boolean,
+): Promise<ReaderDocumentSnapshot | null> {
+  const itemID = reader.itemID;
+  if (!current() || !itemID) return null;
+  const revision = attachmentDocumentRevision(itemID);
+  const pdf = await analysisPDF(itemID);
+  if (!current()) return null;
+  const pages = nativeDocumentPages({ pages: await readerDocumentPageGeometry(reader, current) });
+  if (!current()) return null;
+  const source = { fingerprint: pdf.fingerprint, fileName: pdf.fileName, pages };
+  const isCurrent = async (): Promise<boolean> =>
+    current() &&
+    reader.itemID === itemID &&
+    revision === attachmentDocumentRevision(itemID) &&
+    (await pdf.isCurrent()) &&
+    current() &&
+    revision === attachmentDocumentRevision(itemID);
+  const abort = documentPreparationAbort();
+  const parsed: ParsedDocument = await analyzeDocument(
+    localDocumentParser((signal) =>
+      pdfSourceFigurePages(() => pdf.read(), signal, pages.length, current),
+    ),
+    source,
+    { signal: abort.signal },
+  );
+  if (!(await isCurrent())) return null;
+  const key = localDocumentCacheKey();
+  const corrections = await readAttachmentDocumentCorrections(itemID, parsed, key);
+  const effective = applyDocumentCorrections(parsed, corrections);
+  return (await isCurrent())
+    ? { parsed: effective, origin: 'local', textRegions: effective.regions, isCurrent }
+    : null;
+}
+
 /** Selection, chapter search and notes share one cache-first structure contract; this never uploads. */
 export async function readReaderDocument(
   reader: ReaderRuntime,
@@ -85,8 +126,9 @@ export async function readReaderDocument(
     current() && documentCacheSlot(selectedDocumentCacheKey(preferences)) === slot;
   const cached = await readReaderDocumentCache(reader, preferences, sourceCurrent);
   if (!sourceCurrent()) return null;
-  return cached
-    ? { ...cached, origin: 'cache', textRegions: cached.parsed.regions }
+  if (cached) return { ...cached, origin: 'cache', textRegions: cached.parsed.regions };
+  return selectedDocumentCacheKey(preferences).backend === 'local-rules'
+    ? readLocalReaderDocument(reader, sourceCurrent)
     : readNativeReaderDocument(reader, sourceCurrent);
 }
 

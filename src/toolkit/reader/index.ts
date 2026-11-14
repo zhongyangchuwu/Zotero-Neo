@@ -44,6 +44,7 @@ export { readerActionsTagsItemIDs } from './actions-tags-targets';
 export * from './sidebar';
 export * from './structured-document';
 export * from './document-source';
+export { pdfSourceFigurePages } from '../pdf-source';
 export { readReaderReferenceDocument } from './references';
 export type {
   ReaderReferenceDocument,

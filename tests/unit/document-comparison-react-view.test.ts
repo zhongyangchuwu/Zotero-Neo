@@ -9,6 +9,7 @@ const model: DocumentComparisonModel = {
   providerLabel: 'Provider',
   endpointLabel: 'Endpoint',
   provider: 'oxr',
+  localLabel: 'Local rules (no model)',
   endpoint: 'https://example.com',
   credentialLabel: 'Credential',
   credentialVerifyLabel: 'Verify',
@@ -164,6 +165,25 @@ describe('document comparison credential input', () => {
       .find((button) => button.textContent === 'Verify')!
       .click();
     expect(dispatch).toHaveBeenLastCalledWith({ type: 'credential-verify' });
+    view.dispose();
+  });
+
+  it('offers a local source with no credential or network endpoint controls', () => {
+    const root = document.createElement('div');
+    document.body.append(root);
+    const dispatch = vi.fn();
+    const view = mountDocumentComparisonReactView(root, { ...model, provider: 'local' }, dispatch);
+    expect(root.querySelector<HTMLInputElement>('input[type="url"]')?.hidden).toBe(true);
+    expect(
+      root
+        .querySelector('input[type="password"]')
+        ?.closest<HTMLElement>('.neo-comparison-credential')?.hidden,
+    ).toBe(true);
+    const select = root.querySelector<HTMLSelectElement>('select[aria-label="Provider"]')!;
+    expect(select.selectedOptions[0]?.textContent).toBe('Local rules (no model)');
+    select.value = 'mineru';
+    select.dispatchEvent(new Event('change', { bubbles: true }));
+    expect(dispatch).toHaveBeenLastCalledWith({ type: 'provider', value: 'mineru' });
     view.dispose();
   });
 });
