@@ -319,7 +319,8 @@ function candidates(check, obs) {
         region.kind === 'image' || (check.objectKind === 'table' && region.kind === 'table'),
     );
     const captions = regions.filter(
-      (region) => region.kind === 'caption' && contains(region.text, check.text),
+      (region) =>
+        region.kind === 'caption' && (check.captionRect || contains(region.text, check.text)),
     );
     const groupedCandidate = (groupBodies, groupCaptions) => {
       if (!groupBodies.length || !groupCaptions.length) return [];
@@ -329,7 +330,20 @@ function candidates(check, obs) {
         Math.max(...groupBodies.map((body) => body.rect[2])),
         Math.max(...groupBodies.map((body) => body.rect[3])),
       ];
-      return [{ resources: [...groupBodies, ...groupCaptions].flatMap(regionResources), rect }];
+      const captionRect = [
+        Math.min(...groupCaptions.map((caption) => caption.rect[0])),
+        Math.min(...groupCaptions.map((caption) => caption.rect[1])),
+        Math.max(...groupCaptions.map((caption) => caption.rect[2])),
+        Math.max(...groupCaptions.map((caption) => caption.rect[3])),
+      ];
+      if (check.captionRect && iou(check.captionRect, captionRect) < objectIoUThreshold) return [];
+      return [
+        {
+          resources: [...groupBodies, ...groupCaptions].flatMap(regionResources),
+          rect,
+          captionRect,
+        },
+      ];
     };
     if (obs.objectGroups !== undefined) {
       return obs.objectGroups
@@ -413,6 +427,7 @@ function evaluateObservation(doc, obs) {
       reason: reason ?? null,
       iou: null,
       iouReason: check.rect ? (reason ?? 'no-matched-object') : 'annotation-rectangle-not-provided',
+      ...(check.captionRect ? { captionIoU: null } : {}),
       staticEvidence:
         check.kind === 'object'
           ? check.rect
@@ -452,7 +467,13 @@ function evaluateObservation(doc, obs) {
           result.iou = iou(check.rect, match.rect);
           result.iouReason = null;
           result.static = result.iou >= objectIoUThreshold;
-          if (!result.static) result.reason = 'object-iou-below-threshold';
+          if (check.captionRect && match.captionRect) {
+            result.captionIoU = iou(check.captionRect, match.captionRect);
+            result.static = result.static && result.captionIoU >= objectIoUThreshold;
+            if (result.captionIoU < objectIoUThreshold)
+              result.reason = 'caption-iou-below-threshold';
+          }
+          if (result.iou < objectIoUThreshold) result.reason = 'object-iou-below-threshold';
         }
       } else if (matches.length) result.reason = 'candidate-already-used-by-another-check';
     }
@@ -531,7 +552,7 @@ function markdown(report) {
     '',
     `运行：${report.run.id}；语料文档：${report.corpusDocuments}；观测：${report.summary.observations}；未观测文档：${report.unobservedDocuments.length}。`,
     '',
-    '仅统计选定核验点，非全文精确率或召回率；代理对照来源标注不等于人工金标准。静态匹配不代表端到端任务成功。',
+    '仅统计选定核验点，非全文精确率或召回率；标注来源以清单为准，代理核对不等于额外人工复审。静态匹配不代表端到端任务成功。',
     '',
     '## 观测状态',
     '',
@@ -563,7 +584,7 @@ function markdown(report) {
     '',
   ];
   lines.push(
-    `标注框对象通过阈值：IoU ≥ ${report.objectIoUThreshold}；无框核验仅证明主体/题注可定位，不验证题注关联语义。`,
+    `标注框对象要求主体 IoU ≥ ${report.objectIoUThreshold}，另有 captionRect 时还要求题注 IoU ≥ ${report.objectIoUThreshold}；无框核验不能证明主体/题注关联正确。`,
     '',
   );
   lines.push(

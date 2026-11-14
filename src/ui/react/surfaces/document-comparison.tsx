@@ -38,22 +38,28 @@ export function mountDocumentComparisonReactView(
             onChange={(event) =>
               dispatch({
                 type: 'provider',
-                value: event.currentTarget.value === 'oxr' ? 'oxr' : 'mineru',
+                value:
+                  event.currentTarget.value === 'oxr'
+                    ? 'oxr'
+                    : event.currentTarget.value === 'mineru'
+                      ? 'mineru'
+                      : 'local',
               })
             }
           >
+            <option value="local">{model.localLabel}</option>
             <option value="mineru">MinerU</option>
             <option value="oxr">OXR</option>
           </select>
           <input
             type="url"
             aria-label={model.endpointLabel}
-            hidden={model.provider === 'mineru'}
+            hidden={model.provider !== 'oxr'}
             disabled={model.busy}
             defaultValue={model.endpoint}
             onBlur={(event) => dispatch({ type: 'endpoint', value: event.currentTarget.value })}
           />
-          <div className="neo-comparison-credential">
+          <div className="neo-comparison-credential" hidden={model.provider === 'local'}>
             <label>
               {model.credentialLabel}
               <input
@@ -142,6 +148,15 @@ export function mountDocumentComparisonReactView(
                 </button>
               )}
               <h3>{column.label}</h3>
+              {column.prepareLabel && (
+                <button
+                  type="button"
+                  disabled={model.busy || !model.ready}
+                  onClick={() => dispatch({ type: 'read-native' })}
+                >
+                  {column.prepareLabel}
+                </button>
+              )}
               {column.error && <p>{column.error}</p>}
               {column.summary && <p>{column.summary}</p>}
               {column.cache && <p>{column.cache}</p>}

@@ -22,18 +22,24 @@ const io = vi.hoisted(() => ({
   corrections: vi.fn(),
   native: vi.fn(),
   revision: 0,
+  figures: vi.fn(),
+  write: vi.fn(),
 }));
 vi.mock('../../src/platform/document-analysis', () => ({ analysisPDF: io.pdf }));
 vi.mock('../../src/platform/document-analysis-cache', () => ({
-  attachmentDocumentCache: () => ({ read: io.read }),
+  attachmentDocumentCache: () => ({ read: io.read, write: io.write }),
   attachmentDocumentRevision: () => io.revision,
 }));
 vi.mock('../../src/platform/document-corrections', () => ({
   readAttachmentDocumentCorrections: io.corrections,
 }));
+vi.mock('../../src/platform/document-preparation', () => ({
+  documentPreparationAbort: () => new AbortController(),
+}));
 vi.mock('../../src/toolkit/reader', () => ({
   readerDocumentPageGeometry: io.geometry,
   structuredDocumentData: io.native,
+  pdfSourceFigurePages: io.figures,
 }));
 const settings = new Map<string, string>();
 const preferences = {
@@ -63,6 +69,7 @@ const parsed: ParsedDocument = {
 beforeEach(() => {
   vi.resetAllMocks();
   settings.clear();
+  settings.set('documentAnalysis.provider', 'mineru');
   io.revision = 0;
   io.corrections.mockImplementation(async (_id, raw, key) => emptyDocumentCorrections(raw, key));
   io.native.mockResolvedValue({
@@ -88,6 +95,7 @@ beforeEach(() => {
   });
   io.geometry.mockResolvedValue([{ viewRect: [0, 0, 600, 800], rotation: 0 }]);
   io.read.mockResolvedValue({ parsed });
+  io.write.mockResolvedValue(true);
 });
 describe('Reader external document cache admission', () => {
   it('shares exact parser cache identities and reads without credentials or parser/network construction', async () => {
@@ -203,5 +211,42 @@ describe('Reader external document cache admission', () => {
     });
     expect(await readReaderDocument(reader, preferences, () => true)).toBeNull();
     expect(io.native).not.toHaveBeenCalled();
+  });
+
+  it('builds and reuses model-free local graph geometry without consulting SDT or a cloud provider', async () => {
+    settings.clear();
+    io.read.mockResolvedValue(null);
+    io.write.mockImplementation(async (_source, _key, parsed) => {
+      io.revision++;
+      io.read.mockResolvedValue({ parsed });
+      return true;
+    });
+    io.figures.mockResolvedValue([
+      {
+        pageIndex: 0,
+        viewBox: [0, 0, 600, 800],
+        text: [
+          { text: 'Figure 1: A plot.', rect: [100, 350, 400, 362], fontSize: 10 },
+          { text: 'Plot label', rect: [150, 500, 220, 510], fontSize: 10 },
+        ],
+        graphics: [[100, 400, 400, 620]],
+      },
+    ]);
+    const snapshot = await readReaderDocument(reader, preferences, () => true);
+    expect(snapshot?.parsed.backend).toBe('local-rules');
+    expect(snapshot?.origin).toBe('local');
+    expect(await snapshot!.isCurrent()).toBe(true);
+    // Committing here would notify subscribers and dismiss their initial loading UI.
+    // Durable commits belong to the explicit local-parse action, not a source read.
+    expect(io.write).not.toHaveBeenCalled();
+    expect(snapshot?.parsed.regions.find((region) => region.kind === 'image')).toMatchObject({
+      rect: [100, 400, 400, 620],
+      sourceObject: { kind: 'figure' },
+    });
+    expect(io.native).not.toHaveBeenCalled();
+    io.read.mockResolvedValue({ parsed: snapshot!.parsed });
+    const cached = await readReaderDocument(reader, preferences, () => true);
+    expect(cached?.parsed.regions).toEqual(snapshot?.parsed.regions);
+    expect(io.figures).toHaveBeenCalledTimes(1);
   });
 });

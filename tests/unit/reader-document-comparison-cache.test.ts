@@ -24,6 +24,7 @@ const host = vi.hoisted(() => ({
   readCache: vi.fn(),
   writeCache: vi.fn(),
   native: vi.fn(),
+  localPages: vi.fn(),
   analysisChanged: vi.fn(),
   navigate: vi.fn(),
   readToken: vi.fn(),
@@ -63,6 +64,7 @@ vi.mock('../../src/toolkit/reader', () => ({
   readerWindow: () => host.window,
   readerDocumentPageGeometry: async () => [{ viewRect: [0, 0, 600, 800], rotation: 0 }],
   structuredDocumentData: host.native,
+  pdfSourceFigurePages: host.localPages,
 }));
 vi.mock('../../src/i18n', () => ({ t: (key: string) => key.replace('documentAnalysis.', '') }));
 vi.mock('../../src/platform/document-credentials', () => ({
@@ -267,8 +269,10 @@ const payload = {
 const cached = { savedAt: 1000, parsed: oxrParsedDocument(source, payload, 1250) };
 let document: DocumentFixture;
 let comparison: ReaderDocumentComparison;
+let selectedProvider = 'oxr';
 beforeEach(() => {
   vi.resetAllMocks();
+  selectedProvider = 'oxr';
   host.models.length = 0;
   host.views.length = 0;
   host.correctionRecords.clear();
@@ -292,6 +296,21 @@ beforeEach(() => {
   host.request.mockResolvedValue(payload);
   host.readCache.mockResolvedValue(null);
   host.writeCache.mockResolvedValue(true);
+  host.localPages.mockResolvedValue([
+    {
+      pageIndex: 0,
+      viewBox: [0, 0, 600, 800],
+      text: [
+        {
+          text: 'Figure 1. A local chart.',
+          rect: [100, 370, 400, 382],
+          fontSize: 10,
+          hasEOL: true,
+        },
+      ],
+      graphics: [[100, 400, 400, 600]],
+    },
+  ]);
   host.native.mockResolvedValue({
     metadata: { source: { hash: 'source' } },
     catalog: {},
@@ -301,7 +320,7 @@ beforeEach(() => {
     reader: { itemID: 1 } as ReaderRuntime,
     preferences: {
       get: (key: string, fallback: unknown) =>
-        key === 'documentAnalysis.provider' ? 'oxr' : fallback,
+        key === 'documentAnalysis.provider' ? selectedProvider : fallback,
       set: vi.fn(),
     } as unknown as PreferenceStore,
     language: () => 'en',
@@ -319,6 +338,36 @@ const ready = async () => {
 };
 
 describe('document comparison cache workflow', () => {
+  it('parses locally without preparing SDT or making HTTP requests; native comparison is explicit', async () => {
+    selectedProvider = 'local';
+    host.native.mockRejectedValue(new Error('SDT is unavailable'));
+    host.request.mockRejectedValue(new Error('HTTP is unavailable'));
+    comparison.open();
+    await vi.waitFor(() => expect(document.button('parseLocal').disabled).toBe(false));
+    expect(host.native).not.toHaveBeenCalled();
+    document.button('parseLocal').emit('click');
+    await vi.waitFor(() =>
+      expect(
+        host.models
+          .at(-1)!
+          .columns[1]!.targets.some((target) => target.text.includes('A local chart.')),
+      ).toBe(true),
+    );
+    expect(host.native).not.toHaveBeenCalled();
+    expect(host.request).not.toHaveBeenCalled();
+    host.dispatch!({ type: 'read-native' });
+    await vi.waitFor(() =>
+      expect(host.models.at(-1)!.columns[0]!.error).toContain('SDT is unavailable'),
+    );
+    expect(host.native).toHaveBeenCalledOnce();
+    expect(
+      host.models
+        .at(-1)!
+        .columns[1]!.targets.some((target) => target.text.includes('A local chart.')),
+    ).toBe(true);
+    comparison.close(false);
+  });
+
   it('prefills, autosaves, clears and reopens MinerU input without secret models or automatic checks', async () => {
     let stored = 'saved-secret';
     host.readToken.mockImplementation(() => stored);

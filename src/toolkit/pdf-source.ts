@@ -1,16 +1,24 @@
 import { checkParseCurrent, type DocumentPage } from '../document-analysis/contracts';
 import { nativeDocumentPages } from '../document-analysis/native';
 import { cloneInto } from '../platform/cross-compartment';
+import type { LocalFigurePage } from '../document-analysis/local-figures';
+import { pdfFigureGraphics, pdfFigureText } from './pdf-figure-geometry';
 
 interface PDFTask {
   readonly promise: Promise<{
     readonly numPages: number;
-    getPage(index: number): Promise<{ readonly view: readonly number[]; readonly rotate: number }>;
+    getPage(index: number): Promise<{
+      readonly view: readonly number[];
+      readonly rotate: number;
+      getTextContent(): Promise<unknown>;
+      getOperatorList(): Promise<unknown>;
+    }>;
   }>;
   destroy(): Promise<void>;
 }
 interface HostPDFModule {
   readonly GlobalWorkerOptions: { workerSrc: string };
+  readonly OPS: Readonly<Record<string, number>>;
   getDocument(options: {
     data: Uint8Array;
     disableFontFace: boolean;
@@ -18,12 +26,12 @@ interface HostPDFModule {
   }): PDFTask;
 }
 
-/** Read page geometry with Zotero's bundled PDF.js, without opening Reader tabs or invoking SDT/OCR. */
-export async function pdfSourcePages(
+async function withPdfSource<T>(
   read: () => Promise<Uint8Array>,
   signal: AbortSignal,
   maxPages: number,
-): Promise<readonly DocumentPage[]> {
+  visit: (pdf: Awaited<PDFTask['promise']>, module: HostPDFModule) => Promise<T>,
+): Promise<T> {
   checkParseCurrent(signal);
   if (!Number.isSafeInteger(maxPages) || maxPages < 1) throw new Error('Invalid PDF page budget');
   const window = Zotero.getMainWindow();
@@ -49,16 +57,58 @@ export async function pdfSourcePages(
     checkParseCurrent(signal);
     if (!Number.isInteger(pdf.numPages) || pdf.numPages < 1 || pdf.numPages > maxPages)
       throw new Error(`PDF exceeds ${maxPages} pages or is unreadable`);
-    const pages: { viewRect: readonly number[]; rotation: number }[] = [];
-    for (let i = 1; i <= pdf.numPages; i++) {
-      checkParseCurrent(signal);
-      const page = await pdf.getPage(i);
-      checkParseCurrent(signal);
-      pages.push({ viewRect: page.view, rotation: page.rotate });
-    }
-    return nativeDocumentPages({ pages });
+    return await visit(pdf, module);
   } finally {
     signal.removeEventListener('abort', abort);
     await task.destroy();
   }
+}
+
+/** Read source geometry without opening Reader tabs or invoking SDT/OCR. */
+export async function pdfSourcePages(
+  read: () => Promise<Uint8Array>,
+  signal: AbortSignal,
+  maxPages: number,
+): Promise<readonly DocumentPage[]> {
+  return withPdfSource(read, signal, maxPages, async (pdf) => {
+    const pages: { viewRect: readonly number[]; rotation: number }[] = [];
+    for (let index = 1; index <= pdf.numPages; index++) {
+      checkParseCurrent(signal);
+      const page = await pdf.getPage(index);
+      checkParseCurrent(signal);
+      pages.push({ viewRect: page.view, rotation: page.rotate });
+    }
+    return nativeDocumentPages({ pages });
+  });
+}
+
+/** Read painted graphics and native text; no pixels, SDT labels, OCR or model are used. */
+export async function pdfSourceFigurePages(
+  read: () => Promise<Uint8Array>,
+  signal: AbortSignal,
+  maxPages: number,
+  isCurrent: () => boolean = () => true,
+): Promise<readonly LocalFigurePage[]> {
+  const check = (): void => {
+    checkParseCurrent(signal);
+    if (!isCurrent()) throw new Error('Document analysis cancelled');
+  };
+  check();
+  return withPdfSource(read, signal, maxPages, async (pdf, module) => {
+    const pages: LocalFigurePage[] = [];
+    for (let index = 0; index < pdf.numPages; index++) {
+      check();
+      const page = await pdf.getPage(index + 1);
+      check();
+      const text = pdfFigureText(await page.getTextContent());
+      check();
+      const graphics = pdfFigureGraphics(await page.getOperatorList(), module.OPS);
+      check();
+      const geometry = nativeDocumentPages({
+        pages: [{ viewRect: page.view, rotation: page.rotate }],
+      })[0]!;
+      pages.push({ pageIndex: index, viewBox: geometry.viewBox, text, graphics });
+    }
+    return pages;
+  });
 }

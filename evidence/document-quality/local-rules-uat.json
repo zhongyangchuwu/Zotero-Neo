@@ -1,0 +1,163 @@
+{
+  "schemaVersion": 1,
+  "recordedAt": "2026-11-14T13:22:49.396Z",
+  "source": {
+    "baseCommit": "d4129d4dd038232b32b728a52b55fe191813a34a",
+    "workingTree": true,
+    "runtime": {
+      "os": "Windows",
+      "zoteroVersion": "10.0.8",
+      "pdfjsVersion": "5.7.0",
+      "profile": "dedicated disposable profile"
+    },
+    "initialUiBuild": {
+      "xpiSha256": "f55e5505c09fabacc38eee606039fefe79defcc209f3057d823fc130a87b3d03",
+      "bundleSha256": "fd25e0fdaca42441b10bd294bd662d95c7026377716cc68bf50e2ac868ea852e"
+    },
+    "finalUiBuild": {
+      "xpiSha256": "568b724a0156a085dd1e854b8c1836d24fd5ba82ee04e84ce188904e75699f51",
+      "bundleSha256": "2721f0749aefce32efba28ea1da2249be88d4bab8b608da579bf169b79913c06",
+      "changeAfterInitialScenarios": "reader.excerpts.help 的中英文文案改为当前解析器输出，并保留人工修改与原文核查说明。",
+      "verifiedOnFinalBuild": "重新打开真实摘录界面，确认更新后的文案和同一 PNG 预览。"
+    }
+  },
+  "method": {
+    "driver": "Firefox RDP 驱动真实 Zotero 界面的合成按键和按钮事件",
+    "visualReview": "逐张检查专用 Zotero 窗口截图",
+    "documentId": "c-icml13_3",
+    "guards": {
+      "blockedEntrypoints": ["Zotero.SDT.getReader", "Zotero.HTTP.request"],
+      "observedCalls": {
+        "sdt": 0,
+        "http": 0
+      }
+    },
+    "scope": "本次界面流程验收与 47 个静态配对评分核验点分开记录。物理键盘和输入法验收仍按 docs/ACCEPTANCE.md 执行。",
+    "notPerformed": [
+      "physical-keyboard-and-IME",
+      "per-check-real-reading-tasks-for-47-static-checks"
+    ]
+  },
+  "scenarios": [
+    {
+      "id": "uncached-picker-preview",
+      "status": "passed",
+      "observed": {
+        "backend": "local",
+        "analysisCachesBefore": 0,
+        "analysisCachesAfterOpening": 0,
+        "rows": 6,
+        "sourceLabel": "Table 1 · p. 2 · Document layout · Group with caption",
+        "preview": {
+          "complete": true,
+          "width": 895,
+          "height": 202
+        }
+      }
+    },
+    {
+      "id": "source-navigation",
+      "status": "passed",
+      "observed": {
+        "beforePage": 1,
+        "afterPage": 2,
+        "pickerClosed": true
+      },
+      "environmentNote": "先恢复被遮挡的专用 Windows 测试窗口，再确认原生平滑滚动完成，当前原文页为第 2 页。"
+    },
+    {
+      "id": "local-comparison-default",
+      "status": "passed",
+      "observed": {
+        "backend": "local",
+        "cacheMiss": true,
+        "visibleCredentialInputs": 0,
+        "explicitNativeReadButton": "Read native structure (may use models)",
+        "nativeReadInvoked": false
+      }
+    },
+    {
+      "id": "explicit-cache-save-and-reuse",
+      "status": "passed",
+      "observed": {
+        "savedAnalysisCaches": 1,
+        "reopenedShowsCachedLayout": true
+      }
+    },
+    {
+      "id": "object-excerpt-note",
+      "status": "passed",
+      "observed": {
+        "preview": {
+          "complete": true,
+          "width": 895,
+          "height": 202
+        },
+        "newNotesCreated": 1,
+        "captionPresent": true,
+        "sourceLink": "zotero://open-pdf/library/items/TZGLQ98U?page=2",
+        "embeddedPng": {
+          "count": 1,
+          "contentType": "image/png",
+          "bytes": 40865,
+          "pngSignature": [137, 80, 78, 71, 13, 10, 26, 10],
+          "belongsToSavedNote": true
+        },
+        "excerptClosedOnOpen": true,
+        "noteEditorOpenedForSavedNote": true
+      }
+    },
+    {
+      "id": "final-parser-neutral-wording",
+      "status": "passed",
+      "observed": {
+        "currentParserWording": true,
+        "previousModelOnlyWording": false,
+        "previewWidth": 895,
+        "previewHeight": 202
+      }
+    }
+  ],
+  "screenshots": {
+    "storage": "本地实验目录 neo-local-figures.S0mMuu/screenshots；仓库保留摘要，完整截图留在测试环境。",
+    "width": 1016,
+    "height": 608,
+    "files": [
+      {
+        "file": "01-uncached-figure-picker.png",
+        "sha256": "3f0175580bfb01377157c9976027cacf7dd4e1f7796068d00c9208e06d12bbfc"
+      },
+      {
+        "file": "02-local-comparison-before-parse.png",
+        "sha256": "38af051e4452323795e285fbfdefce154b3457efbbb7871995d33bd6b5ce85fe"
+      },
+      {
+        "file": "03-local-comparison-cached.png",
+        "sha256": "12089ac41f773ad0ca0b6ce5ec004771a7d5d6c6c1c2cc9f8c3b608c4772e631"
+      },
+      {
+        "file": "04-object-excerpt-preview.png",
+        "sha256": "432a3e6ca9b5b2cdb014e08fb626a05bc238353108da50d2d21637fec98d73dd"
+      },
+      {
+        "file": "05-object-excerpt-saved.png",
+        "sha256": "0c85919e4d9bc3b7ec699e176d46cddcf41aba50853979cc6bceceeb33e867a4"
+      },
+      {
+        "file": "06-saved-note-opened.png",
+        "sha256": "96d10f96652a81b9de6a3bbc90a41065eea913a9f119282dcdb12454e9caa11f"
+      },
+      {
+        "file": "07-final-parser-wording.png",
+        "sha256": "eae6e38fe36ed29492fdcee481c3d3c5626f3aae1559b228971c3184a3c003fd"
+      }
+    ]
+  },
+  "verification": {
+    "command": "npm run verify",
+    "status": "passed",
+    "testFiles": 187,
+    "tests": 2280,
+    "packageMembers": 25
+  }
+}
