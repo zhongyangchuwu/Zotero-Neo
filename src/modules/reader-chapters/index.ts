@@ -1,5 +1,9 @@
 import type { ModuleHost } from '../../core/module-host';
-import { DOCUMENT_PROVIDER_KEY, OXR_ENDPOINT_KEY } from '../../document-analysis/settings';
+import {
+  DOCUMENT_PROVIDER_KEY,
+  OXR_ENDPOINT_KEY,
+  LOCAL_RULES_KEY,
+} from '../../document-analysis/settings';
 import { observeAttachmentDocumentCache } from '../../platform/document-analysis-cache';
 import type { PdfWindow } from '../../reader/types';
 import { ReaderChapterSearch, type ReaderChapterSearchHost } from './chapter-search';
@@ -22,7 +26,7 @@ export function createReaderChaptersModule(
     scope.add(() => chapter.close());
     if (ports.reader.itemID)
       scope.add(observeAttachmentDocumentCache(ports.reader.itemID, () => chapter.close()));
-    for (const key of [DOCUMENT_PROVIDER_KEY, OXR_ENDPOINT_KEY]) {
+    for (const key of [DOCUMENT_PROVIDER_KEY, OXR_ENDPOINT_KEY, LOCAL_RULES_KEY]) {
       const stop = ports.preferences.observe?.(key, () => chapter.close());
       if (stop) scope.add(stop);
     }

@@ -1,7 +1,11 @@
 import type { ModuleHost } from '../../core/module-host';
 import type { PdfWindow } from '../../reader/types';
 import { observeAttachmentDocumentCache } from '../../platform/document-analysis-cache';
-import { DOCUMENT_PROVIDER_KEY, OXR_ENDPOINT_KEY } from '../../document-analysis/settings';
+import {
+  DOCUMENT_PROVIDER_KEY,
+  OXR_ENDPOINT_KEY,
+  LOCAL_RULES_KEY,
+} from '../../document-analysis/settings';
 import type { ReaderObjectExcerptHost } from './object-excerpts';
 import { ReaderObjectExcerpts } from './object-excerpts';
 
@@ -26,7 +30,7 @@ export function createReaderExcerptsModule(
     const close = (): void => excerpts.close();
     scope.add(close);
     if (ports.reader.itemID) scope.add(observeAttachmentDocumentCache(ports.reader.itemID, close));
-    for (const key of [DOCUMENT_PROVIDER_KEY, OXR_ENDPOINT_KEY]) {
+    for (const key of [DOCUMENT_PROVIDER_KEY, OXR_ENDPOINT_KEY, LOCAL_RULES_KEY]) {
       const stop = ports.preferences.observe?.(key, close);
       if (stop) scope.add(stop);
     }

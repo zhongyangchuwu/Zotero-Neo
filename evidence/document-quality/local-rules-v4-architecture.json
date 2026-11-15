@@ -1,0 +1,1033 @@
+{
+  "schemaVersion": 1,
+  "kind": "local-rule-architecture-regression",
+  "run": {
+    "id": "local-rule-replay-1794740959157-bfa02206bb99",
+    "sourceCommit": "f192930813daa7bd6c324a40cee7e1e4478f59e0",
+    "sourceTree": "working-tree",
+    "sourceSha256": {
+      "src/document-analysis/contracts.ts": "e4eed979236230da9c7d293fe3550ea221757bb6a86d3a8af01e00b429732b6c",
+      "src/document-analysis/local-rules/association.ts": "786894168ffccac6f418228244de84ad793aad7dfc98e36d7de6a8c17eb5a0d9",
+      "src/document-analysis/local-rules/caption-identity.ts": "2e6c5b3d39a8bcd6a7fcd275cc51b5a3eacbb814e9a2fe0f9d8105d19a6d15ed",
+      "src/document-analysis/local-rules/captions.ts": "03b4236728ed3059b283ea85932658d6d704598f76c3e7967f988c564a34848a",
+      "src/document-analysis/local-rules/compound-panels.ts": "4788313ac120a8f49c87d0c79048b6adf1f09f02c467ddff2aec1530a528e0c2",
+      "src/document-analysis/local-rules/exclusions.ts": "bb2ce364fcdc92885965a0ea56aecf00fe081b66d3d4353632a07724fa920c06",
+      "src/document-analysis/local-rules/expansion.ts": "5405f3817f24da9af3c85445136d07c80bba1679b9ea3df399bc037b72907fb0",
+      "src/document-analysis/local-rules/geometry.ts": "028d830e65d98b8f1a489f7f8da0b1bbb636b9d75f5b4eeeb7113d58a1cae5ff",
+      "src/document-analysis/local-rules/graphic-labels.ts": "80254daea5467104f317c59c1b589a0e70a109bcd97182df4898c3a4102db1bf",
+      "src/document-analysis/local-rules/index.ts": "44233c1ada055f5b037ca87d54104605ca46162b29fa7011ebc479d7607213bd",
+      "src/document-analysis/local-rules/layout.ts": "80f3f808ee283d3e8db3c730a8ef09cb46a4da54287cadc8d154ea04e30df3f5",
+      "src/document-analysis/local-rules/ownership.ts": "7e7c45f8f44b2d8819a8bb17b5fca3b7c07a5c64713ccfa863fe9ce8ac315159",
+      "src/document-analysis/local-rules/painted-components.ts": "344ee1dadf026914f0e4e26b7c93f00c0ac348134b23431a796c6feaae78a5a2",
+      "src/document-analysis/local-rules/paragraphs.ts": "963814337c060a77eaf1f1da1bbf973a7a2b81782270db7b1dc2d394e5a2feb1",
+      "src/document-analysis/local-rules/profile.ts": "8ab680586c4f9b1ff82179cac32209b9fd7911dd82864a5256516428a5cfbf5c",
+      "src/document-analysis/local-rules/regions.ts": "602072d0ecc74a677f32bf8e6e3d516c9d3a5b96bf6241aae6257a1760478213",
+      "src/document-analysis/local-rules/ruled-tables.ts": "460d33b9d7057fa7acb468c8074d49aed33a38d53e6711c42cc8e2a7065774ed",
+      "src/document-analysis/local-rules/structures.ts": "c59993b21a44cdbeffa3f64d36d7c563b9a7a39d757caffdb4a3eda18543617f",
+      "src/document-analysis/local-rules/table-membership.ts": "ea57b731f39bca6131caa7ddb61443ebc0e8e875e250adb050f41dfbb1f92748",
+      "src/document-analysis/local-rules/text.ts": "2e8707aa2f08f9fbf86e7d7342b5ec9d6fd940618fa735ccede839c89b035f99",
+      "src/document-analysis/local-rules/unruled-tables.ts": "95f81d6685be89dc0e6ac3f748ff70504938e45908ac8b7126e7ba9bb6bdd2b1",
+      "src/document-analysis/local.ts": "c8087ecf1fcd91aae01b4a9fbb555b77a220eb6c89aee912b40081ad824118f4",
+      "src/document-analysis/object-groups.ts": "b483a376594bedc1d1405ed92e0b8082cdb42098da86da05a6ebc395bcdf2f0d"
+    },
+    "bundleSha256": "856c5e75a9d783e8561abd27512f08d91fdbd48b40a58c8a92ed0e80bb84a260",
+    "profile": {
+      "version": 1,
+      "rules": {
+        "unruledTables": {
+          "enabled": true,
+          "minRows": 3,
+          "minColumns": 2
+        },
+        "graphicLabels": {
+          "enabled": true,
+          "maxFontSizeEm": 1.4,
+          "maxGapEm": 0.8
+        },
+        "ruledTables": {
+          "enabled": true,
+          "endpointToleranceEm": 0.2
+        },
+        "compoundPanels": {
+          "enabled": true,
+          "maxGapEm": 1.5,
+          "minOverlapRatio": 0.4
+        }
+      },
+      "association": {
+        "maxDistanceLines": 5,
+        "minWidthEm": 3,
+        "minHeightEm": 2
+      }
+    },
+    "profileFingerprint": "[1,1,1,[\"unruledTables\",1,{\"enabled\":true,\"minRows\":3,\"minColumns\":2}],[\"graphicLabels\",1,{\"enabled\":true,\"maxFontSizeEm\":1.4,\"maxGapEm\":0.8}],[\"ruledTables\",1,{\"enabled\":true,\"endpointToleranceEm\":0.2}],[\"compoundPanels\",1,{\"enabled\":true,\"maxGapEm\":1.5,\"minOverlapRatio\":0.4}],{\"maxDistanceLines\":5,\"minWidthEm\":3,\"minHeightEm\":2}]",
+    "host": "Node v26.13.0; immutable native PDF text/graphics replay; no Zotero or DOM",
+    "startedAt": "2026-11-15T11:09:19.165Z",
+    "protocol": "Production local rules and object grouping, full unrotated native capture. PDF identity is checked against capture metadata, not by rereading PDF bytes. Duration is grouping replay only, excluding native extraction, bundling and Reader initialization. Optional diagnostics add observer cost. No gold geometry is used as rule input. Selected checks do not measure exhaustive precision, complete crop fidelity or Zotero task success.",
+    "finishedAt": "2026-11-15T11:09:20.285Z"
+  },
+  "scope": "代次 4 架构回归，不是新的质量调优或独立验证。完整原生几何来自冻结的代次 3；无 gold 框作为规则输入。",
+  "baseline": {
+    "adapterVersion": 3,
+    "bundleSha256": "67f179955165d38b36f8e42d158fb9a00c4d4948db1def270a63776ca7036d60",
+    "note": "相同原生文字和绘图输入；完整区域与对象组逐项比较。",
+    "files": [
+      {
+        "path": "/home/han/.omp/experiments/neo-local-figure-coverage.i51dYY/candidate-r4-c-observations.json",
+        "sha256": "89902acf13137fafd52a431932d9991b872a45e4383b679bbdd72b72c6b86026"
+      },
+      {
+        "path": "/home/han/.omp/experiments/neo-local-figure-coverage.i51dYY/candidate-r4-d-observations.json",
+        "sha256": "655f695b9b63491d99c4977d2b662dc62aa84274e446f98702c752bb6a8019ea"
+      },
+      {
+        "path": "/home/han/.omp/experiments/neo-local-figure-coverage.i51dYY/candidate-r4-e-observations.json",
+        "sha256": "26ab71afd619fb46df1aace2a9f131287420f0e3e7b840cca55219620f6f03bc"
+      }
+    ]
+  },
+  "sourceGeometry": [
+    {
+      "documentId": "c-icml10_3",
+      "path": "/home/han/.omp/experiments/neo-local-figure-coverage.i51dYY/raw-candidate-c/c-icml10_3.json",
+      "sha256": "5742a729aeeb697cffe277cef6848dbc296638e272051d96ea5d717968174cf9",
+      "sourcePages": 8,
+      "decoder": "native-clip-aabb-r1",
+      "captureHarnessSha256": "5e14528967fcbbc1890409f0b1339b89cae2113a58c8d1fa51aed0445b1d0fce"
+    },
+    {
+      "documentId": "c-icml10_4",
+      "path": "/home/han/.omp/experiments/neo-local-figure-coverage.i51dYY/raw-candidate-c/c-icml10_4.json",
+      "sha256": "3ef1137a080c398f04557b3a93ca28de97c43f6f8c15f05eea80e2d0cc9bc2c6",
+      "sourcePages": 8,
+      "decoder": "native-clip-aabb-r1",
+      "captureHarnessSha256": "5e14528967fcbbc1890409f0b1339b89cae2113a58c8d1fa51aed0445b1d0fce"
+    },
+    {
+      "documentId": "c-icml10_5",
+      "path": "/home/han/.omp/experiments/neo-local-figure-coverage.i51dYY/raw-candidate-c/c-icml10_5.json",
+      "sha256": "b97c7a29c4f73d4c54f38247d0e039cb3369b3d02f182930949b1c82b535623d",
+      "sourcePages": 8,
+      "decoder": "native-clip-aabb-r1",
+      "captureHarnessSha256": "5e14528967fcbbc1890409f0b1339b89cae2113a58c8d1fa51aed0445b1d0fce"
+    },
+    {
+      "documentId": "c-icml10_8",
+      "path": "/home/han/.omp/experiments/neo-local-figure-coverage.i51dYY/raw-candidate-c/c-icml10_8.json",
+      "sha256": "7ebc43c2a5828c2818fe6804b8ced7d23ed28b002d74eb7bd1a8e8ae193d2159",
+      "sourcePages": 8,
+      "decoder": "native-clip-aabb-r1",
+      "captureHarnessSha256": "5e14528967fcbbc1890409f0b1339b89cae2113a58c8d1fa51aed0445b1d0fce"
+    },
+    {
+      "documentId": "c-icml13_2",
+      "path": "/home/han/.omp/experiments/neo-local-figure-coverage.i51dYY/raw-candidate-c/c-icml13_2.json",
+      "sha256": "90aabd454f74e59022977f0f16f3ef70d172231d8ec294ab4ff71c0f361cccde",
+      "sourcePages": 9,
+      "decoder": "native-clip-aabb-r1",
+      "captureHarnessSha256": "5e14528967fcbbc1890409f0b1339b89cae2113a58c8d1fa51aed0445b1d0fce"
+    },
+    {
+      "documentId": "c-icml13_3",
+      "path": "/home/han/.omp/experiments/neo-local-figure-coverage.i51dYY/raw-candidate-c/c-icml13_3.json",
+      "sha256": "e0a8cabd24a3a0ea639ed0aedc55f1f2fbb989cdf32db566fabb728372dab273",
+      "sourcePages": 9,
+      "decoder": "native-clip-aabb-r1",
+      "captureHarnessSha256": "5e14528967fcbbc1890409f0b1339b89cae2113a58c8d1fa51aed0445b1d0fce"
+    },
+    {
+      "documentId": "c-icml13_4",
+      "path": "/home/han/.omp/experiments/neo-local-figure-coverage.i51dYY/raw-candidate-c/c-icml13_4.json",
+      "sha256": "c82a1c988a05b58cbac56a7ffdc9c39b9b56e25fe51b51e2a74b5c94e6b697c2",
+      "sourcePages": 9,
+      "decoder": "native-clip-aabb-r1",
+      "captureHarnessSha256": "5e14528967fcbbc1890409f0b1339b89cae2113a58c8d1fa51aed0445b1d0fce"
+    },
+    {
+      "documentId": "c-icml13_6",
+      "path": "/home/han/.omp/experiments/neo-local-figure-coverage.i51dYY/raw-candidate-c/c-icml13_6.json",
+      "sha256": "a60a6ae7f66f620a392c4d34590dae2f2dcb9c2228fbaf736ff0e653d8217c57",
+      "sourcePages": 9,
+      "decoder": "native-clip-aabb-r1",
+      "captureHarnessSha256": "5e14528967fcbbc1890409f0b1339b89cae2113a58c8d1fa51aed0445b1d0fce"
+    },
+    {
+      "documentId": "c-icml13_8",
+      "path": "/home/han/.omp/experiments/neo-local-figure-coverage.i51dYY/raw-candidate-c/c-icml13_8.json",
+      "sha256": "11cc6b9fed6caf45f5a6a75393de555e50c2340b06d743797cc00edb5a0cfaf0",
+      "sourcePages": 9,
+      "decoder": "native-clip-aabb-r1",
+      "captureHarnessSha256": "5e14528967fcbbc1890409f0b1339b89cae2113a58c8d1fa51aed0445b1d0fce"
+    },
+    {
+      "documentId": "c-icml14_9",
+      "path": "/home/han/.omp/experiments/neo-local-figure-coverage.i51dYY/raw-candidate-c/c-icml14_9.json",
+      "sha256": "8f49aae72d28ec63dbf5a4a38f9e94f12b5780c472418104210bd1b8d269da91",
+      "sourcePages": 9,
+      "decoder": "native-clip-aabb-r1",
+      "captureHarnessSha256": "5e14528967fcbbc1890409f0b1339b89cae2113a58c8d1fa51aed0445b1d0fce"
+    },
+    {
+      "documentId": "d-icml10_1",
+      "path": "/home/han/.omp/experiments/neo-local-figure-coverage.i51dYY/raw-candidate-d/d-icml10_1.json",
+      "sha256": "a55586a322a986f0ec13cae4e22512c9fe28e1877fb54a411f195d420319ebf6",
+      "sourcePages": 8,
+      "decoder": "native-clip-aabb-r1",
+      "captureHarnessSha256": "5e14528967fcbbc1890409f0b1339b89cae2113a58c8d1fa51aed0445b1d0fce"
+    },
+    {
+      "documentId": "d-icml10_2",
+      "path": "/home/han/.omp/experiments/neo-local-figure-coverage.i51dYY/raw-candidate-d/d-icml10_2.json",
+      "sha256": "346ff13a36e5d69dec67a72ee8fb061c16c7f8618fb2ced7c71ca4918d137fa7",
+      "sourcePages": 8,
+      "decoder": "native-clip-aabb-r1",
+      "captureHarnessSha256": "5e14528967fcbbc1890409f0b1339b89cae2113a58c8d1fa51aed0445b1d0fce"
+    },
+    {
+      "documentId": "d-icml10_6",
+      "path": "/home/han/.omp/experiments/neo-local-figure-coverage.i51dYY/raw-candidate-d/d-icml10_6.json",
+      "sha256": "276d79aa784aff07a2f31f90e03a877084c3685b6cdff730dd22b7527b4bcec5",
+      "sourcePages": 8,
+      "decoder": "native-clip-aabb-r1",
+      "captureHarnessSha256": "5e14528967fcbbc1890409f0b1339b89cae2113a58c8d1fa51aed0445b1d0fce"
+    },
+    {
+      "documentId": "d-icml13_1",
+      "path": "/home/han/.omp/experiments/neo-local-figure-coverage.i51dYY/raw-candidate-d/d-icml13_1.json",
+      "sha256": "f591a324fc8875729faae1f23da650dd0173f0281e6d22cf9f7c15b414fd2dfe",
+      "sourcePages": 9,
+      "decoder": "native-clip-aabb-r1",
+      "captureHarnessSha256": "5e14528967fcbbc1890409f0b1339b89cae2113a58c8d1fa51aed0445b1d0fce"
+    },
+    {
+      "documentId": "d-icml13_5",
+      "path": "/home/han/.omp/experiments/neo-local-figure-coverage.i51dYY/raw-candidate-d/d-icml13_5.json",
+      "sha256": "1ca568537d7bcd5c02ac264637587d6113837cc8fd0bcb7d495d48ebcba2464a",
+      "sourcePages": 9,
+      "decoder": "native-clip-aabb-r1",
+      "captureHarnessSha256": "5e14528967fcbbc1890409f0b1339b89cae2113a58c8d1fa51aed0445b1d0fce"
+    },
+    {
+      "documentId": "d-icml14_1",
+      "path": "/home/han/.omp/experiments/neo-local-figure-coverage.i51dYY/raw-candidate-d/d-icml14_1.json",
+      "sha256": "2cdfeec87013bef699cfcb4e9ef9eb8b872054fe1d2f716e3f037d1c3a9d38a5",
+      "sourcePages": 9,
+      "decoder": "native-clip-aabb-r1",
+      "captureHarnessSha256": "5e14528967fcbbc1890409f0b1339b89cae2113a58c8d1fa51aed0445b1d0fce"
+    },
+    {
+      "documentId": "d-nips09_1",
+      "path": "/home/han/.omp/experiments/neo-local-figure-coverage.i51dYY/raw-candidate-d/d-nips09_1.json",
+      "sha256": "c7a022cef27fc62c7b9ac2aae71b8823f82a9c08c8169a4cbfdae975cef612ed",
+      "sourcePages": 9,
+      "decoder": "native-clip-aabb-r1",
+      "captureHarnessSha256": "5e14528967fcbbc1890409f0b1339b89cae2113a58c8d1fa51aed0445b1d0fce"
+    },
+    {
+      "documentId": "d-nips09_2",
+      "path": "/home/han/.omp/experiments/neo-local-figure-coverage.i51dYY/raw-candidate-d/d-nips09_2.json",
+      "sha256": "3ba87f1a1526765cfabff4f5b18ce33999da28d85e7bc40a6d683c6242ace613",
+      "sourcePages": 9,
+      "decoder": "native-clip-aabb-r1",
+      "captureHarnessSha256": "5e14528967fcbbc1890409f0b1339b89cae2113a58c8d1fa51aed0445b1d0fce"
+    },
+    {
+      "documentId": "d-nips10_1",
+      "path": "/home/han/.omp/experiments/neo-local-figure-coverage.i51dYY/raw-candidate-d/d-nips10_1.json",
+      "sha256": "be5def792a5977fee4184d14bd1bd06e86e23e279fdc69e7be1c0ee5813118b6",
+      "sourcePages": 9,
+      "decoder": "native-clip-aabb-r1",
+      "captureHarnessSha256": "5e14528967fcbbc1890409f0b1339b89cae2113a58c8d1fa51aed0445b1d0fce"
+    },
+    {
+      "documentId": "d-nips11_1",
+      "path": "/home/han/.omp/experiments/neo-local-figure-coverage.i51dYY/raw-candidate-d/d-nips11_1.json",
+      "sha256": "eed7bb822c93855a1ab3476fd39993d4a5314b961c6546509e896b6ea7185da7",
+      "sourcePages": 9,
+      "decoder": "native-clip-aabb-r1",
+      "captureHarnessSha256": "5e14528967fcbbc1890409f0b1339b89cae2113a58c8d1fa51aed0445b1d0fce"
+    },
+    {
+      "documentId": "d-nips12_1",
+      "path": "/home/han/.omp/experiments/neo-local-figure-coverage.i51dYY/raw-candidate-d/d-nips12_1.json",
+      "sha256": "e81cdc3dae222e11bd4a8b7e584b69ba091503386cde49ea6ee2883bdfe7fcaf",
+      "sourcePages": 9,
+      "decoder": "native-clip-aabb-r1",
+      "captureHarnessSha256": "5e14528967fcbbc1890409f0b1339b89cae2113a58c8d1fa51aed0445b1d0fce"
+    },
+    {
+      "documentId": "d-nips13_1",
+      "path": "/home/han/.omp/experiments/neo-local-figure-coverage.i51dYY/raw-candidate-d/d-nips13_1.json",
+      "sha256": "533f7002ec112c3f4117b5b2a6d235f7caea512640f08d1b8d92bfd733daec2f",
+      "sourcePages": 9,
+      "decoder": "native-clip-aabb-r1",
+      "captureHarnessSha256": "5e14528967fcbbc1890409f0b1339b89cae2113a58c8d1fa51aed0445b1d0fce"
+    },
+    {
+      "documentId": "e-icml10_7",
+      "path": "/home/han/.omp/experiments/neo-local-figure-coverage.i51dYY/raw-candidate-e/e-icml10_7.json",
+      "sha256": "9746ad9db193013434a1eaabfc87263affa9e66fefd04dca165a3dc0949ba689",
+      "sourcePages": 8,
+      "decoder": "native-clip-aabb-r4",
+      "captureHarnessSha256": "67f179955165d38b36f8e42d158fb9a00c4d4948db1def270a63776ca7036d60"
+    },
+    {
+      "documentId": "e-icml10_9",
+      "path": "/home/han/.omp/experiments/neo-local-figure-coverage.i51dYY/raw-candidate-e/e-icml10_9.json",
+      "sha256": "bd9becf2597687fea3d0da7cd98868af559f42758a5cd727263aeeec8a9bba1c",
+      "sourcePages": 8,
+      "decoder": "native-clip-aabb-r4",
+      "captureHarnessSha256": "67f179955165d38b36f8e42d158fb9a00c4d4948db1def270a63776ca7036d60"
+    },
+    {
+      "documentId": "e-icml10_10",
+      "path": "/home/han/.omp/experiments/neo-local-figure-coverage.i51dYY/raw-candidate-e/e-icml10_10.json",
+      "sha256": "d57e7b0327e07c30c1be6f592fdebebaf15805ec6e106131f888b55511b5274b",
+      "sourcePages": 8,
+      "decoder": "native-clip-aabb-r4",
+      "captureHarnessSha256": "67f179955165d38b36f8e42d158fb9a00c4d4948db1def270a63776ca7036d60"
+    },
+    {
+      "documentId": "e-icml11_3",
+      "path": "/home/han/.omp/experiments/neo-local-figure-coverage.i51dYY/raw-candidate-e/e-icml11_3.json",
+      "sha256": "5b6608f80c63ee8eda4b6af3f72b8bd5797eb7182ea8f0d18f48018de866e999",
+      "sourcePages": 8,
+      "decoder": "native-clip-aabb-r4",
+      "captureHarnessSha256": "67f179955165d38b36f8e42d158fb9a00c4d4948db1def270a63776ca7036d60"
+    },
+    {
+      "documentId": "e-icml11_4",
+      "path": "/home/han/.omp/experiments/neo-local-figure-coverage.i51dYY/raw-candidate-e/e-icml11_4.json",
+      "sha256": "064b13ba43974914f19692e06047162c477c0649debd1142bcfa18afd3d028e3",
+      "sourcePages": 8,
+      "decoder": "native-clip-aabb-r4",
+      "captureHarnessSha256": "67f179955165d38b36f8e42d158fb9a00c4d4948db1def270a63776ca7036d60"
+    },
+    {
+      "documentId": "e-icml11_5",
+      "path": "/home/han/.omp/experiments/neo-local-figure-coverage.i51dYY/raw-candidate-e/e-icml11_5.json",
+      "sha256": "4947b1845080b0516bb9dcbd203adce996cd3f0f44f289beffca8c1032522909",
+      "sourcePages": 8,
+      "decoder": "native-clip-aabb-r4",
+      "captureHarnessSha256": "67f179955165d38b36f8e42d158fb9a00c4d4948db1def270a63776ca7036d60"
+    },
+    {
+      "documentId": "e-nips09_3",
+      "path": "/home/han/.omp/experiments/neo-local-figure-coverage.i51dYY/raw-candidate-e/e-nips09_3.json",
+      "sha256": "0ad6ff7322a462db425c92edf4c2e9d8278909df850133a1836d0bf2000a69e9",
+      "sourcePages": 9,
+      "decoder": "native-clip-aabb-r4",
+      "captureHarnessSha256": "67f179955165d38b36f8e42d158fb9a00c4d4948db1def270a63776ca7036d60"
+    },
+    {
+      "documentId": "e-nips09_4",
+      "path": "/home/han/.omp/experiments/neo-local-figure-coverage.i51dYY/raw-candidate-e/e-nips09_4.json",
+      "sha256": "83ff05670d17ff55aee2c88b83714fa536aae10913f13b90c01ed55e13606321",
+      "sourcePages": 9,
+      "decoder": "native-clip-aabb-r4",
+      "captureHarnessSha256": "67f179955165d38b36f8e42d158fb9a00c4d4948db1def270a63776ca7036d60"
+    },
+    {
+      "documentId": "e-nips09_5",
+      "path": "/home/han/.omp/experiments/neo-local-figure-coverage.i51dYY/raw-candidate-e/e-nips09_5.json",
+      "sha256": "cd1f2346eccd7bb590ab219ea3f2ddf5da37ced3a168c43debd30d4a63a3c447",
+      "sourcePages": 9,
+      "decoder": "native-clip-aabb-r4",
+      "captureHarnessSha256": "67f179955165d38b36f8e42d158fb9a00c4d4948db1def270a63776ca7036d60"
+    },
+    {
+      "documentId": "e-nips09_6",
+      "path": "/home/han/.omp/experiments/neo-local-figure-coverage.i51dYY/raw-candidate-e/e-nips09_6.json",
+      "sha256": "5e6207707770ba860ca555efa6f0493a9bee79677bf789bd5f9fb8abccacb793",
+      "sourcePages": 9,
+      "decoder": "native-clip-aabb-r4",
+      "captureHarnessSha256": "67f179955165d38b36f8e42d158fb9a00c4d4948db1def270a63776ca7036d60"
+    },
+    {
+      "documentId": "e-nips09_7",
+      "path": "/home/han/.omp/experiments/neo-local-figure-coverage.i51dYY/raw-candidate-e/e-nips09_7.json",
+      "sha256": "14459365e1fd802c2d9173c92c8610315f2f0317b2b5962dbe61fb01da8c0f79",
+      "sourcePages": 9,
+      "decoder": "native-clip-aabb-r4",
+      "captureHarnessSha256": "67f179955165d38b36f8e42d158fb9a00c4d4948db1def270a63776ca7036d60"
+    },
+    {
+      "documentId": "e-nips09_8",
+      "path": "/home/han/.omp/experiments/neo-local-figure-coverage.i51dYY/raw-candidate-e/e-nips09_8.json",
+      "sha256": "197d3f9c739d30300cd3353d15aa9f54d49e4a6dc073b349bf2bec762c1bd82f",
+      "sourcePages": 9,
+      "decoder": "native-clip-aabb-r4",
+      "captureHarnessSha256": "67f179955165d38b36f8e42d158fb9a00c4d4948db1def270a63776ca7036d60"
+    }
+  ],
+  "defaultComparison": [
+    {
+      "documentId": "c-icml10_3",
+      "regionsIdentical": true,
+      "objectGroupsIdentical": true,
+      "baselineStatus": "completed",
+      "status": "completed"
+    },
+    {
+      "documentId": "c-icml10_4",
+      "regionsIdentical": true,
+      "objectGroupsIdentical": true,
+      "baselineStatus": "completed",
+      "status": "completed"
+    },
+    {
+      "documentId": "c-icml10_5",
+      "regionsIdentical": true,
+      "objectGroupsIdentical": true,
+      "baselineStatus": "completed",
+      "status": "completed"
+    },
+    {
+      "documentId": "c-icml10_8",
+      "regionsIdentical": true,
+      "objectGroupsIdentical": true,
+      "baselineStatus": "completed",
+      "status": "completed"
+    },
+    {
+      "documentId": "c-icml13_2",
+      "regionsIdentical": true,
+      "objectGroupsIdentical": true,
+      "baselineStatus": "completed",
+      "status": "completed"
+    },
+    {
+      "documentId": "c-icml13_3",
+      "regionsIdentical": true,
+      "objectGroupsIdentical": true,
+      "baselineStatus": "completed",
+      "status": "completed"
+    },
+    {
+      "documentId": "c-icml13_4",
+      "regionsIdentical": true,
+      "objectGroupsIdentical": true,
+      "baselineStatus": "completed",
+      "status": "completed"
+    },
+    {
+      "documentId": "c-icml13_6",
+      "regionsIdentical": true,
+      "objectGroupsIdentical": true,
+      "baselineStatus": "completed",
+      "status": "completed"
+    },
+    {
+      "documentId": "c-icml13_8",
+      "regionsIdentical": true,
+      "objectGroupsIdentical": true,
+      "baselineStatus": "completed",
+      "status": "completed"
+    },
+    {
+      "documentId": "c-icml14_9",
+      "regionsIdentical": true,
+      "objectGroupsIdentical": true,
+      "baselineStatus": "completed",
+      "status": "completed"
+    },
+    {
+      "documentId": "d-icml10_1",
+      "regionsIdentical": true,
+      "objectGroupsIdentical": true,
+      "baselineStatus": "completed",
+      "status": "completed"
+    },
+    {
+      "documentId": "d-icml10_2",
+      "regionsIdentical": true,
+      "objectGroupsIdentical": true,
+      "baselineStatus": "completed",
+      "status": "completed"
+    },
+    {
+      "documentId": "d-icml10_6",
+      "regionsIdentical": true,
+      "objectGroupsIdentical": true,
+      "baselineStatus": "completed",
+      "status": "completed"
+    },
+    {
+      "documentId": "d-icml13_1",
+      "regionsIdentical": true,
+      "objectGroupsIdentical": true,
+      "baselineStatus": "completed",
+      "status": "completed"
+    },
+    {
+      "documentId": "d-icml13_5",
+      "regionsIdentical": true,
+      "objectGroupsIdentical": true,
+      "baselineStatus": "completed",
+      "status": "completed"
+    },
+    {
+      "documentId": "d-icml14_1",
+      "regionsIdentical": true,
+      "objectGroupsIdentical": true,
+      "baselineStatus": "completed",
+      "status": "completed"
+    },
+    {
+      "documentId": "d-nips09_1",
+      "regionsIdentical": true,
+      "objectGroupsIdentical": true,
+      "baselineStatus": "completed",
+      "status": "completed"
+    },
+    {
+      "documentId": "d-nips09_2",
+      "regionsIdentical": true,
+      "objectGroupsIdentical": true,
+      "baselineStatus": "completed",
+      "status": "completed"
+    },
+    {
+      "documentId": "d-nips10_1",
+      "regionsIdentical": true,
+      "objectGroupsIdentical": true,
+      "baselineStatus": "completed",
+      "status": "completed"
+    },
+    {
+      "documentId": "d-nips11_1",
+      "regionsIdentical": true,
+      "objectGroupsIdentical": true,
+      "baselineStatus": "completed",
+      "status": "completed"
+    },
+    {
+      "documentId": "d-nips12_1",
+      "regionsIdentical": true,
+      "objectGroupsIdentical": true,
+      "baselineStatus": "completed",
+      "status": "completed"
+    },
+    {
+      "documentId": "d-nips13_1",
+      "regionsIdentical": true,
+      "objectGroupsIdentical": true,
+      "baselineStatus": "completed",
+      "status": "completed"
+    },
+    {
+      "documentId": "e-icml10_7",
+      "regionsIdentical": true,
+      "objectGroupsIdentical": true,
+      "baselineStatus": "completed",
+      "status": "completed"
+    },
+    {
+      "documentId": "e-icml10_9",
+      "regionsIdentical": true,
+      "objectGroupsIdentical": true,
+      "baselineStatus": "completed",
+      "status": "completed"
+    },
+    {
+      "documentId": "e-icml10_10",
+      "regionsIdentical": true,
+      "objectGroupsIdentical": true,
+      "baselineStatus": "completed",
+      "status": "completed"
+    },
+    {
+      "documentId": "e-icml11_3",
+      "regionsIdentical": true,
+      "objectGroupsIdentical": true,
+      "baselineStatus": "completed",
+      "status": "completed"
+    },
+    {
+      "documentId": "e-icml11_4",
+      "regionsIdentical": true,
+      "objectGroupsIdentical": true,
+      "baselineStatus": "completed",
+      "status": "completed"
+    },
+    {
+      "documentId": "e-icml11_5",
+      "regionsIdentical": true,
+      "objectGroupsIdentical": true,
+      "baselineStatus": "completed",
+      "status": "completed"
+    },
+    {
+      "documentId": "e-nips09_3",
+      "regionsIdentical": true,
+      "objectGroupsIdentical": true,
+      "baselineStatus": "completed",
+      "status": "completed"
+    },
+    {
+      "documentId": "e-nips09_4",
+      "regionsIdentical": true,
+      "objectGroupsIdentical": true,
+      "baselineStatus": "completed",
+      "status": "completed"
+    },
+    {
+      "documentId": "e-nips09_5",
+      "regionsIdentical": true,
+      "objectGroupsIdentical": true,
+      "baselineStatus": "completed",
+      "status": "completed"
+    },
+    {
+      "documentId": "e-nips09_6",
+      "regionsIdentical": true,
+      "objectGroupsIdentical": true,
+      "baselineStatus": "completed",
+      "status": "completed"
+    },
+    {
+      "documentId": "e-nips09_7",
+      "regionsIdentical": true,
+      "objectGroupsIdentical": true,
+      "baselineStatus": "completed",
+      "status": "completed"
+    },
+    {
+      "documentId": "e-nips09_8",
+      "regionsIdentical": true,
+      "objectGroupsIdentical": true,
+      "baselineStatus": "completed",
+      "status": "completed"
+    }
+  ],
+  "profiles": [
+    {
+      "name": "default",
+      "completed": 34,
+      "paired": 98,
+      "measured": 108,
+      "changedDocuments": [],
+      "profile": {
+        "version": 1,
+        "rules": {
+          "unruledTables": {
+            "enabled": true,
+            "minRows": 3,
+            "minColumns": 2
+          },
+          "graphicLabels": {
+            "enabled": true,
+            "maxFontSizeEm": 1.4,
+            "maxGapEm": 0.8
+          },
+          "ruledTables": {
+            "enabled": true,
+            "endpointToleranceEm": 0.2
+          },
+          "compoundPanels": {
+            "enabled": true,
+            "maxGapEm": 1.5,
+            "minOverlapRatio": 0.4
+          }
+        },
+        "association": {
+          "maxDistanceLines": 5,
+          "minWidthEm": 3,
+          "minHeightEm": 2
+        }
+      },
+      "fingerprint": "[1,1,1,[\"unruledTables\",1,{\"enabled\":true,\"minRows\":3,\"minColumns\":2}],[\"graphicLabels\",1,{\"enabled\":true,\"maxFontSizeEm\":1.4,\"maxGapEm\":0.8}],[\"ruledTables\",1,{\"enabled\":true,\"endpointToleranceEm\":0.2}],[\"compoundPanels\",1,{\"enabled\":true,\"maxGapEm\":1.5,\"minOverlapRatio\":0.4}],{\"maxDistanceLines\":5,\"minWidthEm\":3,\"minHeightEm\":2}]",
+      "outputs": {
+        "observations": {
+          "path": "/home/han/.omp/experiments/neo-local-rule-core.O3915U/default-safety-v1-observations.json",
+          "sha256": "8f742017a5c1c60db3f207c66e4e6fbc6c58f9007d38c1182344bfae64aeb0f4"
+        },
+        "diagnostics": {
+          "path": "/home/han/.omp/experiments/neo-local-rule-core.O3915U/default-safety-v1-diagnostics.json",
+          "sha256": "70fbba40ee60327724ecc99a1fe49c834549a13736af18d783fcfa871c9172e2"
+        },
+        "evaluation": {
+          "path": "/home/han/.omp/experiments/neo-local-rule-core.O3915U/default-safety-v1-evaluation.json",
+          "sha256": "eed448262b7dc483ea6c4379aabe28c193ceb177169f2a31fdf6fdbe4652aefe"
+        }
+      }
+    },
+    {
+      "name": "no-unruled-tables",
+      "completed": 34,
+      "paired": 90,
+      "measured": 108,
+      "changedDocuments": [
+        "c-icml10_3",
+        "c-icml10_4",
+        "c-icml13_2",
+        "c-icml13_3",
+        "c-icml13_4",
+        "c-icml13_6",
+        "c-icml14_9",
+        "d-icml14_1",
+        "d-nips11_1",
+        "d-nips13_1",
+        "e-icml10_10",
+        "e-nips09_6"
+      ],
+      "profile": {
+        "version": 1,
+        "rules": {
+          "unruledTables": {
+            "enabled": false,
+            "minRows": 3,
+            "minColumns": 2
+          },
+          "graphicLabels": {
+            "enabled": true,
+            "maxFontSizeEm": 1.4,
+            "maxGapEm": 0.8
+          },
+          "ruledTables": {
+            "enabled": true,
+            "endpointToleranceEm": 0.2
+          },
+          "compoundPanels": {
+            "enabled": true,
+            "maxGapEm": 1.5,
+            "minOverlapRatio": 0.4
+          }
+        },
+        "association": {
+          "maxDistanceLines": 5,
+          "minWidthEm": 3,
+          "minHeightEm": 2
+        }
+      },
+      "fingerprint": "[1,1,1,[\"unruledTables\",1,{\"enabled\":false,\"minRows\":3,\"minColumns\":2}],[\"graphicLabels\",1,{\"enabled\":true,\"maxFontSizeEm\":1.4,\"maxGapEm\":0.8}],[\"ruledTables\",1,{\"enabled\":true,\"endpointToleranceEm\":0.2}],[\"compoundPanels\",1,{\"enabled\":true,\"maxGapEm\":1.5,\"minOverlapRatio\":0.4}],{\"maxDistanceLines\":5,\"minWidthEm\":3,\"minHeightEm\":2}]",
+      "outputs": {
+        "observations": {
+          "path": "/home/han/.omp/experiments/neo-local-rule-core.O3915U/no-unruled-tables-safety-v1-observations.json",
+          "sha256": "5556a030d9cb7e9c00afbec0136812b38ef61d2dc9c348802550b2dc9f8756d3"
+        },
+        "diagnostics": {
+          "path": "/home/han/.omp/experiments/neo-local-rule-core.O3915U/no-unruled-tables-safety-v1-diagnostics.json",
+          "sha256": "62b5884cfb0853eac5773c30c67879a1fd629c3028301995adf95ea3e6276437"
+        },
+        "evaluation": {
+          "path": "/home/han/.omp/experiments/neo-local-rule-core.O3915U/no-unruled-tables-safety-v1-evaluation.json",
+          "sha256": "e521f17b6b5ab30cbcdc3e91f24a8997da8912384c6b7945fd9a1e7048fcbec9"
+        }
+      }
+    },
+    {
+      "name": "no-graphic-labels",
+      "completed": 34,
+      "paired": 89,
+      "measured": 108,
+      "changedDocuments": [
+        "c-icml10_3",
+        "c-icml10_4",
+        "c-icml10_5",
+        "c-icml13_2",
+        "c-icml13_3",
+        "c-icml13_4",
+        "c-icml13_6",
+        "c-icml13_8",
+        "c-icml14_9",
+        "d-icml10_1",
+        "d-icml10_2",
+        "d-icml10_6",
+        "d-icml13_1",
+        "d-icml13_5",
+        "d-icml14_1",
+        "d-nips09_1",
+        "d-nips10_1",
+        "d-nips12_1",
+        "d-nips13_1",
+        "e-icml10_7",
+        "e-icml10_9",
+        "e-icml10_10",
+        "e-icml11_3",
+        "e-icml11_4",
+        "e-icml11_5",
+        "e-nips09_3",
+        "e-nips09_4",
+        "e-nips09_5",
+        "e-nips09_6",
+        "e-nips09_7",
+        "e-nips09_8"
+      ],
+      "profile": {
+        "version": 1,
+        "rules": {
+          "unruledTables": {
+            "enabled": true,
+            "minRows": 3,
+            "minColumns": 2
+          },
+          "graphicLabels": {
+            "enabled": false,
+            "maxFontSizeEm": 1.4,
+            "maxGapEm": 0.8
+          },
+          "ruledTables": {
+            "enabled": true,
+            "endpointToleranceEm": 0.2
+          },
+          "compoundPanels": {
+            "enabled": true,
+            "maxGapEm": 1.5,
+            "minOverlapRatio": 0.4
+          }
+        },
+        "association": {
+          "maxDistanceLines": 5,
+          "minWidthEm": 3,
+          "minHeightEm": 2
+        }
+      },
+      "fingerprint": "[1,1,1,[\"unruledTables\",1,{\"enabled\":true,\"minRows\":3,\"minColumns\":2}],[\"graphicLabels\",1,{\"enabled\":false,\"maxFontSizeEm\":1.4,\"maxGapEm\":0.8}],[\"ruledTables\",1,{\"enabled\":true,\"endpointToleranceEm\":0.2}],[\"compoundPanels\",1,{\"enabled\":true,\"maxGapEm\":1.5,\"minOverlapRatio\":0.4}],{\"maxDistanceLines\":5,\"minWidthEm\":3,\"minHeightEm\":2}]",
+      "outputs": {
+        "observations": {
+          "path": "/home/han/.omp/experiments/neo-local-rule-core.O3915U/no-graphic-labels-safety-v1-observations.json",
+          "sha256": "1d45d9dae31572c610f140088f12de1f6ce8f574b835c1d3fc6202cd84eedfe7"
+        },
+        "diagnostics": {
+          "path": "/home/han/.omp/experiments/neo-local-rule-core.O3915U/no-graphic-labels-safety-v1-diagnostics.json",
+          "sha256": "1d4b42f7adba1daa5d25023608e748ec3ecce24281d62899a9145d7f61323c5a"
+        },
+        "evaluation": {
+          "path": "/home/han/.omp/experiments/neo-local-rule-core.O3915U/no-graphic-labels-safety-v1-evaluation.json",
+          "sha256": "d6cdbf947053c3751b12fa8033aad8b878083f82b5da1ff54cb73bd9a3784a48"
+        }
+      }
+    },
+    {
+      "name": "no-ruled-tables",
+      "completed": 34,
+      "paired": 96,
+      "measured": 108,
+      "changedDocuments": [
+        "c-icml10_5",
+        "c-icml13_6",
+        "c-icml13_8",
+        "d-icml10_6",
+        "d-icml13_1",
+        "d-icml13_5",
+        "e-icml10_9",
+        "e-nips09_5",
+        "e-nips09_6"
+      ],
+      "profile": {
+        "version": 1,
+        "rules": {
+          "unruledTables": {
+            "enabled": true,
+            "minRows": 3,
+            "minColumns": 2
+          },
+          "graphicLabels": {
+            "enabled": true,
+            "maxFontSizeEm": 1.4,
+            "maxGapEm": 0.8
+          },
+          "ruledTables": {
+            "enabled": false,
+            "endpointToleranceEm": 0.2
+          },
+          "compoundPanels": {
+            "enabled": true,
+            "maxGapEm": 1.5,
+            "minOverlapRatio": 0.4
+          }
+        },
+        "association": {
+          "maxDistanceLines": 5,
+          "minWidthEm": 3,
+          "minHeightEm": 2
+        }
+      },
+      "fingerprint": "[1,1,1,[\"unruledTables\",1,{\"enabled\":true,\"minRows\":3,\"minColumns\":2}],[\"graphicLabels\",1,{\"enabled\":true,\"maxFontSizeEm\":1.4,\"maxGapEm\":0.8}],[\"ruledTables\",1,{\"enabled\":false,\"endpointToleranceEm\":0.2}],[\"compoundPanels\",1,{\"enabled\":true,\"maxGapEm\":1.5,\"minOverlapRatio\":0.4}],{\"maxDistanceLines\":5,\"minWidthEm\":3,\"minHeightEm\":2}]",
+      "outputs": {
+        "observations": {
+          "path": "/home/han/.omp/experiments/neo-local-rule-core.O3915U/no-ruled-tables-safety-v1-observations.json",
+          "sha256": "b4636efaf02c4a64a251704484606eb919511986ee9e7d4b94d466de8ca8062d"
+        },
+        "diagnostics": {
+          "path": "/home/han/.omp/experiments/neo-local-rule-core.O3915U/no-ruled-tables-safety-v1-diagnostics.json",
+          "sha256": "62aca60bff78fc692492d27dcafc666a5a95fb81cbb24af75e56e662dc6aede0"
+        },
+        "evaluation": {
+          "path": "/home/han/.omp/experiments/neo-local-rule-core.O3915U/no-ruled-tables-safety-v1-evaluation.json",
+          "sha256": "b76f61d0c157b9b6f9f6b1e84f1194cc812f5a843cdb0c68e7b9de15095ca468"
+        }
+      }
+    },
+    {
+      "name": "no-compound-panels",
+      "completed": 34,
+      "paired": 75,
+      "measured": 108,
+      "changedDocuments": [
+        "c-icml10_4",
+        "c-icml10_5",
+        "c-icml13_2",
+        "c-icml13_3",
+        "c-icml13_8",
+        "c-icml14_9",
+        "d-icml10_1",
+        "d-icml10_2",
+        "d-icml10_6",
+        "d-nips09_1",
+        "d-nips10_1",
+        "d-nips12_1",
+        "d-nips13_1",
+        "e-icml10_7",
+        "e-icml10_9",
+        "e-icml10_10",
+        "e-icml11_4",
+        "e-nips09_3",
+        "e-nips09_4",
+        "e-nips09_5",
+        "e-nips09_6",
+        "e-nips09_8"
+      ],
+      "profile": {
+        "version": 1,
+        "rules": {
+          "unruledTables": {
+            "enabled": true,
+            "minRows": 3,
+            "minColumns": 2
+          },
+          "graphicLabels": {
+            "enabled": true,
+            "maxFontSizeEm": 1.4,
+            "maxGapEm": 0.8
+          },
+          "ruledTables": {
+            "enabled": true,
+            "endpointToleranceEm": 0.2
+          },
+          "compoundPanels": {
+            "enabled": false,
+            "maxGapEm": 1.5,
+            "minOverlapRatio": 0.4
+          }
+        },
+        "association": {
+          "maxDistanceLines": 5,
+          "minWidthEm": 3,
+          "minHeightEm": 2
+        }
+      },
+      "fingerprint": "[1,1,1,[\"unruledTables\",1,{\"enabled\":true,\"minRows\":3,\"minColumns\":2}],[\"graphicLabels\",1,{\"enabled\":true,\"maxFontSizeEm\":1.4,\"maxGapEm\":0.8}],[\"ruledTables\",1,{\"enabled\":true,\"endpointToleranceEm\":0.2}],[\"compoundPanels\",1,{\"enabled\":false,\"maxGapEm\":1.5,\"minOverlapRatio\":0.4}],{\"maxDistanceLines\":5,\"minWidthEm\":3,\"minHeightEm\":2}]",
+      "outputs": {
+        "observations": {
+          "path": "/home/han/.omp/experiments/neo-local-rule-core.O3915U/no-compound-panels-safety-v1-observations.json",
+          "sha256": "1ca7d3779ab5c4472f3638d990c56c31b6341d59f8905737e5e0d1184ed6fe79"
+        },
+        "diagnostics": {
+          "path": "/home/han/.omp/experiments/neo-local-rule-core.O3915U/no-compound-panels-safety-v1-diagnostics.json",
+          "sha256": "be6b55352d5d3da5ca2037a4988bb2d699ac654af98f3374af7ffa128efc06b4"
+        },
+        "evaluation": {
+          "path": "/home/han/.omp/experiments/neo-local-rule-core.O3915U/no-compound-panels-safety-v1-evaluation.json",
+          "sha256": "8e2c12bb3b01e8a0a16112fa5c5e6b7b607c8cc6a9084df043f2fe993fcdef34"
+        }
+      }
+    },
+    {
+      "name": "near-captions",
+      "completed": 34,
+      "paired": 96,
+      "measured": 108,
+      "changedDocuments": [
+        "c-icml14_9",
+        "d-nips13_1",
+        "e-icml10_9",
+        "e-icml10_10",
+        "e-nips09_4",
+        "e-nips09_6"
+      ],
+      "profile": {
+        "version": 1,
+        "rules": {
+          "unruledTables": {
+            "enabled": true,
+            "minRows": 3,
+            "minColumns": 2
+          },
+          "graphicLabels": {
+            "enabled": true,
+            "maxFontSizeEm": 1.4,
+            "maxGapEm": 0.8
+          },
+          "ruledTables": {
+            "enabled": true,
+            "endpointToleranceEm": 0.2
+          },
+          "compoundPanels": {
+            "enabled": true,
+            "maxGapEm": 1.5,
+            "minOverlapRatio": 0.4
+          }
+        },
+        "association": {
+          "maxDistanceLines": 2,
+          "minWidthEm": 3,
+          "minHeightEm": 2
+        }
+      },
+      "fingerprint": "[1,1,1,[\"unruledTables\",1,{\"enabled\":true,\"minRows\":3,\"minColumns\":2}],[\"graphicLabels\",1,{\"enabled\":true,\"maxFontSizeEm\":1.4,\"maxGapEm\":0.8}],[\"ruledTables\",1,{\"enabled\":true,\"endpointToleranceEm\":0.2}],[\"compoundPanels\",1,{\"enabled\":true,\"maxGapEm\":1.5,\"minOverlapRatio\":0.4}],{\"maxDistanceLines\":2,\"minWidthEm\":3,\"minHeightEm\":2}]",
+      "outputs": {
+        "observations": {
+          "path": "/home/han/.omp/experiments/neo-local-rule-core.O3915U/near-captions-safety-v1-observations.json",
+          "sha256": "c04243f88dd9de9133da9fb75732498887665fce9fc6cf4952cb930112138f49"
+        },
+        "diagnostics": {
+          "path": "/home/han/.omp/experiments/neo-local-rule-core.O3915U/near-captions-safety-v1-diagnostics.json",
+          "sha256": "041cb5b3af309257be9f0207c21adb006c5723365eb9f6a9ed6a1538f1994c70"
+        },
+        "evaluation": {
+          "path": "/home/han/.omp/experiments/neo-local-rule-core.O3915U/near-captions-safety-v1-evaluation.json",
+          "sha256": "831f00a083f91b06151c26a35676d2f9948312065ae4e23abc73a20b24c7ead9"
+        }
+      }
+    }
+  ],
+  "diagnostics": {
+    "events": 11051,
+    "byRule": {
+      "captions": 358,
+      "paintedComponents": 1447,
+      "ruledTables": 540,
+      "graphicLabels": 7382,
+      "captionAssociation": 979,
+      "compoundPanels": 213,
+      "unruledTables": 130,
+      "ownership": 2
+    },
+    "byOutcome": {
+      "rejected": 600,
+      "candidate": 6402,
+      "accepted": 3982,
+      "ambiguous": 67
+    }
+  },
+  "regressions": {
+    "command": "npx vitest run tests/unit/local-rule-behavior.test.ts tests/unit/ai-qa-reader-application.test.ts tests/contract/local-rule-replay.test.ts",
+    "result": "25/25 passed; before fixes exactly four new cases failed",
+    "cases": [
+      "较大标签留白不能吞入正文，且保留原先有效主体与未归属文字",
+      "换行标签仍遵守所选字号上限",
+      "显式空 baseline 不能报告输出相同",
+      "规则配置失效后，末尾异步检查不能重新发布旧上下文"
+    ],
+    "typecheck": "npm run typecheck passed"
+  },
+  "limits": [
+    "C/D 已用于代次 3 调优；E 本轮仅作架构回归，不是新的独立验证。",
+    "已知五个额外题注、九个未关联主体及裁图问题未被这次架构修改解决。",
+    "108 个静态核验点仍未执行逐点实际阅读任务。",
+    "耗时只含分组重放；不用于与完整 PDF 解析或 UI 延迟排名。",
+    "原始 PDF、正文、完整原生输入与诊断事件保留在实验目录；仓库不再分发完整论文。"
+  ]
+}

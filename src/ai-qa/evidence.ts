@@ -257,7 +257,8 @@ export async function readAIQAContext(
     !current() ||
     snapshot.parsed.sourceFingerprint !== capture.source.fingerprint ||
     !(await snapshot.isCurrent()) ||
-    !(await capture.isCurrent())
+    !(await capture.isCurrent()) ||
+    !current()
   )
     throw new AIQAError('stale-source');
   return projectContext(snapshot, options.sectionID, options.selection, options.pageIndex);

@@ -1,6 +1,11 @@
 import { CleanupFailure, type Cleanup } from '../../core/cleanup';
 import type { PreferenceStore } from '../../core/preference-store';
-import { DOCUMENT_PROVIDER_KEY, selectedDocumentProvider } from '../../document-analysis/settings';
+import {
+  DOCUMENT_PROVIDER_KEY,
+  LOCAL_RULES_KEY,
+  OXR_ENDPOINT_KEY,
+  selectedDocumentProvider,
+} from '../../document-analysis/settings';
 import { isDeadObject } from '../../platform/cross-compartment';
 import { asElement } from '../../platform/dom';
 import { readSettledMinerUToken, saveMinerUToken } from '../../platform/document-credentials';
@@ -179,13 +184,21 @@ export class DocumentPreparationController implements DocumentPreparationPort {
     });
     view.react = react;
     unsubscribe = this.queue.subscribe(() => this.#render(view));
-    unobserve =
-      this.#preferences.observe?.(DOCUMENT_PROVIDER_KEY, () => {
+    const stopPreferences: (() => void)[] = [];
+    for (const key of [DOCUMENT_PROVIDER_KEY, OXR_ENDPOINT_KEY, LOCAL_RULES_KEY]) {
+      const stop = this.#preferences.observe?.(key, () => {
         view.credentialPrefillRevision++;
         this.#retireCredentialCheck(view);
         if (!view.credentialStorageError) view.credentialStatus = '';
         this.#render(view);
-      }) ?? (() => {});
+      });
+      if (stop) stopPreferences.push(stop);
+    }
+    unobserve = () => {
+      const failure = new CleanupFailure();
+      for (const stop of stopPreferences) failure.run(stop);
+      failure.rethrow();
+    };
     root.addEventListener('keydown', (event) => this.handleKey(event));
     host.window.addEventListener('unload', unload, { once: true });
     this.#render(view);

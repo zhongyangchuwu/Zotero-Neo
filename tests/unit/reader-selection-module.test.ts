@@ -6,8 +6,18 @@ import {
 } from '../../src/modules/reader-selection';
 import type { PdfWindow, ReaderMode } from '../../src/reader/types';
 import type { ReaderRuntime } from '../fixtures/reader-native-types';
+import { LOCAL_RULES_KEY, LocalRuleConfigurationError } from '../../src/document-analysis/settings';
+
+const documents = vi.hoisted(() => ({ cache: vi.fn(), native: vi.fn() }));
+vi.mock('../../src/reader/document-cache', () => ({
+  readReaderDocumentCache: documents.cache,
+  readReaderDocument: async () => null,
+  readNativeReaderDocument: documents.native,
+}));
 
 beforeEach(() => {
+  documents.cache.mockReset();
+  documents.native.mockReset().mockResolvedValue(null);
   vi.stubGlobal('Components', {
     utils: { isDeadWrapper: () => false, cloneInto: <T>(value: T): T => value },
   });
@@ -53,10 +63,19 @@ function selectionModule() {
     },
   } as unknown as ReaderRuntime;
   const host = new ModuleHost({ debug: vi.fn(), diagnostic: vi.fn() }, () => true);
+  const preferenceListeners = new Map<string, Set<() => void>>();
   const ports: ReaderSelectionModulePorts = {
     reader,
     preferences: {
       get: (_key: string, fallback: unknown) => fallback,
+      observe: (key: string, listener: () => void) => {
+        const listeners = preferenceListeners.get(key) ?? new Set<() => void>();
+        listeners.add(listener);
+        preferenceListeners.set(key, listeners);
+        return () => {
+          listeners.delete(listener);
+        };
+      },
     } as ReaderSelectionModulePorts['preferences'],
     activeWindow: () => window,
     isViewCurrent: () => current,
@@ -85,6 +104,8 @@ function selectionModule() {
   return {
     module,
     host,
+    preferenceListeners,
+    ports,
     window,
     copied,
     selection,
@@ -99,6 +120,47 @@ function selectionModule() {
 }
 
 describe('Reader selection module isolation', () => {
+  it('reports invalid profile configuration instead of silently using native body geometry', async () => {
+    vi.useFakeTimers();
+    const fixture = selectionModule();
+    fixture.ports.setMode('normal');
+    documents.cache.mockRejectedValueOnce(
+      new LocalRuleConfigurationError('Invalid local rule profile'),
+    );
+    fixture.module.executeAction('toggleBodySelection', fixture.window);
+    await vi.advanceTimersByTimeAsync(0);
+    expect(fixture.ports.debug).toHaveBeenCalledWith(
+      expect.stringContaining('Invalid local rule profile'),
+    );
+    expect(documents.native).not.toHaveBeenCalled();
+    expect(fixture.ports.showStatus).toHaveBeenCalledTimes(2);
+    fixture.host.dispose();
+  });
+
+  it('retires pending body selection on a profile edit and releases its observer with the module', async () => {
+    vi.useFakeTimers();
+    const fixture = selectionModule();
+    fixture.ports.setMode('normal');
+    const gate = Promise.withResolvers<unknown>();
+    documents.cache.mockReturnValueOnce(gate.promise);
+    fixture.module.executeAction('toggleBodySelection', fixture.window);
+    expect(documents.cache).toHaveBeenCalledOnce();
+    expect(fixture.ports.showStatus).toHaveBeenCalledOnce();
+    for (const listener of fixture.preferenceListeners.get(LOCAL_RULES_KEY) ?? []) listener();
+    const notices = vi.mocked(fixture.ports.showStatus).mock.calls.length;
+    gate.resolve({
+      parsed: { regions: [] },
+      isCurrent: async () => true,
+    });
+    await vi.advanceTimersByTimeAsync(0);
+    expect(fixture.ports.updateIndicator).toHaveBeenCalled();
+    expect(vi.mocked(fixture.ports.showStatus).mock.calls).toHaveLength(notices);
+    fixture.host.dispose();
+    expect(
+      [...fixture.preferenceListeners.values()].every((listeners) => listeners.size === 0),
+    ).toBe(true);
+  });
+
   it('keeps a DOM-free selection snapshot but stops reading or copying after retirement', () => {
     const fixture = selectionModule();
     const snapshot = fixture.module.context();

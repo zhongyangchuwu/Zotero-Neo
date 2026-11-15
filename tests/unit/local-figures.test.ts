@@ -1,12 +1,15 @@
 import { describe, expect, it } from 'vitest';
-import { documentCaptionIdentity } from '../../src/document-analysis/caption-identity';
-import type { DocumentRect, DocumentRegion } from '../../src/document-analysis/contracts';
+import type {
+  LocalRuleRect as DocumentRect,
+  LocalRuleRegion as DocumentRegion,
+} from '../../src/document-analysis/local-rules';
 import {
+  documentCaptionIdentity,
   localDocumentRegions,
   localFigureRegions,
   type LocalFigurePage,
   type LocalFigureText,
-} from '../../src/document-analysis/local-figures';
+} from '../../src/document-analysis/local-rules';
 
 function text(content: string, rect: DocumentRect, fontSize = 10): LocalFigureText {
   return { text: content, rect, fontSize };

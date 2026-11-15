@@ -66,8 +66,10 @@ import { COMPARISON_BACKDROP_STYLE, COMPARISON_PANEL_STYLE } from '../../ui/reac
 import {
   DOCUMENT_PROVIDER_KEY,
   OXR_ENDPOINT_KEY,
+  LOCAL_RULES_KEY,
   selectedDocumentCacheKey,
   selectedDocumentProvider,
+  selectedLocalRuleProfile,
   type DocumentProvider,
   DEFAULT_OXR_ENDPOINT,
 } from '../../document-analysis/settings';
@@ -121,7 +123,8 @@ interface ComparisonView {
   react?: NativeReactView<DocumentComparisonModel>;
   stopObserving?: () => void;
   readonly stopPreferences: (() => void)[];
-  preferenceSlot: string;
+  preferenceSlot: string | undefined;
+  preferenceRules: string;
   preferenceWrite?: boolean;
   title: string;
   locations: Map<string, DocumentLocation>;
@@ -164,6 +167,15 @@ export class ReaderDocumentComparison {
       this.#host.isCurrent() &&
       view.root.isConnected
     );
+  }
+
+  /** Invalid local settings have no cache slot; the parse/cache task reports the configuration error. */
+  #selectedSlot(): string | undefined {
+    try {
+      return documentCacheSlot(selectedDocumentCacheKey(this.#host.preferences));
+    } catch {
+      return undefined;
+    }
   }
 
   open(): void {
@@ -222,7 +234,8 @@ export class ReaderDocumentComparison {
       corrections: new Map(),
       regionPages: new Map(),
       stopPreferences: [],
-      preferenceSlot: documentCacheSlot(selectedDocumentCacheKey(this.#host.preferences)),
+      preferenceSlot: this.#selectedSlot(),
+      preferenceRules: this.#host.preferences.get(LOCAL_RULES_KEY, ''),
       title: this.#text('title'),
       locations: new Map(),
       cloudRevision: 0,
@@ -234,7 +247,7 @@ export class ReaderDocumentComparison {
       if (this.#current(view) && !view.cloudPending && !view.correctionPending)
         void this.#refreshCorrections(view);
     });
-    for (const key of [DOCUMENT_PROVIDER_KEY, OXR_ENDPOINT_KEY]) {
+    for (const key of [DOCUMENT_PROVIDER_KEY, OXR_ENDPOINT_KEY, LOCAL_RULES_KEY]) {
       const stop = this.#host.preferences.observe?.(key, () => this.#selectedServiceChanged(view));
       if (stop) view.stopPreferences.push(stop);
     }
@@ -361,7 +374,8 @@ export class ReaderDocumentComparison {
     view.preferenceWrite = true;
     try {
       this.#host.preferences.set(key, value);
-      view.preferenceSlot = documentCacheSlot(selectedDocumentCacheKey(this.#host.preferences));
+      view.preferenceSlot = this.#selectedSlot();
+      view.preferenceRules = this.#host.preferences.get(LOCAL_RULES_KEY, '');
     } finally {
       view.preferenceWrite = false;
     }
@@ -369,9 +383,11 @@ export class ReaderDocumentComparison {
 
   #selectedServiceChanged(view: ComparisonView): void {
     if (!this.#current(view) || view.preferenceWrite) return;
-    const slot = documentCacheSlot(selectedDocumentCacheKey(this.#host.preferences));
-    if (slot === view.preferenceSlot) return;
+    const slot = this.#selectedSlot();
+    const rules = this.#host.preferences.get(LOCAL_RULES_KEY, '');
+    if (slot === view.preferenceSlot && rules === view.preferenceRules) return;
     view.preferenceSlot = slot;
+    view.preferenceRules = rules;
     // Retire old reads/writes and their controls immediately. Reload remains an explicit local lookup/parse action.
     view.cloudRevision++;
     view.provider.value = selectedDocumentProvider(this.#host.preferences);
@@ -382,6 +398,13 @@ export class ReaderDocumentComparison {
     view.corrections.delete(1);
     view.regionPages.delete(1);
     view.cloudNotice = this.#text('corrections.changed');
+    if (slot === undefined) {
+      try {
+        selectedDocumentCacheKey(this.#host.preferences);
+      } catch (error) {
+        view.cloudNotice = String(error);
+      }
+    }
     this.#busy(view, false);
     void this.#loadCredential(view);
     view.status.textContent = view.cloudNotice;
@@ -644,13 +667,15 @@ export class ReaderDocumentComparison {
 
   #parser(view: ComparisonView, credential = ''): DocumentParser {
     if (view.provider.value === 'local')
-      return localDocumentParser((signal) =>
-        pdfSourceFigurePages(
-          () => view.prepared!.pdf.read(),
-          signal,
-          view.prepared!.source.pages.length,
-          () => this.#current(view),
-        ),
+      return localDocumentParser(
+        (signal) =>
+          pdfSourceFigurePages(
+            () => view.prepared!.pdf.read(),
+            signal,
+            view.prepared!.source.pages.length,
+            () => this.#current(view),
+          ),
+        selectedLocalRuleProfile(this.#host.preferences),
       );
     if (view.provider.value === 'mineru')
       return mineruDocumentParser({
@@ -673,6 +698,7 @@ export class ReaderDocumentComparison {
   }
 
   #cloudCurrent(view: ComparisonView, revision: number): boolean {
+    this.#selectedServiceChanged(view);
     return this.#current(view) && view.cloudRevision === revision;
   }
 
@@ -723,10 +749,11 @@ export class ReaderDocumentComparison {
         view.cloudNotice = this.#text('cacheMiss');
         view.status.textContent = view.cloudNotice;
       }
-    } catch {
+    } catch (error) {
       if (this.#cloudCurrent(view, revision)) {
         this.#host.debug('Document analysis cache lookup unavailable');
-        view.cloudNotice = this.#text('cacheUnavailable');
+        view.cloudNotice =
+          view.provider.value === 'local' ? String(error) : this.#text('cacheUnavailable');
         view.status.textContent = view.cloudNotice;
       }
     }
@@ -863,8 +890,8 @@ export class ReaderDocumentComparison {
       view.corrections.get(command.column) === source &&
       (command.column === 0 ||
         (view.cloudRevision === revision &&
-          documentCacheSlot(selectedDocumentCacheKey(this.#host.preferences)) ===
-            documentCacheSlot(source.key)));
+          this.#selectedSlot() === documentCacheSlot(source.key) &&
+          view.preferenceRules === this.#host.preferences.get(LOCAL_RULES_KEY, '')));
     const current = async (): Promise<boolean> => {
       if (!owned() || !(await prepared.pdf.isCurrent()) || !owned()) return false;
       let raw: ParsedDocument | undefined;

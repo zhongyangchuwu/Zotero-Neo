@@ -1,4 +1,4 @@
-import { documentCaptionIdentity } from './caption-identity';
+import { documentCaptionIdentity } from './local-rules';
 import type {
   DocumentLocation,
   DocumentObjectGroup,

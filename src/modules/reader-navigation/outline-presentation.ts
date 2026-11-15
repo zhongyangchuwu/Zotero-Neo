@@ -1,4 +1,4 @@
-import { documentCaptionIdentity } from '../../document-analysis/caption-identity';
+import { documentCaptionIdentity } from '../../document-analysis/local-rules';
 
 const NUMBERED_HEADING = /^\s*(\d+(?:\.\d+)*)(?:[.)、])?\s+\S/;
 

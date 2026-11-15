@@ -97,7 +97,28 @@ npm run quality:evaluate -- \
 
 ## 已测本地规则
 
-当前本地规则使用适配器代次 3，C/D 用于回归与校准，E 用于实现冻结后的独立验证。通过要求主体和题注 IoU 均 ≥ 0.5。逐项报告分别为 [C](../evidence/document-quality/local-rules-v3-calibration.json)、[D](../evidence/document-quality/local-rules-v3-regression.json) 和 [E](../evidence/document-quality/local-rules-v3-validation.json)；E 的旧版对照见 [`local-rules-v2-holdout-e.json`](../evidence/document-quality/local-rules-v2-holdout-e.json)。
+### 代次 4：规则架构回归
+
+当前适配器代次为 4。布局事实、可选规则、题注归属和正文构建拆为纯 TypeScript 内核，配置与诊断用法见[开发指南](DEVELOPMENT.md#本地规则内核与配置)。本轮不调整默认规则以追求更高通过数。
+
+使用代次 3 留存的同一批完整原生文字／绘图几何，回放 C/D/E 的 34 篇文档、293 页。默认组合的完整区域数组和对象组均逐项相同，不仅是评分相同。五组消融分别关闭一个规则或缩短关联距离：
+
+| 规则组合 | 完成回放 | 输出不同的文档 | 配对通过 |
+| --- | --- | --- | --- |
+| 默认组合 | 34/34 | 0/34 | 98/108 |
+| 关闭无框表证据 | 34/34 | 12/34 | 90/108 |
+| 关闭图形文字标签 | 34/34 | 31/34 | 89/108 |
+| 关闭离散横线表证据 | 34/34 | 9/34 | 96/108 |
+| 关闭复合面板带 | 34/34 | 22/34 | 75/108 |
+| `association.maxDistanceLines: 2` | 34/34 | 6/34 | 96/108 |
+
+这些结果证明配置影响真实输出，不构成新的默认值、精确率排名或质量提升。E 在本轮仅作架构回归，不是新的独立验证集；代次 3 已知的五个额外题注、缺失主体和裁图问题仍保留。回放耗时只含分组，不含 PDF 提取和 Reader 初始化。配置、源码／输入哈希、逐文档对照与诊断统计见 [`local-rules-v4-architecture.json`](../evidence/document-quality/local-rules-v4-architecture.json)。
+
+另在 Windows Zotero 10.0.8 的专用配置中，实际打开图表列表并检查一张图的预览，再从解析对照按钮保存默认与关闭无框表的结果。两种配置写入不同槽；错误 JSON 会清除旧组并显示错误，等价默认配置可复用原槽，默认缓存字节保持不变。在途读取遇到配置切换后返回空结果。来源、截图与缓存哈希见 [`local-rules-v4-uat.json`](../evidence/document-quality/local-rules-v4-uat.json)。本轮使用临时加载插件和程序化输入，物理键盘、输入法与重新安装 XPI 未测。
+
+### 代次 3 质量基线
+
+代次 3 的 C/D 用于回归与校准，E 用于实现冻结后的独立验证。通过要求主体和题注 IoU 均 ≥ 0.5。逐项报告分别为 [C](../evidence/document-quality/local-rules-v3-calibration.json)、[D](../evidence/document-quality/local-rules-v3-regression.json) 和 [E](../evidence/document-quality/local-rules-v3-validation.json)；E 的旧版对照见 [`local-rules-v2-holdout-e.json`](../evidence/document-quality/local-rules-v2-holdout-e.json)。
 
 | 语料 | 完成提取的文档 | 代次 2 配对通过 | 代次 3 配对通过 | 代次 3 主体可计算 IoU | 代次 3 主体未关联 |
 | --- | --- | --- | --- | --- | --- |

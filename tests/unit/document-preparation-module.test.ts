@@ -7,6 +7,7 @@ import {
   type PreparationPresentation,
 } from '../../src/modules/document-preparation';
 import type { PreferenceStore } from '../../src/core/preference-store';
+import { DOCUMENT_PROVIDER_KEY, LOCAL_RULES_KEY } from '../../src/document-analysis/settings';
 import type { PreparationRow } from '../../src/document-analysis/preparation';
 import type { PreparationReactModel } from '../../src/modules/document-preparation/react-model';
 import { t } from '../../src/i18n';
@@ -98,25 +99,33 @@ vi.mock('../../src/document-analysis/preparation', () => ({
 
 function preferences(initial = 'mineru') {
   let provider = initial;
-  const listeners = new Set<() => void>();
+  let rules = '';
+  const listeners = new Map<string, Set<() => void>>();
   const store = {
     get: vi.fn((key: string, fallback: unknown) =>
-      key === 'documentAnalysis.provider' ? provider : fallback,
+      key === DOCUMENT_PROVIDER_KEY ? provider : key === LOCAL_RULES_KEY ? rules : fallback,
     ),
     has: vi.fn(() => false),
     set: vi.fn(),
     clear: vi.fn(),
-    observe: vi.fn((_key: string, listener: () => void) => {
-      listeners.add(listener);
-      return () => listeners.delete(listener);
+    observe: vi.fn((key: string, listener: () => void) => {
+      const set = listeners.get(key) ?? new Set<() => void>();
+      set.add(listener);
+      listeners.set(key, set);
+      return () => set.delete(listener);
     }),
   };
   return {
     store: store as unknown as PreferenceStore,
     writes: store.set,
+    listeners,
     change(value: string) {
       provider = value;
-      listeners.forEach((listener) => listener());
+      for (const listener of listeners.get(DOCUMENT_PROVIDER_KEY) ?? []) listener();
+    },
+    changeRules(value: string) {
+      rules = value;
+      for (const listener of listeners.get(LOCAL_RULES_KEY) ?? []) listener();
     },
   };
 }
@@ -309,7 +318,7 @@ describe('preparation credential lifecycle', () => {
     expect(credentials.check).not.toHaveBeenCalled();
   });
 
-  it.each(['edit', 'close', 'replace', 'service'] as const)(
+  it.each(['edit', 'close', 'replace', 'service', 'profile'] as const)(
     'retires explicit verification after %s',
     async (action) => {
       const late = Promise.withResolvers<string>();
@@ -330,6 +339,8 @@ describe('preparation credential lifecycle', () => {
         service.close();
       } else if (action === 'replace') {
         await open();
+      } else if (action === 'profile') {
+        prefs.changeRules('{');
       } else {
         prefs.change('oxr');
       }
@@ -344,6 +355,7 @@ describe('preparation credential lifecycle', () => {
       ).not.toBe(t('credentials.validation.invalid', 'en'));
       expect(service.queue.run).not.toHaveBeenCalled();
       service.close();
+      expect([...prefs.listeners.values()].every((listeners) => listeners.size === 0)).toBe(true);
     },
   );
 

@@ -1,6 +1,6 @@
 import { describe, expect, it } from 'vitest';
 import { analyzeDocument } from '../../src/document-analysis/analyze';
-import { documentCaptionIdentity } from '../../src/document-analysis/caption-identity';
+import { documentCaptionIdentity } from '../../src/document-analysis/local-rules';
 import type {
   DocumentRegion,
   DocumentRect,

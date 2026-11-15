@@ -7,7 +7,11 @@ import { readReaderDocument, type ReaderDocumentSnapshot } from '../../reader/do
 import { readerWindow } from '../../toolkit/reader';
 import { sourceNoteEntries } from '../../toolkit/main';
 import { observeAttachmentDocumentCache } from '../../platform/document-analysis-cache';
-import { DOCUMENT_PROVIDER_KEY, OXR_ENDPOINT_KEY } from '../../document-analysis/settings';
+import {
+  DOCUMENT_PROVIDER_KEY,
+  OXR_ENDPOINT_KEY,
+  LOCAL_RULES_KEY,
+} from '../../document-analysis/settings';
 import { createSourceNote } from '../../operations/source-note';
 import { sourceNoteIdentity, SOURCE_NOTE_IDENTITY_PREFIX } from '../../platform/note-relations';
 import { SearchDialog } from '../../ui/search-dialog';
@@ -47,7 +51,7 @@ export function createChapterNotesModule(
     };
     scope.add(close);
     if (ports.reader.itemID) scope.add(observeAttachmentDocumentCache(ports.reader.itemID, close));
-    for (const key of [DOCUMENT_PROVIDER_KEY, OXR_ENDPOINT_KEY]) {
+    for (const key of [DOCUMENT_PROVIDER_KEY, OXR_ENDPOINT_KEY, LOCAL_RULES_KEY]) {
       const stop = ports.preferences.observe?.(key, close);
       if (stop) scope.add(stop);
     }

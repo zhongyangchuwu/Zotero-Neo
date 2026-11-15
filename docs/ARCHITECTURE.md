@@ -107,6 +107,8 @@ Reader Base 先建立视图和外层输入监听，再在 Navigation 激活事�
 
 解析对照的配置、结果和明确操作由静态 React 视图呈现；PDF 来源校验、服务请求、凭据及迟到结果仍由对照控制器管理，凭据不进入展示模型。
 
+本地无模型规则位于独立的纯 TypeScript 内核 `src/document-analysis/local-rules/`，公开入口接收文字和绘图的纯数据几何，不读取宿主或偏好。候选证据、组件连接和共享归属仲裁分开，正文构建消费明确的文字排除集合。`src/document-analysis/local.ts` 与 Reader 适配负责来源、配置缓存和纠错寿命；规则组合及参数指纹必须贯穿普通读取、显式解析与消费者失效链。配置与扩展约束见[本地规则内核](DEVELOPMENT.md#本地规则内核与配置)。
+
 Reader Surface 保留输入/IME/count/前缀、模式、CurrentTarget、精确视图及共享历史策略，并直接持有 Toolkit 导航宿主。Workspace 的 Reader 实例通过同一宿主处理分屏创建/关闭与方向焦点，普通按键、延迟绑定和 Palette 使用相同实现；原始方向键只在实际成功时消费。Main/Note 通用面板焦点（含 Note Insert）、共享滚动与 `src/reader/native-input.ts` 仍属基座，不依赖 Reader 导航或 Workspace 的业务实现。评论编辑器由批注模块持有，引用上下文控件由 `references` 模块持有；Surface 将两者的精确输入焦点纳入现有原生键盘让出，不新增 Reader mode。`i` 保留评论偏好与 NativeInput 分支，Normal `zb` 按当前批注决定改色或页面底部回退。
 
 `src/modules/reader-selection/` 按 ReaderSession 拥有 Select 范围/垂直 motions、Flash、选择文本复制/搜索和 Selection Actions。每次交互捕获确切 ReaderView、Window 与 Document；旧可用性回调、输入或异步结果不能作用于替换视图。Surface 在接纳新动作或原生选择前先同步旧视图退休，避免较晚扫描清理新取得的资源。范围退出释放 anchor/preferred-X 与样式租约；忙碌面板自己忽略的重复/IME 按键不使其结果失效。

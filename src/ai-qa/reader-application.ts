@@ -5,6 +5,11 @@ import type { SourceNoteReceipt } from '../core/source-note';
 import type { ReaderSelectionContext } from '../core/contracts';
 import type { Logger } from '../core/logging';
 import type { PreferenceStore } from '../core/preference-store';
+import {
+  DOCUMENT_PROVIDER_KEY,
+  OXR_ENDPOINT_KEY,
+  LOCAL_RULES_KEY,
+} from '../document-analysis/settings';
 import { t } from '../i18n';
 import { createAIAbortController } from '../platform/ai-runtime';
 import { readerRegionPreview, type ReaderRuntime } from '../toolkit/reader';
@@ -39,6 +44,7 @@ interface Session {
   readonly port: AIQAReaderTaskPort;
   capture: AIQASourceCapture | null;
   context: AIQAContext | null;
+  contextRevision: number;
   selection: ReaderSelectionContext | null;
   access: AIQAReaderViewAccess | null;
   records: readonly AIQARecord[];
@@ -71,6 +77,7 @@ export class AIQAReaderApplication {
   readonly #preferences: PreferenceStore;
   readonly #logger: Logger;
   readonly #unsubscribe: () => void;
+  readonly #stopPreferences: (() => void)[] = [];
   readonly #sessions = new Map<ReaderRuntime, Session>();
   readonly #preparing = new Map<number, Preparation>();
   readonly #listeners = new Set<(reader: ReaderRuntime) => void>();
@@ -98,6 +105,18 @@ export class AIQAReaderApplication {
         this.#emit(state);
       }
     });
+    for (const key of [DOCUMENT_PROVIDER_KEY, OXR_ENDPOINT_KEY, LOCAL_RULES_KEY]) {
+      const stop = this.#preferences.observe?.(key, () => {
+        for (const preparation of this.#preparing.values()) preparation.abort.abort();
+        for (const state of this.#sessions.values()) {
+          state.contextRevision++;
+          state.operationRevision++;
+          state.context = null;
+          this.#emit(state);
+        }
+      });
+      if (stop) this.#stopPreferences.push(stop);
+    }
   }
 
   register(port: AIQAReaderTaskPort): () => void {
@@ -106,6 +125,7 @@ export class AIQAReaderApplication {
       port,
       capture: null,
       context: null,
+      contextRevision: 0,
       selection: null,
       access: null,
       records: [],
@@ -286,9 +306,11 @@ export class AIQAReaderApplication {
     if (state.pendingLoad) return state.pendingLoad;
     state.loading = true;
     this.#emit(state);
+    const revision = state.contextRevision;
+    const current = (): boolean => this.#current(state) && state.contextRevision === revision;
     const load = async (): Promise<void> => {
       const capture = await captureAIQASource(state.port.reader);
-      if (!this.#current(state)) return;
+      if (!current()) return;
       if (state.capture?.source.fingerprint !== capture.source.fingerprint) {
         state.context = null;
         state.preview = null;
@@ -299,7 +321,7 @@ export class AIQAReaderApplication {
         state.port.reader,
         this.#preferences,
         capture,
-        () => this.#current(state),
+        current,
         {
           prepare: false,
           sectionID: state.context?.sectionID ?? null,
@@ -307,7 +329,7 @@ export class AIQAReaderApplication {
           pageIndex: state.access?.pageIndex ?? null,
         },
       );
-      if (this.#current(state)) state.context = context;
+      if (current()) state.context = context;
     };
     state.pendingLoad = load().finally(() => {
       state.pendingLoad = null;
@@ -391,6 +413,7 @@ export class AIQAReaderApplication {
             pageIndex: invocation.access?.pageIndex ?? null,
           },
         );
+        if (!current()) throw new AIQAError('cancelled');
         if (!context?.evidence.length) throw new AIQAError('unsupported');
         if (
           this.#current(state) &&
@@ -500,11 +523,13 @@ export class AIQAReaderApplication {
         const capture = state.capture;
         if (!capture || !state.context?.sections.some((value) => value.id === command.id))
           throw new AIQAError('unsupported');
-        state.context = await readAIQAContext(
+        const revision = state.contextRevision;
+        const current = (): boolean => this.#current(state) && state.contextRevision === revision;
+        const context = await readAIQAContext(
           state.port.reader,
           this.#preferences,
           capture,
-          () => this.#current(state),
+          current,
           {
             prepare: true,
             sectionID: command.id,
@@ -512,6 +537,7 @@ export class AIQAReaderApplication {
             pageIndex: state.access?.pageIndex ?? null,
           },
         );
+        if (current()) state.context = context;
         return;
       }
       case 'preview':
@@ -620,6 +646,7 @@ export class AIQAReaderApplication {
     this.#preparing.clear();
     for (const state of this.#sessions.values()) failure.run(() => state.previewAbort?.abort());
     failure.run(this.#unsubscribe);
+    for (const stop of this.#stopPreferences) failure.run(stop);
     this.#sessions.clear();
     this.#listeners.clear();
     failure.rethrow();

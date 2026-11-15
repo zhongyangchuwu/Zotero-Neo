@@ -170,6 +170,72 @@ XPI 收录项目 `LICENSE`，以及 `licenses/fuzzysort-LICENSE`、`licenses/ai-
 
 Zotero 管理 Items、视图、标签页、Notes 和 Reader 状态。功能负责目标选择、基数、确认与反馈；Toolkit 负责宿主查找、原生协议、DOM 接缝、跨 compartment 载荷和资源退休。公开 API 能保留行为时优先使用；必要的私有依赖即使经过包装，仍属于私有能力。公开条目 API 和 `src/platform/zotero-items.ts` 可以直接使用，无需逐个套一对一包装。
 
+### 本地规则内核与配置
+
+`src/document-analysis/local-rules/` 是纯 TypeScript 模块。公开入口为 `index.ts`：接收未旋转 PDF 用户坐标中的 `LocalFigurePage[]`，返回纯数据区域；不读取 Zotero、DOM、偏好或磁盘。共享布局事实、题注识别、图形与表格证据、标签、组件连接、题注关联和段落构建各有负责方。段落构建接收明确的文字排除集合，不自行调用图表推断。
+
+候选规则只提供自己的证据、文字成员或组件连接，不修改另一规则的内部集合；共享合并与归属仲裁处理重复和争用。题注／正文阻隔、坐标有效性及歧义退出始终生效，不是可任意关闭的规则。阶段顺序固定，不支持运行时脚本、任意排序或动态插件注册。宿主采集仍在 Toolkit，`local.ts` 负责解析器、来源与缓存适配；所有运行时代码继续静态打入 XPI。
+
+`profile.ts` 定义输入 `LocalRuleOptions` 与解析后的不可变 `LocalRuleProfile`。先调用 `resolveLocalRuleProfile()`，再把同一个 profile 传给 `localFigureRegions()` 或 `localDocumentRegions()`；不要在逐页循环中重新解析配置。所有规则默认开启，参数默认值沿用拆分前的行为：
+
+| 配置 | 参数与默认值 | 控制的行为 |
+| --- | --- | --- |
+| `rules.unruledTables` | `enabled: true`、`minRows: 3`、`minColumns: 2` | 从重复单元格和稳定列识别少线／无框表。行列数须为至少 2 的整数。 |
+| `rules.graphicLabels` | `enabled: true`、`maxFontSizeEm: 1.4`、`maxGapEm: 0.8` | 文字标签归属和图内扩张；不会取消表格规则已证明的单元格归属。 |
+| `rules.ruledTables` | `enabled: true`、`endpointToleranceEm: 0.2` | 连接端点对齐、具有单元格证据的离散横线；关闭不等于隐藏所有表格。 |
+| `rules.compoundPanels` | `enabled: true`、`maxGapEm: 1.5`、`minOverlapRatio: 0.4` | 构建复合图的面板带；关闭后仍不从竞争解释中任取一个。重叠比例范围为 `(0, 1]`。 |
+| `association` | `maxDistanceLines: 5`、`minWidthEm: 3`、`minHeightEm: 2` | 限制题注关联距离及主体最小尺寸。 |
+
+`Em` 按该页估计的文字尺度计算，`Lines` 按估计行距计算，不是屏幕像素。其余数值参数必须为有限正数。未知键、错误类型和不支持的版本均会报错，不忽略拼写错误或静默换用默认规则。
+
+放宽参数不会取消正文／题注阻挡。标签扩张与正文排除共用边界约束，不能借较大留白吞入普通段落；换行标签也受所选字号上限约束。
+
+在 TypeScript 调用方通过公开入口使用配置和可选诊断：
+
+```ts
+import {
+  localDocumentRegions,
+  resolveLocalRuleProfile,
+  type LocalFigurePage,
+  type LocalRuleDiagnostic,
+  type LocalRuleOptions,
+} from './src/document-analysis/local-rules';
+
+export function inspectPages(pages: readonly LocalFigurePage[]) {
+  const options = {
+    version: 1,
+    rules: { unruledTables: { minRows: 4 } },
+  } satisfies LocalRuleOptions;
+  const profile = resolveLocalRuleProfile(options);
+  const diagnostics: LocalRuleDiagnostic[] = [];
+  const regions = localDocumentRegions(pages, profile, (event) => diagnostics.push(event));
+  return { regions, diagnostics };
+}
+```
+
+不传第三个参数时不收集诊断事件。事件中的 `ruleId`、`outcome`、`reason` 和可用的候选／题注引用用于解释候选、正文阻挡、缺少主体及关联争用；没有证据时不能从空结果伪造精确原因。诊断不写入区域缓存，也不作为解析策略的输入。
+
+实际 Reader 使用高级字符串偏好 `extensions.zotero-neo.documentAnalysis.local.rules`，值为上述输入配置的 JSON；空字符串表示默认组合，操作见[设置参考](SETTINGS_REFERENCE.md#本地规则配置高级)。有效参数、启用规则及引擎／几何／规则修订进入规范化指纹，等价 JSON 的缓存身份相同。本地适配器代次为 4；配置变化使在途和已展示结果退休，但普通读取仍不自动保存缓存。旧槽与绑定旧解析身份的纠错保留，不按区域 ID 强行迁移。
+
+#### 回放原生几何与规则消融
+
+`tools/replay-local-rules.mjs` 回放已有的原生几何，不下载 PDF、不调用 Zotero 或模型。输入目录内每篇为 `<documentId>.json`，含 `documentId`、`pdfSha256`、`sourceFingerprint` 和完整的 `pages`；每页含 `pageIndex`、`viewBox`、`text`、`graphics`。此捕获格式限定未旋转坐标，不能用显示截图或公开标注框代替输入证据。文件元数据须与语料清单一致；工具不重新读取 PDF 字节验证身份。
+
+先将 `GEOMETRY_C` 指向已有 C 集捕获目录，并选择尚不存在的输出路径。默认组合示例：
+
+```bash
+node tools/replay-local-rules.mjs \
+  --corpus evidence/document-quality/corpus-c.json \
+  --geometry "$GEOMETRY_C" \
+  --output /tmp/neo-local-default.json
+```
+
+可重复传入 `--corpus`、`--geometry`，合并不重叠的语料。`--profile <JSON文件>` 选择规则配置，`--diagnostics <新文件>` 保存决策事件；`--baseline <旧观测文件>` 可重复传入，逐文档比较完整区域与对象组，不能只比较通过数。工具记录输入／源码／bundle 哈希与实际配置；输出可直接交给现有 `quality:evaluate`。这里的耗时只含分组回放，不是完整解析或 Reader 延迟。
+
+指定 `--baseline` 后，每篇输入都必须有相同 PDF 哈希的旧观测；空或缺失的对照会报错。未指定时明确记录未比较，不把空对照列表视为输出相等。
+
+新增规则先说明适用证据、来源和参数单位，再增加真实行为正例、负例及必要的变换检查。按规则组合消融，分别检查误题注、错误合并、裁图边界与未关联原因；不按论文 ID、题号或 gold 框写分支。固定核验点全过不能代替额外对象审查或未见样本验证，质量口径见[解析质量评测](QUALITY_EVALUATION.md)。
+
 ### 模块基座与启动配置
 
 `src/core/module-host.ts` 提供按 MainWindow 或 ReaderSession 隔离的模块宿主及独立模块作用域。同步激活失败会释放部分资源并保留原错误；动作贡献按 `(BindingContext, ActionId)` 唯一登记，返回有类型的调用入口。退出先使全部回调失效，再完成其余释放，即使某次清理失败也不会中断其他模块。

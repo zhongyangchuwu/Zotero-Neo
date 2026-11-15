@@ -9,7 +9,13 @@ import {
   changeDocumentCorrection,
 } from '../../src/document-analysis/corrections';
 import type { ParsedDocument } from '../../src/document-analysis/contracts';
-import { selectedDocumentCacheKey } from '../../src/document-analysis/settings';
+import {
+  LOCAL_RULES_KEY,
+  selectedDocumentCacheKey,
+  selectedLocalRuleProfile,
+} from '../../src/document-analysis/settings';
+import { localDocumentCacheKey, localDocumentParser } from '../../src/document-analysis/local';
+import { documentCacheSlot } from '../../src/document-analysis/cache';
 import { mineruDocumentCacheKey } from '../../src/document-analysis/mineru';
 import { oxrDocumentCacheKey } from '../../src/document-analysis/oxr';
 import type { PreferenceStore } from '../../src/core/preference-store';
@@ -66,6 +72,17 @@ const parsed: ParsedDocument = {
     },
   ],
 };
+const localPages = [
+  {
+    pageIndex: 0,
+    viewBox: [0, 0, 600, 800] as const,
+    text: [
+      { text: 'Figure 1: A plot.', rect: [100, 350, 400, 362] as const, fontSize: 10 },
+      { text: 'Plot label', rect: [150, 500, 220, 510] as const, fontSize: 10 },
+    ],
+    graphics: [[100, 400, 400, 620] as const],
+  },
+];
 beforeEach(() => {
   vi.resetAllMocks();
   settings.clear();
@@ -96,6 +113,7 @@ beforeEach(() => {
   io.geometry.mockResolvedValue([{ viewRect: [0, 0, 600, 800], rotation: 0 }]);
   io.read.mockResolvedValue({ parsed });
   io.write.mockResolvedValue(true);
+  io.figures.mockResolvedValue(localPages);
 });
 describe('Reader external document cache admission', () => {
   it('shares exact parser cache identities and reads without credentials or parser/network construction', async () => {
@@ -225,17 +243,7 @@ describe('Reader external document cache admission', () => {
       io.read.mockResolvedValue({ parsed });
       return true;
     });
-    io.figures.mockResolvedValue([
-      {
-        pageIndex: 0,
-        viewBox: [0, 0, 600, 800],
-        text: [
-          { text: 'Figure 1: A plot.', rect: [100, 350, 400, 362], fontSize: 10 },
-          { text: 'Plot label', rect: [150, 500, 220, 510], fontSize: 10 },
-        ],
-        graphics: [[100, 400, 400, 620]],
-      },
-    ]);
+    io.figures.mockResolvedValue(localPages);
     const snapshot = await readReaderDocument(reader, preferences, () => true);
     expect(snapshot?.parsed.backend).toBe('local-rules');
     expect(snapshot?.origin).toBe('local');
@@ -253,4 +261,116 @@ describe('Reader external document cache admission', () => {
     expect(cached?.parsed.regions).toEqual(snapshot?.parsed.regions);
     expect(io.figures).toHaveBeenCalledTimes(1);
   });
+
+  it('uses the selected profile for extraction, parser identity, corrections and canonical cache hits', async () => {
+    settings.clear();
+    const records = new Map<string, { parsed: ParsedDocument }>();
+    io.read.mockImplementation(async (_source, key) => records.get(documentCacheSlot(key)) ?? null);
+    const baselineKey = selectedDocumentCacheKey(preferences);
+    expect(baselineKey.adapterVersion).toBe(4);
+    const baseline = await readReaderDocument(reader, preferences, () => true);
+    expect(baseline?.parsed.regions.some((region) => region.kind === 'image')).toBe(true);
+    records.set(documentCacheSlot(baselineKey), { parsed: baseline!.parsed });
+
+    settings.set(LOCAL_RULES_KEY, '{"association":{"minWidthEm":100}}');
+    const selectedKey = selectedDocumentCacheKey(preferences);
+    const profile = selectedLocalRuleProfile(preferences);
+    expect(selectedKey).toEqual(localDocumentCacheKey(profile));
+    expect(localDocumentParser(io.figures, profile).cacheKey).toEqual(selectedKey);
+    expect(selectedKey.configuration).not.toBe(baselineKey.configuration);
+    const changed = await readReaderDocument(reader, preferences, () => true);
+    expect(changed?.origin).toBe('local');
+    expect(changed?.parsed.regions.some((region) => region.kind === 'image')).toBe(false);
+    expect(changed?.parsed.regions.some((region) => region.kind === 'caption')).toBe(true);
+    expect(io.corrections).toHaveBeenLastCalledWith(2, changed!.parsed, selectedKey);
+    expect(await baseline!.isCurrent()).toBe(false);
+    records.set(documentCacheSlot(selectedKey), { parsed: changed!.parsed });
+
+    settings.set(LOCAL_RULES_KEY, '{"version":1,"association":{"minHeightEm":2,"minWidthEm":100}}');
+    expect(selectedDocumentCacheKey(preferences)).toEqual(selectedKey);
+    expect(await changed!.isCurrent()).toBe(false);
+    const reused = await readReaderDocument(reader, preferences, () => true);
+    expect(reused?.origin).toBe('cache');
+    expect(reused?.parsed.regions).toEqual(changed?.parsed.regions);
+    expect(await reused!.isCurrent()).toBe(true);
+    expect(io.figures).toHaveBeenCalledTimes(2);
+    expect(io.write).not.toHaveBeenCalled();
+
+    settings.set(LOCAL_RULES_KEY, '');
+    const original = await readReaderDocument(reader, preferences, () => true);
+    expect(original?.origin).toBe('cache');
+    expect(original?.parsed.regions).toEqual(baseline?.parsed.regions);
+    expect(records.size).toBe(2);
+    expect(io.native).not.toHaveBeenCalled();
+  });
+
+  it.each(['{', '{"rules":{"missingRule":{}}}', '{"association":{"minWidthEm":-1}}'])(
+    'rejects invalid local configuration %s without reading a default cache or extracting',
+    async (rules) => {
+      settings.clear();
+      settings.set(LOCAL_RULES_KEY, rules);
+      expect(() => selectedDocumentCacheKey(preferences)).toThrow();
+      await expect(readReaderDocument(reader, preferences, () => true)).rejects.toThrow();
+      await expect(readReaderDocumentCache(reader, preferences, () => true)).rejects.toThrow();
+      expect(io.read).not.toHaveBeenCalled();
+      expect(io.figures).not.toHaveBeenCalled();
+      expect(io.native).not.toHaveBeenCalled();
+      expect(io.write).not.toHaveBeenCalled();
+    },
+  );
+
+  it.each(['cache', 'local'] as const)(
+    'retires a %s profile snapshot when configuration becomes invalid during PDF validation',
+    async (origin) => {
+      settings.clear();
+      io.read.mockResolvedValue(
+        origin === 'cache' ? { parsed: { ...parsed, backend: 'local-rules' } } : null,
+      );
+      const snapshot = await readReaderDocument(reader, preferences, () => true);
+      expect(snapshot?.origin).toBe(origin);
+      const gate = Promise.withResolvers<boolean>();
+      io.current.mockReturnValueOnce(gate.promise);
+      const checking = snapshot!.isCurrent();
+      settings.set(LOCAL_RULES_KEY, '{');
+      gate.resolve(true);
+      expect(await checking).toBe(false);
+      expect(io.write).not.toHaveBeenCalled();
+    },
+  );
+
+  it.each(['cache', 'geometry', 'corrections'] as const)(
+    'excludes a pending %s result after a profile change',
+    async (stage) => {
+      settings.clear();
+      if (stage === 'geometry') io.read.mockResolvedValue(null);
+      const started = Promise.withResolvers<void>();
+      const gate = Promise.withResolvers<void>();
+      const pause = async () => {
+        started.resolve();
+        await gate.promise;
+      };
+      if (stage === 'cache')
+        io.read.mockImplementationOnce(async () => {
+          await pause();
+          return { parsed: { ...parsed, backend: 'local-rules' } };
+        });
+      else if (stage === 'geometry')
+        io.figures.mockImplementationOnce(async () => {
+          await pause();
+          return localPages;
+        });
+      else
+        io.corrections.mockImplementationOnce(async (_id, raw, key) => {
+          await pause();
+          return emptyDocumentCorrections(raw, key);
+        });
+      const pending = readReaderDocument(reader, preferences, () => true);
+      await started.promise;
+      settings.set(LOCAL_RULES_KEY, '{"rules":{"graphicLabels":{"enabled":false}}}');
+      gate.resolve();
+      expect(await pending).toBeNull();
+      expect(io.native).not.toHaveBeenCalled();
+      expect(io.write).not.toHaveBeenCalled();
+    },
+  );
 });

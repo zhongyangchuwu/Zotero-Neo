@@ -1,4 +1,4 @@
-import { documentCaptionIdentity } from '../../document-analysis/caption-identity';
+import { documentCaptionIdentity } from '../../document-analysis/local-rules';
 import { readerWindow, type ReaderNavigationHost } from '../../toolkit';
 import type { PdfWindow, ReaderRuntime } from '../../reader/types';
 import { outlineEntryKind } from './outline-presentation';
