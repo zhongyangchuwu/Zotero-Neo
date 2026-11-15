@@ -37,7 +37,22 @@ export function tableComponentLabels(
           )) &&
         width(r) >= width(table.rect) * 0.8 &&
         gapY(r, table.rect) <= leading * 1.6;
-      if (!contained && !separator) return;
+      // A connected header rule and column divider has a tall L/T-shaped hull, not the
+      // height of a separator. Its native thin strokes can still prove the same cell grid.
+      const scaffold =
+        contains(table.rect, r, leading * 1.6) &&
+        overlapX(r, table.rect) >= width(table.rect) * 0.8 &&
+        overlapY(r, table.rect) >= height(table.rect) * 0.8 &&
+        group.members.every(
+          (member) => height(member) <= unit * 0.3 || width(member) <= unit * 0.3,
+        ) &&
+        group.members.some(
+          (member) => height(member) <= unit * 0.3 && width(member) >= width(table.rect) * 0.8,
+        ) &&
+        group.members.some(
+          (member) => width(member) <= unit * 0.3 && height(member) >= height(table.rect) * 0.8,
+        );
+      if (!contained && !separator && !scaffold) return;
       const enclosure = bounds([r, table.rect]);
       if (
         captions.some((caption) => intersects(caption.rect, enclosure)) ||

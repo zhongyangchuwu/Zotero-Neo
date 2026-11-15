@@ -1,0 +1,555 @@
+{
+  "schemaVersion": 1,
+  "description": "Corpus F: sealed deterministic independent validation slice of PDFFigures2 Conference150 v2, disjoint by upstream identity and PDF SHA-256 from earlier corpora and prepared sources. Checks are published human figure/table and caption annotations, not extractor predictions or newly corrected gold. Every published annotation on selected pages is included; unannotated objects and other pages are out of scope. Coordinates are unrotated PDF user-space [left, bottom, right, top], pageIndex is zero-based. PDFs are not redistributed.",
+  "documents": [
+    {
+      "id": "f-icml12_4",
+      "title": "A Hierarchical Dirichlet Process Model with Multiple Levels of Clustering for Human EEG Seizure Modeling",
+      "pdf": {
+        "url": "https://icml.cc/2012/papers/49.pdf",
+        "sha256": "d1020179be6b4e343052729e689311993bf54ca15ca59ffa7d89e42cbcd662cd",
+        "fileName": "f-icml12_4.pdf",
+        "license": "Public proceedings PDF; individual copyright and reuse terms apply. Dataset code licensing does not establish permission to redistribute the PDF."
+      },
+      "strata": ["computer-science", "figure"],
+      "annotation": {
+        "kind": "dataset-ground-truth",
+        "sources": [
+          "https://github.com/allenai/pdffigures2/blob/3d7ad46753d4a315cccd1c2bcab398380e88c534/evaluation/datasets/conference/annotations.json",
+          "https://github.com/allenai/pdffigures2/blob/3d7ad46753d4a315cccd1c2bcab398380e88c534/evaluation/datasets/README.md",
+          "https://doi.org/10.1145/2910896.2910904",
+          "http://icml.cc/2012/papers/49.pdf",
+          "https://icml.cc/2012/papers/49.pdf"
+        ],
+        "scope": "PDFFigures2 Conference150 v2 human-marked, foreground-cropped labels. All published figure/table annotations on physical pages 2, 3 are included; other pages are excluded. Captions are upstream transcriptions and can be partial or imperfect. Labels have not been newly rechecked as gold; selected-page coverage is only relative to published annotations."
+      },
+      "checks": [
+        {
+          "id": "figure-2",
+          "kind": "object",
+          "objectKind": "figure",
+          "pageIndex": 2,
+          "text": "Figure 2. The directed graphical model of a 3-level MLC- HDP. The observed value is given in gray, and priors are given as squares.",
+          "captionRect": [307.44, 547.92, 540.72, 578.16],
+          "rect": [351.36, 591.84, 497.52, 725.04]
+        },
+        {
+          "id": "figure-1",
+          "kind": "object",
+          "objectKind": "figure",
+          "pageIndex": 1,
+          "text": "Figure 1. A schematic of the epilepsy data over a popu- lation of patients (level 0), each of whom (level 1) has a variable number of seizures (level 2) and a variable number and unique placement of electrode channels (level 3). We assume that the data cluster at each level, as denoted by",
+          "captionRect": [55.44, 547.92, 288.72, 609.12],
+          "rect": [55.44, 623.52, 287.28, 735.12]
+        }
+      ]
+    },
+    {
+      "id": "f-icml12_5",
+      "title": "A Topic Model for Melodic Sequences",
+      "pdf": {
+        "url": "https://icml.cc/2012/papers/585.pdf",
+        "sha256": "e941d18abc1dd19676f42168008fb7d58ff2e4131efb0a135605eb1840e02ac8",
+        "fileName": "f-icml12_5.pdf",
+        "license": "Public proceedings PDF; individual copyright and reuse terms apply. Dataset code licensing does not establish permission to redistribute the PDF."
+      },
+      "strata": ["computer-science", "figure"],
+      "annotation": {
+        "kind": "dataset-ground-truth",
+        "sources": [
+          "https://github.com/allenai/pdffigures2/blob/3d7ad46753d4a315cccd1c2bcab398380e88c534/evaluation/datasets/conference/annotations.json",
+          "https://github.com/allenai/pdffigures2/blob/3d7ad46753d4a315cccd1c2bcab398380e88c534/evaluation/datasets/README.md",
+          "https://doi.org/10.1145/2910896.2910904",
+          "http://icml.cc/2012/papers/585.pdf",
+          "https://icml.cc/2012/papers/585.pdf"
+        ],
+        "scope": "PDFFigures2 Conference150 v2 human-marked, foreground-cropped labels. All published figure/table annotations on physical pages 2, 3 are included; other pages are excluded. Captions are upstream transcriptions and can be partial or imperfect. Labels have not been newly rechecked as gold; selected-page coverage is only relative to published annotations."
+      },
+      "checks": [
+        {
+          "id": "figure-2",
+          "kind": "object",
+          "objectKind": "figure",
+          "pageIndex": 2,
+          "text": "Figure 2. Graphical models: (a) LDA without the plate notation for words (b) Variable-gram Topic model.",
+          "captionRect": [55.44, 592.56, 288.72, 612.0],
+          "rect": [55.44, 624.24, 289.44, 725.04]
+        },
+        {
+          "id": "figure-1",
+          "kind": "object",
+          "objectKind": "figure",
+          "pageIndex": 1,
+          "text": "Figure 1. An example Dirichlet-VMM tree for a binary se- quence. Contexts 01 and 11 are only observed once and thus are not included in the tree. Note that for readability, contexts in this figure are denoted in chronological order.",
+          "captionRect": [307.44, 580.32, 542.16, 621.36],
+          "rect": [308.16, 635.04, 541.44, 734.4]
+        }
+      ]
+    },
+    {
+      "id": "f-icml12_6",
+      "title": "An adaptive algorithm for finite stochastic partial monitoring",
+      "pdf": {
+        "url": "https://icml.cc/2012/papers/846.pdf",
+        "sha256": "596b0716da31eb135b1237d63cd8dcd2f5315abf2c748a341ce57cd37c6293ee",
+        "fileName": "f-icml12_6.pdf",
+        "license": "Public proceedings PDF; individual copyright and reuse terms apply. Dataset code licensing does not establish permission to redistribute the PDF."
+      },
+      "strata": ["computer-science", "figure", "table"],
+      "annotation": {
+        "kind": "dataset-ground-truth",
+        "sources": [
+          "https://github.com/allenai/pdffigures2/blob/3d7ad46753d4a315cccd1c2bcab398380e88c534/evaluation/datasets/conference/annotations.json",
+          "https://github.com/allenai/pdffigures2/blob/3d7ad46753d4a315cccd1c2bcab398380e88c534/evaluation/datasets/README.md",
+          "https://doi.org/10.1145/2910896.2910904",
+          "http://icml.cc/2012/papers/846.pdf",
+          "https://icml.cc/2012/papers/846.pdf"
+        ],
+        "scope": "PDFFigures2 Conference150 v2 human-marked, foreground-cropped labels. All published figure/table annotations on physical pages 4, 6 are included; other pages are excluded. Captions are upstream transcriptions and can be partial or imperfect. Labels have not been newly rechecked as gold; selected-page coverage is only relative to published annotations."
+      },
+      "checks": [
+        {
+          "id": "figure-1",
+          "kind": "object",
+          "objectKind": "figure",
+          "pageIndex": 5,
+          "text": "Figure 1. An example of cell decomposition (M = 3).",
+          "captionRect": [64.8, 581.04, 278.64, 589.68],
+          "rect": [67.68, 606.24, 280.8, 720.0]
+        },
+        {
+          "id": "table-1",
+          "kind": "object",
+          "objectKind": "table",
+          "pageIndex": 3,
+          "text": "Table 1. List of basic symbols",
+          "captionRect": [238.32, 709.2, 357.84, 715.68],
+          "rect": [114.48, 491.76, 482.4, 706.32]
+        }
+      ]
+    },
+    {
+      "id": "f-icml12_9",
+      "title": "Bayesian Posterior Sampling via Stochastic Gradient Fisher Scoring",
+      "pdf": {
+        "url": "https://icml.cc/2012/papers/782.pdf",
+        "sha256": "e34ca5f4dec93fa8f7c9e46353b9e2f6ce20db085df8909e55bbaac6bd6d32ea",
+        "fileName": "f-icml12_9.pdf",
+        "license": "Public proceedings PDF; individual copyright and reuse terms apply. Dataset code licensing does not establish permission to redistribute the PDF."
+      },
+      "strata": ["computer-science", "figure", "same-page-objects"],
+      "annotation": {
+        "kind": "dataset-ground-truth",
+        "sources": [
+          "https://github.com/allenai/pdffigures2/blob/3d7ad46753d4a315cccd1c2bcab398380e88c534/evaluation/datasets/conference/annotations.json",
+          "https://github.com/allenai/pdffigures2/blob/3d7ad46753d4a315cccd1c2bcab398380e88c534/evaluation/datasets/README.md",
+          "https://doi.org/10.1145/2910896.2910904",
+          "http://icml.cc/2012/papers/782.pdf",
+          "https://icml.cc/2012/papers/782.pdf"
+        ],
+        "scope": "PDFFigures2 Conference150 v2 human-marked, foreground-cropped labels. All published figure/table annotations on physical pages 5, 6 are included; other pages are excluded. Captions are upstream transcriptions and can be partial or imperfect. Labels have not been newly rechecked as gold; selected-page coverage is only relative to published annotations."
+      },
+      "checks": [
+        {
+          "id": "figure-2",
+          "kind": "object",
+          "objectKind": "figure",
+          "pageIndex": 5,
+          "text": "Figure 2. Final error of logistic regression at time T versus mixing rate for the mean (top) and covariance (bottom) estimates after 100 (left) and 3000 (right) seconds of computation. See main text for detailed explanation.",
+          "captionRect": [55.44, 487.44, 288.72, 529.2],
+          "rect": [48.96, 544.32, 287.28, 724.32]
+        },
+        {
+          "id": "figure-1",
+          "kind": "object",
+          "objectKind": "figure",
+          "pageIndex": 4,
+          "text": "Figure 1. 2-d marginal posterior distributions for logistic regres- sion. Grey colors correspond to samples from SGFS. Red solid and blue dotted ellipses represent iso-probability contours at two standard deviations away from the mean computed from HMC and SGFS, respectively. Top plots are the results for SGFS-f and bottom plots represent SGFS-d. Plots on the left represent the 2-d marginals with the smallest difference between HMC and SGFS while the plots on the right represent the 2-d marginals with the largest difference. Value for α is 0 meaning that no additional",
+          "captionRect": [306.72, 416.88, 540.72, 522.0],
+          "rect": [306.0, 537.12, 534.96, 723.6]
+        },
+        {
+          "id": "figure-3",
+          "kind": "object",
+          "objectKind": "figure",
+          "pageIndex": 5,
+          "text": "Figure 3. Test-set classification error of NNs trained with SGFS- f, SGFS-d, SGLD and SGD on the HHP dataset (left) and the MNIST dataset (right)",
+          "captionRect": [306.72, 585.36, 540.72, 615.6],
+          "rect": [301.68, 630.0, 541.44, 724.32]
+        }
+      ]
+    },
+    {
+      "id": "f-icml12_10",
+      "title": "Building High-level Features Using Large Scale Unsupervised Learning",
+      "pdf": {
+        "url": "https://icml.cc/2012/papers/73.pdf",
+        "sha256": "92d7a6607f6a4679ca12d972994087c74a874aa71badb2fd978e240ea190c167",
+        "fileName": "f-icml12_10.pdf",
+        "license": "Public proceedings PDF; individual copyright and reuse terms apply. Dataset code licensing does not establish permission to redistribute the PDF."
+      },
+      "strata": ["computer-science", "figure", "same-page-objects"],
+      "annotation": {
+        "kind": "dataset-ground-truth",
+        "sources": [
+          "https://github.com/allenai/pdffigures2/blob/3d7ad46753d4a315cccd1c2bcab398380e88c534/evaluation/datasets/conference/annotations.json",
+          "https://github.com/allenai/pdffigures2/blob/3d7ad46753d4a315cccd1c2bcab398380e88c534/evaluation/datasets/README.md",
+          "https://doi.org/10.1145/2910896.2910904",
+          "http://icml.cc/2012/papers/73.pdf",
+          "https://icml.cc/2012/papers/73.pdf"
+        ],
+        "scope": "PDFFigures2 Conference150 v2 human-marked, foreground-cropped labels. All published figure/table annotations on physical pages 3, 5 are included; other pages are excluded. Captions are upstream transcriptions and can be partial or imperfect. Labels have not been newly rechecked as gold; selected-page coverage is only relative to published annotations."
+      },
+      "checks": [
+        {
+          "id": "figure-2",
+          "kind": "object",
+          "objectKind": "figure",
+          "pageIndex": 4,
+          "text": "Figure 2. Histograms of faces (red) vs. no faces (blue). The test set is subsampled such that the ratio between",
+          "captionRect": [54.72, 224.64, 288.72, 253.44],
+          "rect": [115.92, 267.12, 228.96, 353.52]
+        },
+        {
+          "id": "figure-1",
+          "kind": "object",
+          "objectKind": "figure",
+          "pageIndex": 2,
+          "text": "Figure 1. The architecture and parameters in one layer of our network. The overall network replicates this structure three times. For simplicity, the images are in 1D.",
+          "captionRect": [54.72, 414.72, 290.16, 445.68],
+          "rect": [77.04, 459.36, 267.12, 650.16]
+        },
+        {
+          "id": "figure-3",
+          "kind": "object",
+          "objectKind": "figure",
+          "pageIndex": 4,
+          "text": "Figure 3. Top: Top 48 stimuli of the best neuron from the test set. Bottom: The optimal stimulus according to nu- merical constraint optimization.",
+          "captionRect": [307.44, 249.12, 540.72, 278.64],
+          "rect": [342.0, 293.04, 506.16, 550.08]
+        }
+      ]
+    },
+    {
+      "id": "f-icml13_7",
+      "title": "An Adaptive Learning Rate for Stochastic Variational Inference",
+      "pdf": {
+        "url": "https://proceedings.mlr.press/v28/ranganath13.pdf",
+        "sha256": "8efe22f576e7212e24202500cbc721b242ae57e49c4acd59df838cb6c67f88f5",
+        "fileName": "f-icml13_7.pdf",
+        "license": "Public proceedings PDF; individual copyright and reuse terms apply. Dataset code licensing does not establish permission to redistribute the PDF."
+      },
+      "strata": ["computer-science", "figure", "same-page-objects"],
+      "annotation": {
+        "kind": "dataset-ground-truth",
+        "sources": [
+          "https://github.com/allenai/pdffigures2/blob/3d7ad46753d4a315cccd1c2bcab398380e88c534/evaluation/datasets/conference/annotations.json",
+          "https://github.com/allenai/pdffigures2/blob/3d7ad46753d4a315cccd1c2bcab398380e88c534/evaluation/datasets/README.md",
+          "https://doi.org/10.1145/2910896.2910904",
+          "http://jmlr.csail.mit.edu/proceedings/papers/v28/ranganath13.pdf",
+          "https://proceedings.mlr.press/v28/ranganath13.pdf"
+        ],
+        "scope": "PDFFigures2 Conference150 v2 human-marked, foreground-cropped labels. All published figure/table annotations on physical pages 2, 8 are included; other pages are excluded. Captions are upstream transcriptions and can be partial or imperfect. Labels have not been newly rechecked as gold; selected-page coverage is only relative to published annotations."
+      },
+      "checks": [
+        {
+          "id": "figure-2",
+          "kind": "object",
+          "objectKind": "figure",
+          "pageIndex": 1,
+          "text": "Figure 2. Graphical model for hierarchical Bayesian models with global hidden variables β, local hidden variables z 1:n , and local observations x 1:n . The hyperparameter η is fixed.",
+          "captionRect": [307.44, 603.36, 542.16, 634.32],
+          "rect": [356.4, 645.12, 491.76, 723.6]
+        },
+        {
+          "id": "figure-1",
+          "kind": "object",
+          "objectKind": "figure",
+          "pageIndex": 1,
+          "text": "Figure 1. The adaptive learning rate on a run of stochastic variational inference, compared to the best Robbins-Monro and best constant learning rate. Here the data arrives non- uniformly, changing its distribution every three hours. (The algorithms do not know this.) The adaptive learning rate spikes when the data distribution changes. This leads to better predictive performance, as indicated by the held-out",
+          "captionRect": [55.44, 499.68, 289.44, 585.36],
+          "rect": [70.56, 598.32, 270.72, 723.6]
+        },
+        {
+          "id": "figure-4",
+          "kind": "object",
+          "objectKind": "figure",
+          "pageIndex": 7,
+          "text": "Figure 4. Learning rates. The adaptive learning rate has a similar shape to the best Robbins-Monro learning rate, but is obtained automatically and adapts when the data requires.",
+          "captionRect": [55.44, 372.24, 540.72, 391.68],
+          "rect": [62.64, 408.24, 521.28, 524.88]
+        },
+        {
+          "id": "figure-3",
+          "kind": "object",
+          "objectKind": "figure",
+          "pageIndex": 7,
+          "text": "Figure 3. Held-out log likelihood on three large corpora. (Higher numbers are better.) The best Robbins-Monro rates from Eq. 21 were t 0 = 1000 and κ = 0.7 for the New York Times and Nature copora and t 0 = 1000 and κ = 0.8 for Wikipedia corpus. The best constant rate was 0.01. The adaptive learning rate performed best.",
+          "captionRect": [54.72, 551.52, 541.44, 581.76],
+          "rect": [62.64, 599.04, 521.28, 715.68]
+        }
+      ]
+    },
+    {
+      "id": "f-nips09_10",
+      "title": "Convex Relaxation of Mixture Regression with Efficient Algorithms",
+      "pdf": {
+        "url": "https://papers.nips.cc/paper/3822-convex-relaxation-of-mixture-regression-with-efficient-algorithms.pdf",
+        "sha256": "af94689dc1022cccba04c54c78d9a05532f62f90209f5094285102ce2c0eba0e",
+        "fileName": "f-nips09_10.pdf",
+        "license": "Public proceedings PDF; individual copyright and reuse terms apply. Dataset code licensing does not establish permission to redistribute the PDF."
+      },
+      "strata": ["computer-science", "figure", "table", "same-page-objects"],
+      "annotation": {
+        "kind": "dataset-ground-truth",
+        "sources": [
+          "https://github.com/allenai/pdffigures2/blob/3d7ad46753d4a315cccd1c2bcab398380e88c534/evaluation/datasets/conference/annotations.json",
+          "https://github.com/allenai/pdffigures2/blob/3d7ad46753d4a315cccd1c2bcab398380e88c534/evaluation/datasets/README.md",
+          "https://doi.org/10.1145/2910896.2910904",
+          "http://papers.nips.cc/paper/3822-convex-relaxation-of-mixture-regression-with-efficient-algorithms.pdf",
+          "https://papers.nips.cc/paper/3822-convex-relaxation-of-mixture-regression-with-efficient-algorithms.pdf"
+        ],
+        "scope": "PDFFigures2 Conference150 v2 human-marked, foreground-cropped labels. All published figure/table annotations on physical pages 8 are included; other pages are excluded. Captions are upstream transcriptions and can be partial or imperfect. Labels have not been newly rechecked as gold; selected-page coverage is only relative to published annotations."
+      },
+      "checks": [
+        {
+          "id": "figure-2",
+          "kind": "object",
+          "objectKind": "figure",
+          "pageIndex": 7,
+          "text": "Figure 2: Resulting motion segmentations produced by the various techniques on the Hopkins 155 dataset. 2(a)-2(d): two cranes, 2(e)-2(h): three cars, and 2(i)-2(l): cars2 07. In two cranes (first row), EM produces more segmentation errors at the left crane. In three cars (second row), the max-min method gives the least segmentation error (at the front side of the middle car) and EM produces more segmentation errors at the front side of the left car. The contrast of EM and convex methods is apparent for cars2 07 (third row): the convex methods segment correctly the static grass field object, while EM makes mistakes. Further, the min-min method can almost perfectly segment the car in the middle of the scene from the static tree background.",
+          "captionRect": [107.28, 68.4, 504.0, 153.36],
+          "rect": [117.36, 169.92, 497.52, 415.44]
+        },
+        {
+          "id": "figure-1",
+          "kind": "object",
+          "objectKind": "figure",
+          "pageIndex": 7,
+          "text": "Figure 1: Recovered membership on synthetic data with EM and convex relaxation. 30 data points are generated according to y i = (π i ⊗ x i )w +   i , with x i ∈ R,   i ∼ N (0, 1) and w ∈ U (0, 1).",
+          "captionRect": [108.72, 433.44, 503.28, 452.88],
+          "rect": [156.24, 469.44, 457.92, 550.08]
+        },
+        {
+          "id": "table-1",
+          "kind": "object",
+          "objectKind": "table",
+          "pageIndex": 7,
+          "text": "Table 1: Error rate on several datasets from the Hopkins 155",
+          "captionRect": [185.04, 648.72, 425.52, 657.36],
+          "rect": [151.2, 577.44, 460.08, 644.4]
+        }
+      ]
+    },
+    {
+      "id": "f-nips10_2",
+      "title": "A novel family of non-parametric cumulative based divergences for point processes",
+      "pdf": {
+        "url": "https://papers.nips.cc/paper/4126-a-novel-family-of-non-parametric-cumulative-based-divergences-for-point-processes.pdf",
+        "sha256": "9e9fb304e2cbeb492348c87560494cfc0cd779a256d797bf021ec80cb4f436f0",
+        "fileName": "f-nips10_2.pdf",
+        "license": "Public proceedings PDF; individual copyright and reuse terms apply. Dataset code licensing does not establish permission to redistribute the PDF."
+      },
+      "strata": ["computer-science", "figure"],
+      "annotation": {
+        "kind": "dataset-ground-truth",
+        "sources": [
+          "https://github.com/allenai/pdffigures2/blob/3d7ad46753d4a315cccd1c2bcab398380e88c534/evaluation/datasets/conference/annotations.json",
+          "https://github.com/allenai/pdffigures2/blob/3d7ad46753d4a315cccd1c2bcab398380e88c534/evaluation/datasets/README.md",
+          "https://doi.org/10.1145/2910896.2910904",
+          "http://papers.nips.cc/paper/4126-a-novel-family-of-non-parametric-cumulative-based-divergences-for-point-processes.pdf",
+          "https://papers.nips.cc/paper/4126-a-novel-family-of-non-parametric-cumulative-based-divergences-for-point-processes.pdf"
+        ],
+        "scope": "PDFFigures2 Conference150 v2 human-marked, foreground-cropped labels. All published figure/table annotations on physical pages 3, 6 are included; other pages are excluded. Captions are upstream transcriptions and can be partial or imperfect. Labels have not been newly rechecked as gold; selected-page coverage is only relative to published annotations."
+      },
+      "checks": [
+        {
+          "id": "figure-2",
+          "kind": "object",
+          "objectKind": "figure",
+          "pageIndex": 5,
+          "text": "Figure 2: Gamma distributed renewal process with shape parameter θ = 3 (H 0 ) and θ = 0.5 (H 1 ). The mean number of action potential is fixed to 10. (Left) Spike trains from the null and alternate hypothesis. (Right) Comparison of the power of each method. The error bars are standard deviation",
+          "captionRect": [108.0, 515.84, 503.28, 556.16],
+          "rect": [126.0, 571.28, 481.68, 753.44]
+        },
+        {
+          "id": "figure-1",
+          "kind": "object",
+          "objectKind": "figure",
+          "pageIndex": 2,
+          "text": "Figure 1: (Left) Illustration of how the point process space is stratified. (Right) Example of spike trains stratified by their respective spike count.",
+          "captionRect": [108.72, 530.96, 503.28, 551.12],
+          "rect": [126.72, 564.08, 478.8, 760.64]
+        }
+      ]
+    },
+    {
+      "id": "f-nips10_3",
+      "title": "A Primal-Dual Message-Passing Algorithm for Approximated Large Scale Structured Prediction",
+      "pdf": {
+        "url": "https://papers.nips.cc/paper/3913-a-primal-dual-message-passing-algorithm-for-approximated-large-scale-structured-prediction.pdf",
+        "sha256": "48768c4c734266c8a2825dd06cdef3d62281887488fcf32f18b64e4f4c52ebbf",
+        "fileName": "f-nips10_3.pdf",
+        "license": "Public proceedings PDF; individual copyright and reuse terms apply. Dataset code licensing does not establish permission to redistribute the PDF."
+      },
+      "strata": ["computer-science", "figure"],
+      "annotation": {
+        "kind": "dataset-ground-truth",
+        "sources": [
+          "https://github.com/allenai/pdffigures2/blob/3d7ad46753d4a315cccd1c2bcab398380e88c534/evaluation/datasets/conference/annotations.json",
+          "https://github.com/allenai/pdffigures2/blob/3d7ad46753d4a315cccd1c2bcab398380e88c534/evaluation/datasets/README.md",
+          "https://doi.org/10.1145/2910896.2910904",
+          "http://papers.nips.cc/paper/3913-a-primal-dual-message-passing-algorithm-for-approximated-large-scale-structured-prediction.pdf",
+          "https://papers.nips.cc/paper/3913-a-primal-dual-message-passing-algorithm-for-approximated-large-scale-structured-prediction.pdf"
+        ],
+        "scope": "PDFFigures2 Conference150 v2 human-marked, foreground-cropped labels. All published figure/table annotations on physical pages 5, 7 are included; other pages are excluded. Captions are upstream transcriptions and can be partial or imperfect. Labels have not been newly rechecked as gold; selected-page coverage is only relative to published annotations."
+      },
+      "checks": [
+        {
+          "id": "figure-2",
+          "kind": "object",
+          "objectKind": "figure",
+          "pageIndex": 6,
+          "text": "Figure 2: Denoising results: Gaussian (left) and Bimodal (right) noise.",
+          "captionRect": [164.16, 619.92, 447.12, 628.56],
+          "rect": [123.12, 632.88, 488.88, 727.2]
+        },
+        {
+          "id": "figure-1",
+          "kind": "object",
+          "objectKind": "figure",
+          "pageIndex": 4,
+          "text": "Figure 1: Gaussian and bimodal noise: Comparison of our approach to loopy belief propaga- tion and mean field approximations when optimizing using BFGS, SGD and SMD. Note that our approach significantly outperforms all the baselines. MF-SMD did not work for Bimodal noise.",
+          "captionRect": [108.72, 596.16, 504.0, 632.88],
+          "rect": [118.8, 631.44, 493.2, 727.2]
+        }
+      ]
+    },
+    {
+      "id": "f-nips10_4",
+      "title": "A Theory of Multiclass Boosting",
+      "pdf": {
+        "url": "https://papers.nips.cc/paper/4135-a-theory-of-multiclass-boosting.pdf",
+        "sha256": "5d6138611cb0349024dbf3d2a8e3f5a3893d52c40180727617817bbde4b5585a",
+        "fileName": "f-nips10_4.pdf",
+        "license": "Public proceedings PDF; individual copyright and reuse terms apply. Dataset code licensing does not establish permission to redistribute the PDF."
+      },
+      "strata": ["computer-science", "figure", "same-page-objects"],
+      "annotation": {
+        "kind": "dataset-ground-truth",
+        "sources": [
+          "https://github.com/allenai/pdffigures2/blob/3d7ad46753d4a315cccd1c2bcab398380e88c534/evaluation/datasets/conference/annotations.json",
+          "https://github.com/allenai/pdffigures2/blob/3d7ad46753d4a315cccd1c2bcab398380e88c534/evaluation/datasets/README.md",
+          "https://doi.org/10.1145/2910896.2910904",
+          "http://papers.nips.cc/paper/4135-a-theory-of-multiclass-boosting.pdf",
+          "https://papers.nips.cc/paper/4135-a-theory-of-multiclass-boosting.pdf"
+        ],
+        "scope": "PDFFigures2 Conference150 v2 human-marked, foreground-cropped labels. All published figure/table annotations on physical pages 8 are included; other pages are excluded. Captions are upstream transcriptions and can be partial or imperfect. Labels have not been newly rechecked as gold; selected-page coverage is only relative to published annotations."
+      },
+      "checks": [
+        {
+          "id": "figure-2",
+          "kind": "object",
+          "objectKind": "figure",
+          "pageIndex": 7,
+          "text": "Figure 2: This is a plot of the final test-errors of standard implementations of M1, MH and pared to C4.5. connect4 forest letter pendigits poker satimage New method after 500 rounds of boosting. We next investigated how each algorithm performs with less powerful weak-classifiers, namely, decision trees whose size has been sharply limited to various",
+          "captionRect": [345.6, 169.92, 503.28, 198.0],
+          "rect": [346.32, 207.36, 498.96, 308.88]
+        },
+        {
+          "id": "figure-1",
+          "kind": "object",
+          "objectKind": "figure",
+          "pageIndex": 7,
+          "text": "Figure 1: Figure 1(a) plots the final test-errors of M1(black, dashed), MH(blue, dotted) and New method(red, solid) against the maximum tree-sizes allowed as weak classifiers. Figure 1(b) plots how fast the test-errors of these algorithms drop with rounds, when the maximum tree-size allowed is 5.",
+          "captionRect": [108.0, 480.96, 504.0, 509.04],
+          "rect": [110.88, 521.28, 496.08, 689.04]
+        }
+      ]
+    },
+    {
+      "id": "f-nips10_5",
+      "title": "Active Learning by Querying Informative and Representative Examples",
+      "pdf": {
+        "url": "https://papers.nips.cc/paper/4176-active-learning-by-querying-informative-and-representative-examples.pdf",
+        "sha256": "0b4bc79a7bee234dd78a3116545edf1092a2055ccd810148ed8984146daf2f1c",
+        "fileName": "f-nips10_5.pdf",
+        "license": "Public proceedings PDF; individual copyright and reuse terms apply. Dataset code licensing does not establish permission to redistribute the PDF."
+      },
+      "strata": ["computer-science", "figure"],
+      "annotation": {
+        "kind": "dataset-ground-truth",
+        "sources": [
+          "https://github.com/allenai/pdffigures2/blob/3d7ad46753d4a315cccd1c2bcab398380e88c534/evaluation/datasets/conference/annotations.json",
+          "https://github.com/allenai/pdffigures2/blob/3d7ad46753d4a315cccd1c2bcab398380e88c534/evaluation/datasets/README.md",
+          "https://doi.org/10.1145/2910896.2910904",
+          "http://papers.nips.cc/paper/4176-active-learning-by-querying-informative-and-representative-examples.pdf",
+          "https://papers.nips.cc/paper/4176-active-learning-by-querying-informative-and-representative-examples.pdf"
+        ],
+        "scope": "PDFFigures2 Conference150 v2 human-marked, foreground-cropped labels. All published figure/table annotations on physical pages 2, 6 are included; other pages are excluded. Captions are upstream transcriptions and can be partial or imperfect. Labels have not been newly rechecked as gold; selected-page coverage is only relative to published annotations."
+      },
+      "checks": [
+        {
+          "id": "figure-2",
+          "kind": "object",
+          "objectKind": "figure",
+          "pageIndex": 5,
+          "text": "Figure 2: Comparison on classification accuracy",
+          "captionRect": [209.52, 260.64, 401.76, 270.0],
+          "rect": [109.44, 268.56, 505.44, 703.44]
+        },
+        {
+          "id": "figure-1",
+          "kind": "object",
+          "objectKind": "figure",
+          "pageIndex": 1,
+          "text": "Figure 1: An illustrative example for selecting informative and representative instances",
+          "captionRect": [132.48, 594.0, 478.8, 603.36],
+          "rect": [115.2, 614.88, 480.24, 709.2]
+        }
+      ]
+    },
+    {
+      "id": "f-nips10_6",
+      "title": "Computing Marginal Distributions over Continuous Markov Networks for Statistical Relational Learning",
+      "pdf": {
+        "url": "https://papers.nips.cc/paper/3942-computing-marginal-distributions-over-continuous-markov-networks-for-statistical-relational-learning.pdf",
+        "sha256": "adcdd3967f63bf52796879f7b4653761aac7d51285c2a30c4dc8216cc1d4d6e1",
+        "fileName": "f-nips10_6.pdf",
+        "license": "Public proceedings PDF; individual copyright and reuse terms apply. Dataset code licensing does not establish permission to redistribute the PDF."
+      },
+      "strata": ["computer-science", "figure", "table"],
+      "annotation": {
+        "kind": "dataset-ground-truth",
+        "sources": [
+          "https://github.com/allenai/pdffigures2/blob/3d7ad46753d4a315cccd1c2bcab398380e88c534/evaluation/datasets/conference/annotations.json",
+          "https://github.com/allenai/pdffigures2/blob/3d7ad46753d4a315cccd1c2bcab398380e88c534/evaluation/datasets/README.md",
+          "https://doi.org/10.1145/2910896.2910904",
+          "http://papers.nips.cc/paper/3942-computing-marginal-distributions-over-continuous-markov-networks-for-statistical-relational-learning.pdf",
+          "https://papers.nips.cc/paper/3942-computing-marginal-distributions-over-continuous-markov-networks-for-statistical-relational-learning.pdf"
+        ],
+        "scope": "PDFFigures2 Conference150 v2 human-marked, foreground-cropped labels. All published figure/table annotations on physical pages 2, 5 are included; other pages are excluded. Captions are upstream transcriptions and can be partial or imperfect. Labels have not been newly rechecked as gold; selected-page coverage is only relative to published annotations."
+      },
+      "checks": [
+        {
+          "id": "figure-1",
+          "kind": "object",
+          "objectKind": "figure",
+          "pageIndex": 4,
+          "text": "Figure 1: Constrained continuous MRF sampling algorithm",
+          "captionRect": [187.92, 82.8, 424.08, 91.44],
+          "rect": [109.44, 95.76, 461.52, 358.56]
+        },
+        {
+          "id": "table-1",
+          "kind": "object",
+          "objectKind": "table",
+          "pageIndex": 1,
+          "text": "Table 1: Example PSL program for collective classification.",
+          "captionRect": [186.48, 665.28, 424.08, 673.92],
+          "rect": [205.92, 684.0, 406.08, 715.68]
+        }
+      ]
+    }
+  ]
+}

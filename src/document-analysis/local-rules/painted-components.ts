@@ -1,5 +1,12 @@
 import { bounds, gapX, height, intersects, readingOrder, valid, width } from './geometry';
-import type { Line, LocalFigurePage, LocalRuleRect, PaintedComponent, RuleContext } from './types';
+import type {
+  Caption,
+  Line,
+  LocalFigurePage,
+  LocalRuleRect,
+  PaintedComponent,
+  RuleContext,
+} from './types';
 
 export function pageLike(page: LocalFigurePage, rect: LocalRuleRect): boolean {
   const pageArea = width(page.viewBox) * height(page.viewBox);
@@ -14,6 +21,7 @@ export function paintedComponents(
   page: LocalFigurePage,
   unit: number,
   barriers: ReadonlySet<Line>,
+  captions: readonly Caption[],
   context: RuleContext,
 ): { readonly rects: readonly LocalRuleRect[]; readonly groups: readonly PaintedComponent[] } {
   const barrierLines = [...barriers];
@@ -23,6 +31,18 @@ export function paintedComponents(
       if (!valid(r) || !intersects(page.viewBox, r)) return false;
       // A scan/background/unknown operator bounding the page is not object evidence.
       if (pageLike(page, r)) return false;
+      // An operator envelope spanning authored caption text is not a body primitive.
+      // Keeping it would swallow the caption and join otherwise independent painted marks.
+      if (captions.some((caption) => intersects(caption.rect, r))) {
+        context.observe?.({
+          pageIndex: page.pageIndex,
+          ruleId: 'paintedComponents',
+          outcome: 'rejected',
+          reason: 'caption-spanning-envelope',
+          rect: r,
+        });
+        return false;
+      }
       const key = r.join(',');
       if (seen.has(key)) return false;
       seen.add(key);

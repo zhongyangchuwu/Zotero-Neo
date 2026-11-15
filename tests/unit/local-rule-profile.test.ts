@@ -26,9 +26,18 @@ describe('local rule profile identity', () => {
     const original = resolveLocalRuleProfile();
     const disabled = resolveLocalRuleProfile({ rules: { unruledTables: { enabled: false } } });
     const threshold = resolveLocalRuleProfile({ association: { maxDistanceLines: 2 } });
-    expect(new Set([original.fingerprint, disabled.fingerprint, threshold.fingerprint]).size).toBe(
-      3,
-    );
+    const repeatedGap = resolveLocalRuleProfile({
+      rules: { compoundPanels: { maxRepeatedGapRatio: 0.4 } },
+    });
+    expect(
+      new Set([
+        original.fingerprint,
+        disabled.fingerprint,
+        threshold.fingerprint,
+        repeatedGap.fingerprint,
+      ]).size,
+    ).toBe(4);
+    expect(repeatedGap.rules.compoundPanels.maxRepeatedGapRatio).toBe(0.4);
   });
 
   it('snapshots caller configuration so later mutation cannot change a running profile', () => {
@@ -63,6 +72,10 @@ describe('local rule profile rejection', () => {
     ['{"rules":{"unruledTables":{"minRows":2.5}}}', 'minRows'],
     ['{"rules":{"unruledTables":{"minColumns":0}}}', 'minColumns'],
     ['{"rules":{"compoundPanels":{"minOverlapRatio":1.1}}}', 'minOverlapRatio'],
+    ['{"rules":{"compoundPanels":{"maxRepeatedGapRatio":0}}}', 'maxRepeatedGapRatio'],
+    ['{"rules":{"compoundPanels":{"maxRepeatedGapRatio":-0.1}}}', 'maxRepeatedGapRatio'],
+    ['{"rules":{"compoundPanels":{"maxRepeatedGapRatio":1.1}}}', 'maxRepeatedGapRatio'],
+    ['{"rules":{"compoundPanels":{"maxRepeatedGapRatio":"0.2"}}}', 'maxRepeatedGapRatio'],
     ['{"association":{"maxDistanceLines":-1}}', 'maxDistanceLines'],
     ['{"association":{"minWidthEm":"3"}}', 'minWidthEm'],
   ])('rejects %s with an actionable parameter path', (text, parameter) => {

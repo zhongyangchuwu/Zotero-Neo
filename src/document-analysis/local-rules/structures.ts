@@ -63,7 +63,7 @@ export function graphicsFromPage(
   context: RuleContext,
 ): Graphic[] {
   const { unit, leading, lines, captions, barriers } = layout;
-  const { rects, groups } = paintedComponents(page, unit, barriers, context);
+  const { rects, groups } = paintedComponents(page, unit, barriers, captions, context);
   const tables = tableTextGroups(lines, captions, rects, barriers, unit, leading, context);
   const boxes = [...groups.map((group) => group.rect), ...tables.map((table) => table.rect)];
   const connectors = [

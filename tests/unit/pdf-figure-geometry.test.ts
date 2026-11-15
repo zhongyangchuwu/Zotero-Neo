@@ -1,11 +1,15 @@
 import { describe, expect, it } from 'vitest';
-import { pdfFigureGraphics, pdfFigureText } from '../../src/toolkit/pdf-figure-geometry';
+import { pdfFigureGeometry } from '../../src/toolkit/pdf-figure-geometry';
 
 const ops = {
   save: 10,
   restore: 11,
   transform: 12,
   setLineWidth: 2,
+  setFont: 37,
+  setGState: 9,
+  showText: 44,
+  setTextRenderingMode: 38,
   constructPath: 91,
   stroke: 20,
   closeStroke: 21,
@@ -32,10 +36,14 @@ const ops = {
   paintImageMaskXObjectGroup: 84,
 };
 
+function paintedGraphics(value: unknown, operators = ops) {
+  return pdfFigureGeometry({ items: [] }, value, operators).graphics;
+}
+
 describe('PDF figure source coordinates', () => {
   it('uses the transformed image unit square, not raster pixel resolution, and restores graphics state', () => {
     const graphics = (pixels: number) =>
-      pdfFigureGraphics(
+      paintedGraphics(
         {
           fnArray: [
             ops.save,
@@ -66,14 +74,14 @@ describe('PDF figure source coordinates', () => {
 
   it('retains horizontal table rules in both installed path formats but never promotes clipping paths', () => {
     const bounds = [10, 20, 110, 20];
-    const old = pdfFigureGraphics(
+    const old = paintedGraphics(
       {
         fnArray: [ops.constructPath, ops.stroke, ops.constructPath, ops.clip, ops.endPath],
         argsArray: [[[], [], bounds], [], [[], [], [0, 0, 600, 800]], [], []],
       },
       ops,
     );
-    const current = pdfFigureGraphics(
+    const current = paintedGraphics(
       { fnArray: [ops.constructPath], argsArray: [[ops.stroke, [[]], bounds]] },
       ops,
     );
@@ -85,25 +93,29 @@ describe('PDF figure source coordinates', () => {
   });
 
   it('projects rotated font ascent and descent in PDF space without adding a display rotation', () => {
-    const text = pdfFigureText({
-      styles: { font: { ascent: 0.8, descent: -0.2 } },
-      items: [
-        {
-          str: 'Figure I',
-          fontName: 'font',
-          transform: [0, 10, -10, 0, 100, 200],
-          width: 40,
-          hasEOL: true,
-        },
-      ],
-    });
+    const text = pdfFigureGeometry(
+      {
+        styles: { font: { ascent: 0.8, descent: -0.2 } },
+        items: [
+          {
+            str: 'Figure I',
+            fontName: 'font',
+            transform: [0, 10, -10, 0, 100, 200],
+            width: 40,
+            hasEOL: true,
+          },
+        ],
+      },
+      { fnArray: [], argsArray: [] },
+      ops,
+    ).text;
     expect(text).toEqual([
       { text: 'Figure I', fontSize: 10, rect: [92, 200, 102, 240], hasEOL: true },
     ]);
   });
 
   it('keeps skewed mask repetitions in page coordinates', () => {
-    const graphics = pdfFigureGraphics(
+    const graphics = paintedGraphics(
       {
         fnArray: [ops.transform, ops.paintImageMaskXObjectRepeat],
         argsArray: [
@@ -120,7 +132,7 @@ describe('PDF figure source coordinates', () => {
   });
 
   it('restores the parent transform after a transparency group', () => {
-    const graphics = pdfFigureGraphics(
+    const graphics = paintedGraphics(
       {
         fnArray: [
           ops.transform,
@@ -141,7 +153,7 @@ describe('PDF figure source coordinates', () => {
   });
 
   it('uses each grouped inline image or mask transform rather than atlas pixel bounds', () => {
-    const graphics = pdfFigureGraphics(
+    const graphics = paintedGraphics(
       {
         fnArray: [ops.transform, ops.paintInlineImageXObjectGroup, ops.paintImageMaskXObjectGroup],
         argsArray: [
@@ -161,7 +173,7 @@ describe('PDF figure source coordinates', () => {
   it.each([ops.clip, ops.eoClip])(
     'clips oversized painted paths after compact endPath (%s)',
     (clip) => {
-      const graphics = pdfFigureGraphics(
+      const graphics = paintedGraphics(
         {
           fnArray: [clip, ops.constructPath, ops.constructPath],
           argsArray: [
@@ -177,7 +189,7 @@ describe('PDF figure source coordinates', () => {
   );
 
   it('keeps nested clips in page coordinates and restores the parent clip', () => {
-    const graphics = pdfFigureGraphics(
+    const graphics = paintedGraphics(
       {
         fnArray: [
           ops.clip,
@@ -213,7 +225,7 @@ describe('PDF figure source coordinates', () => {
   });
 
   it('applies a legacy clipping path only after its current paint operation', () => {
-    const graphics = pdfFigureGraphics(
+    const graphics = paintedGraphics(
       {
         fnArray: [ops.constructPath, ops.clip, ops.fill, ops.transform, ops.paintImageXObject],
         argsArray: [[[], [], [10, 20, 50, 60]], [], [], [100, 0, 0, 100, 0, 0], ['image']],
@@ -227,7 +239,7 @@ describe('PDF figure source coordinates', () => {
   });
 
   it('suppresses images inside an empty clip without changing the restored parent', () => {
-    const graphics = pdfFigureGraphics(
+    const graphics = paintedGraphics(
       {
         fnArray: [
           ops.save,
@@ -245,7 +257,7 @@ describe('PDF figure source coordinates', () => {
   });
 
   it('clips Form contents to the transformed bounding box and restores its parent', () => {
-    const graphics = pdfFigureGraphics(
+    const graphics = paintedGraphics(
       {
         fnArray: [
           ops.paintFormXObjectBegin,
@@ -274,7 +286,7 @@ describe('PDF figure source coordinates', () => {
   });
 
   it('transforms a transparency group clip without applying its matrix to the content twice', () => {
-    const graphics = pdfFigureGraphics(
+    const graphics = paintedGraphics(
       {
         fnArray: [
           ops.beginGroup,
@@ -297,5 +309,143 @@ describe('PDF figure source coordinates', () => {
       [10, 20, 30, 35.05],
       [-0.05, -0.05, 1.05, 1.05],
     ]);
+  });
+
+  it('removes fully clipped embedded text without guessing visibility of shared or partial runs', () => {
+    const item = (str: string, fontName: string, x: number, y: number) => ({
+      str,
+      fontName,
+      transform: [10, 0, 0, 10, x, y],
+      width: 40,
+    });
+    const text = pdfFigureGeometry(
+      {
+        items: [
+          item('visible diagram label', 'embedded', 130, 240),
+          item('hidden original caption', 'embedded', 350, 360),
+          item('partially clipped run', 'embedded', 110, 240),
+          item('restored parent caption', 'parent', 350, 360),
+          item('unknown font remains', 'unknown', 350, 360),
+        ],
+      },
+      {
+        fnArray: [
+          ops.setFont,
+          ops.paintFormXObjectBegin,
+          ops.clip,
+          ops.constructPath,
+          ops.paintFormXObjectBegin,
+          ops.setFont,
+          ops.showText,
+          ops.paintFormXObjectEnd,
+          ops.paintFormXObjectEnd,
+          ops.showText,
+        ],
+        argsArray: [
+          ['parent', 10],
+          [
+            [2, 0, 0, 2, 100, 200],
+            [0, 0, 100, 100],
+          ],
+          [],
+          [ops.endPath, [[]], [10, 10, 90, 40]],
+          [
+            [1, 0, 0, 1, -5, -5],
+            [0, 0, 100, 100],
+          ],
+          ['embedded', 10],
+          [[{ unicode: 'label', width: 500 }]],
+          [],
+          [],
+          [[{ unicode: 'parent caption', width: 500 }]],
+        ],
+      },
+      ops,
+    ).text;
+    expect(text.map((run) => run.text)).toEqual([
+      'visible diagram label',
+      'partially clipped run',
+      'restored parent caption',
+      'unknown font remains',
+    ]);
+  });
+
+  it('keeps both clipped instances of a reused font but not text outside every instance', () => {
+    const text = pdfFigureGeometry(
+      {
+        items: [20, 120, 220].map((x) => ({
+          str: `label at ${x}`,
+          fontName: 'reused',
+          transform: [10, 0, 0, 10, x, 20],
+          width: 20,
+        })),
+      },
+      {
+        fnArray: [
+          ops.paintFormXObjectBegin,
+          ops.setFont,
+          ops.showText,
+          ops.paintFormXObjectEnd,
+          ops.paintFormXObjectBegin,
+          ops.setFont,
+          ops.showText,
+          ops.paintFormXObjectEnd,
+        ],
+        argsArray: [
+          [null, [0, 0, 80, 80]],
+          ['reused', 10],
+          [[{ unicode: 'label', width: 500 }]],
+          [],
+          [
+            [1, 0, 0, 1, 100, 0],
+            [0, 0, 80, 80],
+          ],
+          ['reused', 10],
+          [[{ unicode: 'label', width: 500 }]],
+          [],
+        ],
+      },
+      ops,
+    ).text;
+    expect(text.map((run) => run.text)).toEqual(['label at 20', 'label at 120']);
+  });
+
+  it('retains unbounded invisible OCR text while respecting an empty clip and ExtGState font', () => {
+    const text = pdfFigureGeometry(
+      {
+        items: ['ocr', 'clipped'].map((fontName) => ({
+          str: fontName,
+          fontName,
+          transform: [10, 0, 0, 10, 300, 400],
+          width: 20,
+        })),
+      },
+      {
+        fnArray: [
+          ops.setTextRenderingMode,
+          ops.setFont,
+          ops.showText,
+          ops.save,
+          ops.clip,
+          ops.constructPath,
+          ops.setGState,
+          ops.showText,
+          ops.restore,
+        ],
+        argsArray: [
+          [3],
+          ['ocr', 10],
+          [[{ unicode: 'OCR', width: 500 }]],
+          [],
+          [],
+          [ops.endPath, [null], null],
+          [[['Font', ['clipped', 10]]]],
+          [[{ unicode: 'hidden', width: 500 }]],
+          [],
+        ],
+      },
+      ops,
+    ).text;
+    expect(text.map((run) => run.text)).toEqual(['ocr']);
   });
 });

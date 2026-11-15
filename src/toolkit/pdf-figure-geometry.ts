@@ -49,8 +49,21 @@ function intersect(a: DocumentRect, b: DocumentRect): DocumentRect {
     : [left, bottom, right, top];
 }
 
+type FontClips = ReadonlyMap<string, ReadonlySet<DocumentRect> | null>;
+
+function textMayBeVisible(
+  rect: DocumentRect,
+  clips: ReadonlySet<DocumentRect> | null | undefined,
+): boolean {
+  if (!clips) return true;
+  for (const clip of clips)
+    if (rect[0] < clip[2] && rect[2] > clip[0] && rect[1] < clip[3] && rect[3] > clip[1])
+      return true;
+  return false;
+}
+
 /** Project PDF.js font metrics and text transforms without applying the display viewport or rotation. */
-export function pdfFigureText(value: unknown): readonly LocalFigureText[] {
+function projectText(value: unknown, fontClips: FontClips): readonly LocalFigureText[] {
   const content = record(value);
   const styles = record(content?.styles);
   if (!Array.isArray(content?.items)) throw new Error('PDF text content unavailable');
@@ -77,26 +90,44 @@ export function pdfFigureText(value: unknown): readonly LocalFigureText[] {
       matrix[5]!,
     ];
     const rect = transformed([0, fontSize * descent, width, fontSize * ascent], basis);
-    if (rect.every(Number.isFinite) && rect[2] > rect[0] && rect[3] > rect[1])
+    if (
+      rect.every(Number.isFinite) &&
+      rect[2] > rect[0] &&
+      rect[3] > rect[1] &&
+      textMayBeVisible(rect, fontClips.get(String(item.fontName)))
+    )
       result.push({ text: item.str, rect, fontSize, hasEOL: item.hasEOL === true });
   }
   return result;
 }
 
-/** Observe painted bounds within native clipping regions; clipping paths are not figure evidence. */
-export function pdfFigureGraphics(
+/**
+ * Observe painted bounds and native text in PDF coordinates.
+ * Text extraction ignores Form/path clips. Discard a text run only when every observed use of
+ * its font is clipped and the run is outside all those clips. Shared, unknown and OCR fonts,
+ * and partially overlapping runs, remain conservative; no glyph visibility is guessed.
+ */
+export function pdfFigureGeometry(
+  textContent: unknown,
   value: unknown,
   ops: Readonly<Record<string, number>>,
-): readonly DocumentRect[] {
+): { readonly text: readonly LocalFigureText[]; readonly graphics: readonly DocumentRect[] } {
   const list = record(value);
   if (!Array.isArray(list?.fnArray) || !Array.isArray(list.argsArray))
     throw new Error('PDF graphics unavailable');
   let matrix = IDENTITY;
   let lineWidth = 1;
   let clip: DocumentRect | null = null;
+  let fontName: string | null = null;
+  const fontClips = new Map<string, Set<DocumentRect> | null>();
   let pending: readonly number[] | null = null;
   let pendingClip = false;
-  const stack: { matrix: Matrix; lineWidth: number; clip: DocumentRect | null }[] = [];
+  const stack: {
+    matrix: Matrix;
+    lineWidth: number;
+    clip: DocumentRect | null;
+    fontName: string | null;
+  }[] = [];
   const result: DocumentRect[] = [];
   const painted = new Set(
     [
@@ -146,13 +177,23 @@ export function pdfFigureGraphics(
     add([0, 0, 1, 1], false);
     matrix = original;
   };
+  const observeText = (): void => {
+    if (fontName === null || fontClips.get(fontName) === null) return;
+    if (clip === null) {
+      fontClips.set(fontName, null);
+      return;
+    }
+    let clips = fontClips.get(fontName);
+    if (!clips) fontClips.set(fontName, (clips = new Set()));
+    clips.add(clip);
+  };
   for (let index = 0; index < list.fnArray.length; index++) {
     const op = list.fnArray[index];
     const args: readonly unknown[] = Array.isArray(list.argsArray[index])
       ? list.argsArray[index]
       : [];
     if (op === ops.save || op === ops.beginGroup) {
-      stack.push({ matrix, lineWidth, clip });
+      stack.push({ matrix, lineWidth, clip, fontName });
       if (op === ops.beginGroup) {
         const group = record(args[0]);
         const bounds = numbers(group?.bbox);
@@ -162,21 +203,35 @@ export function pdfFigureGraphics(
       }
     } else if (op === ops.restore || op === ops.endGroup) {
       const state = stack.pop();
-      if (state) ({ matrix, lineWidth, clip } = state);
+      if (state) ({ matrix, lineWidth, clip, fontName } = state);
     } else if (op === ops.transform) {
       const next = numbers(args);
       if (next?.length === 6) matrix = multiply(matrix, next);
     } else if (op === ops.setLineWidth && typeof args[0] === 'number')
       lineWidth = Math.abs(args[0]);
     else if (op === ops.paintFormXObjectBegin) {
-      stack.push({ matrix, lineWidth, clip });
+      stack.push({ matrix, lineWidth, clip, fontName });
       const next = numbers(args[0]);
       if (next?.length === 6) matrix = multiply(matrix, next);
       const bounds = numbers(args[1]);
       if (bounds) clipTo(bounds);
     } else if (op === ops.paintFormXObjectEnd) {
       const state = stack.pop();
-      if (state) ({ matrix, lineWidth, clip } = state);
+      if (state) ({ matrix, lineWidth, clip, fontName } = state);
+    } else if (op === ops.setFont) {
+      fontName = typeof args[0] === 'string' ? args[0] : null;
+    } else if (op === ops.setGState && Array.isArray(args[0])) {
+      for (const entry of args[0])
+        if (Array.isArray(entry) && entry[0] === 'Font')
+          fontName =
+            Array.isArray(entry[1]) && typeof entry[1][0] === 'string' ? entry[1][0] : null;
+    } else if (
+      op === ops.showText ||
+      op === ops.showSpacedText ||
+      op === ops.nextLineShowText ||
+      op === ops.nextLineSetSpacingShowText
+    ) {
+      observeText();
     } else if (op === ops.constructPath) {
       // Zotero's installed PDF.js uses either a separate paint op (older builds),
       // or [paintOp, pathBuffers, bounds]. Both expose the untransformed path bounds.
@@ -227,5 +282,5 @@ export function pdfFigureGraphics(
       }
     }
   }
-  return result;
+  return { text: projectText(textContent, fontClips), graphics: result };
 }

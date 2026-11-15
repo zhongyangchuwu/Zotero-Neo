@@ -2,7 +2,7 @@ import { checkParseCurrent, type DocumentPage } from '../document-analysis/contr
 import { nativeDocumentPages } from '../document-analysis/native';
 import { cloneInto } from '../platform/cross-compartment';
 import type { LocalFigurePage } from '../document-analysis/local-rules';
-import { pdfFigureGraphics, pdfFigureText } from './pdf-figure-geometry';
+import { pdfFigureGeometry } from './pdf-figure-geometry';
 
 interface PDFTask {
   readonly promise: Promise<{
@@ -23,6 +23,7 @@ interface HostPDFModule {
     data: Uint8Array;
     disableFontFace: boolean;
     isEvalSupported: boolean;
+    wasmUrl: string;
   }): PDFTask;
 }
 
@@ -46,7 +47,16 @@ async function withPdfSource<T>(
   const bytes = await read();
   checkParseCurrent(signal);
   const task = module.getDocument(
-    cloneInto({ data: bytes, disableFontFace: true, isEvalSupported: false }, window),
+    // CCITT/JBIG2 decoding otherwise aborts embedded Forms and silently loses later paths.
+    cloneInto(
+      {
+        data: bytes,
+        disableFontFace: true,
+        isEvalSupported: false,
+        wasmUrl: 'resource://zotero/reader/pdf/web/wasm/',
+      },
+      window,
+    ),
   );
   const abort = (): void => {
     void task.destroy().catch(() => {});
@@ -100,9 +110,13 @@ export async function pdfSourceFigurePages(
       check();
       const page = await pdf.getPage(index + 1);
       check();
-      const text = pdfFigureText(await page.getTextContent());
+      const textContent = await page.getTextContent();
       check();
-      const graphics = pdfFigureGraphics(await page.getOperatorList(), module.OPS);
+      const { text, graphics } = pdfFigureGeometry(
+        textContent,
+        await page.getOperatorList(),
+        module.OPS,
+      );
       check();
       const geometry = nativeDocumentPages({
         pages: [{ viewRect: page.view, rotation: page.rotate }],
