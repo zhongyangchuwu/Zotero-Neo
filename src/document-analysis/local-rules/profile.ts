@@ -1,4 +1,4 @@
-export const LOCAL_RULE_ENGINE_REVISION = 2;
+export const LOCAL_RULE_ENGINE_REVISION = 3;
 export const LOCAL_RULE_GEOMETRY_REVISION = 2;
 
 export interface LocalRuleOptions {
@@ -172,9 +172,9 @@ function resolve(input: unknown): LocalRuleProfile {
     LOCAL_RULE_ENGINE_REVISION,
     LOCAL_RULE_GEOMETRY_REVISION,
     1,
-    ['unruledTables', 2, rules.unruledTables],
-    ['graphicLabels', 2, rules.graphicLabels],
-    ['ruledTables', 1, rules.ruledTables],
+    ['unruledTables', 3, rules.unruledTables],
+    ['graphicLabels', 3, rules.graphicLabels],
+    ['ruledTables', 2, rules.ruledTables],
     ['compoundPanels', 2, rules.compoundPanels],
     association,
   ]);

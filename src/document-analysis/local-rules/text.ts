@@ -67,6 +67,13 @@ export function columnBoundaries(rows: readonly TextRow[], unit: number): number
   return [...new Set([...starts.slice(1), ...captionGutters])].sort((a, b) => a - b);
 }
 
+/** Different text scales share a track only at a local attachment, such as a math script. */
+function compatibleTypography(a: LocalFigureText, b: LocalFigureText): boolean {
+  const smaller = Math.min(a.fontSize, b.fontSize);
+  const larger = Math.max(a.fontSize, b.fontSize);
+  return larger <= smaller * 1.5 || gapX(a.rect, b.rect) <= larger * 0.5;
+}
+
 /** Build visual rows, then split column/cell gaps instead of trusting PDF content-stream order. */
 export function textLines(
   text: readonly LocalFigureText[],
@@ -78,6 +85,7 @@ export function textLines(
     (a, b) => readingOrder(a.rect, b.rect) || a.text.localeCompare(b.text),
   )) {
     let row: (typeof rows)[number] | undefined;
+    let fontDifference = Infinity;
     for (let i = rows.length - 1; i >= 0; i--) {
       const candidate = rows[i]!;
       if (candidate.rect[1] > chunk.rect[3] + unit) break;
@@ -85,8 +93,16 @@ export function textLines(
         Math.abs(centerY(candidate.rect) - centerY(chunk.rect)) <=
         Math.min(height(chunk.rect), height(candidate.rect)) * 0.4
       ) {
-        row = candidate;
-        break;
+        // A script can be encountered before its base, so visual rows may contain
+        // mixed sizes. Prefer a matching size over a coincident neighboring tick row.
+        let difference = Infinity;
+        for (const other of candidate.chunks)
+          difference = Math.min(difference, Math.abs(other.fontSize - chunk.fontSize));
+        if (!row || difference < fontDifference) {
+          row = candidate;
+          fontDifference = difference;
+        }
+        if (fontDifference === 0) break;
       }
     }
     if (row) {
@@ -109,6 +125,9 @@ export function textLines(
         // Overprinted text streams are not consecutive words. Keep both, without
         // treating either stream as invisible; small kerning overlaps remain legal.
         if (chunk.rect[0] < previous.rect[2] - unit * 0.2) continue;
+        // A distant matching font must not steal a locally attached math script.
+        if (chunk.rect[0] - previous.rect[2] > cellGap) continue;
+        if (!compatibleTypography(previous, chunk)) continue;
         const difference = Math.abs(chunk.fontSize - previous.fontSize);
         // A long run that overprints this track's later words starts another stream,
         // even when its left edge happens to fit after the current prefix.

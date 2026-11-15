@@ -15,7 +15,8 @@ import type { Caption, Line, LocalFigureText, LocalRuleRect, RuleContext } from 
 /**
  * Repeated cells can prove a table without painted rules. Reconstruct their whitespace from
  * native chunks, not merged prose lines; require multiple rows and two stable cell starts.
- * The caption bounds the search horizontally, while prose and other captions split row chains.
+ * Nearby native rules can supply the width of a table with a short centered caption;
+ * repeated cells, not the rules alone, must still prove its rows and columns.
  */
 export function tableTextGroups(
   lines: readonly Line[],
@@ -42,6 +43,31 @@ export function tableTextGroups(
     if (caption.identity.kind !== 'table') continue;
     let left = caption.rect[0] - unit * 3;
     let right = caption.rect[2] + unit * 3;
+    // Use the closest native separator, not a farther page header spanning another column.
+    // This only widens the search; repeated cells must still prove membership.
+    let nativeDistance = Infinity;
+    let nativeLeft = left;
+    let nativeRight = right;
+    for (const rule of graphics) {
+      const distance = gapY(rule, caption.rect);
+      if (
+        height(rule) > unit * 0.3 ||
+        rule[0] > caption.rect[0] ||
+        rule[2] < caption.rect[2] ||
+        distance > leading * 1.6
+      )
+        continue;
+      if (distance < nativeDistance) {
+        nativeDistance = distance;
+        nativeLeft = rule[0];
+        nativeRight = rule[2];
+      } else if (distance === nativeDistance) {
+        nativeLeft = Math.min(nativeLeft, rule[0]);
+        nativeRight = Math.max(nativeRight, rule[2]);
+      }
+    }
+    left = Math.min(left, nativeLeft);
+    right = Math.max(right, nativeRight);
     for (const other of captions) {
       if (other === caption || overlapY(other.rect, caption.rect) <= 0) continue;
       if (other.rect[2] < caption.rect[0]) left = Math.max(left, other.rect[2] + unit * 0.5);
