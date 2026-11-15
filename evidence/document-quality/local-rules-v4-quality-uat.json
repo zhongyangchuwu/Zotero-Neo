@@ -1,0 +1,244 @@
+{
+  "schemaVersion": 1,
+  "kind": "local-rule-quality-native-uat",
+  "host": {
+    "version": "10.0.8",
+    "profile": "C:\\Users\\25367\\AppData\\Local\\Temp\\neo-local-rule-quality.wWqUXK\\profile",
+    "data": "C:\\Users\\25367\\AppData\\Local\\Temp\\neo-local-rule-quality.wWqUXK\\data",
+    "pid": 25064,
+    "port": 6106,
+    "owned": true
+  },
+  "source": {
+    "baseCommit": "2400004a81bb7d272d9265e6862fe431d1c45683",
+    "documentId": "e-icml11_3",
+    "itemID": 1,
+    "itemKey": "47V49N5L",
+    "fingerprint": "95bd61c1f8d26c3873128b355ea0a27e",
+    "pdf": {
+      "path": "/home/han/.omp/experiments/neo-local-figure-coverage.i51dYY/independent-e/e-icml11_3.pdf",
+      "sha256": "39f87714fb8227113cb8bfc0cb0afdcf78ea5e7b96c38ac8cc87ff05d60c74dc",
+      "bytes": 784840
+    }
+  },
+  "automation": "Firefox RDP；精确 PDF window 的克隆 KeyboardEvent 打开实际界面；通过实际 DOM 按钮保存／定位／打开。截图来自真实窗口 canvas.drawWindow，未重建 DOM 或伪造输出。",
+  "artifacts": [
+    {
+      "path": "/home/han/.omp/experiments/neo-local-rule-quality.wWqUXK/uat-figure-picker-candidate.png",
+      "sha256": "407cc15ba9c41d058b6bbb1e15f508024cfd868e68302197a866e42831c04e9c",
+      "bytes": 114540
+    },
+    {
+      "path": "/home/han/.omp/experiments/neo-local-rule-quality.wWqUXK/uat-figure1-source.png",
+      "sha256": "1b14323433c700d8aa80c26e144d01f16e0dd34f8a987e1cb058875c36830f68",
+      "bytes": 16955
+    },
+    {
+      "path": "/home/han/.omp/experiments/neo-local-rule-quality.wWqUXK/uat-excerpt-before-save.png",
+      "sha256": "878468f11e4381344e3bb7dddb4570d6caf8cdda3b27c78e285f3b2142c548d8",
+      "bytes": 113040
+    },
+    {
+      "path": "/home/han/.omp/experiments/neo-local-rule-quality.wWqUXK/uat-excerpt-saved.png",
+      "sha256": "a984a257654346b3713e61679c9addfcd65d896ae5028a992303486f7e9c63ee",
+      "bytes": 114531
+    },
+    {
+      "path": "/home/han/.omp/experiments/neo-local-rule-quality.wWqUXK/uat-excerpt-reused.png",
+      "sha256": "b6fc343b74040ebc69cace60e57ec4d29c437ab095a65d18e06cad48d514c892",
+      "bytes": 114738
+    },
+    {
+      "path": "/home/han/.omp/experiments/neo-local-rule-quality.wWqUXK/uat-local-parse-saved.png",
+      "sha256": "140f9cfba723d83d6e0390870b0168248b492e11988fd24a73ba82ef580885fa",
+      "bytes": 73299
+    },
+    {
+      "path": "/home/han/.omp/experiments/neo-local-rule-quality.wWqUXK/native-excerpt-note.html",
+      "sha256": "fc58002da9da3533bbd977565d6862480226d47b3ce4d56905dc4628930902a7",
+      "bytes": 1129
+    },
+    {
+      "path": "/home/han/.omp/experiments/neo-local-rule-quality.wWqUXK/native-excerpt-image.png",
+      "sha256": "ad04fab9beca50fc2a2aa3ac8c43173c8e4730aedad2bd178730f2f0198bfa6a",
+      "bytes": 83133
+    },
+    {
+      "path": "/home/han/.omp/experiments/neo-local-rule-quality.wWqUXK/native-baseline-cache.json",
+      "sha256": "60a8d72ed23f3214ecff65d1e1811baeffe0cb2052b65c475649efa58213cb37",
+      "bytes": 181265
+    },
+    {
+      "path": "/home/han/.omp/experiments/neo-local-rule-quality.wWqUXK/native-candidate-cache.json",
+      "sha256": "00cb3fd7fa733821a3681009b0f8808ab96be46249c666793aa995b5be6f74fb",
+      "bytes": 169550
+    },
+    {
+      "path": "/home/han/.omp/experiments/neo-local-rule-quality.wWqUXK/native-reader-uat.js",
+      "sha256": "bf571f56feea3bea4dcda4c2a0e698ef18532a98475a4791a3a2e172ede1266e",
+      "bytes": 303690
+    },
+    {
+      "path": "/home/han/.omp/experiments/neo-local-rule-quality.wWqUXK/uat-note-opened.png",
+      "sha256": "ac75e000ce07df68b6e2c7f5a0f1ed4759d833ccb139493c907644852190c158",
+      "bytes": 105168
+    }
+  ],
+  "package": [
+    {
+      "path": "build/addon/content/zotero-neo.js",
+      "sha256": "bbc777b77b3413d2eb29f5e2444d3f1c71152aaf2b47738fbda946af921243de",
+      "bytes": 1931322
+    },
+    {
+      "path": "zotero-neo.xpi",
+      "sha256": "16755eb5ede5c2b6ebf080bdcb9dd408b5ee7e1718c3b3d6cd8ccddaeb20dc18",
+      "bytes": 872045
+    }
+  ],
+  "checks": [
+    {
+      "name": "实际 Figure Picker 与改进后的复合图预览",
+      "status": "passed",
+      "detail": "4 个真实图组：第 5 页 Figure1、第 6 页 Figure2/3、第 7 页 Figure4；第 6 页的不可见 Figure1 未列出。973×362 原生预览可见四幅曲线及题注，但缺顶行两个内部标题，完整性不判通过。"
+    },
+    {
+      "name": "实际原文跳转",
+      "status": "passed",
+      "detail": "点击 Go to source，实际 PDFViewer 页码与页码输入均为 5，并检查源页截图。"
+    },
+    {
+      "name": "摘录保存／复用／打开",
+      "status": "passed",
+      "detail": "通过实际摘录界面保存 note 2／嵌图 3，再保存复用同一笔记；显式本地解析和缓存重开后再次保存仍复用 note 2。点击 Open note，实际选中 type=note、itemID=2，原生编辑器显示嵌图与来源题注；实际窗口截图已查看。"
+    },
+    {
+      "name": "普通浏览跳过旧身份且不写新槽",
+      "status": "passed",
+      "detail": "旧版真实 UI 创建旧缓存，换载候选后浏览／预览只留下旧槽；生产 readReaderDocumentCache 在显式解析前返回 null。"
+    },
+    {
+      "name": "显式解析保存新身份且不改旧文件",
+      "status": "passed",
+      "detail": "实际 Use cache or parse locally 按钮显示 Analysis saved locally for reuse next time；同为适配器 4 的新旧配置写入不同槽，547 与 507 区域；旧缓存 SHA256 不变。"
+    },
+    {
+      "name": "重开后生产缓存接纳",
+      "status": "passed",
+      "detail": "生产 readReaderDocumentCache 接纳新槽；readReaderDocument 返回 origin=cache、507 区域、isCurrent=true。重开摘录后新旧缓存 SHA256 都未变。"
+    }
+  ],
+  "cache": {
+    "oldKey": {
+      "backend": "local-rules",
+      "adapterVersion": 4,
+      "configuration": "pdfjs-native-text-graphics-v1:[1,1,1,[\"unruledTables\",1,{\"enabled\":true,\"minRows\":3,\"minColumns\":2}],[\"graphicLabels\",1,{\"enabled\":true,\"maxFontSizeEm\":1.4,\"maxGapEm\":0.8}],[\"ruledTables\",1,{\"enabled\":true,\"endpointToleranceEm\":0.2}],[\"compoundPanels\",1,{\"enabled\":true,\"maxGapEm\":1.5,\"minOverlapRatio\":0.4}],{\"maxDistanceLines\":5,\"minWidthEm\":3,\"minHeightEm\":2}]"
+    },
+    "newKey": {
+      "backend": "local-rules",
+      "adapterVersion": 4,
+      "configuration": "pdfjs-native-text-graphics-v1:[2,2,1,[\"unruledTables\",2,{\"enabled\":true,\"minRows\":3,\"minColumns\":2}],[\"graphicLabels\",2,{\"enabled\":true,\"maxFontSizeEm\":1.4,\"maxGapEm\":0.8}],[\"ruledTables\",1,{\"enabled\":true,\"endpointToleranceEm\":0.2}],[\"compoundPanels\",2,{\"enabled\":true,\"maxGapEm\":1.5,\"minOverlapRatio\":0.4,\"maxRepeatedGapRatio\":0.25}],{\"maxDistanceLines\":5,\"minWidthEm\":3,\"minHeightEm\":2}]"
+    },
+    "oldRegions": 547,
+    "newRegions": 507,
+    "oldSlot": ".zotero-neo-analysis-65c2c6270ce04cfb911aac4273255181.json",
+    "newSlot": ".zotero-neo-analysis-c29dae73ecffe624c81e2d11affde3b6.json",
+    "oldSha256Before": "60a8d72ed23f3214ecff65d1e1811baeffe0cb2052b65c475649efa58213cb37",
+    "oldSha256After": "60a8d72ed23f3214ecff65d1e1811baeffe0cb2052b65c475649efa58213cb37",
+    "newSha256": "00cb3fd7fa733821a3681009b0f8808ab96be46249c666793aa995b5be6f74fb",
+    "productionRead": {
+      "cacheBeforeWasMiss": true,
+      "cacheAccepted": true,
+      "origin": "cache",
+      "regionCount": 507,
+      "isCurrent": true,
+      "identity": {
+        "schemaVersion": 1,
+        "sourceFingerprint": "95bd61c1f8d26c3873128b355ea0a27e",
+        "backend": "local-rules",
+        "modelRevision": null,
+        "durationMs": 0
+      },
+      "screenshot": "C:\\Users\\25367\\AppData\\Local\\Temp\\neo-local-rule-quality.wWqUXK\\uat-local-parse-saved.png"
+    }
+  },
+  "excerpt": {
+    "noteID": 2,
+    "imageID": 3,
+    "imageKey": "YHIJZBC8",
+    "previewPixels": [973, 362],
+    "firstReuse": {
+      "noteIDs": [2],
+      "reused": true,
+      "imageIDs": [3],
+      "imagePath": "C:\\Users\\25367\\AppData\\Local\\Temp\\neo-local-rule-quality.wWqUXK\\data\\storage\\YHIJZBC8\\image.png",
+      "imageKey": "YHIJZBC8",
+      "messages": [
+        " list open and reuses an existing note for the same excerpt while preserving your edits. Choose Open note to navigate. Structured text comes from the current parser; verify it against the sourc",
+        "figures · Standalone noteReused existing note: Figure 1 · Neo quality UAT: native clipped figuresFigure · Page 5"
+      ],
+      "screenshot": "C:\\Users\\25367\\AppData\\Local\\Temp\\neo-local-rule-quality.wWqUXK\\uat-excerpt-reused.png",
+      "opening": "comparison UI"
+    },
+    "cachedReuse": {
+      "noteIDs": [2],
+      "enabled": true,
+      "receipt": "Reused existing note: Figure 1 · Neo quality UAT: native clipped figuresFigure · Page 5",
+      "clicked": true
+    },
+    "openedNote": {
+      "activeURL": "chrome://zotero/content/zoteroPane.xhtml",
+      "title": "Figure 1 · Neo quality UAT: native clipped figures - Zotero",
+      "selectedTab": {
+        "id": "tab-Ti10pErZ",
+        "type": "note",
+        "title": "Figure 1 · Neo quality UAT: native clipped figures",
+        "data": {
+          "itemID": 2,
+          "icon": "note"
+        }
+      },
+      "editors": [
+        {
+          "mode": "view"
+        },
+        {
+          "itemID": 2,
+          "mode": "edit"
+        },
+        {
+          "itemID": 2,
+          "mode": "edit"
+        },
+        {
+          "mode": "view"
+        },
+        {
+          "mode": "view"
+        }
+      ],
+      "noteIDs": [2]
+    }
+  },
+  "cleanup": {
+    "ownedPid": 25064,
+    "identityCheckedBeforeQuit": {
+      "pid": 25064,
+      "profile": "C:\\Users\\25367\\AppData\\Local\\Temp\\neo-local-rule-quality.wWqUXK\\profile",
+      "normalQuitScheduled": true
+    },
+    "normalExitObserved": true,
+    "ownedWindowsProfileAndDataRemoved": true,
+    "copiedBuildAndHelpersRemoved": true,
+    "throwawayUATSourcesRemoved": true,
+    "rawCapturesSourceImagesAndArchivedCachesRetained": true
+  },
+  "limits": [
+    "程序化输入与临时加载插件；物理键盘、输入法和重新安装 XPI 未测。",
+    "同一真实复合图贯通任务；不把此 UAT 推广为全部 137 个静态核验点的任务成功。",
+    "预览／嵌图仍缺 Figure1 顶行 rho 内部标题；保存与打开成功不代表裁图完整。",
+    "未选择 SDT、模型、OCR 或云端按钮；不声称整个 Zotero 进程零网络。启动曾自动尝试安装 Word 插件并报错，仅取消错误提示，未手动重试。",
+    "个人 profile／文库和端口 6101 未连接；仅操作本任务 PID 25064、端口 6106 和隔离目录。",
+    "本地 package 已构建和检查；此轮未做打包安装／更新验收，打包与生命周期未改变。"
+  ]
+}

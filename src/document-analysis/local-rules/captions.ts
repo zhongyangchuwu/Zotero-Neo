@@ -21,56 +21,56 @@ export function captionsFromLines(
   const separators = graphics.filter(
     (r) => valid(r) && height(r) <= unit * 0.3 && width(r) >= unit * 6,
   );
+  const sameParagraphBaseline = (previous: Line, next: Line): boolean => {
+    if (
+      Math.abs(previous.fontSize - next.fontSize) > unit * 0.05 ||
+      Math.abs(previous.rect[0] - next.rect[0]) > unit ||
+      !sameColumn(previous.rect, next.rect, unit)
+    )
+      return false;
+    const distance = centerY(previous.rect) - centerY(next.rect);
+    const gap = previous.rect[1] - next.rect[3];
+    return (
+      distance >= unit * 0.7 &&
+      distance <= proseLeading * 1.35 &&
+      // Native ascent/descent boxes can overlap even on distinct paragraph baselines.
+      gap >= -unit * 0.25 &&
+      gap <= Math.min(unit * 0.65, proseLeading - height(previous.rect) + unit * 0.25) &&
+      !graphics.some(
+        (r) =>
+          valid(r) &&
+          width(r) >= unit * 3 &&
+          height(r) >= unit * 2 &&
+          contains(r, previous.rect) !== contains(r, next.rect),
+      )
+    );
+  };
   const used = new Set<Line>();
   const captions: Caption[] = [];
   for (const [seed, identity] of seeds) {
     // An unpunctuated label followed by a sentence predicate can start a prose paragraph.
     // Require a matching body-text baseline too: the identity alone remains valid for captions.
     const paragraphReference =
-      /^\s*(?:fig(?:ure)?\.?|table)\s*\S+(?<![.:：,，])\s+(?:shows?|illustrates?|summari[sz]es?|presents?|compares?|reports?|describes?|demonstrates?)\b/iu.test(
+      /^\s*(?:fig(?:ure)?\.?|table)\s*\S+(?<![.:：,，])\s+(?:also\s+)?(?:shows?|illustrates?|summari[sz]es?|presents?|compares?|reports?|describes?|demonstrates?|contains?)\b/iu.test(
         seed.text,
       ) &&
       Math.abs(seed.fontSize - unit) <= unit * 0.05 &&
-      lines.some((next) => {
-        if (
-          seeds.has(next) ||
-          !proseLine(next, unit) ||
-          Math.abs(next.fontSize - seed.fontSize) > unit * 0.05 ||
-          Math.abs(next.rect[0] - seed.rect[0]) > unit ||
-          !sameColumn(next.rect, seed.rect, unit)
-        )
-          return false;
-        const distance = centerY(seed.rect) - centerY(next.rect);
-        const gap = seed.rect[1] - next.rect[3];
-        return (
-          distance >= unit * 0.7 &&
-          distance <= proseLeading * 1.35 &&
-          gap >= -unit * 0.1 &&
-          gap <= Math.min(unit * 0.65, proseLeading - height(seed.rect) + unit * 0.25)
-        );
-      });
+      lines.some(
+        (next) => !seeds.has(next) && proseLine(next, unit) && sameParagraphBaseline(seed, next),
+      );
     if (paragraphReference) continue;
     // A numbered reference on the next normal paragraph baseline is not a caption lead.
     if (
-      proseLine(seed, unit) &&
-      lines.some((previous) => {
-        if (
-          seeds.has(previous) ||
-          !proseLine(previous, unit) ||
-          Math.abs(previous.fontSize - seed.fontSize) > unit * 0.05 ||
-          Math.abs(previous.rect[0] - seed.rect[0]) > unit ||
-          !sameColumn(previous.rect, seed.rect, unit)
-        )
-          return false;
-        const distance = centerY(previous.rect) - centerY(seed.rect);
-        const gap = previous.rect[1] - seed.rect[3];
-        return (
-          distance >= unit * 0.7 &&
-          distance <= proseLeading * 1.35 &&
-          gap >= -unit * 0.1 &&
-          gap <= Math.min(unit * 0.65, proseLeading - height(previous.rect) + unit * 0.25)
-        );
-      })
+      lines.some(
+        (previous) =>
+          !seeds.has(previous) &&
+          proseLine(previous, unit) &&
+          sameParagraphBaseline(previous, seed) &&
+          (proseLine(seed, unit) ||
+            // A short reference can be the final words of an unfinished prose sentence.
+            (Math.abs(seed.fontSize - unit) <= unit * 0.05 &&
+              !/[.!?。！？]\s*$/u.test(previous.text))),
+      )
     )
       continue;
     const parts = [seed];
@@ -84,7 +84,7 @@ export function captionsFromLines(
       if (gap < -unit * 0.2 || !sameColumn(last.rect, line.rect, unit)) continue;
       // Body prose is commonly only one point larger than a caption; a 15% tolerance crosses
       // that typography boundary and can swallow the paragraph after an otherwise valid caption.
-      if (Math.abs(line.fontSize - seed.fontSize) > unit * 0.08) continue;
+      if (Math.abs(line.fontSize - seed.fontSize) > Math.min(unit, seed.fontSize) * 0.08) continue;
       // A nearby diagram's labels are not caption continuation, even at the same font size.
       if (
         graphics.some(

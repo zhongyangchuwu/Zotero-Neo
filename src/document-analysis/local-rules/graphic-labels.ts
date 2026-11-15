@@ -1,3 +1,4 @@
+import { algorithmPanelLines } from './body-evidence';
 import {
   centerY,
   corridor,
@@ -30,10 +31,48 @@ export function graphicTextLabels(
   const { enabled, maxFontSizeEm, maxGapEm } = context.profile.rules.graphicLabels;
   if (!enabled) return boxes.map(() => new Set<Line>());
   const captionLines = new Set(captions.flatMap((caption) => caption.lines));
-  const labels = boxes.map(() => new Set<Line>());
+  const labels = boxes.map(
+    (rect) => new Set(algorithmPanelLines(rect, lines, captions, unit, maxFontSizeEm)),
+  );
+  // A shared definition may occupy the unused column below a shorter algorithm panel.
+  // Require its explicit multi-algorithm reference and equation, bounded by a taller peer;
+  // ordinary paragraphs beside a frame do not acquire ownership from whitespace alone.
+  labels.forEach((members, index) => {
+    if (!members.size) return;
+    const box = boxes[index]!;
+    boxes.forEach((peer, peerIndex) => {
+      if (
+        peerIndex === index ||
+        !labels[peerIndex]!.size ||
+        peer[1] >= box[1] ||
+        gapX(box, peer) <= 0 ||
+        overlapY(box, peer) < Math.min(height(box), height(peer)) * 0.5
+      )
+        return;
+      const note = lines.filter(
+        (line) =>
+          line.rect[0] >= box[0] - unit * maxGapEm &&
+          line.rect[2] <= box[2] + unit * maxGapEm &&
+          line.rect[3] <= box[1] &&
+          line.rect[3] >= peer[1] - leading &&
+          line.fontSize <= unit * maxFontSizeEm &&
+          !captionLines.has(line) &&
+          !captions.some((caption) => intersects(caption.rect, line.rect)),
+      );
+      if (
+        !note.some((line) => /\b(?:both|these)\s+algorithms\b/iu.test(line.text)) ||
+        !note.some((line) => /[∑∏∫]/u.test(line.text)) ||
+        !note.some((line) => /=/u.test(line.text)) ||
+        note.some((line) => proseLine(line, unit) && line.fontSize >= unit * 0.95)
+      )
+        return;
+      for (const line of note) members.add(line);
+    });
+  });
   const panelLabels = new Set<Line>();
   const barrierLines = [...barriers];
   for (const line of lines) {
+    if (labels.some((members) => members.has(line))) continue;
     if (
       captionLines.has(line) ||
       reserved.has(line) ||

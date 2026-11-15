@@ -1,3 +1,4 @@
+import { algorithmPanelLines } from './body-evidence';
 import {
   bounds,
   contains,
@@ -25,7 +26,6 @@ export function bodiesForCaption(
   context: RuleContext,
 ): Body[] {
   const { maxDistanceLines, minWidthEm, minHeightEm } = context.profile.association;
-  const { enabled: joinPanels, maxGapEm } = context.profile.rules.compoundPanels;
   const captionId = context.observe
     ? `local:${context.pageIndex}:caption:${captions.indexOf(caption)}`
     : undefined;
@@ -35,6 +35,12 @@ export function bodiesForCaption(
   for (const graphic of graphics) {
     const r = graphic.rect;
     if (width(r) < unit * minWidthEm || height(r) < unit * minHeightEm) continue;
+    // Independently headed algorithm panels are not measurement-table continuations.
+    if (
+      caption.identity.kind === 'table' &&
+      algorithmPanelLines(r, lines, captions, unit).length > 0
+    )
+      continue;
     if (!sameColumn(caption.rect, r, unit)) continue;
     const direction =
       r[1] >= caption.rect[3] - unit * 0.15
@@ -43,28 +49,13 @@ export function bodiesForCaption(
           ? below
           : null;
     if (!direction) continue;
-    // A farther row may continue a near-caption band, not annex a separate neighboring object.
-    const farther = gapY(caption.rect, r) > leading * maxDistanceLines;
-    const continuesNearBand =
-      farther &&
-      joinPanels &&
-      graphics.some(
-        (nearer) =>
-          nearer !== graphic &&
-          gapY(caption.rect, nearer.rect) <= leading * maxDistanceLines &&
-          gapY(r, nearer.rect) <= unit * maxGapEm &&
-          sameColumn(r, nearer.rect, unit),
-      );
+    // A separately captioned object of another kind is not a continuation of this band.
     if (
-      farther &&
+      gapY(caption.rect, r) > leading * maxDistanceLines &&
       captions.some(
         (other) =>
           other !== caption &&
-          (!continuesNearBand ||
-            other.identity.kind !== caption.identity.kind ||
-            (direction === above
-              ? r[1] >= other.rect[3] - unit * 0.15
-              : r[3] <= other.rect[1] + unit * 0.15)) &&
+          other.identity.kind !== caption.identity.kind &&
           sameColumn(other.rect, r, unit) &&
           !intersects(other.rect, r) &&
           gapY(other.rect, r) <= leading * maxDistanceLines,
@@ -119,6 +110,8 @@ export function bodiesForCaption(
     }
     direction.push(graphic);
   }
+  // Keep complete same-kind bands until ownership resolution. Pruning a distant panel because
+  // another same-kind caption is closer would split one repeated stack into unique claims.
   const bands: Graphic[][] = [];
   for (const direction of [above, below]) {
     for (const connected of compoundPanelBands(direction, unit, context)) {

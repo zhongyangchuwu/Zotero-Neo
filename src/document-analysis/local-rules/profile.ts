@@ -1,5 +1,5 @@
-export const LOCAL_RULE_ENGINE_REVISION = 1;
-export const LOCAL_RULE_GEOMETRY_REVISION = 1;
+export const LOCAL_RULE_ENGINE_REVISION = 2;
+export const LOCAL_RULE_GEOMETRY_REVISION = 2;
 
 export interface LocalRuleOptions {
   readonly version?: 1;
@@ -22,6 +22,7 @@ export interface LocalRuleOptions {
       readonly enabled?: boolean;
       readonly maxGapEm?: number;
       readonly minOverlapRatio?: number;
+      readonly maxRepeatedGapRatio?: number;
     };
   };
   readonly association?: {
@@ -52,6 +53,7 @@ export interface LocalRuleProfile {
       readonly enabled: boolean;
       readonly maxGapEm: number;
       readonly minOverlapRatio: number;
+      readonly maxRepeatedGapRatio: number;
     };
   };
   readonly association: {
@@ -122,6 +124,7 @@ function resolve(input: unknown): LocalRuleProfile {
     'enabled',
     'maxGapEm',
     'minOverlapRatio',
+    'maxRepeatedGapRatio',
   ]);
   const a = section(root.association, 'association', [
     'maxDistanceLines',
@@ -151,6 +154,13 @@ function resolve(input: unknown): LocalRuleProfile {
       enabled: enabled(c.enabled, 'rules.compoundPanels.enabled'),
       maxGapEm: number(c.maxGapEm, 1.5, 'rules.compoundPanels.maxGapEm'),
       minOverlapRatio: number(c.minOverlapRatio, 0.4, 'rules.compoundPanels.minOverlapRatio', 0, 1),
+      maxRepeatedGapRatio: number(
+        c.maxRepeatedGapRatio,
+        0.25,
+        'rules.compoundPanels.maxRepeatedGapRatio',
+        0,
+        1,
+      ),
     }),
   });
   const association = Object.freeze({
@@ -162,10 +172,10 @@ function resolve(input: unknown): LocalRuleProfile {
     LOCAL_RULE_ENGINE_REVISION,
     LOCAL_RULE_GEOMETRY_REVISION,
     1,
-    ['unruledTables', 1, rules.unruledTables],
-    ['graphicLabels', 1, rules.graphicLabels],
+    ['unruledTables', 2, rules.unruledTables],
+    ['graphicLabels', 2, rules.graphicLabels],
     ['ruledTables', 1, rules.ruledTables],
-    ['compoundPanels', 1, rules.compoundPanels],
+    ['compoundPanels', 2, rules.compoundPanels],
     association,
   ]);
   return Object.freeze({ version: 1, rules, association, fingerprint });

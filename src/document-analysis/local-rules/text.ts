@@ -98,8 +98,42 @@ export function textLines(
     row.chunks.sort((a, b) => a.rect[0] - b.rect[0] || a.text.localeCompare(b.text));
   const boundaries = columnBoundaries(rows, unit);
   const lines: Line[] = [];
+  const runs: LocalFigureText[][] = [];
   for (const row of rows) {
-    const chunks = row.chunks;
+    const tracks: LocalFigureText[][] = [];
+    for (const chunk of row.chunks) {
+      let best: LocalFigureText[] | undefined;
+      let fontDifference = Infinity;
+      for (const track of tracks) {
+        const previous = track[track.length - 1]!;
+        // Overprinted text streams are not consecutive words. Keep both, without
+        // treating either stream as invisible; small kerning overlaps remain legal.
+        if (chunk.rect[0] < previous.rect[2] - unit * 0.2) continue;
+        const difference = Math.abs(chunk.fontSize - previous.fontSize);
+        // A long run that overprints this track's later words starts another stream,
+        // even when its left edge happens to fit after the current prefix.
+        if (
+          difference > Math.min(chunk.fontSize, previous.fontSize) * 0.08 &&
+          width(chunk.rect) >= unit * 6 &&
+          row.chunks.some(
+            (other) =>
+              other !== chunk &&
+              Math.abs(other.fontSize - previous.fontSize) <= unit * 0.05 &&
+              overlapX(other.rect, chunk.rect) > unit * 0.2,
+          )
+        )
+          continue;
+        if (difference < fontDifference) {
+          best = track;
+          fontDifference = difference;
+        }
+      }
+      if (best) best.push(chunk);
+      else tracks.push([chunk]);
+    }
+    runs.push(...tracks);
+  }
+  for (const chunks of runs) {
     let parts: LocalFigureText[] = [];
     let prefix = '';
     let captionStart = false;
