@@ -26,7 +26,15 @@ import {
   structuredDocumentData,
   type ReaderRuntime,
 } from '../toolkit/reader';
-import { selectedDocumentCacheKey } from '../document-analysis/settings';
+import {
+  LOCAL_RULES_KEY,
+  selectedDocumentCacheKey,
+  selectedLocalRuleProfile,
+} from '../document-analysis/settings';
+import {
+  DEFAULT_LOCAL_RULE_PROFILE,
+  type LocalRuleProfile,
+} from '../document-analysis/local-rules';
 
 export interface ReaderCachedDocument {
   readonly parsed: ParsedDocument;
@@ -37,6 +45,21 @@ export interface ReaderCachedDocument {
 export interface ReaderDocumentSnapshot extends ReaderCachedDocument {
   readonly origin: 'cache' | 'native' | 'local';
   readonly textRegions: readonly DocumentRegion[];
+}
+
+/** Raw edits retire snapshots even when a later lookup can reuse the same canonical cache slot. */
+function configurationCurrent(preferences: PreferenceStore, current: () => boolean): () => boolean {
+  const slot = documentCacheSlot(selectedDocumentCacheKey(preferences));
+  const rules = preferences.get(LOCAL_RULES_KEY, '');
+  return () => {
+    if (!current() || preferences.get(LOCAL_RULES_KEY, '') !== rules) return false;
+    try {
+      return documentCacheSlot(selectedDocumentCacheKey(preferences)) === slot;
+    } catch {
+      // A retired snapshot is not the error boundary for a newly invalid configuration.
+      return false;
+    }
+  };
 }
 
 /** Native extraction is explicit and validates the same PDF revision before exposing normalized structure. */
@@ -82,6 +105,7 @@ export async function readNativeReaderDocument(
 export async function readLocalReaderDocument(
   reader: ReaderRuntime,
   current: () => boolean,
+  profile: LocalRuleProfile = DEFAULT_LOCAL_RULE_PROFILE,
 ): Promise<ReaderDocumentSnapshot | null> {
   const itemID = reader.itemID;
   if (!current() || !itemID) return null;
@@ -100,14 +124,15 @@ export async function readLocalReaderDocument(
     revision === attachmentDocumentRevision(itemID);
   const abort = documentPreparationAbort();
   const parsed: ParsedDocument = await analyzeDocument(
-    localDocumentParser((signal) =>
-      pdfSourceFigurePages(() => pdf.read(), signal, pages.length, current),
+    localDocumentParser(
+      (signal) => pdfSourceFigurePages(() => pdf.read(), signal, pages.length, current),
+      profile,
     ),
     source,
     { signal: abort.signal },
   );
   if (!(await isCurrent())) return null;
-  const key = localDocumentCacheKey();
+  const key = localDocumentCacheKey(profile);
   const corrections = await readAttachmentDocumentCorrections(itemID, parsed, key);
   const effective = applyDocumentCorrections(parsed, corrections);
   return (await isCurrent())
@@ -121,14 +146,14 @@ export async function readReaderDocument(
   preferences: PreferenceStore,
   current: () => boolean,
 ): Promise<ReaderDocumentSnapshot | null> {
-  const slot = documentCacheSlot(selectedDocumentCacheKey(preferences));
-  const sourceCurrent = (): boolean =>
-    current() && documentCacheSlot(selectedDocumentCacheKey(preferences)) === slot;
+  const sourceCurrent = configurationCurrent(preferences, current);
+  const key = selectedDocumentCacheKey(preferences);
+  const profile = key.backend === 'local-rules' ? selectedLocalRuleProfile(preferences) : undefined;
   const cached = await readReaderDocumentCache(reader, preferences, sourceCurrent);
   if (!sourceCurrent()) return null;
   if (cached) return { ...cached, origin: 'cache', textRegions: cached.parsed.regions };
-  return selectedDocumentCacheKey(preferences).backend === 'local-rules'
-    ? readLocalReaderDocument(reader, sourceCurrent)
+  return key.backend === 'local-rules'
+    ? readLocalReaderDocument(reader, sourceCurrent, profile)
     : readNativeReaderDocument(reader, sourceCurrent);
 }
 
@@ -141,25 +166,24 @@ export async function readReaderDocumentCache(
   if (!current() || !reader.itemID) return null;
   const revision = attachmentDocumentRevision(reader.itemID);
   const key = selectedDocumentCacheKey(preferences);
+  const sourceCurrent = configurationCurrent(preferences, current);
   const pdf = await analysisPDF(reader.itemID);
-  if (!current()) return null;
-  const pages = await readerDocumentPageGeometry(reader, current);
-  if (!current()) return null;
+  if (!sourceCurrent()) return null;
+  const pages = await readerDocumentPageGeometry(reader, sourceCurrent);
+  if (!sourceCurrent()) return null;
   const source = {
     fingerprint: pdf.fingerprint,
     fileName: pdf.fileName,
     pages: nativeDocumentPages({ pages }),
   };
   const cached = await attachmentDocumentCache(reader.itemID).read(source, key);
-  if (!cached || !current()) return null;
+  if (!cached || !sourceCurrent()) return null;
   const corrections = await readAttachmentDocumentCorrections(reader.itemID, cached.parsed, key);
   const isCurrent = async (): Promise<boolean> =>
-    current() &&
+    sourceCurrent() &&
     revision === attachmentDocumentRevision(reader.itemID!) &&
-    documentCacheSlot(selectedDocumentCacheKey(preferences)) === documentCacheSlot(key) &&
     (await pdf.isCurrent()) &&
-    current() &&
-    documentCacheSlot(selectedDocumentCacheKey(preferences)) === documentCacheSlot(key) &&
+    sourceCurrent() &&
     revision === attachmentDocumentRevision(reader.itemID!);
   return (await isCurrent())
     ? { parsed: applyDocumentCorrections(cached.parsed, corrections), isCurrent }

@@ -1,5 +1,5 @@
 import type { DocumentRect } from '../document-analysis/contracts';
-import type { LocalFigureText } from '../document-analysis/local-figures';
+import type { LocalFigureText } from '../document-analysis/local-rules';
 import { record } from '../document-analysis/contracts';
 
 type Matrix = readonly [number, number, number, number, number, number];

@@ -3,6 +3,7 @@ import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import { ModuleHost } from '../../src/core/module-host';
 import { createChapterNotesModule, type ChapterNotesHost } from '../../src/modules/chapter-notes';
 import type { SourceNoteEntry } from '../../src/core/source-note';
+import { LOCAL_RULES_KEY } from '../../src/document-analysis/settings';
 import type {
   SearchDialogReactCommand,
   SearchDialogReactModel,
@@ -68,9 +69,19 @@ function fixture() {
   const window = { document: { activeElement: null }, focus: vi.fn() } as unknown as Parameters<
     ReturnType<typeof createChapterNotesModule>['open']
   >[0];
+  const preferenceListeners = new Map<string, Set<() => void>>();
   const ports: ChapterNotesHost = {
     reader: { itemID: 7 },
-    preferences: {} as ChapterNotesHost['preferences'],
+    preferences: {
+      observe: (key: string, listener: () => void) => {
+        const listeners = preferenceListeners.get(key) ?? new Set<() => void>();
+        listeners.add(listener);
+        preferenceListeners.set(key, listeners);
+        return () => {
+          listeners.delete(listener);
+        };
+      },
+    } as ChapterNotesHost['preferences'],
     target: () => ({
       attachment: { itemID: 7, libraryID: 1, key: 'PDF', title: 'Paper' },
       parent: null,
@@ -112,9 +123,36 @@ function fixture() {
       current = false;
     },
     host,
+    preferenceListeners,
   };
 }
 describe('Reader chapter notes review', () => {
+  it.each([false, true])(
+    'closes a profile-dependent preview on configuration change (pending=%s)',
+    async (pending) => {
+      const f = fixture();
+      const gate = Promise.withResolvers<unknown>();
+      if (pending) io.read.mockReturnValueOnce(gate.promise);
+      f.module.open(f.window);
+      await f.loaded();
+      expect(f.doc.querySelector('section')).not.toBeNull();
+      for (const listener of f.preferenceListeners.get(LOCAL_RULES_KEY) ?? []) listener();
+      if (pending)
+        gate.resolve({
+          parsed: { sourceFingerprint: 'pdf', regions: [] },
+          isCurrent: async () => true,
+        });
+      await f.loaded();
+      expect(f.doc.querySelector('section')).toBeNull();
+      expect(io.save).not.toHaveBeenCalled();
+      if (pending) expect(io.entries).not.toHaveBeenCalled();
+      f.host.dispose();
+      expect([...f.preferenceListeners.values()].every((listeners) => listeners.size === 0)).toBe(
+        true,
+      );
+    },
+  );
+
   it('cancels without writing and contains a late source read', async () => {
     const f = fixture(),
       pending = Promise.withResolvers<unknown>();

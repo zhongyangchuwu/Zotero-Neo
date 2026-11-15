@@ -5,7 +5,11 @@ import type { KeyGuideLanguage } from '../../input/key-guide-config';
 import type { PreferenceStore } from '../../core/preference-store';
 import { readReaderDocumentCache, readReaderDocument } from '../../reader/document-cache';
 import { observeAttachmentDocumentCache } from '../../platform/document-analysis-cache';
-import { DOCUMENT_PROVIDER_KEY, OXR_ENDPOINT_KEY } from '../../document-analysis/settings';
+import {
+  DOCUMENT_PROVIDER_KEY,
+  OXR_ENDPOINT_KEY,
+  LOCAL_RULES_KEY,
+} from '../../document-analysis/settings';
 import type { PdfWindow, ReaderMode, ReaderRuntime } from '../../reader/types';
 import {
   computeSelectionPosition,
@@ -114,7 +118,7 @@ export function createReaderSelectionModule(
     };
     if (ports.reader.itemID)
       scope.add(observeAttachmentDocumentCache(ports.reader.itemID, invalidateStructure));
-    for (const key of [DOCUMENT_PROVIDER_KEY, OXR_ENDPOINT_KEY]) {
+    for (const key of [DOCUMENT_PROVIDER_KEY, OXR_ENDPOINT_KEY, LOCAL_RULES_KEY]) {
       const stop = ports.preferences.observe?.(key, invalidateStructure);
       if (stop) scope.add(stop);
     }

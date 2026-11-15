@@ -15,6 +15,9 @@ import {
   type DocumentCorrections,
 } from '../../src/document-analysis/corrections';
 import { documentCacheSlot } from '../../src/document-analysis/cache';
+import { LOCAL_RULES_KEY } from '../../src/document-analysis/settings';
+import { localDocumentCacheKey, localParsedDocument } from '../../src/document-analysis/local';
+import { parseLocalRuleProfile } from '../../src/document-analysis/local-rules';
 
 const host = vi.hoisted(() => ({
   window: null as unknown,
@@ -270,9 +273,13 @@ const cached = { savedAt: 1000, parsed: oxrParsedDocument(source, payload, 1250)
 let document: DocumentFixture;
 let comparison: ReaderDocumentComparison;
 let selectedProvider = 'oxr';
+let selectedRules = '';
+const preferenceListeners = new Map<string, Set<() => void>>();
 beforeEach(() => {
   vi.resetAllMocks();
   selectedProvider = 'oxr';
+  selectedRules = '';
+  preferenceListeners.clear();
   host.models.length = 0;
   host.views.length = 0;
   host.correctionRecords.clear();
@@ -320,8 +327,20 @@ beforeEach(() => {
     reader: { itemID: 1 } as ReaderRuntime,
     preferences: {
       get: (key: string, fallback: unknown) =>
-        key === 'documentAnalysis.provider' ? selectedProvider : fallback,
+        key === 'documentAnalysis.provider'
+          ? selectedProvider
+          : key === LOCAL_RULES_KEY
+            ? selectedRules
+            : fallback,
       set: vi.fn(),
+      observe: (key: string, listener: () => void) => {
+        const listeners = preferenceListeners.get(key) ?? new Set<() => void>();
+        listeners.add(listener);
+        preferenceListeners.set(key, listeners);
+        return () => {
+          listeners.delete(listener);
+        };
+      },
     } as unknown as PreferenceStore,
     language: () => 'en',
     themeRoot: () => () => {},
@@ -367,6 +386,145 @@ describe('document comparison cache workflow', () => {
     ).toBe(true);
     comparison.close(false);
   });
+
+  it('extracts and persists the selected local profile, reusing canonical equivalents without touching old slots', async () => {
+    selectedProvider = 'local';
+    selectedRules = '{"association":{"minWidthEm":100}}';
+    const key = localDocumentCacheKey(parseLocalRuleProfile(selectedRules));
+    const oldSlot = documentCacheSlot(localDocumentCacheKey());
+    const records = new Map([
+      [oldSlot, { ...cached, parsed: { ...cached.parsed, backend: 'local-rules' } }],
+    ]);
+    host.readCache.mockImplementation(
+      async (_source, selected) => records.get(documentCacheSlot(selected)) ?? null,
+    );
+    host.writeCache.mockImplementation(async (_source, selected, parsed, current) => {
+      if (!(await current())) return false;
+      records.set(documentCacheSlot(selected), { savedAt: 2000, parsed });
+      return true;
+    });
+    comparison.open();
+    await vi.waitFor(() => expect(document.button('parseLocal').disabled).toBe(false));
+    expect(host.localPages).not.toHaveBeenCalled();
+    document.button('parseLocal').emit('click');
+    await vi.waitFor(() => expect(records.has(documentCacheSlot(key))).toBe(true));
+    await vi.waitFor(() => expect(host.models.at(-1)?.busy).toBe(false));
+    expect(host.writeCache.mock.calls[0]?.[1]).toEqual(key);
+    const parsed = host.writeCache.mock.calls[0]?.[2];
+    expect(parsed.regions.some((region: { kind: string }) => region.kind === 'image')).toBe(false);
+    expect(parsed.regions.some((region: { kind: string }) => region.kind === 'caption')).toBe(true);
+    expect(records.size).toBe(2);
+    expect(records.get(oldSlot)?.savedAt).toBe(cached.savedAt);
+    comparison.close();
+
+    selectedRules = '{"version":1,"association":{"minHeightEm":2,"minWidthEm":100}}';
+    comparison.open();
+    await vi.waitFor(() =>
+      expect(host.models.at(-1)?.columns[1]?.cache.length ?? 0).toBeGreaterThan(0),
+    );
+    expect(host.readCache).toHaveBeenLastCalledWith(source, key);
+    expect(host.localPages).toHaveBeenCalledOnce();
+    expect(host.writeCache).toHaveBeenCalledOnce();
+    expect(host.request).not.toHaveBeenCalled();
+    expect(host.native).not.toHaveBeenCalled();
+    comparison.close();
+  });
+
+  it.each([{ rules: '{' }, { rules: '{"rules":{"missingRule":{}}}' }])(
+    'contains invalid local configuration $rules at the comparison task boundary',
+    async ({ rules }) => {
+      selectedProvider = 'local';
+      selectedRules = rules;
+      expect(() => comparison.open()).not.toThrow();
+      const preparingStatus = host.models.at(-1)!.status;
+      await vi.waitFor(() => expect(host.models.at(-1)!.status).not.toBe(preparingStatus));
+      expect(host.models.at(-1)!.status).not.toBe('');
+      expect(host.models.at(-1)?.columns[1]?.targets).toEqual([]);
+      expect(host.readCache).not.toHaveBeenCalled();
+      host.dispatch!({ type: 'parse' });
+      await vi.waitFor(() => expect(host.models.at(-1)?.busy).toBe(false));
+      expect(host.models.at(-1)?.columns[1]?.targets).toEqual([]);
+      expect(host.localPages).not.toHaveBeenCalled();
+      expect(host.writeCache).not.toHaveBeenCalled();
+      expect(host.request).not.toHaveBeenCalled();
+      expect(host.native).not.toHaveBeenCalled();
+      comparison.close();
+    },
+  );
+
+  it.each([true, false])(
+    'excludes pending local correction commits after an invalid profile edit (observe=%s)',
+    async (observe) => {
+      selectedProvider = 'local';
+      const raw = localParsedDocument(source, await host.localPages());
+      host.localPages.mockClear();
+      host.readCache.mockResolvedValue({ parsed: raw, savedAt: 1000 });
+      comparison.open();
+      await vi.waitFor(() =>
+        expect(host.models.at(-1)?.columns[1]?.cache.length ?? 0).toBeGreaterThan(0),
+      );
+      const started = Promise.withResolvers<void>();
+      const gate = Promise.withResolvers<void>();
+      host.saveCorrections.mockImplementationOnce(async (options) => {
+        started.resolve();
+        await gate.promise;
+        return options.current();
+      });
+      host.dispatch!({
+        type: 'correct-body',
+        column: 1,
+        regionID: raw.regions.find((region) => region.kind === 'image')!.id,
+      });
+      await started.promise;
+      selectedRules = '{';
+      if (observe)
+        for (const listener of preferenceListeners.get(LOCAL_RULES_KEY) ?? []) listener();
+      gate.resolve();
+      await vi.waitFor(() => expect(host.models.at(-1)?.corrections.busy).toBe(false));
+      expect(host.models.at(-1)?.columns[1]?.targets).toEqual([]);
+      expect(host.correctionRecords.size).toBe(0);
+      expect(host.request).not.toHaveBeenCalled();
+      expect(host.writeCache).not.toHaveBeenCalled();
+      comparison.close();
+    },
+  );
+
+  it.each([
+    { observe: true, rules: '{}' },
+    { observe: false, rules: '{}' },
+    { observe: true, rules: '{"association":{"minWidthEm":100}}' },
+    { observe: false, rules: '{"association":{"minWidthEm":100}}' },
+    { observe: true, rules: '{' },
+    { observe: false, rules: '{' },
+  ])(
+    'retires pending local extraction after a raw profile edit (observe=$observe, rules=$rules)',
+    async ({ observe, rules }) => {
+      selectedProvider = 'local';
+      const pages = await host.localPages();
+      host.localPages.mockClear();
+      const gate = Promise.withResolvers<typeof pages>();
+      host.localPages.mockReturnValueOnce(gate.promise);
+      comparison.open();
+      await vi.waitFor(() => expect(document.button('parseLocal').disabled).toBe(false));
+      host.dispatch!({ type: 'parse' });
+      await vi.waitFor(() => expect(host.localPages).toHaveBeenCalledOnce());
+      const parsingStatus = host.models.at(-1)!.status;
+      selectedRules = rules;
+      if (observe)
+        for (const listener of preferenceListeners.get(LOCAL_RULES_KEY) ?? []) listener();
+      gate.resolve(pages);
+      await vi.waitFor(() => expect(host.models.at(-1)?.busy).toBe(false));
+      await vi.waitFor(() => expect(host.models.at(-1)!.status).not.toBe(parsingStatus));
+      expect(host.models.at(-1)?.columns[1]?.targets).toEqual([]);
+      expect(host.writeCache).not.toHaveBeenCalled();
+      expect(host.request).not.toHaveBeenCalled();
+      expect(host.native).not.toHaveBeenCalled();
+      comparison.close();
+      expect([...preferenceListeners.values()].every((listeners) => listeners.size === 0)).toBe(
+        true,
+      );
+    },
+  );
 
   it('prefills, autosaves, clears and reopens MinerU input without secret models or automatic checks', async () => {
     let stored = 'saved-secret';

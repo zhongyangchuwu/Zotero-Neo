@@ -6,6 +6,12 @@ import {
 } from '../../src/modules/reader-navigation';
 import { ReaderNavigationHost, type ReaderNativeNavigation } from '../../src/toolkit';
 import type { PdfWindow, ReaderRuntime } from '../../src/reader/types';
+import type { PreferenceStore } from '../../src/core/preference-store';
+import { LOCAL_RULES_KEY } from '../../src/document-analysis/settings';
+import type { ReaderDocumentSnapshot } from '../../src/reader/document-cache';
+
+const documents = vi.hoisted(() => ({ read: vi.fn() }));
+vi.mock('../../src/reader/document-cache', () => ({ readReaderDocument: documents.read }));
 import {
   READER_OUTLINE_ACTIONS,
   READER_MARKS_ACTIONS,
@@ -40,6 +46,66 @@ function minimalPorts(): ReaderNavigationModulePorts {
 }
 
 describe('Reader navigation module lifetime', () => {
+  it('retires a pending caption source on a profile edit and prevents its late targets from returning', async () => {
+    const listeners = new Map<string, Set<() => void>>();
+    const preferences = {
+      observe: (key: string, listener: () => void) => {
+        const set = listeners.get(key) ?? new Set<() => void>();
+        set.add(listener);
+        listeners.set(key, set);
+        return () => {
+          set.delete(listener);
+        };
+      },
+    } as unknown as PreferenceStore;
+    const source: ReaderDocumentSnapshot = {
+      origin: 'local',
+      parsed: {
+        schemaVersion: 1,
+        sourceFingerprint: 'pdf',
+        backend: 'local-rules',
+        modelRevision: null,
+        durationMs: 0,
+        pages: [{ pageIndex: 0, viewBox: [0, 0, 600, 800], rotation: 0 }],
+        regions: [
+          {
+            id: 'old-caption',
+            kind: 'caption',
+            flow: 'auxiliary',
+            pageIndex: 0,
+            rect: [10, 10, 100, 30],
+            text: 'Figure 1: Old profile',
+            format: 'text',
+            anchorPrecision: 'region',
+          },
+        ],
+      },
+      textRegions: [],
+      isCurrent: async () => true,
+    };
+    const gate = Promise.withResolvers<ReaderDocumentSnapshot>();
+    documents.read
+      .mockReset()
+      .mockReturnValueOnce(gate.promise)
+      .mockResolvedValue({
+        ...source,
+        parsed: { ...source.parsed, regions: [] },
+      });
+    const host = new ModuleHost({ debug: vi.fn(), diagnostic: vi.fn() }, () => true);
+    const ports = minimalPorts();
+    const module = createReaderNavigationModule(host, { ...ports, preferences });
+    const pending = module.captions.load();
+    await vi.waitFor(() => expect(documents.read).toHaveBeenCalledOnce());
+    for (const listener of listeners.get(LOCAL_RULES_KEY) ?? []) listener();
+    await vi.waitFor(() => expect(documents.read).toHaveBeenCalledTimes(2));
+    gate.resolve(source);
+    expect(await pending).toEqual([]);
+    expect(await module.captions.load()).toEqual([]);
+    expect(module.captions.bodies).toEqual([]);
+    host.dispose();
+    expect([...listeners.values()].every((set) => set.size === 0)).toBe(true);
+  });
+
   it('rejects duplicate ownership for every supported sidebar contribution', () => {
     const host = new ModuleHost({ debug: vi.fn(), diagnostic: vi.fn() }, () => true);
     createReaderNavigationModule(host, minimalPorts());

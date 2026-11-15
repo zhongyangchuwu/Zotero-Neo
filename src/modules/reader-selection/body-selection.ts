@@ -11,6 +11,7 @@ import {
   type ReaderTextSourceLocation,
 } from '../../toolkit/reader';
 import { CleanupFailure } from '../../core/cleanup';
+import { LocalRuleConfigurationError } from '../../document-analysis/settings';
 import { bodyTextAdmission } from './body-text';
 
 export interface BodySelectionHost {
@@ -166,7 +167,8 @@ export class ReaderBodySelection {
       let cached: ReaderCachedDocument | null = null;
       try {
         cached = (await this.#host.readCache?.()) ?? null;
-      } catch {
+      } catch (error) {
+        if (error instanceof LocalRuleConfigurationError) throw error;
         if (current()) this.#host.debug('Body cache unavailable; using native layout');
       }
       if (!current()) throw new Error('Body selection retired');

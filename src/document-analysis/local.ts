@@ -5,22 +5,35 @@ import {
   type DocumentSource,
   type ParsedDocument,
 } from './contracts';
-import { localDocumentRegions, type LocalFigurePage } from './local-figures';
+import {
+  DEFAULT_LOCAL_RULE_PROFILE,
+  localDocumentRegions,
+  type LocalFigurePage,
+  type LocalRuleProfile,
+} from './local-rules';
 
-const LOCAL_DOCUMENT_KEY: DocumentCacheKey = {
-  backend: 'local-rules',
-  adapterVersion: 3,
-  configuration: 'pdfjs-native-text-graphics-v1',
-};
+const localKeys = new WeakMap<LocalRuleProfile, DocumentCacheKey>();
 
-export function localDocumentCacheKey(): DocumentCacheKey {
-  return LOCAL_DOCUMENT_KEY;
+export function localDocumentCacheKey(
+  profile: LocalRuleProfile = DEFAULT_LOCAL_RULE_PROFILE,
+): DocumentCacheKey {
+  let key = localKeys.get(profile);
+  if (!key) {
+    key = {
+      backend: 'local-rules',
+      adapterVersion: 4,
+      configuration: `pdfjs-native-text-graphics-v1:${profile.fingerprint}`,
+    };
+    localKeys.set(profile, key);
+  }
+  return key;
 }
 
 /** Source geometry is authoritative; do not attach extracted regions to another PDF revision. */
 export function localParsedDocument(
   source: DocumentSource,
   pages: readonly LocalFigurePage[],
+  profile: LocalRuleProfile = DEFAULT_LOCAL_RULE_PROFILE,
 ): ParsedDocument {
   if (
     pages.length !== source.pages.length ||
@@ -34,27 +47,28 @@ export function localParsedDocument(
   return {
     schemaVersion: 1,
     sourceFingerprint: source.fingerprint,
-    backend: LOCAL_DOCUMENT_KEY.backend,
+    backend: 'local-rules',
     modelRevision: null,
     durationMs: 0,
     pages: source.pages,
-    regions: localDocumentRegions(pages),
+    regions: localDocumentRegions(pages, profile),
   };
 }
 
 /** A local parser consumes host PDF text and painted geometry, never an SDT or cloud prediction. */
 export function localDocumentParser(
   extract: (signal: AbortSignal) => Promise<readonly LocalFigurePage[]>,
+  profile: LocalRuleProfile = DEFAULT_LOCAL_RULE_PROFILE,
 ): DocumentParser {
   return {
-    id: LOCAL_DOCUMENT_KEY.backend,
-    cacheKey: LOCAL_DOCUMENT_KEY,
+    id: 'local-rules',
+    cacheKey: localDocumentCacheKey(profile),
     capabilities: ['layout', 'text', 'reading-order', 'tables'],
     async parse(source, { signal }) {
       checkParseCurrent(signal);
       const pages = await extract(signal);
       checkParseCurrent(signal);
-      return localParsedDocument(source, pages);
+      return localParsedDocument(source, pages, profile);
     },
   };
 }

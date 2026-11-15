@@ -1,0 +1,138 @@
+{
+  "schemaVersion": 1,
+  "kind": "local-rule-profile-native-uat",
+  "host": {
+    "version": "10.0.8",
+    "profile": "C:\\Users\\25367\\AppData\\Local\\Temp\\neo-local-rule-core.O3915U\\profile",
+    "data": "C:\\Users\\25367\\AppData\\Local\\Temp\\neo-local-rule-core.O3915U\\data",
+    "neo": true,
+    "pid": 45652,
+    "port": 6105,
+    "profileOwnedByThisTask": true
+  },
+  "source": {
+    "baseCommit": "f192930813daa7bd6c324a40cee7e1e4478f59e0",
+    "sourceTree": "working-tree",
+    "documentId": "c-icml13_2",
+    "fingerprint": "285064cbbb2a6681efe1cab58b8b7b67"
+  },
+  "artifacts": {
+    "defaultCache": {
+      "path": "/mnt/c/Users/25367/AppData/Local/Temp/neo-local-rule-core.O3915U/data/storage/WKD9YQYQ/.zotero-neo-analysis-65c2c6270ce04cfb911aac4273255181.json",
+      "sha256": "2cf20b9700383136da6068852c6d39c32a61555bf304af52d2ad2201b90c461a",
+      "bytes": 135976
+    },
+    "changedCache": {
+      "path": "/mnt/c/Users/25367/AppData/Local/Temp/neo-local-rule-core.O3915U/data/storage/WKD9YQYQ/.zotero-neo-analysis-2e64b164d9ccfbdb04d84f76d787a51e.json",
+      "sha256": "50a33c7aa523d43c9b2632b82e043167c409264a7a72aa952c0bd70184c7ea3c",
+      "bytes": 137864
+    },
+    "pdf": {
+      "path": "/mnt/c/Users/25367/AppData/Local/Temp/neo-local-rule-core.O3915U/data/storage/WKD9YQYQ/owned-paper.pdf",
+      "sha256": "9c2fec72abba2629f6aa3164daffc2d3967bf260fe4d409da4c5f26a7f05f26a",
+      "bytes": 457707
+    },
+    "addon": {
+      "path": "build/addon/content/zotero-neo.js",
+      "sha256": "dbb065a3a377da6783722e9b0f394d1b04a6d8c52e1e296090a39fb12821bd0d",
+      "bytes": 1923464
+    },
+    "xpi": {
+      "path": "zotero-neo.xpi",
+      "sha256": "f464c95b18edc4b7557ab36b8cf1ff3b8ed7e58bfa2c98ffd5483552a1075b01",
+      "bytes": 870210
+    },
+    "uatBundle": {
+      "path": "/home/han/.omp/experiments/neo-local-rule-core.O3915U/native-rule-uat.js",
+      "sha256": "99764259739ecd08a2e8aaf6208ab230c4b91233d0776c6d47b98fe2daa67f68",
+      "bytes": 294999
+    },
+    "figure": {
+      "path": "/home/han/.omp/experiments/neo-local-rule-core.O3915U/native-figure-picker.png",
+      "sha256": "45c6f589cf43d16f3176ecd9d7ba24d32d80192cb9f7bd4b490e377bb4c5277b",
+      "bytes": 163515
+    },
+    "disabled": {
+      "path": "/home/han/.omp/experiments/neo-local-rule-core.O3915U/native-profile-disabled-table.png",
+      "sha256": "6f62908e2b2f99029c24b8fc406354dc595aeebb165b69230b634e8f2861ea4f",
+      "bytes": 95611
+    },
+    "invalid": {
+      "path": "/home/han/.omp/experiments/neo-local-rule-core.O3915U/native-profile-invalid.png",
+      "sha256": "f4b2812fcc73fd109805db7e285fb6a2d8cf689347b289a07dc8c9f7ec8fb94d",
+      "bytes": 73270
+    },
+    "restored": {
+      "path": "/home/han/.omp/experiments/neo-local-rule-core.O3915U/native-profile-restored.png",
+      "sha256": "a6a4483ac9e27f41fdedb8b0b69aaa701950b0c299fb3988d237bd90a7ed9e82",
+      "bytes": 94817
+    }
+  },
+  "checks": [
+    {
+      "name": "实际 Figure Picker 与图形预览",
+      "status": "passed",
+      "detail": "在真实 PDF viewport 通过克隆参数的 KeyboardEvent 触发 <Space>rf，检查实际界面截图。正常按需读取后磁盘缓存仍为空。"
+    },
+    {
+      "name": "显式本地解析保存默认配置",
+      "status": "passed",
+      "detail": "通过实际对照界面按钮保存；9 页、380 区域，随后生产 Reader API 接纳此缓存。"
+    },
+    {
+      "name": "关闭无框表并隔离缓存",
+      "status": "passed",
+      "detail": "偏好服务写入后旧快照失效、旧组从对照界面撤下；新槽首次未命中。实际本地解析按钮写入不同缓存文件，388 区域，与默认完整区域不同。"
+    },
+    {
+      "name": "错误配置不回退",
+      "status": "passed",
+      "detail": "写入非法 JSON，实际界面显示 LocalRuleConfigurationError 并清除旧组；生产 Reader API 同样拒绝，没有返回默认区域。"
+    },
+    {
+      "name": "等价配置复用规范缓存",
+      "status": "passed",
+      "detail": "{} 与空字符串映射到同一默认槽，返回 cache 来源与相同的完整区域；默认缓存字节 SHA-256 未变。"
+    },
+    {
+      "name": "在途配置切换",
+      "status": "passed",
+      "detail": "启动真实缓存优先 Reader 读取后立即改为另一有效规则配置，待处理读取返回 null；恢复默认后重新打开对照并复用默认缓存。"
+    }
+  ],
+  "results": {
+    "defaultRegions": 380,
+    "changedRegions": 388,
+    "retired": true,
+    "isolated": true,
+    "invalidError": {
+      "name": "LocalRuleConfigurationError",
+      "message": "Local rule profile must be valid JSON"
+    },
+    "canonicalSlotReused": true,
+    "pendingRetired": true,
+    "defaultCacheSHA256Before": "2cf20b9700383136da6068852c6d39c32a61555bf304af52d2ad2201b90c461a",
+    "defaultCacheSHA256After": "2cf20b9700383136da6068852c6d39c32a61555bf304af52d2ad2201b90c461a",
+    "restoredProvider": "local",
+    "restoredRules": ""
+  },
+  "automation": "Firefox RDP；对精确 PDF window 使用 unwaiveXrays，将 KeyboardEvent 初始化参数 cloneInto 该 window，再在实际 viewport 元素上分发；按钮通过实际 DOM 点击。",
+  "cleanup": {
+    "ownedPid": 45652,
+    "normalExitObserved": true,
+    "ownedWindowsProfileAndDataRemoved": true,
+    "copiedBuildAndHelpersRemoved": true,
+    "throwawayUATSourcesRemoved": true,
+    "archivedDefaultCache": "/home/han/.omp/experiments/neo-local-rule-core.O3915U/native-defaultCache.json",
+    "archivedChangedCache": "/home/han/.omp/experiments/neo-local-rule-core.O3915U/native-changedCache.json",
+    "screenshotsAndReplayOutputsRetained": true
+  },
+  "limits": [
+    "使用临时加载的真实构建，不是重新安装 XPI 的验证；打包成员检查另行通过。",
+    "程序化按键与按钮点击，不代表物理键盘或输入法验收。",
+    "没有点击原生模型读取或云端解析；没有记录 HTTP 拦截计数，故不报告网络请求数。",
+    "高级偏好通过真实 PreferenceStore 写入，不是 Config Editor 文本输入的手动验收。",
+    "仅一份真实 PDF 的宿主流程，不是 108 个核验点的逐项实际任务。",
+    "未把原始 PDF、完整正文、截图或缓存副本再分发到仓库；实验输出保留在本机。"
+  ]
+}

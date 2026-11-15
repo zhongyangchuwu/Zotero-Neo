@@ -1,6 +1,8 @@
 import { describe, expect, it, vi } from 'vitest';
 import type { AIGenerationResult, AIService } from '../../src/ai/contracts';
 import type { PreferenceStore } from '../../src/core/preference-store';
+import { LOCAL_RULES_KEY } from '../../src/document-analysis/settings';
+import type { ParsedDocument } from '../../src/document-analysis/contracts';
 import type { ReaderRuntime } from '../../src/toolkit/reader';
 import type { AIQASourceCapture } from '../../src/ai-qa/evidence';
 import type * as EvidenceModule from '../../src/ai-qa/evidence';
@@ -8,7 +10,11 @@ import { AIQAReaderApplication } from '../../src/ai-qa/reader-application';
 import { createAIQARepository } from '../../src/ai-qa/repository';
 import { createAIQATasks } from '../../src/ai-qa/tasks';
 
-const host = vi.hoisted(() => ({ capture: vi.fn<() => Promise<AIQASourceCapture>>() }));
+const host = vi.hoisted(() => ({
+  capture: vi.fn<() => Promise<AIQASourceCapture>>(),
+  cache: vi.fn(),
+  prepared: vi.fn(),
+}));
 const adoption = vi.hoisted(() => ({ find: vi.fn(), save: vi.fn() }));
 vi.mock('../../src/ai-qa/adoption', () => ({
   findAIQAAdoptions: adoption.find,
@@ -22,8 +28,8 @@ vi.mock('../../src/platform/ai-runtime', () => ({
   createAIAbortController: () => new AbortController(),
 }));
 vi.mock('../../src/reader/document-cache', () => ({
-  readReaderDocumentCache: async () => null,
-  readReaderDocument: async () => null,
+  readReaderDocumentCache: host.cache,
+  readReaderDocument: host.prepared,
 }));
 
 const reader = { itemID: 1 } as ReaderRuntime;
@@ -36,6 +42,8 @@ const result: AIGenerationResult = {
 };
 
 function fixture(current: () => Promise<boolean>) {
+  host.cache.mockReset().mockResolvedValue(null);
+  host.prepared.mockReset().mockResolvedValue(null);
   adoption.find
     .mockReset()
     .mockImplementation(async (records: { id: string }[]) =>
@@ -72,11 +80,28 @@ function fixture(current: () => Promise<boolean>) {
     createAbortController: () => new AbortController(),
   });
   const disposeTasks = vi.spyOn(tasks, 'dispose');
+  const values = new Map<string, string>();
+  const listeners = new Map<string, Set<() => void>>();
+  const preferences = {
+    get: (key: string, fallback: string) => values.get(key) ?? fallback,
+    set: (key: string, value: string) => {
+      values.set(key, value);
+      for (const listener of listeners.get(key) ?? []) listener();
+    },
+    observe: (key: string, listener: () => void) => {
+      const set = listeners.get(key) ?? new Set<() => void>();
+      set.add(listener);
+      listeners.set(key, set);
+      return () => {
+        set.delete(listener);
+      };
+    },
+  } as unknown as PreferenceStore;
   const app = new AIQAReaderApplication({
     service,
     repository,
     tasks,
-    preferences: {} as PreferenceStore,
+    preferences,
     logger: { debug() {}, diagnostic() {} },
   });
   host.capture.mockResolvedValue({ source, isCurrent: current } as AIQASourceCapture);
@@ -92,7 +117,17 @@ function fixture(current: () => Promise<boolean>) {
     language: () => 'en' as const,
     openNote: vi.fn(async () => {}),
   };
-  return { app, tasks, repository, service, generation, port, disposeTasks };
+  return {
+    app,
+    tasks,
+    repository,
+    service,
+    generation,
+    port,
+    disposeTasks,
+    preferences,
+    listeners,
+  };
 }
 
 describe('headless Reader application lifetime', () => {
@@ -139,6 +174,64 @@ describe('headless Reader application lifetime', () => {
     f.app.dispose();
     f.tasks.dispose();
   });
+
+  it.each([false, true])(
+    'retires cached AI context without starting work when the local profile changes (pending=%s)',
+    async (pending) => {
+      const f = fixture(async () => true);
+      const parsed: ParsedDocument = {
+        schemaVersion: 1,
+        sourceFingerprint: source.fingerprint,
+        backend: 'local-rules',
+        modelRevision: null,
+        durationMs: 0,
+        pages: [{ pageIndex: 0, viewBox: [0, 0, 600, 800], rotation: 0 }],
+        regions: [
+          {
+            id: 'heading',
+            kind: 'heading',
+            flow: 'body',
+            pageIndex: 0,
+            rect: [20, 700, 300, 720],
+            text: 'Profile chapter',
+            format: 'text',
+            anchorPrecision: 'region',
+          },
+          {
+            id: 'paragraph',
+            kind: 'text',
+            flow: 'body',
+            pageIndex: 0,
+            rect: [20, 600, 300, 680],
+            text: 'The current profile supplies this context.',
+            format: 'text',
+            anchorPrecision: 'region',
+          },
+        ],
+      };
+      const gate = Promise.withResolvers<{
+        parsed: ParsedDocument;
+        isCurrent: () => Promise<boolean>;
+      }>();
+      const snapshot = { parsed, isCurrent: async () => true };
+      host.cache.mockReturnValue(pending ? gate.promise : Promise.resolve(snapshot));
+      f.app.register(f.port);
+      f.app.load(reader);
+      await vi.waitFor(() => expect(host.cache).toHaveBeenCalledOnce());
+      if (!pending)
+        await vi.waitFor(() => expect(f.app.snapshot(reader)?.sections.length).toBeGreaterThan(0));
+      f.preferences.set(LOCAL_RULES_KEY, '{');
+      if (pending) gate.resolve(snapshot);
+      await vi.waitFor(() => expect(f.app.snapshot(reader)?.loading).toBe(false));
+      expect(f.app.snapshot(reader)?.sections).toEqual([]);
+      expect(f.app.snapshot(reader)?.selectedSectionID).toBeNull();
+      expect(f.service.generate).not.toHaveBeenCalled();
+      expect(host.cache).toHaveBeenCalledOnce();
+      f.app.dispose();
+      expect([...f.listeners.values()].every((set) => set.size === 0)).toBe(true);
+      f.tasks.dispose();
+    },
+  );
 });
 
 it('opens only a revalidated note and reports a deleted note instead of opening it', async () => {
@@ -246,6 +339,65 @@ it('keeps a new result and a concurrent save when its earlier adoption lookup fi
   await vi.waitFor(() => expect(f.app.snapshot(reader)?.records).toHaveLength(2));
   expect(f.app.snapshot(reader)?.adoptions[record.id]).toEqual(receipt);
   expect(f.app.snapshot(reader)?.adoptions[lookupIDs.find((id) => id !== record.id)!]).toBeNull();
+  f.app.dispose();
+  f.tasks.dispose();
+});
+
+it('does not republish retired context after the final asynchronous source check', async () => {
+  const finalCheck = Promise.withResolvers<boolean>();
+  const checking = Promise.withResolvers<void>();
+  let holdSourceCheck = false;
+  const f = fixture(async () => {
+    if (!holdSourceCheck) return true;
+    checking.resolve();
+    return finalCheck.promise;
+  });
+  const parsed: ParsedDocument = {
+    schemaVersion: 1,
+    sourceFingerprint: source.fingerprint,
+    backend: 'local-rules',
+    modelRevision: null,
+    durationMs: 0,
+    pages: [{ pageIndex: 0, viewBox: [0, 0, 600, 800], rotation: 0 }],
+    regions: [
+      {
+        id: 'heading',
+        kind: 'heading',
+        flow: 'body',
+        pageIndex: 0,
+        rect: [20, 700, 300, 720],
+        text: 'Retired profile chapter',
+        format: 'text',
+        anchorPrecision: 'region',
+      },
+      {
+        id: 'paragraph',
+        kind: 'text',
+        flow: 'body',
+        pageIndex: 0,
+        rect: [20, 600, 300, 680],
+        text: 'Context from the previous local rule profile.',
+        format: 'text',
+        anchorPrecision: 'region',
+      },
+    ],
+  };
+  f.app.register(f.port);
+  f.app.load(reader);
+  await vi.waitFor(() => expect(host.cache).toHaveBeenCalledOnce());
+  await vi.waitFor(() => expect(f.app.snapshot(reader)?.loading).toBe(false));
+  host.prepared.mockImplementationOnce(async () => {
+    holdSourceCheck = true;
+    return { parsed, origin: 'local', textRegions: parsed.regions, isCurrent: async () => true };
+  });
+  const running = f.app.dispatch(reader, { type: 'guide' });
+  await checking.promise;
+  f.preferences.set(LOCAL_RULES_KEY, '{');
+  finalCheck.resolve(true);
+  await running;
+  expect(f.app.snapshot(reader)?.sections).toEqual([]);
+  expect(f.app.snapshot(reader)?.selectedSectionID).toBeNull();
+  expect(f.service.generate).not.toHaveBeenCalled();
   f.app.dispose();
   f.tasks.dispose();
 });

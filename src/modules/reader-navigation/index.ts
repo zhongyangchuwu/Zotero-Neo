@@ -15,7 +15,11 @@ import type { ReaderCaptionTarget } from './caption-targets';
 import type { PreferenceStore } from '../../core/preference-store';
 import { readReaderDocument } from '../../reader/document-cache';
 import { observeAttachmentDocumentCache } from '../../platform/document-analysis-cache';
-import { DOCUMENT_PROVIDER_KEY, OXR_ENDPOINT_KEY } from '../../document-analysis/settings';
+import {
+  DOCUMENT_PROVIDER_KEY,
+  OXR_ENDPOINT_KEY,
+  LOCAL_RULES_KEY,
+} from '../../document-analysis/settings';
 import { t } from '../../i18n';
 import {
   bindReaderNavigationActions,
@@ -135,7 +139,7 @@ export function createReaderNavigationModule(
     const preferences = ports.preferences;
     if (ports.reader.itemID)
       scope.add(observeAttachmentDocumentCache(ports.reader.itemID, refreshAnalysis));
-    for (const key of [DOCUMENT_PROVIDER_KEY, OXR_ENDPOINT_KEY]) {
+    for (const key of [DOCUMENT_PROVIDER_KEY, OXR_ENDPOINT_KEY, LOCAL_RULES_KEY]) {
       const stop = preferences?.observe?.(key, refreshAnalysis);
       if (stop) scope.add(stop);
     }

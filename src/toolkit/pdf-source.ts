@@ -1,7 +1,7 @@
 import { checkParseCurrent, type DocumentPage } from '../document-analysis/contracts';
 import { nativeDocumentPages } from '../document-analysis/native';
 import { cloneInto } from '../platform/cross-compartment';
-import type { LocalFigurePage } from '../document-analysis/local-figures';
+import type { LocalFigurePage } from '../document-analysis/local-rules';
 import { pdfFigureGraphics, pdfFigureText } from './pdf-figure-geometry';
 
 interface PDFTask {
