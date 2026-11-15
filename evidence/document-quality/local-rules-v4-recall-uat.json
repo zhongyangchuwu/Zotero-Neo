@@ -1,0 +1,372 @@
+{
+  "schemaVersion": 1,
+  "scope": "三处召回修复的真实Zotero界面与持久缓存核验；不把静态137项冒充实际任务通过",
+  "sourceCommit": "9b397bbb57814a4576df4840dd76cdf3f04e1739",
+  "sourceTree": "working-tree; exact pure-core hashes in local-rules-v4-recall.json",
+  "host": {
+    "application": "Zotero",
+    "version": "10.0.8",
+    "platform": "Windows; driven from WSL via Firefox RDP",
+    "debugPort": 6107,
+    "pid": 42676,
+    "isolatedProfileBasename": "neo-local-rule-recall.5rO8Ah",
+    "profileAndDataDirectoryGuardPassed": true,
+    "personalRdp6101Connected": false,
+    "temporaryAddon": true,
+    "actualNativeBundleSha256": "408c81d448cd65b120b8f10535c9898238e2dee186d52557e0dc2cf3b5806561",
+    "baselineNativeBundleSha256": "bbc777b77b3413d2eb29f5e2444d3f1c71152aaf2b47738fbda946af921243de",
+    "wordAutomaticInstallationSkipped": true
+  },
+  "method": {
+    "input": "Cloned programmatic KeyboardEvent objects sent to the actual PDF viewer/list; actual DOM buttons clicked",
+    "visual": "Actual Reader drawWindow screenshots and actual rendered preview PNGs; no replacement test UI or source-audit raster used as native proof",
+    "modelsAndCloud": "只点击本地规则控件；未点击 Read native structure (may use models) 或云端控件。宿主自行产生 .zotero-sdt-cache，整进程 SDT／网络调用未测，不能据此声称整进程零模型或零网络。",
+    "physicalKeyboard": "not-performed",
+    "inputMethod": "not-performed",
+    "packagedXpiReinstallation": "not-performed"
+  },
+  "cases": [
+    {
+      "documentId": "e-nips09_5",
+      "checkId": "figure-2",
+      "pdfSha256": "79fdf5093a4aa42e372187e1ac79ab952f1c046db8012088820c48dc9ce9398c",
+      "status": "passed",
+      "actualOperations": [
+        "actual Figure Picker selection and preview",
+        "Go to source button",
+        "actual excerpt list selection",
+        "Save as a new note button"
+      ],
+      "sourceBefore": {
+        "pdfPage": 1,
+        "toolbar": "1"
+      },
+      "sourceAfter": {
+        "pdfPage": 4,
+        "toolbar": "4"
+      },
+      "preview": {
+        "width": 794,
+        "height": 604,
+        "artifact": "native-uat/algorithm-preview.png",
+        "sha256": "1419aad88e6d30e2eb16371602d1ded3c53713cc517b45ca4b1683f337563bc5"
+      },
+      "note": {
+        "id": 7,
+        "parentID": 1,
+        "annotationPosition": {
+          "pageIndex": 3,
+          "rects": [[107.6015, 100.61834400000001, 504.39849995371094, 402.1965042]]
+        },
+        "pageLabel": "4",
+        "saveReceipt": ["Created note: Figure 2 · e-nips09_5"],
+        "openDisabledBeforeSave": true,
+        "openDisabledAfterSave": false,
+        "imageArtifact": "native-uat/algorithm-note-image.png",
+        "imageSha256": "1419aad88e6d30e2eb16371602d1ded3c53713cc517b45ca4b1683f337563bc5",
+        "imageBytesEqualPreview": true
+      },
+      "screenshots": [
+        "native-uat/algorithm-picker.png",
+        "native-uat/algorithm-source.png",
+        "native-uat/algorithm-excerpt-saved.png"
+      ]
+    },
+    {
+      "documentId": "f-icml12_6",
+      "checkId": "table-1",
+      "pdfSha256": "596b0716da31eb135b1237d63cd8dcd2f5315abf2c748a341ce57cd37c6293ee",
+      "status": "passed",
+      "actualOperations": [
+        "actual Figure Picker selection and preview",
+        "Go to source button",
+        "actual excerpt list selection",
+        "Save as a new note button"
+      ],
+      "sourceBefore": {
+        "pdfPage": 1,
+        "toolbar": "1"
+      },
+      "sourceAfter": {
+        "pdfPage": 4,
+        "toolbar": "4"
+      },
+      "preview": {
+        "width": 736,
+        "height": 446,
+        "artifact": "native-uat/table-preview.png",
+        "sha256": "6ab5a27090cc32a120ac0d5cd16baebb5fa20ad5ca84589aead5e7227557c36f"
+      },
+      "note": {
+        "id": 9,
+        "parentID": 3,
+        "annotationPosition": {
+          "pageIndex": 3,
+          "rects": [[114.464, 492.31899999999996, 482.416, 714.9726816]]
+        },
+        "pageLabel": "4",
+        "saveReceipt": ["Created note: Table 1 · f-icml12_6"],
+        "openDisabledBeforeSave": true,
+        "openDisabledAfterSave": false,
+        "imageArtifact": "native-uat/table-note-image.png",
+        "imageSha256": "6ab5a27090cc32a120ac0d5cd16baebb5fa20ad5ca84589aead5e7227557c36f",
+        "imageBytesEqualPreview": true
+      },
+      "screenshots": [
+        "native-uat/table-picker.png",
+        "native-uat/table-source.png",
+        "native-uat/table-excerpt-saved.png"
+      ]
+    },
+    {
+      "documentId": "f-nips10_4",
+      "checkId": "figure-2",
+      "pdfSha256": "5d6138611cb0349024dbf3d2a8e3f5a3893d52c40180727617817bbde4b5585a",
+      "status": "passed",
+      "actualOperations": [
+        "actual Figure Picker selection and preview",
+        "Go to source button",
+        "actual excerpt list selection",
+        "Save as a new note button"
+      ],
+      "sourceBefore": {
+        "pdfPage": 1,
+        "toolbar": "1"
+      },
+      "sourceAfter": {
+        "pdfPage": 8,
+        "toolbar": "8"
+      },
+      "preview": {
+        "width": 317,
+        "height": 279,
+        "artifact": "native-uat/bar-preview.png",
+        "sha256": "0edbb819b20b6e414331e5c9a3fc4a06f183ed48b015ef4fa7d418cd3b3cc0ab"
+      },
+      "note": {
+        "id": 11,
+        "parentID": 5,
+        "annotationPosition": {
+          "pageIndex": 7,
+          "rects": [[345.602, 169.42625760000004, 504.0024224, 308.4463189208985]]
+        },
+        "pageLabel": "8",
+        "saveReceipt": ["Created note: Figure 2 · f-nips10_4"],
+        "openDisabledBeforeSave": true,
+        "openDisabledAfterSave": false,
+        "imageArtifact": "native-uat/bar-note-image.png",
+        "imageSha256": "0edbb819b20b6e414331e5c9a3fc4a06f183ed48b015ef4fa7d418cd3b3cc0ab",
+        "imageBytesEqualPreview": true
+      },
+      "screenshots": [
+        "native-uat/bar-picker.png",
+        "native-uat/bar-source.png",
+        "native-uat/bar-excerpt-saved.png"
+      ]
+    }
+  ],
+  "explicitNoteReuseAndOpen": {
+    "documentId": "e-nips09_5",
+    "checkId": "figure-2",
+    "receipt": ["Reused existing note: Figure 2 · e-nips09_5"],
+    "noteCountBeforeAndAfterRepeat": 1,
+    "reusedNoteID": 7,
+    "actualSelectedTab": {
+      "id": "tab-EVxWOJm7",
+      "type": "note",
+      "itemID": 7
+    }
+  },
+  "cacheIdentity": {
+    "documentId": "e-nips09_5",
+    "baselineSeed": "实际运行冻结旧bundle，并点击 Use cache or parse locally 保存；未合成缓存",
+    "old": {
+      "key": {
+        "backend": "local-rules",
+        "adapterVersion": 4,
+        "configuration": "pdfjs-native-text-graphics-v1:[2,2,1,[\"unruledTables\",2,{\"enabled\":true,\"minRows\":3,\"minColumns\":2}],[\"graphicLabels\",2,{\"enabled\":true,\"maxFontSizeEm\":1.4,\"maxGapEm\":0.8}],[\"ruledTables\",1,{\"enabled\":true,\"endpointToleranceEm\":0.2}],[\"compoundPanels\",2,{\"enabled\":true,\"maxGapEm\":1.5,\"minOverlapRatio\":0.4,\"maxRepeatedGapRatio\":0.25}],{\"maxDistanceLines\":5,\"minWidthEm\":3,\"minHeightEm\":2}]"
+      },
+      "regionCount": 390,
+      "artifact": {
+        "path": "native-uat/baseline-cache.json",
+        "sha256": "fdcc7ddbac27d74d6872470b31ff5ed4b241ca0eb01ce3357992261df1f45c28",
+        "bytes": 134034
+      },
+      "after": {
+        "path": "native-uat/baseline-cache-after-reopen.json",
+        "sha256": "fdcc7ddbac27d74d6872470b31ff5ed4b241ca0eb01ce3357992261df1f45c28",
+        "bytes": 134034
+      }
+    },
+    "ordinaryBrowse": {
+      "restoredBodyPreviewShown": true,
+      "analysisSlotsBefore": 1,
+      "analysisSlotsAfter": 1,
+      "onlyOldEngineSlotPresent": true,
+      "oldCacheBytesUnchanged": true
+    },
+    "explicitCurrentSave": {
+      "key": {
+        "backend": "local-rules",
+        "adapterVersion": 4,
+        "configuration": "pdfjs-native-text-graphics-v1:[3,2,1,[\"unruledTables\",3,{\"enabled\":true,\"minRows\":3,\"minColumns\":2}],[\"graphicLabels\",3,{\"enabled\":true,\"maxFontSizeEm\":1.4,\"maxGapEm\":0.8}],[\"ruledTables\",2,{\"enabled\":true,\"endpointToleranceEm\":0.2}],[\"compoundPanels\",2,{\"enabled\":true,\"maxGapEm\":1.5,\"minOverlapRatio\":0.4,\"maxRepeatedGapRatio\":0.25}],{\"maxDistanceLines\":5,\"minWidthEm\":3,\"minHeightEm\":2}]"
+      },
+      "regionCount": 393,
+      "beforeStatus": [
+        "",
+        "No matching cache. Local rules need no upload; cloud parsing uploads only after explicitly choosing a service and parsing."
+      ],
+      "receipt": ["", "Analysis saved locally for reuse next time."],
+      "analysisSlotsAfter": 2,
+      "artifact": {
+        "path": "native-uat/candidate-cache.json",
+        "sha256": "88506f4b411954960706b76c0dddfa2c22d3ca740abf5e057715b8c9849b3798",
+        "bytes": 136197
+      }
+    },
+    "actualReaderCloseAndReopen": {
+      "uiStatus": ["", "Loaded local analysis cache; PDF was not uploaded."],
+      "localPanel": {
+        "title": "Local rules (no model)",
+        "summary": "9 pages · 393 regions · Recorded elapsed (including waits / pauses) 0.0s",
+        "detail": "Loaded local analysis cache; PDF was not uploaded. · 11/16/2026, 1:44:25 AM"
+      },
+      "currentAfter": {
+        "path": "native-uat/candidate-cache-after-reopen.json",
+        "sha256": "88506f4b411954960706b76c0dddfa2c22d3ca740abf5e057715b8c9849b3798",
+        "bytes": 136197
+      },
+      "currentCacheBytesUnchanged": true,
+      "oldCacheBytesUnchanged": true
+    }
+  },
+  "outsideScoredPages": {
+    "documentId": "f-icml12_6",
+    "pageIndex": 7,
+    "label": "Figure 4",
+    "observedUiAssociation": "caption-only (body not identified)",
+    "baselineAssociation": "caption-only",
+    "bodyUnassociatedInBaselineToo": true,
+    "originalBodySourceAuditedThisRound": false,
+    "note": "这是评分页外的既有仅题注候选，不把137/137解释为全文完整性，也不把它冒充本轮新增独立核验点。"
+  },
+  "artifacts": [
+    {
+      "path": "native-uat/baseline-cache-saved.png",
+      "sha256": "d1ff3ca4116e0d0e76758031ec7d9fb07a1ee0eafa4b73bb56ff20b9398f76cc",
+      "bytes": 83898,
+      "actuallyOpenedForVisualInspection": true
+    },
+    {
+      "path": "native-uat/algorithm-preview.png",
+      "sha256": "1419aad88e6d30e2eb16371602d1ded3c53713cc517b45ca4b1683f337563bc5",
+      "bytes": 103006,
+      "actuallyOpenedForVisualInspection": true
+    },
+    {
+      "path": "native-uat/algorithm-picker.png",
+      "sha256": "75d7649f2e9b7b09ab9da7756e9c43f6c12a9740f3af8012a6e7a4df4b656366",
+      "bytes": 451654,
+      "actuallyOpenedForVisualInspection": true
+    },
+    {
+      "path": "native-uat/algorithm-source.png",
+      "sha256": "0d8e220f09bb157381f632be88404357c35cee42020817e1e886e7e6bfaa257a",
+      "bytes": 269535,
+      "actuallyOpenedForVisualInspection": true
+    },
+    {
+      "path": "native-uat/algorithm-excerpt-saved.png",
+      "sha256": "ec78452187cc393ac3f45fefe1b00ba3bd279525b5be62621cc7f5dc9497e543",
+      "bytes": 434172,
+      "actuallyOpenedForVisualInspection": true
+    },
+    {
+      "path": "native-uat/algorithm-note-image.png",
+      "sha256": "1419aad88e6d30e2eb16371602d1ded3c53713cc517b45ca4b1683f337563bc5",
+      "bytes": 103006,
+      "actuallyOpenedForVisualInspection": false,
+      "identicalPreview": "native-uat/algorithm-preview.png"
+    },
+    {
+      "path": "native-uat/table-preview.png",
+      "sha256": "6ab5a27090cc32a120ac0d5cd16baebb5fa20ad5ca84589aead5e7227557c36f",
+      "bytes": 81766,
+      "actuallyOpenedForVisualInspection": true
+    },
+    {
+      "path": "native-uat/table-picker.png",
+      "sha256": "8e602c5216a2a42ab2e25593db3da48dcbcb6f0bfefc8aba202eb50347d06f54",
+      "bytes": 418788,
+      "actuallyOpenedForVisualInspection": false
+    },
+    {
+      "path": "native-uat/table-source.png",
+      "sha256": "563e76779987fc33f501078a2bf3a15e9103de4223ba589bdc47487190865b5f",
+      "bytes": 307124,
+      "actuallyOpenedForVisualInspection": true
+    },
+    {
+      "path": "native-uat/table-excerpt-saved.png",
+      "sha256": "363ecb4cba2ccf226debf075c61f7cd6451332ab3900ad4dcce9eaf59c48f396",
+      "bytes": 441305,
+      "actuallyOpenedForVisualInspection": true
+    },
+    {
+      "path": "native-uat/table-note-image.png",
+      "sha256": "6ab5a27090cc32a120ac0d5cd16baebb5fa20ad5ca84589aead5e7227557c36f",
+      "bytes": 81766,
+      "actuallyOpenedForVisualInspection": false,
+      "identicalPreview": "native-uat/table-preview.png"
+    },
+    {
+      "path": "native-uat/bar-preview.png",
+      "sha256": "0edbb819b20b6e414331e5c9a3fc4a06f183ed48b015ef4fa7d418cd3b3cc0ab",
+      "bytes": 16626,
+      "actuallyOpenedForVisualInspection": true
+    },
+    {
+      "path": "native-uat/bar-picker.png",
+      "sha256": "7ef39b3154f3ed5d843ebfb0569839d669544d40e9440745653792741759a38d",
+      "bytes": 164646,
+      "actuallyOpenedForVisualInspection": false
+    },
+    {
+      "path": "native-uat/bar-source.png",
+      "sha256": "e008702c9ad6e3693d34ab4325a603f6e34469c40e9ecb0daa87dba122d7219b",
+      "bytes": 365093,
+      "actuallyOpenedForVisualInspection": true
+    },
+    {
+      "path": "native-uat/bar-excerpt-saved.png",
+      "sha256": "5efef563848a453fe688fd5ed2800ab2c20a176a95f68140b2269796d5abdebb",
+      "bytes": 160425,
+      "actuallyOpenedForVisualInspection": true
+    },
+    {
+      "path": "native-uat/bar-note-image.png",
+      "sha256": "0edbb819b20b6e414331e5c9a3fc4a06f183ed48b015ef4fa7d418cd3b3cc0ab",
+      "bytes": 16626,
+      "actuallyOpenedForVisualInspection": false,
+      "identicalPreview": "native-uat/bar-preview.png"
+    },
+    {
+      "path": "native-uat/candidate-cache-saved.png",
+      "sha256": "ac5e7e676becc4d24496fd910e84cad5f22ce6808eca2fe343ddb913b263c5e9",
+      "bytes": 146045,
+      "actuallyOpenedForVisualInspection": true
+    },
+    {
+      "path": "native-uat/candidate-cache-loaded.png",
+      "sha256": "c5cbb178b94f3e41154e024e596e7d5aec4c1d63808d0023bbda4744385a6ca0",
+      "bytes": 147954,
+      "actuallyOpenedForVisualInspection": true
+    }
+  ],
+  "cleanup": {
+    "ownedProcessStopped": true,
+    "ownedWindowsProfileAndDataRemoved": true,
+    "copiedNativeHostScriptsRemoved": true,
+    "privateLinuxEvidenceRetained": true
+  }
+}

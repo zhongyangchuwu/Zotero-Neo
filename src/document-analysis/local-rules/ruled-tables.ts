@@ -1,3 +1,4 @@
+import { algorithmPanelLines } from './body-evidence';
 import { bounds, centerY, contains, gapY, height, intersects, width } from './geometry';
 import type { Caption, ComponentLink, Line, LocalRuleRect, RuleContext } from './types';
 
@@ -31,6 +32,7 @@ export function ruledTableLinks(
       )
         continue;
       const enclosure = bounds([a, b]);
+      let authored: readonly Line[] | undefined;
       context.observe?.({
         pageIndex: context.pageIndex,
         ruleId: 'ruledTables',
@@ -44,10 +46,20 @@ export function ruledTableLinks(
       });
       if (
         captions.some((c) => intersects(c.rect, enclosure)) ||
-        barrierLines.some(
-          (line) =>
-            intersects(line.rect, enclosure) && !labels[i]!.has(line) && !labels[j]!.has(line),
-        )
+        barrierLines.some((line) => {
+          if (!intersects(line.rect, enclosure) || labels[i]!.has(line) || labels[j]!.has(line))
+            return false;
+          authored ??= context.profile.rules.graphicLabels.enabled
+            ? algorithmPanelLines(
+                enclosure,
+                lines,
+                captions,
+                unit,
+                context.profile.rules.graphicLabels.maxFontSizeEm,
+              )
+            : [];
+          return !authored.includes(line);
+        })
       ) {
         context.observe?.({
           pageIndex: context.pageIndex,

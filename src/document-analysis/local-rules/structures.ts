@@ -1,3 +1,4 @@
+import { algorithmPanelLabels } from './body-evidence';
 import { bounds, height, readingOrder, width } from './geometry';
 import { graphicTextLabels } from './graphic-labels';
 import { pageLike, paintedComponents } from './painted-components';
@@ -102,5 +103,34 @@ export function graphicsFromPage(
     (_, index) => new Set([...graphicLabels[index]!, ...tableLabels[index]!]),
   );
   const links = ruledTableLinks(boxes, labels, lines, captions, barriers, unit, leading, context);
-  return joinStructures(page, boxes, labels, links);
+  const graphics = joinStructures(page, boxes, labels, links);
+  if (!links.length || !context.profile.rules.graphicLabels.enabled) return graphics;
+  // Horizontal rules only become complete authored panels after shared component assembly.
+  const authored = algorithmPanelLabels(
+    graphics.map((graphic) => graphic.rect),
+    lines,
+    captions,
+    unit,
+    leading,
+    context.profile.rules.graphicLabels.maxFontSizeEm,
+    context.profile.rules.graphicLabels.maxGapEm,
+  );
+  return graphics.map((graphic, index) => {
+    const members = authored[index]!;
+    if (!members.size) return graphic;
+    const rect = bounds([graphic.rect, ...[...members].map((line) => line.rect)]);
+    context.observe?.({
+      pageIndex: context.pageIndex,
+      ruleId: 'graphicLabels',
+      outcome: 'accepted',
+      reason: 'assembled-algorithm-membership',
+      candidateIds: [`graphic:${context.pageIndex}:${graphic.index}`],
+      rect,
+    });
+    return {
+      ...graphic,
+      rect,
+      labels: new Set([...graphic.labels, ...members]),
+    };
+  });
 }
