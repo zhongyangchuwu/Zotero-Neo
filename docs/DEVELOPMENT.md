@@ -41,8 +41,8 @@ powershell -ExecutionPolicy Bypass -File tools\build.ps1
 3. 从该包准备候选清单，例如：
 
    ```bash
-   node tools/prepare-release.mjs v0.2.1 zotero-neo.xpi --output updates.candidate.json
-   node tools/check-release.mjs v0.2.1
+   node tools/prepare-release.mjs v0.3.0 zotero-neo.xpi --output updates.candidate.json
+   node tools/check-release.mjs v0.3.0
    ```
 
    准备工具保留正式 `updates.json` 的历史，不继承未发布的旧候选，也不修改正式更新清单。代码或包版本变化后必须重新准备哈希；文档与候选清单本身不进入 XPI。
@@ -57,7 +57,7 @@ powershell -ExecutionPolicy Bypass -File tools\build.ps1
 公开 Release 不等于已向用户推送。取得该标签的完整源码 SHA 后，执行：
 
 ```bash
-GITHUB_REPOSITORY=zhongyangchuwu/Zotero-Neo node tools/promote-release.mjs v0.2.1 <完整源码SHA> --output /tmp/neo-updates.json
+GITHUB_REPOSITORY=zhongyangchuwu/Zotero-Neo node tools/promote-release.mjs v0.3.0 <完整源码SHA> --output /tmp/neo-updates.json
 ```
 
 该命令只读取远端，核对稳定版标签、公开 Release、包身份、哈希、下载可达性及正式清单，输出待审查的新清单；不会直接推送或更改 `main`。将输出作为独立 PR 的 `updates.json` 变更，在合并前再次核对 Release 与版本单调递增。正式清单只接纳稳定版，不把候选或预发布自动推给普通用户。
