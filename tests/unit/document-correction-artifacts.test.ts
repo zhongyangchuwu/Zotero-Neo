@@ -6,12 +6,17 @@ import {
   emptyDocumentCorrections,
 } from '../../src/document-analysis/corrections';
 import type { ParsedDocument } from '../../src/document-analysis/contracts';
-import { documentCacheSlot } from '../../src/document-analysis/cache';
+import {
+  documentCacheRecord,
+  documentCacheSlot,
+  readDocumentCacheRecord,
+} from '../../src/document-analysis/cache';
 import {
   readAttachmentDocumentCorrections,
   saveAttachmentDocumentCorrections,
 } from '../../src/platform/document-corrections';
 import { artifactStorageIssues } from '../../src/platform/artifact-feedback';
+import { observeAttachmentDocumentCache } from '../../src/platform/document-analysis-cache';
 
 const key = { backend: 'native', adapterVersion: 1, configuration: 'manual' };
 function baseline(fingerprint: string): ParsedDocument {
@@ -57,6 +62,13 @@ describe('manual corrections stored artifact integration', () => {
     const { host, parsed, manual, sidecar } = setup(),
       repo = createArtifactRepository();
     const original = host.files.get(sidecar);
+    const source = {
+      fingerprint: parsed.sourceFingerprint,
+      fileName: 'paper.pdf',
+      pages: parsed.pages,
+    };
+    const cachePath = `/legacy/.zotero-neo-analysis-${host.md5(documentCacheSlot(key))}.json`;
+    host.files.set(cachePath, JSON.stringify(documentCacheRecord(source, key, parsed)));
     const state = await readAttachmentDocumentCorrections(2, parsed, key);
     expect(state).toEqual(manual);
     expect(await readAttachmentDocumentCorrections(2, parsed, key)).toEqual(manual);
@@ -100,6 +112,9 @@ describe('manual corrections stored artifact integration', () => {
     const listing = await repo.list(host.parent, 'document-corrections');
     expect(listing.artifacts).toHaveLength(2);
     expect(artifactHeads(listing.artifacts, first.recordID)).toHaveLength(1);
+    expect(
+      readDocumentCacheRecord(JSON.parse(host.files.get(cachePath)!), source, key)?.parsed,
+    ).toEqual(parsed);
   });
 
   it('honors an authoritative empty correction restore when the PDF is missing', async () => {
@@ -328,4 +343,115 @@ describe('manual corrections stored artifact integration', () => {
     expect(artifactStorageIssues(2).some((issue) => issue.kind === 'pending-download')).toBe(true);
     expect(host.imports).toHaveBeenCalledTimes(2);
   });
+
+  it('does not publish or notify after cancellation or a failed native import and permits a later explicit save', async () => {
+    const { host, parsed, manual } = setup();
+    const previous = await readAttachmentDocumentCorrections(2, parsed, key);
+    const next = emptyDocumentCorrections(parsed, key);
+    const notify = vi.fn();
+    const stop = observeAttachmentDocumentCache(2, notify);
+    try {
+      let checks = 0;
+      expect(
+        await saveAttachmentDocumentCorrections({
+          itemID: 2,
+          parsed,
+          key,
+          previous,
+          next,
+          current: async () => ++checks === 1,
+        }),
+      ).toBe(false);
+      expect(host.imports).toHaveBeenCalledTimes(1);
+      expect(notify).not.toHaveBeenCalled();
+      expect(await readAttachmentDocumentCorrections(2, parsed, key)).toEqual(manual);
+      host.imports.mockRejectedValueOnce(new Error('disk unavailable'));
+      await expect(
+        saveAttachmentDocumentCorrections({
+          itemID: 2,
+          parsed,
+          key,
+          previous,
+          next,
+          current: async () => true,
+        }),
+      ).rejects.toThrow('disk unavailable');
+      expect(notify).not.toHaveBeenCalled();
+      expect([...host.files.keys()].some((path) => path.startsWith('/temp/'))).toBe(false);
+      expect(await readAttachmentDocumentCorrections(2, parsed, key)).toEqual(manual);
+      expect(
+        await saveAttachmentDocumentCorrections({
+          itemID: 2,
+          parsed,
+          key,
+          previous,
+          next,
+          current: async () => true,
+        }),
+      ).toBe(true);
+      expect(notify).toHaveBeenCalledOnce();
+      expect((await readAttachmentDocumentCorrections(2, parsed, key)).edits).toEqual([]);
+    } finally {
+      stop();
+    }
+  });
+
+  it('rechecks a queued owner after an earlier owner is cancelled and releases the queue', async () => {
+    const { host, parsed } = setup();
+    const previous = await readAttachmentDocumentCorrections(2, parsed, key);
+    const next = emptyDocumentCorrections(parsed, key);
+    const entered = Promise.withResolvers<void>(),
+      gate = Promise.withResolvers<boolean>();
+    const first = saveAttachmentDocumentCorrections({
+      itemID: 2,
+      parsed,
+      key,
+      previous,
+      next,
+      current: async () => {
+        entered.resolve();
+        return gate.promise;
+      },
+    });
+    await entered.promise;
+    let current = true;
+    const second = saveAttachmentDocumentCorrections({
+      itemID: 2,
+      parsed,
+      key,
+      previous,
+      next,
+      current: async () => current,
+    });
+    current = false;
+    gate.resolve(false);
+    expect(await first).toBe(false);
+    expect(await second).toBe(false);
+    expect(host.imports).toHaveBeenCalledTimes(1);
+    expect(
+      await saveAttachmentDocumentCorrections({
+        itemID: 2,
+        parsed,
+        key,
+        previous,
+        next,
+        current: async () => true,
+      }),
+    ).toBe(true);
+    expect((await readAttachmentDocumentCorrections(2, parsed, key)).edits).toEqual([]);
+  });
+
+  it.each(['malformed', 'oversized'] as const)(
+    'rejects a %s legacy correction file without publishing or losing it',
+    async (failure) => {
+      const { host, parsed, sidecar } = setup();
+      const content = failure === 'malformed' ? '{broken' : 'x'.repeat(32 * 1024 * 1024 + 1);
+      host.files.set(sidecar, content);
+      const read = vi.spyOn(Zotero.File, 'getContentsAsync');
+      await expect(readAttachmentDocumentCorrections(2, parsed, key)).rejects.toThrow();
+      expect(host.imports).not.toHaveBeenCalled();
+      expect(host.files.get(sidecar)).toBe(content);
+      if (failure === 'oversized') expect(read).not.toHaveBeenCalled();
+    },
+  );
 });
