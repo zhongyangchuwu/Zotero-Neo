@@ -3923,10 +3923,16 @@ describe('Reader native passthrough ownership', () => {
           expect(key.preventDefault).toHaveBeenCalledOnce();
         }
         await settleReaderMicrotasks();
-        expect(navigate).toHaveBeenLastCalledWith(location(0, 400), { block: 'start' });
+        expect(navigate).toHaveBeenLastCalledWith(location(0, 400), {
+          block: 'start',
+          behavior: 'instant',
+        });
         for (const token of ['[', 's']) bridge.dispatch(readerKey(token, { target }).event);
         await settleReaderMicrotasks();
-        expect(navigate).toHaveBeenLastCalledWith(location(0, 700), { block: 'start' });
+        expect(navigate).toHaveBeenLastCalledWith(location(0, 700), {
+          block: 'start',
+          behavior: 'instant',
+        });
         expect(navigate).toHaveBeenCalledTimes(2);
         expect(state.sidebarOpen).toBe(pane !== 'pdf');
         expect(state.sidebarView).toBe(
@@ -4977,7 +4983,10 @@ describe('Reader category history execution', () => {
       created.session.start();
       for (const key of [']', 'f']) created.session.focusAndHandle(readerKey(key).event);
       await vi.waitFor(() => expect(observeNative).toHaveBeenCalledOnce());
-      expect(navigate).toHaveBeenCalledExactlyOnceWith({ position }, { block: 'start' });
+      expect(navigate).toHaveBeenCalledExactlyOnceWith(
+        { position },
+        { block: 'start', behavior: 'instant' },
+      );
       expect(state.sidebarOpen).toBe(false);
       expect(state.sidebarView).toBe('annotations');
       expect(observeNative).toHaveBeenCalledOnce();
