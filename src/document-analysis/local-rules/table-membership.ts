@@ -1,5 +1,41 @@
 import { bounds, contains, gapY, height, intersects, overlapX, overlapY, width } from './geometry';
-import type { Caption, Line, PaintedComponent, RuleContext, TextEvidence } from './types';
+import type {
+  Caption,
+  Line,
+  LocalRuleRect,
+  PaintedComponent,
+  RuleContext,
+  TextEvidence,
+} from './types';
+
+/** Painted members are top-down: join aligned vertical strokes without spanning a missing run. */
+function hasVerticalSpan(
+  members: readonly LocalRuleRect[],
+  minimum: number,
+  unit: number,
+): boolean {
+  const tolerance = unit * 0.2;
+  const runs: { left: number; right: number; bottom: number; top: number }[] = [];
+  for (const member of members) {
+    if (width(member) > unit * 0.3) continue;
+    if (height(member) >= minimum) return true;
+    const run = runs.find(
+      (other) =>
+        Math.abs(other.left - member[0]) <= tolerance &&
+        Math.abs(other.right - member[2]) <= tolerance &&
+        member[3] >= other.bottom - tolerance &&
+        member[1] <= other.top + tolerance,
+    );
+    if (run) {
+      run.bottom = Math.min(run.bottom, member[1]);
+      run.top = Math.max(run.top, member[3]);
+      if (run.top - run.bottom >= minimum) return true;
+    } else {
+      runs.push({ left: member[0], right: member[2], bottom: member[1], top: member[3] });
+    }
+  }
+  return false;
+}
 
 /** Table-owned text independently licenses compatible painted separators, not arbitrary labels. */
 export function tableComponentLabels(
@@ -49,9 +85,7 @@ export function tableComponentLabels(
         group.members.some(
           (member) => height(member) <= unit * 0.3 && width(member) >= width(table.rect) * 0.8,
         ) &&
-        group.members.some(
-          (member) => width(member) <= unit * 0.3 && height(member) >= height(table.rect) * 0.8,
-        );
+        hasVerticalSpan(group.members, height(table.rect) * 0.8, unit);
       if (!contained && !separator && !scaffold) return;
       const enclosure = bounds([r, table.rect]);
       if (

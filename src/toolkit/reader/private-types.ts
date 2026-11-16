@@ -158,7 +158,11 @@ export interface NativeReaderViewRuntime {
       | { readonly pageLabel: string }
       | { readonly pageNumber: string }
       | { readonly annotationID: string },
-    options?: { readonly skipHistory?: boolean; readonly block?: 'start' | 'center' | 'nearest' },
+    options?: {
+      readonly skipHistory?: boolean;
+      readonly block?: 'start' | 'center' | 'nearest';
+      readonly behavior?: ScrollBehavior;
+    },
   ): void | Promise<void>;
   focus?(): void;
   navigateToNextPage?(): void;

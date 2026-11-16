@@ -74,6 +74,11 @@ function compatibleTypography(a: LocalFigureText, b: LocalFigureText): boolean {
   return larger <= smaller * 1.5 || gapX(a.rect, b.rect) <= larger * 0.5;
 }
 
+/** A PDF stream may put the parenthesized panel lead in its own text chunk. */
+export function panelCaptionLead(text: string): boolean {
+  return /^\s*\([a-z]\)(?:\s|$)/iu.test(text);
+}
+
 /** Build visual rows, then split column/cell gaps instead of trusting PDF content-stream order. */
 export function textLines(
   text: readonly LocalFigureText[],
@@ -156,6 +161,7 @@ export function textLines(
     let parts: LocalFigureText[] = [];
     let prefix = '';
     let captionStart = false;
+    let panelStart = false;
     const flush = (): void => {
       if (!parts.length) return;
       let content = '';
@@ -174,6 +180,7 @@ export function textLines(
       parts = [];
       prefix = '';
       captionStart = false;
+      panelStart = false;
     };
     for (const chunk of chunks) {
       const previous = parts[parts.length - 1];
@@ -186,12 +193,20 @@ export function textLines(
           );
         const captionRestart =
           captionStart && gap > unit * 0.75 && documentCaptionIdentity(chunk.text);
-        if (gap > cellGap || previous.hasEOL || columnGap || captionRestart) flush();
+        const panelRestart =
+          panelStart &&
+          gap > unit * 0.12 &&
+          chunk.rect[0] - parts[0]!.rect[0] >= unit * 6 &&
+          Math.abs(chunk.fontSize - parts[0]!.fontSize) <= unit * 0.08 &&
+          panelCaptionLead(chunk.text);
+        if (gap > cellGap || previous.hasEOL || columnGap || captionRestart || panelRestart)
+          flush();
       }
       parts.push(chunk);
-      if (!captionStart && prefix.length < 40) {
+      if (!captionStart && !panelStart && prefix.length < 40) {
         prefix += (prefix ? ' ' : '') + chunk.text;
         captionStart = documentCaptionIdentity(prefix) !== null;
+        panelStart = panelCaptionLead(prefix);
       }
     }
     flush();

@@ -318,15 +318,30 @@ describe('ReaderNavigation', () => {
     await expect(
       test.navigation.traverseOutline('heading', 1, test.primary, () => true),
     ).resolves.toBe(true);
-    expect(nativeNavigate).toHaveBeenLastCalledWith(location(0, 700), { block: 'start' });
+    expect(nativeNavigate).toHaveBeenLastCalledWith(location(0, 700), {
+      block: 'start',
+      behavior: 'instant',
+    });
     await test.navigation.traverseOutline('heading', 1, test.primary, () => true);
-    expect(nativeNavigate).toHaveBeenLastCalledWith(location(1, 750), { block: 'start' });
+    expect(nativeNavigate).toHaveBeenLastCalledWith(location(1, 750), {
+      block: 'start',
+      behavior: 'instant',
+    });
     await test.navigation.traverseOutline('heading', 1, test.primary, () => true);
-    expect(nativeNavigate).toHaveBeenLastCalledWith(location(2, 792), { block: 'start' });
+    expect(nativeNavigate).toHaveBeenLastCalledWith(location(2, 792), {
+      block: 'start',
+      behavior: 'instant',
+    });
     await test.navigation.traverseOutline('heading', 1, test.primary, () => true);
-    expect(nativeNavigate).toHaveBeenLastCalledWith(location(0, 792), { block: 'start' });
+    expect(nativeNavigate).toHaveBeenLastCalledWith(location(0, 792), {
+      block: 'start',
+      behavior: 'instant',
+    });
     await test.navigation.traverseOutline('heading', -1, test.primary, () => true);
-    expect(nativeNavigate).toHaveBeenLastCalledWith(location(2, 792), { block: 'start' });
+    expect(nativeNavigate).toHaveBeenLastCalledWith(location(2, 792), {
+      block: 'start',
+      behavior: 'instant',
+    });
     expect(state.sidebarOpen).toBe(false);
     expect(state.sidebarView).toBe('annotations');
     expect(test.cloneInto).toHaveBeenCalledWith(
@@ -509,7 +524,10 @@ describe('ReaderNavigation', () => {
     await test.navigation.traverseOutline('figure', 1, test.secondary, () => true);
     await test.navigation.traverseOutline('figure', -1, test.secondary, () => true);
     expect(secondaryNavigate).toHaveBeenCalledTimes(2);
-    expect(secondaryNavigate).toHaveBeenLastCalledWith({ position }, { block: 'start' });
+    expect(secondaryNavigate).toHaveBeenLastCalledWith(
+      { position },
+      { block: 'start', behavior: 'instant' },
+    );
     expect(primaryNavigate).not.toHaveBeenCalled();
     await expect(
       test.navigation.traverseOutline('table', 1, test.secondary, () => true),
@@ -556,7 +574,7 @@ describe('ReaderNavigation', () => {
       await test.navigation.traverseOutline('heading', direction, test.primary, () => true);
       expect(navigate).toHaveBeenCalledExactlyOnceWith(
         { position: { pageIndex: 0, rects: [[0, target, 0, target]] } },
-        { block: 'start' },
+        { block: 'start', behavior: 'instant' },
       );
     },
   );
@@ -595,11 +613,11 @@ describe('ReaderNavigation', () => {
     });
     Reflect.set(internal._primaryView!, 'navigate', navigate);
     await test.navigation.traverseOutline('heading', 1, test.primary, () => true);
-    expect(navigate).toHaveBeenLastCalledWith(last, { block: 'start' });
+    expect(navigate).toHaveBeenLastCalledWith(last, { block: 'start', behavior: 'instant' });
     await test.navigation.traverseOutline('heading', 1, test.primary, () => true);
-    expect(navigate).toHaveBeenLastCalledWith(first, { block: 'start' });
+    expect(navigate).toHaveBeenLastCalledWith(first, { block: 'start', behavior: 'instant' });
     await test.navigation.traverseOutline('heading', -1, test.primary, () => true);
-    expect(navigate).toHaveBeenLastCalledWith(last, { block: 'start' });
+    expect(navigate).toHaveBeenLastCalledWith(last, { block: 'start', behavior: 'instant' });
     expect(navigate).toHaveBeenCalledTimes(3);
   });
 
@@ -642,7 +660,7 @@ describe('ReaderNavigation', () => {
     const navigate = vi.fn();
     Reflect.set(internal._primaryView!, 'navigate', navigate);
     await test.navigation.traverseOutline('heading', 1, test.primary, () => true);
-    expect(navigate).toHaveBeenCalledExactlyOnceWith(next, { block: 'start' });
+    expect(navigate).toHaveBeenCalledExactlyOnceWith(next, { block: 'start', behavior: 'instant' });
 
     Reflect.set(viewer, 'getPageView', undefined);
     Reflect.set(viewer, '_location', undefined);
@@ -698,11 +716,20 @@ describe('ReaderNavigation', () => {
     });
     Reflect.set(internal._primaryView!, 'navigate', navigate);
     await test.navigation.traverseOutline('figure', 1, test.primary, () => true);
-    expect(navigate).toHaveBeenLastCalledWith({ position: nativeFigure }, { block: 'start' });
+    expect(navigate).toHaveBeenLastCalledWith(
+      { position: nativeFigure },
+      { block: 'start', behavior: 'instant' },
+    );
     await test.navigation.traverseOutline('figure', 1, test.primary, () => true);
-    expect(navigate).toHaveBeenLastCalledWith({ position: figure }, { block: 'start' });
+    expect(navigate).toHaveBeenLastCalledWith(
+      { position: figure },
+      { block: 'start', behavior: 'instant' },
+    );
     await test.navigation.traverseOutline('table', 1, test.primary, () => true);
-    expect(navigate).toHaveBeenLastCalledWith({ position: table }, { block: 'start' });
+    expect(navigate).toHaveBeenLastCalledWith(
+      { position: table },
+      { block: 'start', behavior: 'instant' },
+    );
   });
 
   it('lands a duplicate Figure identity at the supplied image region rather than its bookmark caption', async () => {
@@ -732,20 +759,29 @@ describe('ReaderNavigation', () => {
         1000 + 900 - Math.min(rect[1], rect[3]),
       ];
     };
+    // Native navigate() resolves even when an adjacent-page animation still awaits a frame.
+    const animationFrames: (() => void)[] = [];
     Reflect.set(internal._primaryView!, 'getPositionBoundingViewRect', nativeRect);
     Reflect.set(
       internal._primaryView!,
       'navigate',
-      async ({ position }: { position: ReaderLinkPosition }) => {
-        container.scrollTop = Math.min(
-          nativeRect(position)[1],
-          container.scrollHeight - container.clientHeight,
-        );
-        viewer._location = {
-          pageNumber: position.pageIndex + 1,
-          top: 900 - (container.scrollTop - 1000),
-          left: 0,
+      async (
+        { position }: { position: ReaderLinkPosition },
+        options?: { readonly behavior?: ScrollBehavior },
+      ) => {
+        const land = (): void => {
+          container.scrollTop = Math.min(
+            nativeRect(position)[1],
+            container.scrollHeight - container.clientHeight,
+          );
+          viewer._location = {
+            pageNumber: position.pageIndex + 1,
+            top: 900 - (container.scrollTop - 1000),
+            left: 0,
+          };
         };
+        if (options?.behavior === 'instant') land();
+        else animationFrames.push(land);
       },
     );
 
@@ -755,6 +791,8 @@ describe('ReaderNavigation', () => {
     expect(viewer._location).toEqual({ pageNumber: 2, top: 760, left: 0 });
     expect(nativeRect(region)[1] - container.scrollTop).toBe(0);
     expect(nativeRect(caption)[1] - container.scrollTop).toBe(300);
+    container.scrollTop = 0;
+    viewer._location = { pageNumber: 1, top: 900, left: 0 };
     await test.navigation.navigateCaption(target, test.primary);
     expect(nativeRect(region)[1] - container.scrollTop).toBe(0);
   });
@@ -784,7 +822,10 @@ describe('ReaderNavigation', () => {
       const navigate = vi.fn();
       Reflect.set(internal._primaryView!, 'navigate', navigate);
       await test.navigation.traverseOutline('table', 1, test.primary, () => true);
-      expect(navigate).toHaveBeenLastCalledWith({ position: group }, { block: 'start' });
+      expect(navigate).toHaveBeenLastCalledWith(
+        { position: group },
+        { block: 'start', behavior: 'instant' },
+      );
       expect(test.cloneInto).toHaveBeenCalledWith({ position: group }, test.reader._iframeWindow);
     },
   );
@@ -804,10 +845,16 @@ describe('ReaderNavigation', () => {
     const navigate = vi.fn();
     Reflect.set(internal._primaryView!, 'navigate', navigate);
     await test.navigation.traverseOutline('table', 1, test.primary, () => true);
-    expect(navigate).toHaveBeenLastCalledWith({ position: a }, { block: 'start' });
+    expect(navigate).toHaveBeenLastCalledWith(
+      { position: a },
+      { block: 'start', behavior: 'instant' },
+    );
     location.top = 600;
     await test.navigation.traverseOutline('table', 1, test.primary, () => true);
-    expect(navigate).toHaveBeenLastCalledWith({ position: b }, { block: 'start' });
+    expect(navigate).toHaveBeenLastCalledWith(
+      { position: b },
+      { block: 'start', behavior: 'instant' },
+    );
     vi.spyOn(test.captions, 'sourceCurrent').mockResolvedValue(false);
     await test.navigation.traverseOutline('table', 1, test.primary, () => true);
     expect(navigate).toHaveBeenCalledTimes(2);

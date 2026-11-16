@@ -51,7 +51,7 @@ export function captionsFromLines(
     // An unpunctuated label followed by a sentence predicate can start a prose paragraph.
     // Require a matching body-text baseline too: the identity alone remains valid for captions.
     const paragraphReference =
-      /^\s*(?:fig(?:ure)?\.?|table)\s*\S+(?<![.:：,，])\s+(?:also\s+)?(?:shows?|illustrates?|summari[sz]es?|presents?|compares?|reports?|describes?|demonstrates?|contains?)\b/iu.test(
+      /^\s*(?:fig(?:ure)?\.?|table)\s*\S+(?<![.:：,，])\s+(?:also\s+)?(?:shows?|displays?|illustrates?|summari[sz]es?|presents?|compares?|reports?|describes?|demonstrates?|contains?)\b/iu.test(
         seed.text,
       ) &&
       Math.abs(seed.fontSize - unit) <= unit * 0.05 &&
