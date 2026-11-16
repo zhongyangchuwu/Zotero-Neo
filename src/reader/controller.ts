@@ -917,7 +917,12 @@ export class ReaderSession {
               themeRoot: (root) => this.themeRoot(root),
               captureView: (window) => this.invocationCurrent(window, null),
               render: (target, signal) =>
-                readerRegionPreview(dependencies.reader, target.location.position, signal),
+                readerRegionPreview(
+                  dependencies.reader,
+                  target.location.position,
+                  signal,
+                  'bounds',
+                ),
               navigate: (target, window) => navigationModule.navigateCaption(target, window),
               debug: (message) => dependencies.controller.dependencies.logger.debug(message),
             }),

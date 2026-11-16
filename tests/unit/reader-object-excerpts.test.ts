@@ -4,12 +4,13 @@ import {
   ReaderObjectExcerpts,
   type ReaderObjectExcerptHost,
 } from '../../src/modules/reader-excerpts/object-excerpts';
-import type { SourceNoteReceipt } from '../../src/core/source-note';
+import type { SourceNoteDraft, SourceNoteReceipt } from '../../src/core/source-note';
 import type {
   SearchDialogReactCommand,
   SearchDialogReactModel,
 } from '../../src/ui/search-dialog-react-model';
 import { mountSearchDialogReactView } from '../../src/ui/react/surfaces/search-dialog';
+import type { DocumentRegion } from '../../src/document-analysis/contracts';
 
 const io = vi.hoisted(() => ({
   read: vi.fn(),
@@ -74,12 +75,12 @@ afterEach(() => {
 const flush = async (): Promise<void> => {
   for (let i = 0; i < 30; i++) await Promise.resolve();
 };
-function setup() {
+function setup(regions?: readonly DocumentRegion[]) {
   io.owner.mockReturnValue(window);
   const snapshot = {
     parsed: {
       sourceFingerprint: 'pdf-v1',
-      regions: [
+      regions: regions ?? [
         {
           id: 'equation',
           kind: 'formula',
@@ -190,6 +191,88 @@ describe('Reader object excerpt save receipts', () => {
       first.identity,
     ]);
     expect(ui.openNote).not.toHaveBeenCalled();
+  });
+
+  it('creates a complete-image note without reusing a legacy masked note or losing its edits', async () => {
+    const regions: DocumentRegion[] = [
+      {
+        id: 'caption',
+        kind: 'caption',
+        pageIndex: 0,
+        rect: [0, 0, 100, 20],
+        text: 'Figure 1. A chart.',
+        format: 'text',
+        flow: 'auxiliary',
+        anchorPrecision: 'region',
+        sourceObject: { id: 'figure-1', kind: 'figure' },
+      },
+      {
+        id: 'body',
+        kind: 'image',
+        pageIndex: 0,
+        rect: [20, 40, 100, 100],
+        text: '',
+        format: 'text',
+        flow: 'auxiliary',
+        anchorPrecision: 'region',
+        sourceObject: { id: 'figure-1', kind: 'figure' },
+      },
+    ];
+    const ui = setup(regions);
+    const legacyIdentity = JSON.stringify([
+      'reader-object-excerpt',
+      'pdf-v1',
+      'figure',
+      'object',
+      [{ pageIndex: 0, rects: regions.map((region) => region.rect) }],
+      regions[0]!.text,
+    ]);
+    const legacy = {
+      receipt: { itemID: 20, key: 'MASKED', reused: false },
+      html: '<p>My manual edits</p>',
+      images: ['legacy-masked-png'],
+    };
+    const notes = new Map([[legacyIdentity, legacy]]);
+    let nextItemID = 21;
+    io.save.mockImplementation(async (_target: unknown, draft: SourceNoteDraft) => {
+      const previous = draft.identity && notes.get(draft.identity);
+      if (previous) return { ...previous.receipt, reused: true };
+      const receipt = { itemID: nextItemID++, key: 'COMPLETE', reused: false };
+      if (draft.identity)
+        notes.set(draft.identity, {
+          receipt,
+          html: draft.html,
+          images: [...draft.images],
+        });
+      return receipt;
+    });
+    ui.excerpts.open(ui.pdfWindow);
+    await flush();
+    ui.button('save').click();
+    await flush();
+    expect(document.documentElement.textContent).toContain('created:');
+    ui.button('openNote').click();
+    await flush();
+    expect(ui.openNote).toHaveBeenLastCalledWith(
+      { itemID: 21, key: 'COMPLETE', reused: false },
+      ui.pdfWindow,
+    );
+    ui.excerpts.open(ui.pdfWindow);
+    await flush();
+    ui.button('save').click();
+    await flush();
+    expect(document.documentElement.textContent).toContain('reused:');
+    ui.button('openNote').click();
+    await flush();
+    expect(ui.openNote).toHaveBeenLastCalledWith(
+      { itemID: 21, key: 'COMPLETE', reused: true },
+      ui.pdfWindow,
+    );
+    expect(notes.get(legacyIdentity)).toEqual({
+      receipt: { itemID: 20, key: 'MASKED', reused: false },
+      html: '<p>My manual edits</p>',
+      images: ['legacy-masked-png'],
+    });
   });
 
   it('reports a save failure without claiming success or enabling note opening', async () => {
