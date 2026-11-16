@@ -1,4 +1,4 @@
-import type { ScholarlyPaper } from './contracts';
+import type { ScholarlyPaper } from '../scholarly/contracts';
 
 export type ReferenceScene =
   | 'loading'

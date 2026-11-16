@@ -133,9 +133,11 @@ Reader Surface 保留输入/IME/count/前缀、模式、CurrentTarget、精确�
 
 原生引文预览内的 Neo 操作按钮使用 `src/ui/react/surfaces/references.tsx`，不替换原生预览、链接或右键菜单；关闭预览时先退休渲染器及其回调。
 
-本地分析和文库查找不访问网络。元数据只在显式搜索未命中缓存或显式刷新时从 Semantic Scholar 或 arXiv 获取；展示来源原始字段、原始摘要和检索时间，未提供的摘要不生成。本模块不依赖或调用 AI 问答，不对论文或引用作 AI 生成、质量判断或分类。`src/operations/references.ts` 只在明确确认后添加条目；已存在条目不覆盖，精确 DOI/arXiv 身份用于去重。
+本地分析和文库查找不访问网络。共享学术查询由 `src/scholarly/` 拥有：`query.ts` 规范化条目和 BibTeX 线索，`service.ts` 协调来源、结果与缓存，`adapters/` 分别实现 Semantic Scholar、arXiv、Crossref 和 INSPIRE，`cache.ts` 管理本机缓存，`rate.ts` 跨消费者限制请求。组合根注入应用级服务，Reader 界面和 Main 审阅复用它；适配器不写文库。来源能力、查询与缓存行为见[阅读器指南](READER_GUIDE.md#查看元数据和外部来源)。
 
-论文元数据缓存由 `src/references/cache.ts` 在进程内跨 Reader／服务实例共享并串行管理，`src/platform/reference-cache.ts` 负责配置目录中的持久化。打开论文详情只读缓存；显式搜索按规范化查询键命中缓存（包括已过期结果）时不联网，未命中时才请求来源；刷新跳过缓存并请求网络。成功取得的原始元数据保存在当前 Zotero 配置目录的有界 JSON 中，标记来源、原始检索时间与过期状态；缓存不读取或保存 PDF 文本、笔记、坐标或凭据。刷新失败保留既有内容并报告错误。用户清除时只清除该缓存，代次保护使已清除的在途请求不能重新写回；不影响文库条目、已采纳记录或凭据。
+`src/metadata-review/` 固定 Main 条目范围、展示来源和字段差异；`src/operations/metadata.ts` 在事务内重查目标及审阅基线，只写明确选择的字段。`src/operations/references.ts` 继续负责确认后添加参考文献。来源缓存不是审阅历史，清除缓存不删除成果。`src/artifacts/` 负责版本化成果和修订，`src/platform/artifacts.ts` 通过 Zotero 正式导入附件；审阅笔记由 `src/operations/artifact-note.ts` 单独投影。封套、迁移与互通边界见[成果附件格式](ARTIFACT_FORMAT.md)。
+
+本模块不依赖或调用 AI 问答，不生成摘要或对论文质量分类。查询按来源能力发送所需书目线索，不上传笔记或 PDF；只有用户明确查询或刷新才访问来源。
 
 #### 文档准备
 
@@ -170,13 +172,13 @@ Reader Surface 保留输入/IME/count/前缀、模式、CurrentTarget、精确�
 
 `src/platform/ai-runtime.ts` 按首次生成请求惰性建立无窗口 runtime；关闭的模块不注册入口／动作，不挂载面板或界面 runtime，也不读取凭据或发送请求。打开面板前先从发起的 Reader 捕获选区与视图，打开本身只读取缓存和已存成果；用户明确发起任务后才准备证据并请求模型。输入最多 40 条证据、32,000 字符；模型仅收到明确证据 ID，不返回可执行 HTML 或位置坐标；有效 ID 不证明语义正确。
 
-主窗口标签页 Reader 使用原生 ItemPaneManager section；Toolkit 通过窄的私有 `item-details.tabID` seam 解析精确 Reader。独立 Reader 使用单独工具窗，绑定发起它的 Reader，不挤压 PDF 布局，并复用同一 controller、React 视图和成果仓库。关闭工具窗只释放界面，不取消已接纳任务；Reader 退出时关闭其工具窗并退休视图，但已接纳任务仍可完成。显式取消不保存部分结果。校验通过的成果按附件与 PDF 指纹在本机 JSON 持久保存，生成原稿与人工修改版本分开；这不是 Zotero 同步。来源跳转先预览再明确确认，只有用户明确采纳时才通过既有 Operation 写入带来源的 Zotero Note，不自动创建 PDF 批注。
+主窗口标签页 Reader 使用原生 ItemPaneManager section；Toolkit 通过窄的私有 `item-details.tabID` seam 解析精确 Reader。独立 Reader 使用单独工具窗，绑定发起它的 Reader，不挤压 PDF 布局，并复用同一 controller、React 视图和成果仓库。关闭工具窗只释放界面，不取消已接纳任务；Reader 退出时关闭其工具窗，但已接纳任务仍可完成。显式取消不保存部分结果。成果以正式 Zotero 附件保存；旧旁路文件按需迁移并保留，来源变化时保留历史但停用旧定位。跨设备同步尚未验证，详见[成果附件格式](ARTIFACT_FORMAT.md)。来源跳转先预览再明确确认，只有用户明确采纳时才通过既有 Operation 写入带来源的 Zotero Note，不自动创建 PDF 批注。
 
 生成段落仅投影自己的 `evidenceIDs`，人工修订不继承原稿的逐段引用。采纳回执绑定成果与修订，通过既有 source-note 身份查询找回笔记，不扫描整库；打开前再次验证可访问性，并委托来源 Reader 的实际主窗口打开。重复采纳复用笔记而不覆盖人工正文。
 
 静态宿主文档 `assets/package/content/ai-qa-window.xhtml` 打包为 `content/ai-qa-window.xhtml`，由 `src/platform/ai-qa-ui.ts` 按需注册到 `chrome://zotero-neo-ai-qa/content/ai-qa-window.xhtml`；窗口类型为 `zotero-neo:ai-qa`。AI 问答 UI bundle 为 `content/ai-qa-ui.js`。关闭所有归 Toolkit 所有的工具窗后才释放共享注册；关闭 Reader 会退休其窗口，但不会单独移除仍供其他 Reader 使用的共享注册。
 
-更名不会更改既有持久化身份：配置 `ai.configuration`、端点凭据身份、附件成果文件 `.zotero-neo-reader-ai.json` 及 Note provenance／幂等标记继续沿用。关闭模块也不会清除配置、凭据、成果或人工修订。
+更名不会更改既有配置 `ai.configuration`、端点凭据身份及 Note provenance／幂等标记。旧附件成果文件 `.zotero-neo-reader-ai.json` 是按需迁移的恢复来源，迁移后仍保留；关闭模块不会清除配置、凭据、成果或人工修订。
 
 宿主能力位于 `src/toolkit/reader/`；具体路径和私有接缝见[开发指南](DEVELOPMENT.md#宿主能力-toolkit)。Reader 生命周期工作仅对活跃 session 及精确 PDF 视图有效。同 Window 的 ReaderView 或 Document 替换也会退休旧注册；部分监听获取失败或获取期间重入退出时，先封住回调，再排空已取得的句柄。原生事件回调在注销前先按身份退休；只有权威 Reader 清单才能据此退休缺失 session。退出时防护已销毁的 Gecko wrapper，同时保持活对象上的失败可观测。
 

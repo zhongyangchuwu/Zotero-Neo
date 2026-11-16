@@ -110,6 +110,8 @@ export const BUILTIN_MODULES: readonly BuiltinModuleDescriptor[] = [
         actions: [
           ...itemFind,
           'mainAddByIdentifier',
+          'inspectMetadata',
+          'inspectCollectionMetadata',
           'mainYankCitekey',
           'mainOpenPDF',
           'mainActivate',

@@ -40,6 +40,7 @@ export interface LibraryModuleHost {
   readonly leaveVisual: () => void;
   readonly prepareQuickSearch: () => void;
   readonly prepareIdentifierLookup: () => void;
+  readonly reviewMetadata: (items: readonly Zotero.Item[]) => Cleanup | null;
   readonly choose: (kind: 'all' | 'collection', options: PickerOpenOptions) => Cleanup | null;
   readonly selectItem: (
     itemID: number,
@@ -81,6 +82,7 @@ export interface LibraryModule {
   advancedSearch(): boolean;
   findItems(kind: 'all' | 'collection', surface: NavigationSurface): boolean;
   addByIdentifier(surface: 'main' | 'reader'): boolean;
+  inspectMetadata(items: readonly Zotero.Item[], collection?: boolean): boolean;
   yankCitekeys(targets: ItemTargetSet<'main'> | ItemTargetSet<'note'>): boolean;
   openItem(item: Zotero.Item | null, surface: 'main' | 'note'): boolean;
   activate(item: Zotero.Item | null): boolean;
@@ -141,16 +143,26 @@ export function createLibraryModule(host: ModuleHost, ports: LibraryModuleHost):
       },
     });
     let releaseChooser: Cleanup | null = null;
+    let releaseReview: Cleanup | null = null;
+    const review = (items: readonly Zotero.Item[]) => {
+      releaseReview?.();
+      releaseReview = ports.reviewMetadata(items);
+    };
     scope.add(() => {
       const release = releaseChooser;
       releaseChooser = null;
       const failure = new CleanupFailure();
       failure.run(() => localFind.close(false));
       failure.run(() => release?.());
+      failure.run(() => releaseReview?.());
       failure.rethrow();
     });
     const bind = <Request>(action: ActionId, run: (request: Request) => void) =>
       host.bind<Request>(scope, 'main-normal', action, run);
+    const metadata = {
+      selected: bind<readonly Zotero.Item[]>('inspectMetadata', review),
+      collection: bind<readonly Zotero.Item[]>('inspectCollectionMetadata', review),
+    };
     const search = (direction?: 1 | -1) => {
       if (!mainTreeFocused(ports.window, 'items')) {
         status('✗ Focus the items list first');
@@ -358,6 +370,8 @@ export function createLibraryModule(host: ModuleHost, ports: LibraryModuleHost):
       advancedSearch: () => advancedSearch(),
       findItems: (kind, surface) => find[surface][kind](),
       addByIdentifier: (surface) => identifiers[surface](),
+      inspectMetadata: (items, collection = false) =>
+        metadata[collection ? 'collection' : 'selected'](items),
       yankCitekeys: (targets) => yank[targets.source](targets),
       openItem: (item, surface) => openItems[surface](item),
       activate,

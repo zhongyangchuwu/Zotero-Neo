@@ -234,6 +234,7 @@ Main Normal 命令取决于焦点所在位置：分类树、条目列表、Quick
 | `findNext` / `findPrevious` | `n` / `N` | 条目列表获得焦点时，按已提交的内部查找查询向前/后重复搜索一次；忽略计数。没有查询、未命中或游标未改变时，位置不变。游标改变时可添加历史记录。 |
 | `mainQuickSearch` / `mainAdvancedSearch` | `<Space>fq` / `<Space>fa` | 聚焦原生 Quick Search 或打开 Advanced Search；`fa` 可将现有 Quick Search 文字转换过去。这些操作改变 Main 视图范围，不改变 Reader 页码位置。 |
 | `mainAddByIdentifier` | `<Space>ai` | 为一个可写文库及其当前所选分类打开原生标识符录入；不使用条目目标或 Neo 选择集。跨文库或只读范围不可用；忽略计数。见[通过标识符添加条目](MAIN_GUIDE.md#用-doi、arxiv-id-等添加论文)。
+| `inspectMetadata` / `inspectCollectionMetadata` | **未绑定** | Main Normal 命令面板：分别固定当前条目目标或当前普通分类的直接条目，打开元数据审阅；不自动联网或写入。操作见[检查和更新论文信息](MAIN_GUIDE.md#检查和更新论文信息)。 |
 | `findAllItems` / `findCollectionItems` / `findNotes` | `<Space>ff` / `<Space>fc` / `<Space>fn` | 打开共享的条目/笔记选择器。确认结果时可添加历史位置；浏览或取消不会添加。 |
 | `findCollections` | **未绑定** | Main Normal：在一个文库范围内按名称或完整路径搜索分类。未选定文库范围时，提示 `Choose one library scope to find collections`。浏览或取消不会改变范围；确认后进入该分类，目标变化时可添加共享历史位置。 |
 | `switchTab` / `previousTab` / `nextTab` / `closeCurrentTab` | `<Space>,` / `H` / `L` / `<Space>q` | 打开标签页选择器、切换到上一个/下一个打开的标签页，或关闭当前原生标签页。关闭标签页不会移除其保存的分组成员，也不会记入历史或删除旧记录；选择器确认、`H` / `L` 成功切换时会记录位置，`H` / `L` 忽略计数。 |
@@ -458,6 +459,7 @@ Reader Normal 中按 `<Space>ro`、`<Space>rm`、`<Space>ra` 和 `<Space>rt` 可
 | `findCollectionItems` | Reader/Main/Note Normal `<Space>fc` | 打开共享分类条目选择器 |
 | `findNotes` | Reader/Main/Note Normal `<Space>fn` | 打开共享 Note 选择器 |
 | `findCollections` | **未绑定** | 在 Main Normal 中按名称或完整路径搜索分类 |
+| `inspectMetadata` / `inspectCollectionMetadata` | **未绑定** | Main Normal 中审阅当前条目目标或当前分类直接条目的元数据 |
 | `mainQuickSearch` | Main Normal `<Space>fq` | 聚焦 Zotero 原生 Quick Search |
 | `mainAdvancedSearch` | Main Normal `<Space>fa` | 打开 Zotero 原生 Advanced Search |
 | `managePlugins` | Reader/Main/Note Normal `<Space>pp` | 打开 Plugin Manager 面板 |

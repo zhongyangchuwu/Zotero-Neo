@@ -1,4 +1,5 @@
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
+import { createScholarlyMetadataService } from '../../src/scholarly';
 
 import type {
   CommandPaletteContext,
@@ -179,6 +180,7 @@ function createReaderRegistryHarness(
   const preferences = readerPreferences(initial);
   const logger = { debug: () => {}, diagnostic: () => {} };
   const dependencies: ReaderControllerDependencies = {
+    scholarly: createScholarlyMetadataService(),
     preferences,
     logger,
     modules: new BuiltinModuleRuntime(preferences, logger),
@@ -615,6 +617,7 @@ describe('Reader event lifecycle', () => {
     const preferences = readerPreferences();
     const logger = { debug: () => {}, diagnostic: () => {} };
     const dependencies: ReaderControllerDependencies = {
+      scholarly: createScholarlyMetadataService(),
       preferences,
       logger,
       modules: new BuiltinModuleRuntime(preferences, logger),
@@ -740,6 +743,7 @@ describe('Reader event lifecycle', () => {
     const preferences = readerPreferences();
     const logger = { debug: () => {}, diagnostic: () => {} };
     const dependencies: ReaderControllerDependencies = {
+      scholarly: createScholarlyMetadataService(),
       preferences,
       logger,
       modules: new BuiltinModuleRuntime(preferences, logger),
@@ -943,6 +947,7 @@ function createHistorySession(
       leaveVisual: () => {},
       prepareQuickSearch: () => {},
       prepareIdentifierLookup: () => {},
+      reviewMetadata: () => null,
       choose: () => null,
       selectItem: unavailable,
       executeNavigation: unavailable,
@@ -1002,6 +1007,7 @@ function createHistorySession(
     }),
   );
   const controller = new ReaderController({
+    scholarly: createScholarlyMetadataService(),
     preferences,
     logger,
     modules,

@@ -1,10 +1,6 @@
-import type {
-  ReferenceAdditionReceipt,
-  ReferenceLocalMatch,
-  ReferenceQuery,
-  ScholarlyPaper,
-} from '../references/contracts';
-import { normalizeArxiv, normalizeDOI } from '../references/identifiers';
+import type { ReferenceAdditionReceipt, ReferenceLocalMatch } from '../references/contracts';
+import type { ScholarlyQuery, ScholarlyPaper } from '../scholarly/contracts';
+import { normalizeArxiv, normalizeDOI } from '../scholarly/identifiers';
 
 function writableLibrary(libraryID: number): void {
   const library = Zotero.Libraries.get(libraryID);
@@ -29,7 +25,7 @@ function match(item: Zotero.Item): ReferenceLocalMatch {
   return { itemID: item.id, attachmentID, title: String(item.getField('title') || '') };
 }
 
-async function searchItems(query: ReferenceQuery, libraryID: number): Promise<Zotero.Item[]> {
+async function searchItems(query: ScholarlyQuery, libraryID: number): Promise<Zotero.Item[]> {
   if (!Number.isInteger(libraryID) || !Zotero.Libraries.get(libraryID)) return [];
   const terms: Array<[string, string]> = [];
   const doi = normalizeDOI(query.doi);
@@ -54,7 +50,7 @@ async function searchItems(query: ReferenceQuery, libraryID: number): Promise<Zo
 }
 
 export async function findReferenceItems(
-  query: ReferenceQuery,
+  query: ScholarlyQuery,
   libraryID: number,
 ): Promise<readonly ReferenceLocalMatch[]> {
   return (await searchItems(query, libraryID)).map(match);

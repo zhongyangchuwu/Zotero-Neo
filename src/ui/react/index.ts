@@ -53,6 +53,8 @@ import { mountMainStatusReactView, MAIN_STATUS_REACT_CSS } from './surfaces/main
 import type { MainStatusReactModel } from '../../modules/worksets/status-react-model';
 import { mountReaderStatusReactView, READER_STATUS_REACT_CSS } from './surfaces/reader-status';
 import type { ReaderStatusReactModel } from '../../reader/status-react-model';
+import { mountMetadataReviewView, METADATA_REVIEW_CSS } from './surfaces/metadata-review';
+import type { MetadataReviewModel } from '../../metadata-review/react-model';
 import { NATIVE_UI_CSS } from './styles';
 import type { NativeUIRuntime, ReactView } from './types';
 
@@ -76,6 +78,7 @@ const runtime: NativeUIRuntime = {
         READER_FIGURES_REACT_CSS +
         DOCUMENT_COMPARISON_REACT_CSS +
         DOCUMENT_PREPARATION_REACT_CSS +
+        METADATA_REVIEW_CSS +
         ANNOTATION_COMMENT_REACT_CSS +
         SELECTION_ACTIONS_REACT_CSS +
         READER_SIDEBAR_REACT_CSS +
@@ -149,6 +152,10 @@ const runtime: NativeUIRuntime = {
         ) as ReactView<unknown>;
       case 'document-preparation':
         return mountDocumentPreparationReactView(root, model as PreparationReactModel, (command) =>
+          dispatch(command),
+        ) as ReactView<unknown>;
+      case 'metadata-review':
+        return mountMetadataReviewView(root, model as MetadataReviewModel, (command) =>
           dispatch(command),
         ) as ReactView<unknown>;
       case 'document-comparison':

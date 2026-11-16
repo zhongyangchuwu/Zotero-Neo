@@ -297,6 +297,8 @@
   "action.mainFocusItems": "主窗口：聚焦条目列表",
   "action.mainYankCitekey": "复制 BetterBibTeX citekey",
   "action.mainAddByIdentifier": "通过标识符添加条目",
+  "action.inspectMetadata": "检查所选条目的论文信息与更新",
+  "action.inspectCollectionMetadata": "检查当前分类的论文信息与更新",
   "action.mainOpenPDF": "打开主窗口游标条目或 Note 上下文条目",
   "action.closeCurrentTab": "关闭当前标签页",
   "action.addTag": "为当前目标添加标签",

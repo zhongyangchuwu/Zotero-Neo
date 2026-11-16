@@ -15,6 +15,7 @@ export type NativeReactSurface =
   | 'search-dialog'
   | 'reader-figures'
   | 'document-preparation'
+  | 'metadata-review'
   | 'document-comparison'
   | 'annotation-comment'
   | 'selection-actions'

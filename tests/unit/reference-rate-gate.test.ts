@@ -8,6 +8,10 @@ vi.mock('../../src/platform/reference-credentials', () => ({
   readReferenceKey: () => '',
   changeReferenceKey: vi.fn(),
 }));
+vi.mock('../../src/platform/reference-cache', () => ({
+  readReferenceCache: vi.fn(async () => null),
+  writeReferenceCache: vi.fn(async () => {}),
+}));
 import { referenceRequest } from '../../src/platform/reference-http';
 
 let now: number;
@@ -31,21 +35,23 @@ afterEach(() => {
 });
 
 it.each([
-  ['s2', 1000],
+  ['semantic-scholar', 1000],
   ['arxiv', 3000],
+  ['crossref', 1000],
+  ['inspire', 1000],
 ] as const)(
   'spaces %s starts across service instances after late timer delivery',
   async (provider, interval) => {
     // Reload to give each test an isolated module-global provider gate.
-    const { createReferenceMetadataService } = await import('../../src/references/metadata');
-    const first = createReferenceMetadataService();
-    const second = createReferenceMetadataService();
+    const { createScholarlyMetadataService } = await import('../../src/scholarly');
+    const first = createScholarlyMetadataService();
+    const second = createScholarlyMetadataService();
     const query = (id: number) =>
-      provider === 's2' ? { text: `paper ${id}` } : { text: '', arxivID: `2001.0000${id}` };
+      provider !== 'arxiv' ? { text: `paper ${id}` } : { text: '', arxivID: `2001.0000${id}` };
     const signal = () => new AbortController().signal;
-    await first.lookup(query(1), signal());
-    const pending1 = second.lookup(query(2), signal());
-    const pending2 = first.lookup(query(3), signal());
+    await first.lookup(query(1), signal(), { source: provider });
+    const pending1 = second.lookup(query(2), signal(), { source: provider });
+    const pending2 = first.lookup(query(3), signal(), { source: provider });
     now += interval * 5;
     await vi.advanceTimersByTimeAsync(interval * 3);
     expect(starts).toEqual([100_000, now]);
@@ -58,9 +64,9 @@ it.each([
 
 it('removes cancelled pending calls without filling the shared arXiv queue', async () => {
   // Reload to give each test an isolated module-global provider gate.
-  const { createReferenceMetadataService } = await import('../../src/references/metadata');
-  const first = createReferenceMetadataService();
-  const second = createReferenceMetadataService();
+  const { createScholarlyMetadataService } = await import('../../src/scholarly');
+  const first = createScholarlyMetadataService();
+  const second = createScholarlyMetadataService();
   await first.lookup({ text: '', arxivID: '2001.00001' }, new AbortController().signal);
   for (let i = 0; i < 15; i++) {
     const controller = new AbortController();
@@ -77,8 +83,8 @@ it('removes cancelled pending calls without filling the shared arXiv queue', asy
 
 it('rejects requests beyond the bounded wait and releases cancelled capacity', async () => {
   // Reload to give each test an isolated module-global provider gate.
-  const { createReferenceMetadataService } = await import('../../src/references/metadata');
-  const service = createReferenceMetadataService();
+  const { createScholarlyMetadataService } = await import('../../src/scholarly');
+  const service = createScholarlyMetadataService();
   await service.lookup({ text: '', arxivID: '2001.00001' }, new AbortController().signal);
   const controllers = Array.from({ length: 10 }, () => new AbortController());
   const pending = controllers.map((controller) =>
@@ -95,3 +101,29 @@ it('rejects requests beyond the bounded wait and releases cancelled capacity', a
   await vi.advanceTimersByTimeAsync(3000);
   await expect(next).resolves.toEqual({ kind: 'not-found' });
 });
+
+it.each(['arxiv', 'crossref'] as const)(
+  'serializes active %s connections, not only starts',
+  async (source) => {
+    // Static import cannot model a fresh module-owned gate after vi.resetModules().
+    const { createScholarlyMetadataService } = await import('../../src/scholarly');
+    const held = Promise.withResolvers<{ status: number; text: string }>();
+    const entered = Promise.withResolvers<void>();
+    vi.mocked(referenceRequest).mockImplementationOnce(() => {
+      starts.push(Date.now());
+      entered.resolve();
+      return held.promise;
+    });
+    const first = createScholarlyMetadataService();
+    const second = createScholarlyMetadataService();
+    const a = first.lookup({ text: 'first paper' }, new AbortController().signal, { source });
+    await entered.promise;
+    const b = second.lookup({ text: 'second paper' }, new AbortController().signal, { source });
+    now += 6000;
+    await vi.advanceTimersByTimeAsync(6000);
+    expect(starts).toEqual([100_000]);
+    held.resolve({ status: 404, text: '' });
+    await Promise.all([a, b]);
+    expect(starts).toEqual([100_000, 106_000]);
+  },
+);

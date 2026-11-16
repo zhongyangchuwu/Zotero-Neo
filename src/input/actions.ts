@@ -94,6 +94,8 @@ const BASE_ACTION_IDS = [
   'openCommandPalette',
   'openNeoSettings',
   'prepareDocuments',
+  'inspectMetadata',
+  'inspectCollectionMetadata',
   'findAllItems',
   'findCollectionItems',
   'findNotes',

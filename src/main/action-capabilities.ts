@@ -20,6 +20,8 @@ export const MAIN_NORMAL_ACTIONS = Object.freeze([
   ...TAB_ENHANCEMENT_MAIN_ACTIONS,
   'openNeoSettings',
   'prepareDocuments',
+  'inspectMetadata',
+  'inspectCollectionMetadata',
   'manageSelection',
   'navigateBack',
   'navigateForward',
