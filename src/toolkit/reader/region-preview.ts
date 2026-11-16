@@ -14,7 +14,7 @@ export interface ReaderRegionPreview {
   readonly height: number;
 }
 
-/** Bounded raster geometry; member rectangles also define the mask, never just an enclosing crop. */
+/** Bounded raster geometry shared by precise member masks and continuous group crops. */
 export function regionPreviewPlan(rects: readonly DocumentRect[]) {
   if (!rects.length || rects.length > 256 || rects.some((rect) => !documentRect(rect)))
     throw new Error('Invalid preview geometry');
@@ -29,23 +29,18 @@ export function regionPreviewPlan(rects: readonly DocumentRect[]) {
     scale,
     width: Math.max(1, Math.ceil(width * scale)),
     height: Math.max(1, Math.ceil(height * scale)),
-    members: rects.map(
-      (r) =>
-        [
-          Math.max(0, Math.floor((r[0] - left) * scale)),
-          Math.max(0, Math.floor((r[1] - top) * scale)),
-          Math.ceil((r[2] - left) * scale),
-          Math.ceil((r[3] - top) * scale),
-        ] as DocumentRect,
-    ),
   };
 }
 
-/** Render the source PDF into detached canvases without scrolling, zooming or annotating either Reader pane. */
+/**
+ * Render source PDF pixels without changing either Reader pane.
+ * Precise regions retain member masks; object workflows explicitly retain the entire enclosing crop.
+ */
 export async function readerRegionPreview(
   reader: ReaderRuntime,
   location: ReaderLinkPosition,
   signal: AbortSignal,
+  clip: 'members' | 'bounds' = 'members',
 ): Promise<ReaderRegionPreview> {
   const internal = (reader as NativeReaderRuntime)._internalReader;
   const window = internal?._primaryView?._iframeWindow as NativePdfWindow | undefined;
@@ -94,16 +89,21 @@ export async function readerRegionPreview(
   });
   const plan = regionPreviewPlan(rects);
   const canvas = window.document.createElement('canvas'),
-    masked = window.document.createElement('canvas');
-  canvas.width = masked.width = plan.width;
-  canvas.height = masked.height = plan.height;
+    masked = clip === 'bounds' ? canvas : window.document.createElement('canvas');
+  canvas.width = plan.width;
+  canvas.height = plan.height;
+  if (masked !== canvas) {
+    masked.width = plan.width;
+    masked.height = plan.height;
+  }
   let task: PdfRenderTaskRuntime | undefined;
   const abort = (): void => task?.cancel();
   signal.addEventListener('abort', abort, { once: true });
   try {
     const context = canvas.getContext('2d'),
-      output = masked.getContext('2d');
-    if (!context || !output || !page.render) throw new Error('PDF canvas unavailable');
+      output = masked === canvas ? null : masked.getContext('2d');
+    if (!context || (masked !== canvas && !output) || !page.render)
+      throw new Error('PDF canvas unavailable');
     current();
     const nativePDF = nativeObjectIdentity(pdf);
     if (!nativePDF.getOptionalContentConfig)
@@ -148,13 +148,21 @@ export async function readerRegionPreview(
     task = page.render(renderOptions);
     await task.promise;
     current();
-    output.fillStyle = 'white';
-    output.fillRect(0, 0, plan.width, plan.height);
-    for (const [x0, y0, x1, y1] of plan.members)
-      output.drawImage(canvas, x0, y0, x1 - x0, y1 - y0, x0, y0, x1 - x0, y1 - y0);
+    if (output) {
+      output.fillStyle = 'white';
+      output.fillRect(0, 0, plan.width, plan.height);
+      for (const rect of rects) {
+        const x0 = Math.max(0, Math.floor((rect[0] - plan.left) * plan.scale)),
+          y0 = Math.max(0, Math.floor((rect[1] - plan.top) * plan.scale)),
+          x1 = Math.ceil((rect[2] - plan.left) * plan.scale),
+          y1 = Math.ceil((rect[3] - plan.top) * plan.scale);
+        output.drawImage(canvas, x0, y0, x1 - x0, y1 - y0, x0, y0, x1 - x0, y1 - y0);
+      }
+    }
     return { dataURL: masked.toDataURL('image/png'), width: plan.width, height: plan.height };
   } finally {
     signal.removeEventListener('abort', abort);
-    canvas.width = canvas.height = masked.width = masked.height = 0;
+    canvas.width = canvas.height = 0;
+    if (masked !== canvas) masked.width = masked.height = 0;
   }
 }

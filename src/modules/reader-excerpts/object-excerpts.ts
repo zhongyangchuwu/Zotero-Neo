@@ -75,7 +75,7 @@ export class ReaderObjectExcerpts {
         const images: ReaderRegionPreview[] = [];
         for (const location of target.locations) {
           await check();
-          images.push(await readerRegionPreview(this.#host.reader, location, signal));
+          images.push(await readerRegionPreview(this.#host.reader, location, signal, 'bounds'));
         }
         await check();
         const result = { target, images };
@@ -152,7 +152,7 @@ export class ReaderObjectExcerpts {
           sourceFingerprint: source!.parsed.sourceFingerprint,
           identity: sourceNoteIdentity(
             JSON.stringify([
-              'reader-object-excerpt',
+              'reader-object-excerpt-rectangle-v1',
               source!.parsed.sourceFingerprint,
               target.kind,
               target.part,
