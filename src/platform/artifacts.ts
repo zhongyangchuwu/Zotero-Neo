@@ -37,9 +37,7 @@ export function artifactBelongsToParent(
   );
 }
 
-export async function artifactPDF(
-  itemID: number,
-): Promise<{
+export async function artifactPDF(itemID: number): Promise<{
   item: Zotero.Item;
   parent: Zotero.Item;
   source: ArtifactSource;
