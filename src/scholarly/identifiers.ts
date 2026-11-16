@@ -1,4 +1,5 @@
 export function normalizeDOI(value: string | null | undefined): string | null {
+  if (value && value.length > 512) return null;
   const match = value
     ?.trim()
     .replace(/^https?:\/\/(?:dx\.)?doi\.org\//iu, '')
@@ -8,6 +9,7 @@ export function normalizeDOI(value: string | null | undefined): string | null {
 }
 
 export function normalizeArxiv(value: string | null | undefined): string | null {
+  if (value && value.length > 128) return null;
   const id = value
     ?.trim()
     .replace(/^https?:\/\/(?:www\.)?arxiv\.org\/(?:abs|pdf)\//iu, '')

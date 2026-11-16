@@ -24,6 +24,9 @@ import { AIQAController } from './ai-qa/controller';
 import { isSourceNoteIdentity, migrateLegacySourceNoteIdentities } from './platform/note-relations';
 import { ManagedTagsUI } from './toolkit/main';
 import { registerNativeUIResources } from './platform/native-ui';
+import { createScholarlyMetadataService } from './scholarly';
+import { createArtifactRepository } from './artifacts';
+import { MetadataReviewController } from './metadata-review/controller';
 
 export interface AddonContext {
   readonly id: string;
@@ -57,6 +60,9 @@ export class ZoteroNeoAddon implements ZoteroNeoController {
   );
   readonly #modules: BuiltinModuleRuntime;
   readonly #preparation: DocumentPreparationController;
+  readonly #scholarly = createScholarlyMetadataService();
+  readonly #artifacts = createArtifactRepository();
+  readonly #metadataReview: MetadataReviewController;
   readonly #reader: ReaderControllerApi;
   readonly #main: MainWindowControllerApi;
   readonly api: ZoteroNeoPublicApi;
@@ -71,6 +77,11 @@ export class ZoteroNeoAddon implements ZoteroNeoController {
       (message) => this.#logger.debug(message),
       preferences,
     );
+    this.#metadataReview = new MetadataReviewController(
+      this.#scholarly,
+      this.#artifacts,
+      (message) => this.#logger.debug(message),
+    );
     this.#modules = new BuiltinModuleRuntime(
       this.#preferences,
       this.#logger,
@@ -80,6 +91,7 @@ export class ZoteroNeoAddon implements ZoteroNeoController {
     this.#reader = createReaderController({
       modules: this.#modules,
       documentPreparation: this.#preparation,
+      scholarly: this.#scholarly,
       aiQA: () => this.aiQA,
       preferences: this.#preferences,
       logger: this.#logger,
@@ -112,6 +124,7 @@ export class ZoteroNeoAddon implements ZoteroNeoController {
     this.#main = createMainWindowController({
       modules: this.#modules,
       documentPreparation: this.#preparation,
+      metadataReview: this.#metadataReview,
       aiQA: () => this.aiQA,
       preferences: this.#preferences,
       logger: this.#logger,
@@ -173,6 +186,8 @@ export class ZoteroNeoAddon implements ZoteroNeoController {
     const failure = new CleanupFailure();
     failure.run(() => this.#managedTags.dispose());
     failure.run(() => this.#preparation.dispose());
+    failure.run(() => this.#metadataReview.dispose());
+    failure.run(() => this.#scholarly.dispose());
     failure.run(() => this.#reader.shutdown());
     failure.run(() => this.aiQA?.dispose());
     this.aiQA = null;

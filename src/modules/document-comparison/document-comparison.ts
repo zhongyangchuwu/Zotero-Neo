@@ -28,6 +28,7 @@ import {
   readAttachmentDocumentCorrections,
   saveAttachmentDocumentCorrections,
 } from '../../platform/document-corrections';
+import { artifactStorageIssues } from '../../platform/artifact-feedback';
 import { documentObjectLocation } from '../../document-analysis/object-groups';
 import type {
   DocumentSource,
@@ -1089,7 +1090,14 @@ export class ReaderDocumentComparison {
       refreshLabel: this.#text(view.provider.value === 'local' ? 'refreshLocal' : 'refreshCloud'),
       copyLabel: this.#text('copyReport'),
       closeLabel: this.#text('close'),
-      status: view.status.textContent,
+      status: [
+        view.status.textContent,
+        ...(this.#host.reader.itemID
+          ? artifactStorageIssues(this.#host.reader.itemID).map((issue) => issue.message)
+          : []),
+      ]
+        .filter(Boolean)
+        .join('\n'),
       vocabularyLabel: this.#text('vocabulary'),
       vocabulary: comparison
         ? `${this.#text('diagnostic')}\n${this.#text('nativeOnly')}: ${comparison.nativeOnlyWords.slice(0, 50).join(', ')}\n${this.#text('cloudOnly')}: ${comparison.cloudOnlyWords.slice(0, 50).join(', ')}`

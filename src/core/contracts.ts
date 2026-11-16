@@ -7,6 +7,8 @@ import type { PreferenceStore } from './preference-store';
 import type { BuiltinModuleRuntime } from './module-runtime';
 import type { NavigationPort } from '../navigation/types';
 import type { AIQAController } from '../ai-qa/controller';
+import type { ScholarlyMetadataService } from '../scholarly/contracts';
+import type { MetadataReviewPort } from '../metadata-review/controller';
 
 /** Business owners use standard DOM windows; native Zotero fields stay in Toolkit. */
 export type MainWindow = Window;
@@ -122,6 +124,7 @@ export interface MainWindowControllerApi extends ReaderMainOperations {
 }
 
 export interface ReaderControllerDependencies {
+  readonly scholarly: ScholarlyMetadataService;
   readonly documentPreparation?: DocumentPreparationPort;
   readonly aiQA?: () => AIQAController | null;
   readonly modules: BuiltinModuleRuntime;
@@ -131,6 +134,7 @@ export interface ReaderControllerDependencies {
 }
 
 export interface MainWindowControllerDependencies {
+  readonly metadataReview?: MetadataReviewPort;
   readonly documentPreparation?: DocumentPreparationPort;
   readonly aiQA?: () => AIQAController | null;
   readonly modules: BuiltinModuleRuntime;

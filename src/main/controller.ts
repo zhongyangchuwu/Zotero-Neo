@@ -81,6 +81,7 @@ import {
   applyMainTagFilter,
   closeMainAdvancedSearch,
   prepareTabEnhancementData,
+  mainActiveCollection,
 } from '../toolkit/main';
 import { mainCursorItem, resolveMainEffectiveTargets } from './action-targets';
 import { resolveMainDocumentAttachments, MAIN_ITEM_TARGET } from './main-item-target';
@@ -337,6 +338,14 @@ export class MainWindowController implements MainWindowControllerApi {
             if (worksets?.isVisual) worksets?.cancel();
             this.resetMainInput(window, session);
           },
+          reviewMetadata: (items) =>
+            this.#dependencies.metadataReview?.open({
+              window,
+              items,
+              language: () => this.keyGuideLanguage(),
+              themeRoot: (root) => session.theme.add(root),
+              isCurrent: () => this.#sessions.get(window) === session && !session.cleanup.disposed,
+            }) ?? null,
           choose: (kind, options) => {
             if (session.picker.open) return null;
             const previous = session.picker.generation;
@@ -1537,6 +1546,24 @@ export class MainWindowController implements MainWindowControllerApi {
           themeRoot: (root) => session.theme.add(root),
           isCurrent: () => this.#sessions.get(window) === session && !session.cleanup.disposed,
         });
+        break;
+      }
+      case 'inspectMetadata': {
+        const targets = MAIN_ITEM_TARGET.resolve(
+          window,
+          this.worksetsModule(session)?.selection ?? null,
+          this.worksetsModule(session)?.isVisual
+            ? this.worksetsModule(session)?.currentTarget()
+            : undefined,
+        );
+        this.libraryModule(session)?.inspectMetadata(targets.items);
+        break;
+      }
+      case 'inspectCollectionMetadata': {
+        const collection = mainActiveCollection(window);
+        const native = collection && Zotero.Collections.get(collection.id);
+        const items = native ? native.getChildItems() : [];
+        this.libraryModule(session)?.inspectMetadata(items || [], true);
         break;
       }
       case 'openNeoSettings':

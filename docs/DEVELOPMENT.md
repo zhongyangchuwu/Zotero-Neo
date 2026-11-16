@@ -170,6 +170,23 @@ XPI 收录项目 `LICENSE`，以及 `licenses/fuzzysort-LICENSE`、`licenses/ai-
 
 Zotero 管理 Items、视图、标签页、Notes 和 Reader 状态。功能负责目标选择、基数、确认与反馈；Toolkit 负责宿主查找、原生协议、DOM 接缝、跨 compartment 载荷和资源退休。公开 API 能保留行为时优先使用；必要的私有依赖即使经过包装，仍属于私有能力。公开条目 API 和 `src/platform/zotero-items.ts` 可以直接使用，无需逐个套一对一包装。
 
+学术来源及应用用例的依赖方向见[架构：引用增强](ARCHITECTURE.md#引用增强)。`src/scholarly/` 是共享查询、来源适配、限速与缓存的规范位置；`src/metadata-review/` 管理差异和审阅界面，文库写入属于 `src/operations/metadata.ts`。成果封套、各 payload、原生附件与旧旁路迁移见[成果附件格式](ARTIFACT_FORMAT.md)；缓存不能代替审阅回执。
+
+当前开发环境的 zotero-mcp 附件工具互通路径和实测限制记录在该格式参考中，工具描述不等于端到端验证。本轮在 Zotero 10.0.8 的隔离 profile 核对了 Crossref 字段更新、无 DOI／arXiv ID 的 INSPIRE 标题候选、未默认勾选的 `Maldacena:1997re`、取消不写入、两条目 collection 的批量进度与只读检查、JSON 与笔记保存、重复保存保留人工编辑，以及真实 PDF Reader 的 arXiv 详情获取和缓存重开。真实双 profile 数据和文件同步、未下载文件的实机恢复与外部 harness 导入／发现仍须单独核验，不能以复制 storage 或本地保存代替。
+
+**来源选择与社区参考**
+
+本轮公开样本探测中，Crossref、arXiv、INSPIRE 和 OpenAlex 返回 HTTP 200；Semantic Scholar 匿名精确查询返回 429，没有自动重试。生产接入 Semantic Scholar、arXiv、Crossref 和 INSPIRE；OpenAlex 仅作调研，尚未接入。免费公开来源已覆盖当前候选、发表字段和 INSPIRE 引用键需求，没有登录或付费试用。认证／付费访问的额度与可靠性未验证；只有出现实际覆盖或吞吐缺口时才另行确认授权和费用。OpenAlex 的密钥、预算与收费以[官方文档](https://help.openalex.org/api/authentication/)为准，不把调研成功当作已配置订阅。
+
+| 社区项目 | 本轮参考及取舍 |
+| --- | --- |
+| [Zotero INSPIRE v4.1.2](https://github.com/fkguo/zotero-inspire/releases/tag/v4.1.2) | 参考发表检查和 TeX-key／BibTeX 工作流；Neo 直接查询公开 INSPIRE API，不依赖该插件或其本地读 token。 |
+| [arXiv Workflow v0.4.2](https://github.com/AllanChain/zotero-arxiv-workflow/releases/tag/v0.4.2) | 参考多来源发表关联；不自动合并条目、替换 PDF 或搬迁批注。 |
+| [Zotero Metadata Refresh v0.5.0](https://github.com/ZhiboRao/zotero-meta-refresh/releases/tag/v0.5.0) | 参考逐字段预览及明确确认；沿用 Neo Operations 的写入边界，不引入插件依赖。 |
+| [Better BibTeX](https://retorque.re/zotero-better-bibtex/citing/index.html) | 保留既有可选桥接和 Zotero 原生 Citation Key；INSPIRE `texkeys[0]` 是来源建议，不替代本地生成规则。 |
+
+这些项目仅作公开文档和源码调研，未安装试用，也未复制其代码。来源字段和版本日期可能不同；不能因多个服务聚合了同一条记录，就把它们当作独立权威证明。
+
 按位置定位的章节和图表跳转显式采用原生 `behavior: 'instant'`：宿主 `navigate()` 的 Promise 不等待相邻页平滑滚动完成，不能据此认为已到达目标。连续 `j/k` 滚动仍沿用原有平滑滚动策略。
 
 `readerRegionPreview()` 默认保留成员遮罩，用于精确区域；图表列表和对象摘录显式传入第四参数 `'bounds'`，保留每页整组外框的连续原图。两种方式都先校验全部原始成员并通过 PDF viewport 变换，沿用来源退休、取消、显示图层与像素上限；连续截图只分配一张画布。截图不改变成员位置、正文排除或解析缓存身份。对象笔记的内容身份包含截图表示版本，避免新表示复用旧遮罩图片，同时保留旧笔记。

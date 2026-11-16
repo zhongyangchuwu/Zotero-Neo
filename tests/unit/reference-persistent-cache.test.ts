@@ -45,7 +45,7 @@ const response = (id: string) => ({
 });
 async function service() {
   // Reload the module to model a new process while retaining the fake file.
-  return (await import('../../src/references/metadata')).createReferenceMetadataService();
+  return (await import('../../src/scholarly')).createScholarlyMetadataService();
 }
 
 beforeEach(() => {
@@ -69,7 +69,7 @@ describe('persistent reference metadata', () => {
     vi.resetModules();
     host.request.mockClear();
     const cold = await service();
-    expect(await cold.lookup(query('one'), signal(), 'cache-only')).toMatchObject({
+    expect(await cold.lookup(query('one'), signal(), { mode: 'cache-only' })).toMatchObject({
       kind: 'found',
       paper: { title: 'Paper one', abstract: 'Original abstract' },
       cache: { origin: 'cached' },
@@ -92,13 +92,13 @@ describe('persistent reference metadata', () => {
       cache: { origin: 'cached', stale: true },
     });
     host.request.mockRejectedValueOnce(new Error('offline'));
-    expect(await cold.lookup(query('one'), signal(), 'refresh')).toMatchObject({
+    expect(await cold.lookup(query('one'), signal(), { mode: 'refresh' })).toMatchObject({
       kind: 'found',
       paper: { retrievedAt: '2000-01-01T00:00:00.000Z' },
-      cache: { origin: 'cached', stale: true, warning: 'offline' },
+      cache: { origin: 'cached', stale: true, warning: 'Reference service request failed' },
     });
     host.request.mockResolvedValueOnce(response('one'));
-    expect(await cold.lookup(query('one'), signal(), 'refresh')).toMatchObject({
+    expect(await cold.lookup(query('one'), signal(), { mode: 'refresh' })).toMatchObject({
       cache: { origin: 'network', stale: false },
     });
     cold.dispose();
@@ -144,7 +144,9 @@ describe('persistent reference metadata', () => {
     await pending;
     vi.resetModules();
     const cold = await service();
-    expect((await cold.lookup(query('one'), signal(), 'cache-only')).kind).toBe('not-found');
+    expect((await cold.lookup(query('one'), signal(), { mode: 'cache-only' })).kind).toBe(
+      'not-found',
+    );
     const abort = new AbortController();
     const cancelled = cold.lookup(query('two'), abort.signal);
     abort.abort();
@@ -168,7 +170,9 @@ describe('persistent reference metadata', () => {
     await expect(pending).rejects.toThrow('cancelled');
     vi.resetModules();
     const cold = await service();
-    expect((await cold.lookup(query('cancelled'), signal(), 'cache-only')).kind).toBe('not-found');
+    expect((await cold.lookup(query('cancelled'), signal(), { mode: 'cache-only' })).kind).toBe(
+      'not-found',
+    );
   });
 
   it('does not expose or later persist cancelled data when its pending write rejects', async () => {
@@ -188,13 +192,13 @@ describe('persistent reference metadata', () => {
     await rejected;
     host.writeGate = null;
     host.writeStarted = null;
-    expect((await second.lookup(query('cancelled-write'), signal(), 'cache-only')).kind).toBe(
-      'not-found',
-    );
+    expect(
+      (await second.lookup(query('cancelled-write'), signal(), { mode: 'cache-only' })).kind,
+    ).toBe('not-found');
     host.request.mockResolvedValue(response('other'));
     await second.lookup(query('other'), signal());
     expect(JSON.parse(host.disk!).entries.map(([key]: [string, unknown]) => key)).toEqual([
-      'doi:10.1234/other',
+      'semantic-scholar:doi:10.1234/other',
     ]);
   });
 
@@ -224,20 +228,23 @@ describe('persistent reference metadata', () => {
     vi.resetModules();
     host.request.mockClear();
     const cold = await service();
-    expect((await cold.lookup(query('wrong'), signal(), 'cache-only')).kind).toBe('not-found');
+    expect((await cold.lookup(query('wrong'), signal(), { mode: 'cache-only' })).kind).toBe(
+      'not-found',
+    );
     expect(
-      (await cold.lookup({ text: '', arxivID: '2401.12345v2' }, signal(), 'cache-only')).kind,
+      (await cold.lookup({ text: '', arxivID: '2401.12345v2' }, signal(), { mode: 'cache-only' }))
+        .kind,
     ).toBe('not-found');
-    expect(await cold.lookup(query('good'), signal(), 'cache-only')).toMatchObject({
+    expect(await cold.lookup(query('good'), signal(), { mode: 'cache-only' })).toMatchObject({
       kind: 'found',
       paper: { doi: '10.1234/good' },
     });
-    expect(await cold.lookup(query('ambiguous'), signal(), 'cache-only')).toMatchObject({
+    expect(await cold.lookup(query('ambiguous'), signal(), { mode: 'cache-only' })).toMatchObject({
       kind: 'candidates',
       papers: [{ doi: '10.1234/good' }],
     });
     expect(
-      await cold.lookup({ text: '', arxivID: '2401.12345' }, signal(), 'cache-only'),
+      await cold.lookup({ text: '', arxivID: '2401.12345' }, signal(), { mode: 'cache-only' }),
     ).toMatchObject({ kind: 'found', paper: { arxivID: '2401.12345v1' } });
     expect(host.request).not.toHaveBeenCalled();
   });
@@ -254,7 +261,7 @@ describe('persistent reference metadata', () => {
       host.readError = problem === 'unreadable';
       host.request.mockResolvedValue(response('one'));
       const current = await service();
-      expect(await current.lookup(query('one'), signal(), 'cache-only')).toMatchObject({
+      expect(await current.lookup(query('one'), signal(), { mode: 'cache-only' })).toMatchObject({
         kind: 'not-found',
         cache: { warning: expect.any(String) },
       });
@@ -279,4 +286,46 @@ describe('persistent reference metadata', () => {
     });
     await expect(current.clearCache()).rejects.toThrow('could not be cleared');
   });
+});
+
+it('retains bibliographic and citekey proposal data across cold load, rejecting source-poisoned entries', async () => {
+  host.request.mockResolvedValue({
+    status: 200,
+    text: JSON.stringify({
+      metadata: {
+        control_number: 451647,
+        titles: [{ title: 'HEP paper' }],
+        arxiv_eprints: [{ value: 'hep-th/9711200' }],
+        texkeys: ['Maldacena:1997re'],
+        preprint_date: '1997-11-27',
+        imprints: [{ date: '1998-01-01' }],
+        publication_info: [{ year: 1998, journal_volume: '2', page_start: '231', page_end: '252' }],
+      },
+    }),
+  });
+  const first = await service();
+  const input = { text: '', arxivID: 'hep-th/9711200' };
+  await first.lookup(input, signal(), { source: 'inspire' });
+  first.dispose();
+  const file = JSON.parse(host.disk!);
+  const record = file.entries[0][1];
+  file.entries.push(['arxiv:arxiv:hep-th/9711200', record]);
+  host.disk = JSON.stringify(file);
+  vi.resetModules();
+  host.request.mockClear();
+  const cold = await service();
+  expect(
+    await cold.lookup(input, signal(), { source: 'inspire', mode: 'cache-only' }),
+  ).toMatchObject({
+    kind: 'found',
+    paper: {
+      citekey: 'Maldacena:1997re',
+      bibliography: { date: '1998-01-01', volume: '2', pages: '231-252' },
+    },
+  });
+  expect(await cold.lookup(input, signal(), { source: 'arxiv', mode: 'cache-only' })).toMatchObject(
+    { kind: 'not-found' },
+  );
+  expect(host.request).not.toHaveBeenCalled();
+  cold.dispose();
 });

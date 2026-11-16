@@ -1,6 +1,7 @@
-import { documentCacheSlot } from './cache';
+import { documentCacheSlot, readDocumentCacheRecord } from './cache';
 import {
   record,
+  documentRect,
   type DocumentCacheKey,
   type DocumentRegion,
   type ParsedDocument,
@@ -43,6 +44,96 @@ export function documentCorrectionIdentity(parsed: ParsedDocument, key: Document
       r.sourceObject ? [r.sourceObject.id, r.sourceObject.kind] : null,
     ]),
   ]);
+}
+
+/** The legacy identity contains the complete replay baseline, not just a hash or region IDs. */
+export function recoverDocumentCorrections(value: unknown): {
+  parsed: ParsedDocument;
+  key: DocumentCacheKey;
+  corrections: DocumentCorrections;
+} | null {
+  const saved = record(value);
+  if (typeof saved?.identity !== 'string') return null;
+  try {
+    const identity: unknown = JSON.parse(saved.identity);
+    if (!Array.isArray(identity) || identity.length !== 7 || typeof identity[0] !== 'string')
+      return null;
+    const slot: unknown = JSON.parse(identity[0]);
+    if (
+      !Array.isArray(slot) ||
+      slot.length !== 3 ||
+      typeof slot[0] !== 'string' ||
+      !Number.isSafeInteger(slot[1]) ||
+      typeof slot[2] !== 'string' ||
+      !Array.isArray(identity[5]) ||
+      !Array.isArray(identity[6])
+    )
+      return null;
+    const key: DocumentCacheKey = {
+      backend: slot[0],
+      adapterVersion: slot[1] as number,
+      configuration: slot[2],
+    };
+    const pages = [];
+    for (const [index, raw] of identity[5].entries()) {
+      if (
+        !Array.isArray(raw) ||
+        raw.length !== 3 ||
+        raw[0] !== index ||
+        ![0, 90, 180, 270].includes(raw[2])
+      )
+        return null;
+      const viewBox = documentRect(raw[1]);
+      if (!viewBox) return null;
+      pages.push({ pageIndex: index, viewBox, rotation: raw[2] as 0 | 90 | 180 | 270 });
+    }
+    const regions = [];
+    for (const raw of identity[6]) {
+      if (
+        !Array.isArray(raw) ||
+        raw.length !== 10 ||
+        !(raw[8] === null || Array.isArray(raw[8])) ||
+        !(raw[9] === null || Array.isArray(raw[9]))
+      )
+        return null;
+      regions.push({
+        id: raw[0],
+        kind: raw[1],
+        pageIndex: raw[2],
+        rect: raw[3],
+        text: raw[4],
+        format: raw[5],
+        flow: raw[6],
+        anchorPrecision: raw[7],
+        ...(raw[8] ? { sourceBlock: { id: raw[8][0], order: raw[8][1] } } : {}),
+        ...(raw[9] ? { sourceObject: { id: raw[9][0], kind: raw[9][1] } } : {}),
+      });
+    }
+    if (typeof identity[2] !== 'string') return null;
+    const parsed = readDocumentCacheRecord(
+      {
+        cacheVersion: 1,
+        savedAt: 0,
+        key,
+        parsed: {
+          schemaVersion: identity[1],
+          sourceFingerprint: identity[2],
+          backend: identity[3],
+          modelRevision: identity[4],
+          durationMs: 0,
+          pages,
+          regions,
+        },
+      },
+      { fingerprint: identity[2], fileName: '', pages },
+      key,
+    )?.parsed;
+    if (!parsed) return null;
+    const corrections = readDocumentCorrections(value, parsed, key);
+    return corrections ? { parsed, key, corrections } : null;
+  } catch {
+    return null;
+  }
 }
 
 export function emptyDocumentCorrections(

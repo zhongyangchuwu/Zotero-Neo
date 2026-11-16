@@ -1,10 +1,6 @@
 import type { ReferenceReaderPort, ReferenceReaderViewAccess } from './reader-port';
-import type {
-  ReferenceLocalMatch,
-  ReferenceMetadataService,
-  ReferenceQuery,
-  ScholarlyPaper,
-} from './contracts';
+import type { ReferenceLocalMatch } from './contracts';
+import type { ScholarlyQuery, ScholarlyPaper } from '../scholarly/contracts';
 import type {
   ReaderReferenceDocument,
   ReaderReferenceEntry,
@@ -19,10 +15,9 @@ import type {
 } from '../toolkit/reader/reference-interaction-contracts';
 import { observeReaderReferenceInteractions, readReaderReferenceDocument } from '../toolkit/reader';
 import { launchMainURL } from '../toolkit/main';
-import { createReferenceMetadataService } from './metadata';
 import { addReferencePaper, findReferenceItems } from '../operations/references';
 import { createReferenceAbortController } from '../platform/reference-http';
-import { normalizeArxiv, normalizeDOI } from './identifiers';
+import { normalizeArxiv, normalizeDOI } from '../scholarly/identifiers';
 import { CleanupScope } from '../core/cleanup';
 import { REFERENCES_PANEL_STYLE } from '../ui/react/shells/reader';
 import { compositionOwnsKey } from '../input/composition';
@@ -64,7 +59,6 @@ function overlaps(a: ReaderReferenceLocation, b: ReaderReferenceLocation): boole
 }
 
 export class ReferenceController {
-  readonly #metadata: ReferenceMetadataService = createReferenceMetadataService();
   readonly #unobserve: () => void;
   #close: (() => void) | null = null;
   #window: Window | null = null;
@@ -225,11 +219,7 @@ export class ReferenceController {
   }
   dispose(): void {
     this.close();
-    try {
-      this.#unobserve();
-    } finally {
-      this.#metadata.dispose();
-    }
+    this.#unobserve();
   }
 
   open(): void {
@@ -440,7 +430,7 @@ export class ReferenceController {
     let matches: readonly ReferenceLocalMatch[] = [];
     let candidates: readonly ScholarlyPaper[] = [];
     let choices: readonly ReaderReferenceEntry[] = [];
-    let initialQuery: ReferenceQuery | null = null;
+    let initialQuery: ScholarlyQuery | null = null;
     let displayedQuery: string | null = null;
     let displayedProvenance = '';
     const update = (changes: Partial<ReferenceViewModel>): void => {
@@ -495,12 +485,12 @@ export class ReferenceController {
           if (current() && revision === token) setStatus(message(error));
         });
     };
-    const queryFor = (entry: ReaderReferenceEntry): ReferenceQuery => ({
+    const queryFor = (entry: ReaderReferenceEntry): ScholarlyQuery => ({
       text: entry.text,
       ...(entry.doi ? { doi: entry.doi } : {}),
       ...(entry.arxivID ? { arxivID: entry.arxivID } : {}),
     });
-    const queryFromInput = (value: string): ReferenceQuery => {
+    const queryFromInput = (value: string): ScholarlyQuery => {
       const text = value.trim();
       const doi = normalizeDOI(text);
       const arxivID = normalizeArxiv(text);
@@ -673,7 +663,7 @@ export class ReferenceController {
       void validated()
         .then((valid) =>
           valid && revision === token
-            ? this.#metadata.lookup(submitted, controller.signal, mode)
+            ? this.port.metadata.lookup(submitted, controller.signal, { mode })
             : null,
         )
         .then(async (value) => {
@@ -873,7 +863,7 @@ export class ReferenceController {
           if (model.scene !== 'metadata') break;
           stop();
           const token = revision;
-          void this.#metadata
+          void this.port.metadata
             .clearCache()
             .then(() => {
               if (!current() || revision !== token) return;

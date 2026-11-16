@@ -1,3 +1,4 @@
+import type { ScholarlyMetadataService } from '../scholarly/contracts';
 import type { ReaderReferenceLocation } from '../toolkit/reader/reference-contracts';
 import type { AppLanguage } from '../i18n';
 import type { PdfWindow, ReaderRuntime } from '../toolkit/reader';
@@ -14,6 +15,7 @@ export interface ReferenceReaderViewAccess {
 
 export interface ReferenceReaderPort {
   readonly reader: ReaderRuntime;
+  readonly metadata: ScholarlyMetadataService;
   readonly pluginID: string;
   /** An explicit contextual action may activate its captured pane; passive hover never calls this. */
   captureView(window?: PdfWindow): ReferenceReaderViewAccess | null;

@@ -8,6 +8,7 @@ import type { PreferenceStore } from '../core/preference-store';
 import { t } from '../i18n';
 import { createAIAbortController } from '../platform/ai-runtime';
 import { attachmentReadingStorage } from '../platform/ai-qa-storage';
+import { artifactStorageIssues } from '../platform/artifact-feedback';
 import type { ReaderRuntime } from '../toolkit/reader';
 import type { AIQATasks } from './contracts';
 import { AIQAPresentation } from './presentation';
@@ -121,7 +122,15 @@ export class AIQAController {
         adoption: state.adoptions[record.id] ?? null,
       })),
       error: state.error ? text(`error.${state.error}`) : null,
-      notice: state.notice ? text(state.notice) : null,
+      notice:
+        [
+          state.notice ? text(state.notice) : '',
+          ...(state.source
+            ? artifactStorageIssues(state.source.itemID).map((issue) => issue.message)
+            : []),
+        ]
+          .filter(Boolean)
+          .join('\n') || null,
     };
   }
 

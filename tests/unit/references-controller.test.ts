@@ -34,13 +34,6 @@ vi.mock('../../src/toolkit/reader', () => ({
 vi.mock('../../src/toolkit/main', () => ({
   launchMainURL: host.launch,
 }));
-vi.mock('../../src/references/metadata', () => ({
-  createReferenceMetadataService: () => ({
-    lookup: host.lookup,
-    clearCache: host.clearCache,
-    dispose: host.dispose,
-  }),
-}));
 vi.mock('../../src/operations/references', () => ({
   findReferenceItems: host.find,
   addReferencePaper: host.add,
@@ -190,6 +183,12 @@ function setup() {
   }));
   const port: ReferenceReaderPort = {
     reader: { itemID: 7 },
+    metadata: {
+      sources: [],
+      lookup: host.lookup,
+      clearCache: host.clearCache,
+      dispose: host.dispose,
+    },
     pluginID: 'test',
     captureView,
     language: () => 'en',
@@ -332,12 +331,12 @@ describe('contextual references', () => {
     await ui.openEntry();
     ui.send({ type: 'metadata' });
     await flush();
-    expect(host.lookup.mock.calls[0]![2]).toBe('cache-only');
+    expect(host.lookup.mock.calls[0]![2]).toEqual({ mode: 'cache-only' });
     expect(host.view!.model.paper).toEqual(paper);
     expect(host.view!.model.provenance).toContain('Cached');
     ui.send({ type: 'metadata-refresh' });
     await flush();
-    expect(host.lookup.mock.calls.at(-1)?.[2]).toBe('refresh');
+    expect(host.lookup.mock.calls.at(-1)?.[2]).toEqual({ mode: 'refresh' });
     expect(host.view!.model.status).toContain('offline');
     expect(host.view!.model.paper).toEqual(paper);
     ui.send({ type: 'metadata-clear' });
@@ -345,6 +344,7 @@ describe('contextual references', () => {
     expect(host.clearCache).toHaveBeenCalledOnce();
     expect(host.view!.model.paper).toBeNull();
     ui.controller.dispose();
+    expect(host.dispose).not.toHaveBeenCalled();
   });
   it('retains the raw paper if refresh fails without a cache fallback', async () => {
     host.lookup
@@ -400,7 +400,7 @@ describe('contextual references', () => {
     expect(host.lookup).toHaveBeenCalledWith(
       { text: 'Second reference', doi: '10.1/example', arxivID: '2401.12345v2' },
       expect.anything(),
-      'cache-only',
+      { mode: 'cache-only' },
     );
     expect(host.view!.model.paper).toBeNull();
     expect(host.add).not.toHaveBeenCalled();
@@ -459,7 +459,7 @@ describe('contextual references', () => {
     ui.send({ type: 'metadata-search' });
     admission.resolve(true);
     await flush();
-    expect(host.lookup).toHaveBeenCalledWith(submitted, expect.anything(), undefined);
+    expect(host.lookup.mock.calls[0]?.[0]).toEqual(submitted);
     ui.controller.dispose();
   });
   it('aborts a pending lookup on query change and ignores its late result', async () => {

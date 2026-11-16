@@ -22,6 +22,7 @@ function harness() {
     leaveVisual: () => {},
     prepareQuickSearch: () => {},
     prepareIdentifierLookup: () => {},
+    reviewMetadata: () => null,
     choose: (_kind, options) => {
       if (chooser?.open) return null;
       const invocation = { open: true, options };

@@ -1,4 +1,5 @@
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
+import { createScholarlyMetadataService } from '../../src/scholarly';
 
 import type { ActionId } from '../../src/input/actions';
 import { t } from '../../src/i18n';
@@ -2635,6 +2636,7 @@ describe('Reader to Main command palette integration', () => {
     let main: MainWindowControllerApi | null = null;
     const modules = new BuiltinModuleRuntime(preferences, logger);
     const readerController = createReaderController({
+      scholarly: createScholarlyMetadataService(),
       modules,
       preferences,
       logger,

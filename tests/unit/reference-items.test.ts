@@ -1,6 +1,6 @@
 import { afterEach, describe, expect, it, vi } from 'vitest';
 import { addReferencePaper, findReferenceItems } from '../../src/operations/references';
-import type { ScholarlyPaper } from '../../src/references/contracts';
+import type { ScholarlyPaper } from '../../src/scholarly/contracts';
 
 const paper: ScholarlyPaper = {
   source: 'semantic-scholar',

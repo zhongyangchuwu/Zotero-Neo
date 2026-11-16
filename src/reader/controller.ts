@@ -1116,6 +1116,7 @@ export class ReaderSession {
         return createReferencesModule(this.#modules.host, {
           reader: dependencies.reader,
           pluginID: referencePluginID,
+          metadata: dependencies.controller.dependencies.scholarly,
           captureView: (requestedWindow) => {
             const window = requestedWindow ?? this.#navigationHost.activePdfWindow();
             if (!window || !this.readerViewForWindow(window)) return null;
