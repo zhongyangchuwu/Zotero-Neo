@@ -1,6 +1,6 @@
 import { algorithmPanelLabels } from './body-evidence';
 import { bounds, height, readingOrder, width } from './geometry';
-import { graphicTextLabels } from './graphic-labels';
+import { graphicTextLabels, nativeGraphicLabelLinks } from './graphic-labels';
 import { pageLike, paintedComponents } from './painted-components';
 import { ruledTableLinks } from './ruled-tables';
 import { tableComponentLabels } from './table-membership';
@@ -102,7 +102,8 @@ export function graphicsFromPage(
   const labels = boxes.map(
     (_, index) => new Set([...graphicLabels[index]!, ...tableLabels[index]!]),
   );
-  const links = ruledTableLinks(boxes, labels, lines, captions, barriers, unit, leading, context);
+  const links = nativeGraphicLabelLinks(groups, labels, captions, barriers, unit, leading, context);
+  links.push(...ruledTableLinks(boxes, labels, lines, captions, barriers, unit, leading, context));
   const graphics = joinStructures(page, boxes, labels, links);
   if (!links.length || !context.profile.rules.graphicLabels.enabled) return graphics;
   // Horizontal rules only become complete authored panels after shared component assembly.

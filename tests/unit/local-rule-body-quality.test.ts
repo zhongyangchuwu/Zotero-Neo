@@ -89,6 +89,34 @@ function algorithmPanel(): LocalFigurePage {
   );
 }
 
+function segmentedTable(variant: 'continuous' | 'gapped' | 'offset'): LocalFigurePage {
+  const input = mathematicalTable();
+  const gap = variant === 'gapped' ? 3 : 0;
+  const segmentHeight = (76 - 6 * gap) / 7;
+  return {
+    ...input,
+    text: input.text.map((chunk) => {
+      if (chunk.text === 'H(s) ← V(s)')
+        return text(
+          'expected future value',
+          [145, chunk.rect[1], 265, chunk.rect[3]],
+          chunk.fontSize,
+        );
+      if (chunk.text === 'TD-Root')
+        return text(chunk.text, [60, chunk.rect[1], 135, chunk.rect[3]], chunk.fontSize);
+      return chunk;
+    }),
+    graphics: [
+      input.graphics[0]!,
+      ...Array.from({ length: 7 }, (_, row): LocalRuleRect => {
+        const x = variant === 'offset' && row % 2 ? 143 : 140;
+        const y = 635 + row * (segmentHeight + gap);
+        return [x, y, x + 0.4, y + segmentHeight];
+      }),
+    ],
+  };
+}
+
 describe('repeated body envelopes remain caption bounded', () => {
   it('recovers three aligned panels beyond generic proximity without increasing caption distance', () => {
     const regions = extract(repeatedStack);
@@ -265,6 +293,24 @@ describe('native separators and caption-spanning operator envelopes', () => {
       ),
     ).toBe(true);
   });
+
+  it('keeps the actual rule ends when a table divider is made of aligned touching segments', () => {
+    const input = segmentedTable('continuous');
+    const regions = extract(input);
+    expect(bodies(regions).map((region) => region.rect)).toEqual([[50, 635, 280, 711]]);
+    expect(bodies(regions)[0]?.text).toContain('expected future value');
+    expect(extract(permuted(input))).toEqual(regions);
+    expect(extract(input, { rules: { graphicLabels: { enabled: false } } })).toEqual(regions);
+  });
+
+  it.each(['gapped', 'offset'] as const)(
+    'does not infer a continuous table divider from %s short strokes',
+    (variant) => {
+      const regions = extract(segmentedTable(variant));
+      expect(bodies(regions).map((region) => region.rect)).toEqual([[60, 640, 265, 711]]);
+      expect(bodies(regions)[0]?.text).toContain('expected future value');
+    },
+  );
 
   it('does not use a table grid to license a scaffold extending into ordinary prose', () => {
     const input = mathematicalTable();
@@ -448,5 +494,132 @@ describe('framed algorithm membership requires authored instruction evidence', (
     };
     expect(bodies(extract(ordinaryNote))).toEqual([]);
     expect(bodies(extract(input, { rules: { compoundPanels: { enabled: false } } }))).toEqual([]);
+  });
+});
+
+describe('native glyph ownership and neighboring panel subcaptions', () => {
+  const prose = [
+    text(
+      'The surrounding paragraph describes an independent experimental procedure.',
+      [50, 700, 550, 710],
+    ),
+    text('Its next aligned baseline remains ordinary document prose.', [50, 688, 550, 698]),
+  ];
+
+  it('includes real small vector headers and boxed row tags, but not the page rule', () => {
+    const input = page(
+      [
+        ...prose,
+        text('Figure 1: A hierarchical measurement plot.', [80, 370, 320, 379], 9),
+        ...[420, 450, 480, 510].map((y, row) => text(`level ${row}`, [75, y, 89, y + 5], 5)),
+      ],
+      [
+        [100, 400, 300, 550],
+        [180, 555, 198, 561],
+        ...[420, 450, 480, 510].map((y): LocalRuleRect => [74, y, 90, y + 6]),
+        [50, 575, 550, 576],
+      ],
+    );
+    const regions = extract(input);
+    expect(bodies(regions).map((region) => region.rect)).toEqual([[74, 400, 300, 561]]);
+    for (let row = 0; row < 4; row++) expect(bodies(regions)[0]?.text).toContain(`level ${row}`);
+    expect(extract(permuted(input))).toEqual(regions);
+    expect(
+      bodies(extract(input, { rules: { graphicLabels: { enabled: false } } })).map(
+        (region) => region.rect,
+      ),
+    ).toEqual([[100, 400, 300, 550]]);
+    expect(regions.filter((region) => region.flow === 'body').map((region) => region.text)).toEqual(
+      [prose.map((chunk) => chunk.text).join(' ')],
+    );
+  });
+
+  it('leaves a small painted mark between equally near panels unowned', () => {
+    const input = page(
+      [...prose, text('Figure 1: Paired measurement panels.', [80, 370, 320, 379], 9)],
+      [
+        [100, 400, 193, 550],
+        [207, 400, 300, 550],
+        [198, 450, 202, 456],
+      ],
+    );
+    const regions = extract(input);
+    expect(bodies(regions).map((region) => region.rect)).toEqual(input.graphics.slice(0, 2));
+    expect(extract(permuted(input))).toEqual(regions);
+  });
+
+  it('does not grow a native glyph envelope into ordinary prose', () => {
+    const sentence = 'The independent paragraph is not a label on the adjacent measurement plot.';
+    const input = page(
+      [
+        ...prose,
+        text(sentence, [60, 448, 198, 458]),
+        text('Figure 1: Independent measurements.', [200, 370, 400, 379], 9),
+      ],
+      [
+        [200, 400, 400, 550],
+        [175, 450, 190, 456],
+      ],
+    );
+    const regions = extract(input);
+    expect(bodies(regions).map((region) => region.rect)).toEqual([[200, 400, 400, 550]]);
+    expect(regions.some((region) => region.flow === 'body' && region.text.includes(sentence))).toBe(
+      true,
+    );
+    expect(bodies(regions)[0]?.text).not.toContain(sentence);
+  });
+
+  it.each([4, 10])(
+    'keeps complete sibling subcaptions across a %s-point authored gutter',
+    (gap) => {
+      const input = page(
+        [
+          ...prose,
+          text('origin', [70, 448, 93, 455], 7),
+          text('origin', [180, 448, 203, 455], 7),
+          text('(a) First panel.', [72, 436, 177 - gap, 444], 9),
+          text('(b)', [177, 436, 189, 444], 9),
+          text('Gray indicates ex-', [192, 436, 282, 444], 9),
+          text('cluded area.', [177, 426, 227, 434], 9),
+          text('Figure 1: Two complementary views.', [60, 400, 290, 408], 9),
+        ],
+        [
+          [80, 460, 170, 540],
+          [190, 460, 280, 540],
+        ],
+      );
+      const regions = extract(input);
+      expect(bodies(regions).map((region) => region.rect)).toEqual([
+        [70, 436, Math.max(170, 177 - gap), 540],
+        [177, 426, 282, 540],
+      ]);
+      expect(bodies(regions)[0]?.text).toContain('(a) First panel.');
+      expect(bodies(regions)[1]?.text).toContain('(b) Gray indicates ex-');
+      expect(bodies(regions)[1]?.text).toContain('cluded area.');
+      expect(bodies(regions)[0]?.sourceObject).toBeDefined();
+      for (const body of bodies(regions))
+        expect(body.sourceObject).toEqual(
+          regions.find((region) => region.kind === 'caption')?.sourceObject,
+        );
+      expect(extract(permuted(input))).toEqual(regions);
+    },
+  );
+
+  it('keeps parenthesized alternatives inside an ordinary sentence on the same line', () => {
+    const regions = extract(
+      page(
+        [
+          text('The alternatives include', [50, 300, 165, 310]),
+          text('(a)', [174, 300, 187, 310]),
+          text('and', [190, 300, 205, 310]),
+          text('(b)', [214, 300, 227, 310]),
+          text('as independent experimental conditions.', [230, 300, 500, 310]),
+        ],
+        [],
+      ),
+    );
+    expect(regions.map((region) => [region.kind, region.text])).toEqual([
+      ['text', 'The alternatives include (a) and (b) as independent experimental conditions.'],
+    ]);
   });
 });

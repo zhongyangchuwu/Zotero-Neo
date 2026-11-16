@@ -1,0 +1,913 @@
+{
+  "schemaVersion": 1,
+  "recordedAt": "2026-11-16T09:39:54.871Z",
+  "status": "accepted-with-explicit-cross-render-raster-limit",
+  "scope": {
+    "description": "五份已见 PDF、六处实际图表预览／原文定位／摘录保存复用与缓存迁移；独立于 137 项静态配对。",
+    "host": "Windows Zotero10.0.8",
+    "adapterVersion": 4,
+    "baselineEngineRevision": 3,
+    "candidateEngineRevision": 4,
+    "geometryRevision": 2,
+    "isolatedProfileAndData": true,
+    "programmaticInput": true,
+    "personalProfileConnected": false
+  },
+  "runtime": {
+    "baselineEngine3NativeJsSha256": "408c81d448cd65b120b8f10535c9898238e2dee186d52557e0dc2cf3b5806561",
+    "phase1NativeJsSha256": "537def54bc4982c2aaf306057385048689054af262fe81ad02994725bc285ffe",
+    "finalNativeJsSha256": "8569e9db19e90e0d0a2f9e23d7de620fcee83f54ed7b8f1623d20a82dae8a5f3",
+    "locallyBuiltXpiSha256": "4ce18d09aef53adae8d93ab963503b3d5b1edd040e16cbe6992c8e8246ecfd12",
+    "xpiPersistentlyInstalled": false
+  },
+  "artifacts": [
+    {
+      "name": "audit.json",
+      "sha256": "ab52f465259088d3ff43e5d34158ed5b7da946c3bdefc504d01c55a7b23d6047"
+    },
+    {
+      "name": "compact-audit.json",
+      "sha256": "d1f52e18a4742918bedb3820034b4da45a032e4b46f58e5238cec945d671d82d"
+    }
+  ],
+  "phases": [
+    {
+      "id": "phase1",
+      "nativeJS": "537def54bc4982c2aaf306057385048689054af262fe81ad02994725bc285ffe",
+      "pid": 30504,
+      "outcome": "保留真实引擎 3→4 缓存迁移和六张新笔记的预览 PNG 字节一致证明；原文定位仅 4/6。已纠正自动化误点选中行导致的界面退休归因。"
+    },
+    {
+      "id": "phase2-hotreload",
+      "nativeJS": "8569e9db19e90e0d0a2f9e23d7de620fcee83f54ed7b8f1623d20a82dae8a5f3",
+      "pid": 30504,
+      "outcome": "原生 instant 滚动已移动，但热重载后所有 Reader／PDF 隐藏、无动画帧及页面画布；空白视口不算定位通过。保留失败，不修改可见性或全局偏好。"
+    },
+    {
+      "id": "phase2-cold",
+      "nativeJS": "8569e9db19e90e0d0a2f9e23d7de620fcee83f54ed7b8f1623d20a82dae8a5f3",
+      "pid": 5060,
+      "outcome": "同一隔离配置冷启动后恢复可见原生绘制；六处真实原文定位与六个已连接按钮的笔记复用回执通过。保留跨冷启动的 Figure 4 微小栅格差异。"
+    }
+  ],
+  "summary": {
+    "fiveExactPdfs": 5,
+    "sixCases": 6,
+    "actualPickerAndExcerptPreviewsInspected": 6,
+    "actualSourceNavigationPassed": 6,
+    "existingNotesReused": 6,
+    "nativeNoteHTMLUnchanged": 6,
+    "noteEmbeddedImagesUnchanged": 6,
+    "sameSourceGeometryAndCaption": 6,
+    "phase1PreviewToNewNoteByteEquality": 6,
+    "phase2CurrentPreviewToExistingNoteByteEquality": 5,
+    "oldEngine3CacheBytesUnchanged": true,
+    "newEngine4CacheBytesUnchanged": true,
+    "actualCacheReopenStatus": "Loaded local analysis cache; PDF was not uploaded.",
+    "repeatSaveSameNativeNotePhase1": true,
+    "explicitOpenNoteNativeTabPhase1": "tab-G1qQ0Ttq",
+    "guardedCleanupCompleted": true
+  },
+  "sourceIdentities": [
+    {
+      "documentId": "f-icml13_7",
+      "expectedSha256": "8efe22f576e7212e24202500cbc721b242ae57e49c4acd59df838cb6c67f88f5",
+      "actualSha256": "8efe22f576e7212e24202500cbc721b242ae57e49c4acd59df838cb6c67f88f5"
+    },
+    {
+      "documentId": "f-icml12_6",
+      "expectedSha256": "596b0716da31eb135b1237d63cd8dcd2f5315abf2c748a341ce57cd37c6293ee",
+      "actualSha256": "596b0716da31eb135b1237d63cd8dcd2f5315abf2c748a341ce57cd37c6293ee"
+    },
+    {
+      "documentId": "e-icml11_3",
+      "expectedSha256": "39f87714fb8227113cb8bfc0cb0afdcf78ea5e7b96c38ac8cc87ff05d60c74dc",
+      "actualSha256": "39f87714fb8227113cb8bfc0cb0afdcf78ea5e7b96c38ac8cc87ff05d60c74dc"
+    },
+    {
+      "documentId": "f-icml12_4",
+      "expectedSha256": "d1020179be6b4e343052729e689311993bf54ca15ca59ffa7d89e42cbcd662cd",
+      "actualSha256": "d1020179be6b4e343052729e689311993bf54ca15ca59ffa7d89e42cbcd662cd"
+    },
+    {
+      "documentId": "e-nips09_6",
+      "expectedSha256": "55ad57284e82e0555686df8d8395d2823f0b180b75efbd8048ce28545dbff602",
+      "actualSha256": "55ad57284e82e0555686df8d8395d2823f0b180b75efbd8048ce28545dbff602"
+    }
+  ],
+  "cases": [
+    {
+      "id": "f-icml13_7",
+      "kind": "Figure",
+      "label": "1",
+      "physicalPage": 2,
+      "noteID": 6,
+      "sourceNavigation": {
+        "page": "2",
+        "nativePage": 2,
+        "viewPage": 1,
+        "scrollTop": 1375,
+        "readerItemID": 1,
+        "rendered": true,
+        "pdfHidden": false,
+        "readerHidden": false,
+        "activeTabMatched": true,
+        "navigationPassed": true,
+        "viewPageIsZeroBased": true
+      },
+      "saveButtonGuard": {
+        "connected": true,
+        "disabled": false,
+        "dialogConnected": true
+      },
+      "saveStatus": "Reused existing note: Figure 1 · Neo completeness: f-icml13_7",
+      "sourceNoteIDReused": true,
+      "noteHtmlUnchanged": true,
+      "storedEmbeddedBytesUnchanged": true,
+      "sourceGeometryEqual": true,
+      "selectedCaptionEqual": true,
+      "sourcePosition": {
+        "pageIndex": 1,
+        "rects": [[54.841, 499.84851840000005, 290.97839656895997, 724.9392604761304]]
+      },
+      "currentPreview": {
+        "file": "phase2/images/phase2-cold-f-icml13_7-Figure1-excerpt.png",
+        "sha256": "805bde6de07a01a6506e8a1180b12cfb586d7d2105259640a528d5e55b091dde",
+        "bytes": 58792,
+        "width": 473,
+        "height": 451
+      },
+      "storedEmbeddedPng": {
+        "file": "phase2/images/phase2-cold-f-icml13_7-Figure1-note.png",
+        "sha256": "805bde6de07a01a6506e8a1180b12cfb586d7d2105259640a528d5e55b091dde",
+        "bytes": 58792,
+        "width": 473,
+        "height": 451
+      },
+      "phase1EmbeddedPng": {
+        "file": "images/f-icml13_7-Figure1-note.png",
+        "sha256": "805bde6de07a01a6506e8a1180b12cfb586d7d2105259640a528d5e55b091dde",
+        "bytes": 58792,
+        "width": 473,
+        "height": 451
+      },
+      "byteEqualCurrentPreviewToStoredNote": true,
+      "completed": true
+    },
+    {
+      "id": "f-icml12_6",
+      "kind": "Figure",
+      "label": "4",
+      "physicalPage": 8,
+      "noteID": 8,
+      "sourceNavigation": {
+        "page": "8",
+        "nativePage": 8,
+        "viewPage": 7,
+        "scrollTop": 9401,
+        "readerItemID": 2,
+        "rendered": true,
+        "pdfHidden": false,
+        "readerHidden": false,
+        "activeTabMatched": true,
+        "navigationPassed": true,
+        "viewPageIsZeroBased": true
+      },
+      "saveButtonGuard": {
+        "connected": true,
+        "disabled": false,
+        "dialogConnected": true
+      },
+      "saveStatus": "Reused existing note: Figure 4 · Neo completeness: f-icml12_6",
+      "sourceNoteIDReused": true,
+      "noteHtmlUnchanged": true,
+      "storedEmbeddedBytesUnchanged": true,
+      "sourceGeometryEqual": true,
+      "selectedCaptionEqual": true,
+      "sourcePosition": {
+        "pageIndex": 7,
+        "rects": [[115.4, 256.4075184, 481.4805331199999, 399.63100000000003]]
+      },
+      "currentPreview": {
+        "file": "phase2/images/phase2-cold-f-icml12_6-Figure4-excerpt.png",
+        "sha256": "99586f66ed1e83f3cf9ab967df44bf7c971164f4fa4ef3fb43a370fd613548e5",
+        "bytes": 38657,
+        "width": 733,
+        "height": 287
+      },
+      "storedEmbeddedPng": {
+        "file": "phase2/images/phase2-cold-f-icml12_6-Figure4-note.png",
+        "sha256": "57eb671323619f9256b1d89474dab36bfc11e6e090230c037ece7d6fef3cf5cd",
+        "bytes": 38673,
+        "width": 733,
+        "height": 287
+      },
+      "phase1EmbeddedPng": {
+        "file": "images/f-icml12_6-Figure4-note.png",
+        "sha256": "57eb671323619f9256b1d89474dab36bfc11e6e090230c037ece7d6fef3cf5cd",
+        "bytes": 38673,
+        "width": 733,
+        "height": 287
+      },
+      "byteEqualCurrentPreviewToStoredNote": false,
+      "completed": true
+    },
+    {
+      "id": "e-icml11_3",
+      "kind": "Figure",
+      "label": "1",
+      "physicalPage": 5,
+      "noteID": 14,
+      "sourceNavigation": {
+        "page": "5",
+        "nativePage": 5,
+        "viewPage": 4,
+        "scrollTop": 5133,
+        "readerItemID": 3,
+        "rendered": true,
+        "pdfHidden": false,
+        "readerHidden": false,
+        "activeTabMatched": true,
+        "navigationPassed": true,
+        "viewPageIsZeroBased": true
+      },
+      "saveButtonGuard": {
+        "connected": true,
+        "disabled": false,
+        "dialogConnected": true
+      },
+      "saveStatus": "Reused existing note: Figure 1 · Neo completeness: e-icml11_3",
+      "sourceNoteIDReused": true,
+      "noteHtmlUnchanged": true,
+      "storedEmbeddedBytesUnchanged": true,
+      "sourceGeometryEqual": true,
+      "selectedCaptionEqual": true,
+      "sourcePosition": {
+        "pageIndex": 4,
+        "rects": [[55.43999999999994, 534.8975184000002, 541.44488256, 724.940997253418]]
+      },
+      "currentPreview": {
+        "file": "phase2/images/phase2-cold-e-icml11_3-Figure1-excerpt.png",
+        "sha256": "697d9cfa4e416f4c6ac65675d75c3981d21883b5604167b954cca9ed23c9a829",
+        "bytes": 84378,
+        "width": 973,
+        "height": 381
+      },
+      "storedEmbeddedPng": {
+        "file": "phase2/images/phase2-cold-e-icml11_3-Figure1-note.png",
+        "sha256": "697d9cfa4e416f4c6ac65675d75c3981d21883b5604167b954cca9ed23c9a829",
+        "bytes": 84378,
+        "width": 973,
+        "height": 381
+      },
+      "phase1EmbeddedPng": {
+        "file": "images/e-icml11_3-Figure1-note.png",
+        "sha256": "697d9cfa4e416f4c6ac65675d75c3981d21883b5604167b954cca9ed23c9a829",
+        "bytes": 84378,
+        "width": 973,
+        "height": 381
+      },
+      "byteEqualCurrentPreviewToStoredNote": true,
+      "completed": true
+    },
+    {
+      "id": "f-icml12_4",
+      "kind": "Figure",
+      "label": "1",
+      "physicalPage": 2,
+      "noteID": 16,
+      "sourceNavigation": {
+        "page": "2",
+        "nativePage": 2,
+        "viewPage": 1,
+        "scrollTop": 1375,
+        "readerItemID": 4,
+        "rendered": true,
+        "pdfHidden": false,
+        "readerHidden": false,
+        "activeTabMatched": true,
+        "navigationPassed": true,
+        "viewPageIsZeroBased": true
+      },
+      "saveButtonGuard": {
+        "connected": true,
+        "disabled": false,
+        "dialogConnected": true
+      },
+      "saveStatus": "Reused existing note: Figure 1 · Neo completeness: f-icml12_4",
+      "sourceNoteIDReused": true,
+      "noteHtmlUnchanged": true,
+      "storedEmbeddedBytesUnchanged": true,
+      "sourceGeometryEqual": true,
+      "selectedCaptionEqual": true,
+      "sourcePosition": {
+        "pageIndex": 1,
+        "rects": [[55.44, 545.7745184000003, 289.4451072, 724.9075122474591]]
+      },
+      "currentPreview": {
+        "file": "phase2/images/phase2-cold-f-icml12_4-Figure1-excerpt.png",
+        "sha256": "3265cc9ef7f45e7905d34c75eca03e6a9b9983bb811685815321c7cf849dd5fa",
+        "bytes": 43936,
+        "width": 469,
+        "height": 359
+      },
+      "storedEmbeddedPng": {
+        "file": "phase2/images/phase2-cold-f-icml12_4-Figure1-note.png",
+        "sha256": "3265cc9ef7f45e7905d34c75eca03e6a9b9983bb811685815321c7cf849dd5fa",
+        "bytes": 43936,
+        "width": 469,
+        "height": 359
+      },
+      "phase1EmbeddedPng": {
+        "file": "images/f-icml12_4-Figure1-note.png",
+        "sha256": "3265cc9ef7f45e7905d34c75eca03e6a9b9983bb811685815321c7cf849dd5fa",
+        "bytes": 43936,
+        "width": 469,
+        "height": 359
+      },
+      "byteEqualCurrentPreviewToStoredNote": true,
+      "completed": true
+    },
+    {
+      "id": "f-icml12_6",
+      "kind": "Figure",
+      "label": "1",
+      "physicalPage": 6,
+      "noteID": 10,
+      "sourceNavigation": {
+        "page": "6",
+        "nativePage": 6,
+        "viewPage": 5,
+        "scrollTop": 6394,
+        "readerItemID": 2,
+        "rendered": true,
+        "pdfHidden": false,
+        "readerHidden": false,
+        "activeTabMatched": true,
+        "navigationPassed": true,
+        "viewPageIsZeroBased": true
+      },
+      "saveButtonGuard": {
+        "connected": true,
+        "disabled": false,
+        "dialogConnected": true
+      },
+      "saveStatus": "Reused existing note: Figure 1 · Neo completeness: f-icml12_6",
+      "sourceNoteIDReused": true,
+      "noteHtmlUnchanged": true,
+      "storedEmbeddedBytesUnchanged": true,
+      "sourceGeometryEqual": true,
+      "selectedCaptionEqual": true,
+      "sourcePosition": {
+        "pageIndex": 5,
+        "rects": [[64.454, 581.2885184, 281.2261673599999, 719.9581650000001]]
+      },
+      "currentPreview": {
+        "file": "phase2/images/phase2-cold-f-icml12_6-Figure1-excerpt.png",
+        "sha256": "918b817c6002704079cd9d729958da6dc83aec8a399f97cad26c8c1bd22fd074",
+        "bytes": 26601,
+        "width": 434,
+        "height": 278
+      },
+      "storedEmbeddedPng": {
+        "file": "phase2/images/phase2-cold-f-icml12_6-Figure1-note.png",
+        "sha256": "918b817c6002704079cd9d729958da6dc83aec8a399f97cad26c8c1bd22fd074",
+        "bytes": 26601,
+        "width": 434,
+        "height": 278
+      },
+      "phase1EmbeddedPng": {
+        "file": "images/f-icml12_6-Figure1-note.png",
+        "sha256": "918b817c6002704079cd9d729958da6dc83aec8a399f97cad26c8c1bd22fd074",
+        "bytes": 26601,
+        "width": 434,
+        "height": 278
+      },
+      "byteEqualCurrentPreviewToStoredNote": true,
+      "completed": true
+    },
+    {
+      "id": "e-nips09_6",
+      "kind": "Table",
+      "label": "1",
+      "physicalPage": 4,
+      "noteID": 12,
+      "sourceNavigation": {
+        "page": "4",
+        "nativePage": 4,
+        "viewPage": 3,
+        "scrollTop": 4254,
+        "readerItemID": 5,
+        "rendered": true,
+        "pdfHidden": false,
+        "readerHidden": false,
+        "activeTabMatched": true,
+        "navigationPassed": true,
+        "viewPageIsZeroBased": true
+      },
+      "saveButtonGuard": {
+        "connected": true,
+        "disabled": false,
+        "dialogConnected": true
+      },
+      "saveStatus": "Reused existing note: Table 1 · Neo completeness: e-nips09_6",
+      "sourceNoteIDReused": true,
+      "noteHtmlUnchanged": true,
+      "storedEmbeddedBytesUnchanged": true,
+      "sourceGeometryEqual": true,
+      "selectedCaptionEqual": true,
+      "sourcePosition": {
+        "pageIndex": 3,
+        "rects": [[190.02241185300002, 648.8817294000002, 421.97611753067304, 760.6035848]]
+      },
+      "currentPreview": {
+        "file": "phase2/images/phase2-cold-e-nips09_6-Table1-excerpt.png",
+        "sha256": "0714022910bae8eae19f8b44baf181c23ce80bef17804d6344f175283c55db39",
+        "bytes": 26755,
+        "width": 464,
+        "height": 224
+      },
+      "storedEmbeddedPng": {
+        "file": "phase2/images/phase2-cold-e-nips09_6-Table1-note.png",
+        "sha256": "0714022910bae8eae19f8b44baf181c23ce80bef17804d6344f175283c55db39",
+        "bytes": 26755,
+        "width": 464,
+        "height": 224
+      },
+      "phase1EmbeddedPng": {
+        "file": "images/e-nips09_6-Table1-note.png",
+        "sha256": "0714022910bae8eae19f8b44baf181c23ce80bef17804d6344f175283c55db39",
+        "bytes": 26755,
+        "width": 464,
+        "height": 224
+      },
+      "byteEqualCurrentPreviewToStoredNote": true,
+      "completed": true
+    }
+  ],
+  "figure4RasterDifference": {
+    "dimensions": [733, 287],
+    "changedPixels": 22,
+    "maxChannelDelta": 35,
+    "oldPngSha256": "57eb671323619f9256b1d89474dab36bfc11e6e090230c037ece7d6fef3cf5cd",
+    "currentPreviewSha256": "99586f66ed1e83f3cf9ab967df44bf7c971164f4fa4ef3fb43a370fd613548e5",
+    "sourceGeometrySame": true,
+    "note8Unchanged": true,
+    "coldPreviewRepeatedByteIdentical": true,
+    "mainActuallyViewedBothImages": true,
+    "description": "相同 733×287 几何，22 个像素变化，最大通道差 35；两个绘图面板、子图说明和题注均可见。跨冷启动不声称 6/6 PNG 字节相同，重复保存不覆盖原笔记。"
+  },
+  "cache": {
+    "oldEngine3BytesUnchanged": true,
+    "newEngine4BytesUnchanged": true,
+    "distinctSlots": true,
+    "slots": [
+      {
+        "file": ".zotero-neo-analysis-8d42841cab202e8ab8a0b3f1b3a0ef50.json",
+        "sha256": "215815c021c656cb5102058d0d60563f02d9517c0d1d9523c9403ed21c211b0d",
+        "bytes": 131531,
+        "key": {
+          "backend": "local-rules",
+          "adapterVersion": 4,
+          "configuration": "pdfjs-native-text-graphics-v1:[3,2,1,[\"unruledTables\",3,{\"enabled\":true,\"minRows\":3,\"minColumns\":2}],[\"graphicLabels\",3,{\"enabled\":true,\"maxFontSizeEm\":1.4,\"maxGapEm\":0.8}],[\"ruledTables\",2,{\"enabled\":true,\"endpointToleranceEm\":0.2}],[\"compoundPanels\",2,{\"enabled\":true,\"maxGapEm\":1.5,\"minOverlapRatio\":0.4,\"maxRepeatedGapRatio\":0.25}],{\"maxDistanceLines\":5,\"minWidthEm\":3,\"minHeightEm\":2}]"
+        }
+      },
+      {
+        "file": ".zotero-neo-analysis-fe1458a8d410a2861bbfe4689507e01b.json",
+        "sha256": "b51be69e3148dde547369376c3f7c9ff07c2e7043dd1dd5f550e26c9bf7c54b6",
+        "bytes": 131574,
+        "key": {
+          "backend": "local-rules",
+          "adapterVersion": 4,
+          "configuration": "pdfjs-native-text-graphics-v1:[4,2,1,[\"unruledTables\",4,{\"enabled\":true,\"minRows\":3,\"minColumns\":2}],[\"graphicLabels\",4,{\"enabled\":true,\"maxFontSizeEm\":1.4,\"maxGapEm\":0.8}],[\"ruledTables\",2,{\"enabled\":true,\"endpointToleranceEm\":0.2}],[\"compoundPanels\",2,{\"enabled\":true,\"maxGapEm\":1.5,\"minOverlapRatio\":0.4,\"maxRepeatedGapRatio\":0.25}],{\"maxDistanceLines\":5,\"minWidthEm\":3,\"minHeightEm\":2}]"
+        }
+      }
+    ],
+    "actualReopen": {
+      "cacheStatus": "Loaded local analysis cache; PDF was not uploaded.",
+      "readerTabChanged": true,
+      "readerHidden": false,
+      "pdfHidden": false
+    }
+  },
+  "images": [
+    {
+      "file": "phase2/images/phase2-cold-cache-reopen.png",
+      "sha256": "af7e09afb7906fdeca7f3b33d398bdeedf2d2affb47bd0e32992c5f9d1a169d2",
+      "bytes": 108085,
+      "width": 1001,
+      "height": 600,
+      "openedWithRead": true
+    },
+    {
+      "file": "phase2/images/phase2-cold-e-icml11_3-Figure1-excerpt-ui.png",
+      "sha256": "328cac46fca26ea94fe11f802bf777461c5eff8206e929e0af8b8737dfe6e6c3",
+      "bytes": 153480,
+      "width": 1001,
+      "height": 600,
+      "openedWithRead": false
+    },
+    {
+      "file": "phase2/images/phase2-cold-e-icml11_3-Figure1-excerpt.png",
+      "sha256": "697d9cfa4e416f4c6ac65675d75c3981d21883b5604167b954cca9ed23c9a829",
+      "bytes": 84378,
+      "width": 973,
+      "height": 381,
+      "openedWithRead": true
+    },
+    {
+      "file": "phase2/images/phase2-cold-e-icml11_3-Figure1-note.png",
+      "sha256": "697d9cfa4e416f4c6ac65675d75c3981d21883b5604167b954cca9ed23c9a829",
+      "bytes": 84378,
+      "width": 973,
+      "height": 381,
+      "openedWithRead": false
+    },
+    {
+      "file": "phase2/images/phase2-cold-e-icml11_3-Figure1-picker-ui.png",
+      "sha256": "57f267a34996b0522e7fe81ebf28bcbcefe0ad48acf7aaae66120ead5fbde534",
+      "bytes": 144856,
+      "width": 1001,
+      "height": 600,
+      "openedWithRead": true
+    },
+    {
+      "file": "phase2/images/phase2-cold-e-icml11_3-Figure1-picker.png",
+      "sha256": "697d9cfa4e416f4c6ac65675d75c3981d21883b5604167b954cca9ed23c9a829",
+      "bytes": 84378,
+      "width": 973,
+      "height": 381,
+      "openedWithRead": false
+    },
+    {
+      "file": "phase2/images/phase2-cold-e-icml11_3-Figure1-saved.png",
+      "sha256": "678e08198929f3dee1df5e070ce64ebe3ae544c7cb69e5bd3b6c8456f2e9199f",
+      "bytes": 154662,
+      "width": 1001,
+      "height": 600,
+      "openedWithRead": true
+    },
+    {
+      "file": "phase2/images/phase2-cold-e-icml11_3-Figure1-source.png",
+      "sha256": "1cb80eb7486f3f9873817abc0afc0cc5def3c464605bc6e4ef25601b37f83c92",
+      "bytes": 256983,
+      "width": 1001,
+      "height": 600,
+      "openedWithRead": true
+    },
+    {
+      "file": "phase2/images/phase2-cold-e-nips09_6-Table1-excerpt-ui.png",
+      "sha256": "6dd4b72c621d41b379c83138fd73e2304a116171c3452324d77d0bab6ea2036a",
+      "bytes": 128653,
+      "width": 1001,
+      "height": 600,
+      "openedWithRead": false
+    },
+    {
+      "file": "phase2/images/phase2-cold-e-nips09_6-Table1-excerpt.png",
+      "sha256": "0714022910bae8eae19f8b44baf181c23ce80bef17804d6344f175283c55db39",
+      "bytes": 26755,
+      "width": 464,
+      "height": 224,
+      "openedWithRead": true
+    },
+    {
+      "file": "phase2/images/phase2-cold-e-nips09_6-Table1-note.png",
+      "sha256": "0714022910bae8eae19f8b44baf181c23ce80bef17804d6344f175283c55db39",
+      "bytes": 26755,
+      "width": 464,
+      "height": 224,
+      "openedWithRead": false
+    },
+    {
+      "file": "phase2/images/phase2-cold-e-nips09_6-Table1-picker-ui.png",
+      "sha256": "c91e1dcc71ab4575f80e853ca686893ba7b81d5dae68254cb9e1922d39248a86",
+      "bytes": 126201,
+      "width": 1001,
+      "height": 600,
+      "openedWithRead": true
+    },
+    {
+      "file": "phase2/images/phase2-cold-e-nips09_6-Table1-picker.png",
+      "sha256": "0714022910bae8eae19f8b44baf181c23ce80bef17804d6344f175283c55db39",
+      "bytes": 26755,
+      "width": 464,
+      "height": 224,
+      "openedWithRead": false
+    },
+    {
+      "file": "phase2/images/phase2-cold-e-nips09_6-Table1-saved.png",
+      "sha256": "0e1bc270d2e2af39fe8bfc250aed548c3e38792dbb0e345a5e2277ef79748619",
+      "bytes": 130062,
+      "width": 1001,
+      "height": 600,
+      "openedWithRead": true
+    },
+    {
+      "file": "phase2/images/phase2-cold-e-nips09_6-Table1-source.png",
+      "sha256": "59a22755d7f362194fb26c22bc9fd765b564bf729da0990815200d6ec675609a",
+      "bytes": 185784,
+      "width": 1001,
+      "height": 600,
+      "openedWithRead": true
+    },
+    {
+      "file": "phase2/images/phase2-cold-f-icml12_4-Figure1-excerpt-ui.png",
+      "sha256": "f2bc33256aa69ff6599e2f1b83545b86c7a6a153080d07fb368c4bc5a7d2f16a",
+      "bytes": 144027,
+      "width": 1001,
+      "height": 600,
+      "openedWithRead": false
+    },
+    {
+      "file": "phase2/images/phase2-cold-f-icml12_4-Figure1-excerpt.png",
+      "sha256": "3265cc9ef7f45e7905d34c75eca03e6a9b9983bb811685815321c7cf849dd5fa",
+      "bytes": 43936,
+      "width": 469,
+      "height": 359,
+      "openedWithRead": true
+    },
+    {
+      "file": "phase2/images/phase2-cold-f-icml12_4-Figure1-note.png",
+      "sha256": "3265cc9ef7f45e7905d34c75eca03e6a9b9983bb811685815321c7cf849dd5fa",
+      "bytes": 43936,
+      "width": 469,
+      "height": 359,
+      "openedWithRead": false
+    },
+    {
+      "file": "phase2/images/phase2-cold-f-icml12_4-Figure1-picker-ui.png",
+      "sha256": "6214815d8190ee704e11ea9ec697ec9b4120015e2badb43d5ea9e31e0abd1c04",
+      "bytes": 176459,
+      "width": 1001,
+      "height": 600,
+      "openedWithRead": true
+    },
+    {
+      "file": "phase2/images/phase2-cold-f-icml12_4-Figure1-picker.png",
+      "sha256": "3265cc9ef7f45e7905d34c75eca03e6a9b9983bb811685815321c7cf849dd5fa",
+      "bytes": 43936,
+      "width": 469,
+      "height": 359,
+      "openedWithRead": false
+    },
+    {
+      "file": "phase2/images/phase2-cold-f-icml12_4-Figure1-saved.png",
+      "sha256": "26f67d8499c78c0376d72faab9d14f2f5e68916ce762e4a3190b928854f72d67",
+      "bytes": 145228,
+      "width": 1001,
+      "height": 600,
+      "openedWithRead": true
+    },
+    {
+      "file": "phase2/images/phase2-cold-f-icml12_4-Figure1-source.png",
+      "sha256": "ff48515fe32a29bd4af2a02293440899d10ac54055d8826f31b7c4bf28773e4c",
+      "bytes": 343551,
+      "width": 1001,
+      "height": 600,
+      "openedWithRead": true
+    },
+    {
+      "file": "phase2/images/phase2-cold-f-icml12_6-Figure1-excerpt-ui.png",
+      "sha256": "1934d13b2dfd176b30c0fae755cd9d3ab5a2b3441a4563a015bce0281547c50c",
+      "bytes": 135228,
+      "width": 1001,
+      "height": 600,
+      "openedWithRead": false
+    },
+    {
+      "file": "phase2/images/phase2-cold-f-icml12_6-Figure1-excerpt.png",
+      "sha256": "918b817c6002704079cd9d729958da6dc83aec8a399f97cad26c8c1bd22fd074",
+      "bytes": 26601,
+      "width": 434,
+      "height": 278,
+      "openedWithRead": true
+    },
+    {
+      "file": "phase2/images/phase2-cold-f-icml12_6-Figure1-note.png",
+      "sha256": "918b817c6002704079cd9d729958da6dc83aec8a399f97cad26c8c1bd22fd074",
+      "bytes": 26601,
+      "width": 434,
+      "height": 278,
+      "openedWithRead": false
+    },
+    {
+      "file": "phase2/images/phase2-cold-f-icml12_6-Figure1-picker-ui.png",
+      "sha256": "4b2fef5dd0ca1c57a263ffc8e9af7d2cbf028d362af49a327b1e5cba88cc89e9",
+      "bytes": 119220,
+      "width": 1001,
+      "height": 600,
+      "openedWithRead": true
+    },
+    {
+      "file": "phase2/images/phase2-cold-f-icml12_6-Figure1-picker.png",
+      "sha256": "918b817c6002704079cd9d729958da6dc83aec8a399f97cad26c8c1bd22fd074",
+      "bytes": 26601,
+      "width": 434,
+      "height": 278,
+      "openedWithRead": false
+    },
+    {
+      "file": "phase2/images/phase2-cold-f-icml12_6-Figure1-saved.png",
+      "sha256": "3eabab62a8354eacdc8b678010f580f5ba2dc7805a5a43a2cafff7362aabdde6",
+      "bytes": 136590,
+      "width": 1001,
+      "height": 600,
+      "openedWithRead": true
+    },
+    {
+      "file": "phase2/images/phase2-cold-f-icml12_6-Figure1-source.png",
+      "sha256": "b1ecfbe8dd7b667b43f9b48d9095f2a38fda363c03de128180e13ec6f2691725",
+      "bytes": 271693,
+      "width": 1001,
+      "height": 600,
+      "openedWithRead": true
+    },
+    {
+      "file": "phase2/images/phase2-cold-f-icml12_6-Figure4-excerpt-ui.png",
+      "sha256": "9a0d27fcc4ba9e8b462658adcb4d3e0502c232d1092a0f70e7e9ce543f1649c5",
+      "bytes": 140590,
+      "width": 1001,
+      "height": 600,
+      "openedWithRead": true
+    },
+    {
+      "file": "phase2/images/phase2-cold-f-icml12_6-Figure4-excerpt.png",
+      "sha256": "99586f66ed1e83f3cf9ab967df44bf7c971164f4fa4ef3fb43a370fd613548e5",
+      "bytes": 38657,
+      "width": 733,
+      "height": 287,
+      "openedWithRead": true
+    },
+    {
+      "file": "phase2/images/phase2-cold-f-icml12_6-Figure4-note.png",
+      "sha256": "57eb671323619f9256b1d89474dab36bfc11e6e090230c037ece7d6fef3cf5cd",
+      "bytes": 38673,
+      "width": 733,
+      "height": 287,
+      "openedWithRead": false
+    },
+    {
+      "file": "phase2/images/phase2-cold-f-icml12_6-Figure4-picker-ui.png",
+      "sha256": "b441cecd348d337d6b458dd7e82f7c01606b02817f8e66ac21cda0ef47c7c8ed",
+      "bytes": 106585,
+      "width": 1001,
+      "height": 600,
+      "openedWithRead": true
+    },
+    {
+      "file": "phase2/images/phase2-cold-f-icml12_6-Figure4-picker.png",
+      "sha256": "99586f66ed1e83f3cf9ab967df44bf7c971164f4fa4ef3fb43a370fd613548e5",
+      "bytes": 38657,
+      "width": 733,
+      "height": 287,
+      "openedWithRead": true
+    },
+    {
+      "file": "phase2/images/phase2-cold-f-icml12_6-Figure4-saved.png",
+      "sha256": "d6b6958300f6da33dad1fa529be92192bf0a57e36c662132e955df6f38c9b760",
+      "bytes": 142135,
+      "width": 1001,
+      "height": 600,
+      "openedWithRead": true
+    },
+    {
+      "file": "phase2/images/phase2-cold-f-icml12_6-Figure4-source.png",
+      "sha256": "94dd33270768b8b23c8a3353680e4b51629dbcc359c0ec65abd75d09935ec3d9",
+      "bytes": 233585,
+      "width": 1001,
+      "height": 600,
+      "openedWithRead": true
+    },
+    {
+      "file": "phase2/images/phase2-cold-f-icml13_7-Figure1-excerpt-ui.png",
+      "sha256": "3b2bc86e19f1330981683cb543e188dd3d13e8f2cb5bef95b3ef986571f54bc5",
+      "bytes": 149337,
+      "width": 1001,
+      "height": 600,
+      "openedWithRead": false
+    },
+    {
+      "file": "phase2/images/phase2-cold-f-icml13_7-Figure1-excerpt.png",
+      "sha256": "805bde6de07a01a6506e8a1180b12cfb586d7d2105259640a528d5e55b091dde",
+      "bytes": 58792,
+      "width": 473,
+      "height": 451,
+      "openedWithRead": true
+    },
+    {
+      "file": "phase2/images/phase2-cold-f-icml13_7-Figure1-note.png",
+      "sha256": "805bde6de07a01a6506e8a1180b12cfb586d7d2105259640a528d5e55b091dde",
+      "bytes": 58792,
+      "width": 473,
+      "height": 451,
+      "openedWithRead": false
+    },
+    {
+      "file": "phase2/images/phase2-cold-f-icml13_7-Figure1-picker-ui.png",
+      "sha256": "4c23dde2c789098f53c59f59d9f14a3fd8d059a01a929b9d68bebc3214e71fa4",
+      "bytes": 177705,
+      "width": 1001,
+      "height": 600,
+      "openedWithRead": true
+    },
+    {
+      "file": "phase2/images/phase2-cold-f-icml13_7-Figure1-picker.png",
+      "sha256": "805bde6de07a01a6506e8a1180b12cfb586d7d2105259640a528d5e55b091dde",
+      "bytes": 58792,
+      "width": 473,
+      "height": 451,
+      "openedWithRead": false
+    },
+    {
+      "file": "phase2/images/phase2-cold-f-icml13_7-Figure1-saved.png",
+      "sha256": "a93259078b454718bc462d9d9695265bef7ef7e50be4d1f437b6d919467d5716",
+      "bytes": 150681,
+      "width": 1001,
+      "height": 600,
+      "openedWithRead": true
+    },
+    {
+      "file": "phase2/images/phase2-cold-f-icml13_7-Figure1-source.png",
+      "sha256": "649b022f069e42e06146187179b2ac637e81f10727e60b649915bb5be031221e",
+      "bytes": 270888,
+      "width": 1001,
+      "height": 600,
+      "openedWithRead": true
+    },
+    {
+      "file": "phase2/images/phase2-cold-figure4-repeat-preview-ui.png",
+      "sha256": "12e070c15f2a035083b56ccc7f32132b208951d538fdf018732508f26c923b44",
+      "bytes": 137336,
+      "width": 1001,
+      "height": 600,
+      "openedWithRead": false
+    },
+    {
+      "file": "phase2/images/phase2-cold-figure4-repeat-preview.png",
+      "sha256": "99586f66ed1e83f3cf9ab967df44bf7c971164f4fa4ef3fb43a370fd613548e5",
+      "bytes": 38657,
+      "width": 733,
+      "height": 287,
+      "openedWithRead": false
+    },
+    {
+      "file": "phase2/images/phase2-cold-ready.png",
+      "sha256": "8cdc34dec54e2e85a1bc1eeac90be9b72352603f6e6ca24e29267298003585e1",
+      "bytes": 267902,
+      "width": 1001,
+      "height": 600,
+      "openedWithRead": true
+    },
+    {
+      "file": "phase2/images/phase2-f-icml13_7-Figure1-picker-ui.png",
+      "sha256": "b9497ede25df4170fe99550a7bfa59af3a7da1a531204e0b6176a75744d99852",
+      "bytes": 164695,
+      "width": 1001,
+      "height": 600,
+      "openedWithRead": false
+    },
+    {
+      "file": "phase2/images/phase2-f-icml13_7-Figure1-picker.png",
+      "sha256": "805bde6de07a01a6506e8a1180b12cfb586d7d2105259640a528d5e55b091dde",
+      "bytes": 58792,
+      "width": 473,
+      "height": 451,
+      "openedWithRead": false
+    },
+    {
+      "file": "phase2/images/phase2-first-deadline-state.png",
+      "sha256": "61d21f0a0536807f66c0a8c75ce680aad28cb9d7ab7736a93bc3ff60c1c316c8",
+      "bytes": 27462,
+      "width": 1001,
+      "height": 600,
+      "openedWithRead": false
+    },
+    {
+      "file": "phase2/images/phase2-native-tab-reactivation.png",
+      "sha256": "68c510927cecaf13a10358b28e499528b352aa78f162722b95c3ee4b8107e1ba",
+      "bytes": 27548,
+      "width": 1001,
+      "height": 600,
+      "openedWithRead": false
+    }
+  ],
+  "cleanup": {
+    "recordedAt": "2026-11-16T09:38:34.661Z",
+    "ownedPidExited": true,
+    "ownedRdpPortFree": true,
+    "ownedWindowsTempRootRemoved": true,
+    "personal6101NeverConnected": true,
+    "evidenceAndOriginalPdfsPreserved": true
+  },
+  "limits": [
+    "五份已见／校准 PDF，不代表未见数据或全文完整性。",
+    "程序化克隆 KeyboardEvent 与真实 DOM 按钮；物理键盘和输入法未测。",
+    "临时加载解包插件、热重载及一次冷启动；未测 XPI 持久安装、更新或重装。",
+    "未点击 Neo 的 SDT／云端按钮；宿主出现打包 SDT 模型读取及原生 SDT 缓存，不能声称整个进程零模型或零网络活动。",
+    "最终版本重验的是语义位置定位；连续 Vim 平滑滚动未由本轮 GUI 再测。",
+    "初始候选的预览→新笔记 PNG 为 6/6 相同；最终版本当前预览→既存笔记为 5/6，不改写差异或覆盖原笔记。",
+    "热重载后的原生隐藏／空白视口失败原样保留，只有冷启动后的可见渲染路径计入通过。",
+    "静态评分与实际界面任务分开；不将本记录扩为 137 项全部操作通过。"
+  ]
+}

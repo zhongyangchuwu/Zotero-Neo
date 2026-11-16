@@ -23,6 +23,7 @@ describe('source-backed local caption quality', () => {
     { lead: 'Table 1 contains', lineHeight: 9, baseline: 11 },
     { lead: 'Fig. 2 also illustrates', lineHeight: 10, baseline: 12 },
     { lead: 'Figure 2 summarizes', lineHeight: 12, baseline: 11 },
+    { lead: 'Figure 4 displays', lineHeight: 9, baseline: 12 },
   ])(
     'keeps the paragraph beginning "$lead" as ordinary prose',
     ({ lead, lineHeight, baseline }) => {
@@ -107,23 +108,25 @@ describe('source-backed local caption quality', () => {
     ]);
   });
 
-  it.each(['Table 1: Contains', 'Fig. 2. Also illustrates', 'Figure 2. Summarizes'])(
-    'preserves the explicitly punctuated caption "%s"',
-    (lead) => {
-      const regions = localFigureRegions([
-        page(
-          [
-            text(`${lead} the independently measured observations.`, [50, 500, 280, 510]),
-            text('Each estimate uses a separate evaluation sample.', [50, 488, 280, 498]),
-          ],
-          [[50, 540, 280, 620]],
-        ),
-      ]);
-      expect(regions.find((region) => region.kind === 'caption')?.text).toBe(
-        `${lead} the independently measured observations.\nEach estimate uses a separate evaluation sample.`,
-      );
-    },
-  );
+  it.each([
+    'Table 1: Contains',
+    'Fig. 2. Also illustrates',
+    'Figure 2. Summarizes',
+    'Figure 4. Displays',
+  ])('preserves the explicitly punctuated caption "%s"', (lead) => {
+    const regions = localFigureRegions([
+      page(
+        [
+          text(`${lead} the independently measured observations.`, [50, 500, 280, 510]),
+          text('Each estimate uses a separate evaluation sample.', [50, 488, 280, 498]),
+        ],
+        [[50, 540, 280, 620]],
+      ),
+    ]);
+    expect(regions.find((region) => region.kind === 'caption')?.text).toBe(
+      `${lead} the independently measured observations.\nEach estimate uses a separate evaluation sample.`,
+    );
+  });
 
   it('isolates a wrapped caption from the adjacent column without losing its prose', () => {
     const prose = [

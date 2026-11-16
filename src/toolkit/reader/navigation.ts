@@ -140,6 +140,7 @@ export class ReaderNavigationHost {
     return Math.abs(distance) <= 1 ? 0 : distance;
   }
 
+  /** Native navigate() resolves before adjacent-page animation; semantic jumps must land immediately. */
   navigatePosition(
     view: ReaderViewRuntime,
     location: { readonly position: ReaderLinkPosition },
@@ -149,7 +150,7 @@ export class ReaderNavigationHost {
     if (!outer || !nativeView.navigate) return;
     return nativeView.navigate(
       cloneInto(location, outer),
-      cloneInto({ block: 'start' as const }, outer),
+      cloneInto({ block: 'start' as const, behavior: 'instant' as const }, outer),
     );
   }
 
