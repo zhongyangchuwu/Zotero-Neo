@@ -286,6 +286,25 @@ describe('annotation comment editor preferences', () => {
 });
 
 describe('binding preferences', () => {
+  it('retains custom settings snapshot bindings when upgrading the retired action ID', () => {
+    const preferences = new TestPreferences({
+      'bindings.schemaVersion': 21,
+      bindings: JSON.stringify({
+        'main-normal:<F9>': 'openSettingsTransfer',
+        'main-normal:<F10>': null,
+        'reader-normal:j': 'scrollUp',
+      }),
+    });
+    migrateBindingPreferences(preferences);
+    const bindings = bindingsFromPreferences(preferences);
+    expect(bindings['main-normal:<F9>']).toBe('openSettingsSnapshots');
+    expect(bindings['main-normal:<F10>']).toBeUndefined();
+    expect(bindings['reader-normal:j']).toBe('scrollUp');
+    expect(JSON.parse(preferences.get('bindings', ''))['main-normal:<F9>']).toBe(
+      'openSettingsSnapshots',
+    );
+  });
+
   it.each([7, 16])('removes only inactive Reader Insert rows upgrading schema %s', (version) => {
     const retained = {
       'reader-normal:j': 'scrollUp',

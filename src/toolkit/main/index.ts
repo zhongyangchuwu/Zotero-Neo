@@ -88,6 +88,13 @@ export {
   type MainPluginSnapshot,
 } from './plugins';
 export {
+  mainSettingsTemplatePlugins,
+  mainSettingsTemplatePreferenceType,
+  mainSettingsTemplateDigest,
+  observeMainSettingsTemplatePlugins,
+  type MainTemplatePlugin,
+} from './settings-snapshot-templates';
+export {
   mainCollectionRef,
   mainCollectionRefs,
   mainActiveCollection,

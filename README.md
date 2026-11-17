@@ -18,7 +18,7 @@ Zotero Neo 是一个受 Vim/Neovim 启发的 Zotero 插件。它给文献列表�
 - [选择文字与批注](docs/SELECTION_GUIDE.md)：输入词句定位选区，调整范围，复制、划线和编辑评论。
 - [文献库与批量整理](docs/MAIN_GUIDE.md)：查找论文、建立临时选择集、整理标签和分类。
 - [笔记](docs/NOTE_GUIDE.md)：查找已有笔记，按需使用 Vim 风格编辑。
-- [加密配置迁移](docs/SETTINGS_GUIDE.md#导出和恢复配置)：在 Main 命令面板打开 `openSettingsTransfer`，用自管密码文件迁移受支持的 Zotero／Neo 配置；恢复前先保存加密备份。
+- [设置快照](docs/SETTINGS_GUIDE.md#导出和恢复配置)：按插件审核、保存和恢复设置，支持自管 JSON／age 文件或明确选择的 Zotero 附件；恢复前先保存独立加密备份。
 - [更多功能](docs/FEATURES.md)和[使用指南](docs/USER_GUIDE.md)：按实际任务查找操作。
 
 ## 参考与开发

@@ -22,12 +22,14 @@ export interface SettingsReactModel {
   readonly title: string;
   readonly closeLabel: string;
   readonly navigationLabel: string;
+  readonly snapshotsLabel?: string;
   readonly section: SettingsSection;
   readonly sections: readonly { readonly id: SettingsSection; readonly label: string }[];
   readonly page: SettingsPagePresentation;
 }
 export type SettingsReactCommand = { readonly generation: number } & (
   | { readonly type: 'close' }
+  | { readonly type: 'openSettingsSnapshots' }
   | { readonly type: 'section'; readonly section: SettingsSection }
   | { readonly type: 'appearance'; readonly command: AppearancePageCommand }
   | { readonly type: 'keybindings'; readonly command: KeybindingsPageCommand }

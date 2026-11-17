@@ -62,9 +62,9 @@ import {
   type DocumentPreparationModule,
 } from '../modules/document-preparation';
 import {
-  createSettingsTransferModule,
-  type SettingsTransferModule,
-} from '../modules/settings-transfer';
+  createSettingsSnapshotModule,
+  type SettingsSnapshotModule,
+} from '../modules/settings-snapshots';
 import { createItemAttributesModule, type ItemAttributesModule } from '../modules/item-attributes';
 import type { PickerOpenOptions } from './picker/types';
 import {
@@ -134,7 +134,7 @@ export class MainWindowController implements MainWindowControllerApi {
       readonly notes: NotesModule | null;
       readonly workspace: WorkspaceModule | null;
       readonly preparation: DocumentPreparationModule | null;
-      readonly settingsTransfer: SettingsTransferModule | null;
+      readonly settingsSnapshots: SettingsSnapshotModule | null;
       readonly itemAttributes: ItemAttributesModule | null;
       tabEnhancements: TabEnhancementsModule | null;
     }
@@ -212,10 +212,10 @@ export class MainWindowController implements MainWindowControllerApi {
             createDocumentPreparationModule(host, 'main-normal', preparationService),
           )
         : null;
-      const settingsTransferService = this.#dependencies.settingsTransfer;
-      const settingsTransfer = settingsTransferService
-        ? scope.activate('settings-transfer', () =>
-            createSettingsTransferModule(host, settingsTransferService),
+      const settingsSnapshotsService = this.#dependencies.settingsSnapshots;
+      const settingsSnapshots = settingsSnapshotsService
+        ? scope.activate('settings-snapshots', () =>
+            createSettingsSnapshotModule(host, settingsSnapshotsService),
           )
         : null;
       const itemAttributesService = this.#dependencies.itemAttributes;
@@ -484,7 +484,7 @@ export class MainWindowController implements MainWindowControllerApi {
         notes,
         workspace,
         preparation,
-        settingsTransfer,
+        settingsSnapshots,
         itemAttributes,
         tabEnhancements: null,
       });
@@ -785,7 +785,11 @@ export class MainWindowController implements MainWindowControllerApi {
     this.resetMainInput(window, resolved);
     try {
       window.focus();
-      resolved.settings.openWorkspace();
+      resolved.settings.openWorkspace(
+        this.#modules.get(resolved)?.settingsSnapshots
+          ? () => this.executeMain('openSettingsSnapshots', window, resolved, 1)
+          : undefined,
+      );
       return true;
     } catch (error) {
       this.#dependencies.logger.debug(`Settings open failed: ${String(error)}`);
@@ -1107,7 +1111,7 @@ export class MainWindowController implements MainWindowControllerApi {
       return;
     }
     if (this.#dependencies.documentPreparation?.handleKey(event)) return;
-    if (this.#dependencies.settingsTransfer?.handleKey(event)) return;
+    if (this.#dependencies.settingsSnapshots?.handleKey(event)) return;
     if (this.#dependencies.itemAttributes?.handleKey(event)) return;
     if (mainIdentifierLookupOwnsInput(window)) {
       this.resetMainInput(window, session);
@@ -1589,8 +1593,8 @@ export class MainWindowController implements MainWindowControllerApi {
         else module.edit(presentation, this.bindingMode(window));
         break;
       }
-      case 'openSettingsTransfer': {
-        this.#modules.get(session)?.settingsTransfer?.open({
+      case 'openSettingsSnapshots': {
+        this.#modules.get(session)?.settingsSnapshots?.open({
           window,
           language: () => this.keyGuideLanguage(),
           themeRoot: (root) => session.theme.add(root),

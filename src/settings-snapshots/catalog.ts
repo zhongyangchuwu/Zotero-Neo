@@ -1,0 +1,479 @@
+import {
+  SettingsSnapshotError,
+  type SettingsAdapter,
+  type SettingsOperationContext,
+} from './contracts';
+import type {
+  SettingsTemplateCatalogPort,
+  SnapshotPluginTemplate,
+  SnapshotTemplateField,
+} from './ports';
+import { assertSettingsCurrent, assertSettingsTextSize } from './document';
+import { createSettingsAdapters } from './registry';
+import { NATIVE_PREFERENCE_FIELDS } from './templates/zotero';
+import { NEO_PREFERENCE_FIELDS } from './templates/zotero-neo';
+import { discoverPluginTemplates } from './templates/scanner';
+import { ReviewedPreferenceAdapter } from './adapters/preferences';
+import { MAX_TEMPLATE_BYTES, settingsTemplateHost } from '../platform/settings-snapshot-templates';
+import { ZOTERO_NEO_PLUGIN_ID } from '../modules/extensions/host';
+
+interface TemplateFile {
+  readonly format: 'zotero-neo-settings-template';
+  readonly schemaVersion: 1;
+  readonly pluginID: string;
+  readonly version: string;
+  readonly revision: string;
+  readonly fields: readonly {
+    readonly key: string;
+    readonly type: SnapshotTemplateField['type'];
+    readonly secret: boolean;
+  }[];
+  readonly status: 'draft' | 'reviewed' | 'needs-review';
+}
+/** Sticky field keys are profile-local metadata, independent of portable selection and review. */
+interface TemplateRecord extends TemplateFile {
+  readonly sensitiveKeys: readonly string[];
+}
+function invalid(): never {
+  throw new SettingsSnapshotError(
+    'invalid-template',
+    'Template data is malformed, unsupported, or not locally owned',
+  );
+}
+function parse(text: string, local = false): TemplateRecord {
+  assertSettingsTextSize(text, MAX_TEMPLATE_BYTES);
+  let value: unknown;
+  try {
+    value = JSON.parse(text);
+  } catch {
+    invalid();
+  }
+  if (!value || typeof value !== 'object' || Array.isArray(value)) invalid();
+  const data = value as Record<string, unknown>;
+  if (
+    Object.keys(data).some(
+      (key) =>
+        ![
+          'format',
+          'schemaVersion',
+          'pluginID',
+          'version',
+          'revision',
+          'fields',
+          'status',
+          ...(local ? ['sensitiveKeys'] : []),
+        ].includes(key),
+    ) ||
+    data.format !== 'zotero-neo-settings-template' ||
+    data.schemaVersion !== 1 ||
+    typeof data.pluginID !== 'string' ||
+    !data.pluginID ||
+    data.pluginID.length > 512 ||
+    /[\s\0]/u.test(data.pluginID) ||
+    typeof data.version !== 'string' ||
+    !data.version ||
+    data.version.length > 128 ||
+    typeof data.revision !== 'string' ||
+    !/^[a-f0-9]{64}$/u.test(data.revision) ||
+    !Array.isArray(data.fields) ||
+    data.fields.length > 2048 ||
+    !['draft', 'reviewed', 'needs-review'].includes(String(data.status))
+  )
+    invalid();
+  const keys = new Set<string>();
+  const fields: TemplateFile['fields'][number][] = [];
+  for (const field of data.fields) {
+    if (!field || typeof field !== 'object' || Array.isArray(field)) invalid();
+    const item = field as Record<string, unknown>;
+    if (
+      Object.keys(item).some((key) => !['key', 'type', 'secret'].includes(key)) ||
+      typeof item.key !== 'string' ||
+      !item.key ||
+      item.key.length > 512 ||
+      keys.has(item.key) ||
+      !['boolean', 'number', 'string'].includes(String(item.type)) ||
+      typeof item.secret !== 'boolean'
+    )
+      invalid();
+    keys.add(item.key);
+    fields.push({
+      key: item.key,
+      type: item.type as SnapshotTemplateField['type'],
+      secret: item.secret,
+    });
+  }
+  // Legacy v1 files have no private key list; their secret fields seed the same sticky policy.
+  // The complete record remains bounded by MAX_TEMPLATE_BYTES and contains no preference values.
+  const sensitiveKeys = new Set(fields.filter((field) => field.secret).map((field) => field.key));
+  if (local && data.sensitiveKeys !== undefined) {
+    if (!Array.isArray(data.sensitiveKeys)) invalid();
+    const seen = new Set<string>();
+    for (const key of data.sensitiveKeys) {
+      if (typeof key !== 'string' || !key || key.length > 512 || seen.has(key)) invalid();
+      seen.add(key);
+      sensitiveKeys.add(key);
+    }
+  }
+  return {
+    format: 'zotero-neo-settings-template',
+    schemaVersion: 1,
+    pluginID: data.pluginID,
+    version: data.version,
+    revision: data.revision,
+    fields,
+    status: data.status as TemplateFile['status'],
+    sensitiveKeys: [...sensitiveKeys],
+  };
+}
+function mergeSensitiveKeys(
+  record: TemplateRecord | undefined,
+  fields: readonly { readonly key: string; readonly secret: boolean }[],
+): readonly string[] {
+  const keys = new Set(record?.sensitiveKeys);
+  for (const field of fields) if (field.secret) keys.add(field.key);
+  return record && keys.size === record.sensitiveKeys.length ? record.sensitiveKeys : [...keys];
+}
+function frozen(template: SnapshotPluginTemplate): SnapshotPluginTemplate {
+  return Object.freeze({
+    ...template,
+    fields: Object.freeze(template.fields.map((field) => Object.freeze({ ...field }))),
+    reviewedKeys: Object.freeze([...template.reviewedKeys]),
+    issues: Object.freeze([...template.issues]),
+  });
+}
+/** Construction is host-free; local templates hydrate only after an initialized caller lists/scans. */
+export function createSettingsTemplateCatalog(
+  neoVersion: () => string,
+): SettingsTemplateCatalogPort {
+  const builtins = createSettingsAdapters(neoVersion);
+  const records = new Map<string, TemplateRecord>();
+  const templates = new Map<string, SnapshotPluginTemplate>();
+  const adapters = new Map<string, SettingsAdapter>();
+  let disposed = false,
+    loaded = false,
+    stopObserving: (() => void) | undefined;
+  let tail: Promise<unknown> = Promise.resolve();
+  const assert = (context: SettingsOperationContext): void => {
+    assertSettingsCurrent(context);
+    if (disposed) throw new SettingsSnapshotError('cancelled', 'The template catalog is disposed');
+  };
+  const fileName = (id: string): string => `plugin-${settingsTemplateHost.digest(id)}.json`;
+  const save = async (record: TemplateRecord, context: SettingsOperationContext): Promise<void> => {
+    assert(context);
+    await settingsTemplateHost.writeFile(
+      fileName(record.pluginID),
+      JSON.stringify(record, null, 2),
+      {
+        ...context,
+        isCurrent: () => !disposed && context.isCurrent(),
+      },
+    );
+    assert(context);
+    records.set(record.pluginID, record);
+  };
+  const refresh = async (context: SettingsOperationContext): Promise<void> => {
+    assert(context);
+    if (!loaded) {
+      const files = await settingsTemplateHost.readFiles();
+      assert(context);
+      const hydrated = new Map<string, TemplateRecord>();
+      for (const file of files) {
+        const record = parse(file.text, true);
+        if (file.name !== fileName(record.pluginID) || hydrated.has(record.pluginID)) invalid();
+        hydrated.set(record.pluginID, record);
+      }
+      for (const [id, record] of hydrated) records.set(id, record);
+      loaded = true;
+      stopObserving = settingsTemplateHost.observePlugins(() => {
+        adapters.clear();
+        for (const [id, record] of records)
+          if (record.status === 'reviewed') records.set(id, { ...record, status: 'needs-review' });
+      });
+    }
+    const plugins = await settingsTemplateHost.plugins();
+    assert(context);
+    const discovered = discoverPluginTemplates(plugins, settingsTemplateHost).filter(
+      (template) =>
+        template.pluginID !== ZOTERO_NEO_PLUGIN_ID &&
+        !builtins.some((adapter) => adapter.id === template.pluginID),
+    );
+    templates.clear();
+    const present = new Set<string>();
+    for (const draft of discovered) {
+      present.add(draft.pluginID);
+      let record = records.get(draft.pluginID);
+      const sensitiveKeys = mergeSensitiveKeys(record, draft.fields);
+      if (sensitiveKeys.length && sensitiveKeys !== record?.sensitiveKeys) {
+        adapters.delete(draft.pluginID);
+        record = {
+          ...(record ?? {
+            format: 'zotero-neo-settings-template',
+            schemaVersion: 1,
+            pluginID: draft.pluginID,
+            version: draft.version,
+            revision: draft.revision,
+            fields: draft.fields
+              .filter((field) => field.supported)
+              .map(({ key, type, secret }) => ({ key, type, secret })),
+            status: 'draft',
+          }),
+          sensitiveKeys,
+        };
+        await save(record, context);
+      }
+      const compatible =
+        !!record &&
+        draft.status !== 'unavailable' &&
+        record.version === draft.version &&
+        record.revision === draft.revision &&
+        record.fields.every((selected) =>
+          draft.fields.some(
+            (field) =>
+              field.key === selected.key && field.supported && field.type === selected.type,
+          ),
+        );
+      if (record?.status === 'reviewed' && !compatible) {
+        record = { ...record, status: 'needs-review' };
+        await save(record, context);
+      }
+      const reviewed = compatible && record?.status === 'reviewed';
+      const template = frozen({
+        ...draft,
+        status:
+          draft.status === 'unavailable'
+            ? 'unavailable'
+            : reviewed
+              ? 'reviewed'
+              : record?.status === 'needs-review'
+                ? 'needs-review'
+                : 'draft',
+        fields: draft.fields.map((field) => ({
+          ...field,
+          secret: field.secret || !!record?.sensitiveKeys.includes(field.key),
+        })),
+        reviewedKeys: reviewed ? record!.fields.map((field) => field.key) : [],
+      });
+      templates.set(template.pluginID, template);
+      if (!reviewed) {
+        adapters.delete(template.pluginID);
+        continue;
+      }
+      if (!adapters.has(template.pluginID)) {
+        let adapter: SettingsAdapter;
+        const review = record;
+        adapter = new ReviewedPreferenceAdapter(
+          template,
+          settingsTemplateHost,
+          async (operation) => {
+            await refresh(operation);
+            if (
+              adapters.get(template.pluginID) !== adapter ||
+              records.get(template.pluginID) !== review
+            )
+              throw new SettingsSnapshotError(
+                'stale-template',
+                'Plugin template requires fresh local review',
+              );
+          },
+          () =>
+            !disposed &&
+            adapters.get(template.pluginID) === adapter &&
+            records.get(template.pluginID) === review,
+        );
+        adapters.set(template.pluginID, adapter);
+      }
+    }
+    for (const [id, record] of records)
+      if (!present.has(id)) {
+        adapters.delete(id);
+        templates.set(
+          id,
+          frozen({
+            pluginID: id,
+            adapterID: `plugin-${settingsTemplateHost.digest(id)}`,
+            label: id,
+            version: record.version,
+            revision: record.revision,
+            status: 'unavailable',
+            fields: record.fields.map((field) => ({
+              ...field,
+              secret: field.secret || record.sensitiveKeys.includes(field.key),
+              label: field.key,
+              supported: false,
+              reason: 'Plugin is not installed',
+              requiresRestart: true,
+              source: 'local-template',
+            })),
+            reviewedKeys: [],
+            issues: ['The plugin is not installed; no adapter is admitted'],
+          }),
+        );
+      }
+    for (const id of adapters.keys()) if (!present.has(id)) adapters.delete(id);
+    assert(context);
+  };
+  const requireTemplate = (id: string): SnapshotPluginTemplate => {
+    const template = templates.get(id);
+    if (!template || template.status === 'unavailable')
+      throw new SettingsSnapshotError(
+        'unavailable-plugin',
+        'An installed compatible plugin is required',
+      );
+    return template;
+  };
+  const serial = <T>(context: SettingsOperationContext, task: () => Promise<T>): Promise<T> => {
+    const result = tail.then(async () => {
+      assert(context);
+      return task();
+    });
+    tail = result.catch(() => {});
+    return result;
+  };
+  const builtinTemplates = (): SnapshotPluginTemplate[] =>
+    builtins.map((adapter, index) =>
+      frozen({
+        pluginID: adapter.id,
+        adapterID: adapter.id,
+        label: adapter.label,
+        version: adapter.sourceVersion,
+        revision: 'builtin-v1',
+        status: 'builtin',
+        fields: (index === 0 ? NATIVE_PREFERENCE_FIELDS : NEO_PREFERENCE_FIELDS).map((field) => ({
+          key: field.key,
+          label: field.label,
+          type: field.type ?? 'string',
+          secret: !!field.secret,
+          requiresRestart: !!field.restart,
+          supported: !field.manual,
+          ...(field.manual ? { reason: field.manual } : {}),
+          source: 'builtin-verified',
+        })),
+        reviewedKeys: [],
+        issues: [
+          'Built-in verified adapter; native resources and credential fields use dedicated local policies',
+        ],
+      }),
+    );
+  return {
+    get adapters() {
+      return disposed ? [] : [...builtins, ...adapters.values()];
+    },
+    list(context) {
+      return serial(context, async () => {
+        await refresh(context);
+        return [...builtinTemplates(), ...templates.values()];
+      });
+    },
+    scan(pluginID, context) {
+      return serial(context, async () => {
+        await refresh(context);
+        return requireTemplate(pluginID);
+      });
+    },
+    review(pluginID, revision, fields, context) {
+      return serial(context, async () => {
+        await refresh(context);
+        const template = requireTemplate(pluginID);
+        if (template.revision !== revision)
+          throw new SettingsSnapshotError(
+            'stale-template',
+            'Plugin source changed; scan and review again',
+          );
+        if (!Array.isArray(fields) || fields.length > 2048) invalid();
+        const selected: TemplateFile['fields'][number][] = [],
+          seen = new Set<string>();
+        for (const request of fields) {
+          const field = template.fields.find((candidate) => candidate.key === request.key);
+          if (!field?.supported || seen.has(request.key) || typeof request.secret !== 'boolean')
+            invalid();
+          seen.add(request.key);
+          selected.push({
+            key: field.key,
+            type: field.type,
+            secret: field.secret || request.secret,
+          });
+        }
+        adapters.delete(pluginID);
+        await save(
+          {
+            format: 'zotero-neo-settings-template',
+            schemaVersion: 1,
+            pluginID,
+            version: template.version,
+            revision,
+            fields: selected,
+            status: 'reviewed',
+            sensitiveKeys: mergeSensitiveKeys(records.get(pluginID), selected),
+          },
+          context,
+        );
+        await refresh(context);
+        return requireTemplate(pluginID);
+      });
+    },
+    exportTemplate(pluginID, context) {
+      return serial(context, async () => {
+        await refresh(context);
+        const template = requireTemplate(pluginID),
+          record = records.get(pluginID);
+        return JSON.stringify(
+          {
+            format: 'zotero-neo-settings-template',
+            schemaVersion: 1,
+            pluginID,
+            version: template.version,
+            revision: template.revision,
+            fields: template.fields
+              .filter(
+                (field) =>
+                  field.supported &&
+                  (!record || record.fields.some((selected) => selected.key === field.key)),
+              )
+              .map(({ key, type, secret }) => ({ key, type, secret })),
+            status: 'draft',
+          },
+          null,
+          2,
+        );
+      });
+    },
+    importTemplate(text, context) {
+      return serial(context, async () => {
+        const incoming = parse(text);
+        await refresh(context);
+        const template = requireTemplate(incoming.pluginID);
+        if (incoming.version !== template.version || incoming.revision !== template.revision)
+          throw new SettingsSnapshotError(
+            'stale-template',
+            'Imported template does not match current installed plugin sources',
+          );
+        for (const selected of incoming.fields)
+          if (
+            !template.fields.some(
+              (field) =>
+                field.key === selected.key && field.supported && field.type === selected.type,
+            )
+          )
+            invalid();
+        adapters.delete(incoming.pluginID);
+        await save(
+          {
+            ...incoming,
+            sensitiveKeys: mergeSensitiveKeys(records.get(incoming.pluginID), incoming.fields),
+            status: 'draft',
+          },
+          context,
+        );
+        await refresh(context);
+        return requireTemplate(incoming.pluginID);
+      });
+    },
+    dispose() {
+      disposed = true;
+      adapters.clear();
+      templates.clear();
+      records.clear();
+      stopObserving?.();
+    },
+  };
+}

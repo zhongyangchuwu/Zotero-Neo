@@ -975,6 +975,7 @@ const RETIRED_SHORTCUT_ACTIONS = new Map<string, ActionId>([
   ['followIdentifier', 'followLink'],
   ['focusReaderSidebar', 'focusReaderOutline'],
   ['openReaderAI', 'openAIQA'],
+  ['openSettingsTransfer', 'openSettingsSnapshots'],
 ]);
 
 /** Translate persisted retired IDs before earlier schema steps parse ActionIds. */

@@ -85,7 +85,7 @@ for (const [entry, output] of [
   ['src/ai-qa/ui/index.tsx', 'content/ai-qa-ui.js'],
   ['src/ui/react/library.ts', 'content/react-runtime.js'],
   ['src/ui/react/index.ts', 'content/native-ui.js'],
-  ['src/settings-transfer/crypto-worker.ts', 'content/settings-transfer-crypto.js'],
+  ['src/settings-snapshots/crypto-worker.ts', 'content/settings-snapshots-crypto.js'],
 ]) {
   await build({
     ...common,

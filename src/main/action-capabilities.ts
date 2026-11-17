@@ -19,7 +19,7 @@ export const MAIN_NORMAL_ACTIONS = Object.freeze([
   ...EXTENSIONS_SURFACE_ACTIONS,
   ...TAB_ENHANCEMENT_MAIN_ACTIONS,
   'openNeoSettings',
-  'openSettingsTransfer',
+  'openSettingsSnapshots',
   'manageItemAttributes',
   'editItemAttributes',
   'prepareDocuments',
