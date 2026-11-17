@@ -55,8 +55,8 @@ import { mountReaderStatusReactView, READER_STATUS_REACT_CSS } from './surfaces/
 import type { ReaderStatusReactModel } from '../../reader/status-react-model';
 import { mountMetadataReviewView, METADATA_REVIEW_CSS } from './surfaces/metadata-review';
 import type { MetadataReviewModel } from '../../metadata-review/react-model';
-import { mountSettingsTransferView, SETTINGS_TRANSFER_CSS } from './surfaces/settings-transfer';
-import type { SettingsTransferModel } from '../../settings-transfer/react-model';
+import { mountSettingsSnapshotsView, SETTINGS_SNAPSHOTS_CSS } from './surfaces/settings-snapshots';
+import type { SettingsSnapshotModel } from '../../settings-snapshots/react-model';
 import { mountItemAttributesView, ITEM_ATTRIBUTES_CSS } from './surfaces/item-attributes';
 import type { ItemAttributesModel } from '../../item-attributes/react-model';
 import { NATIVE_UI_CSS } from './styles';
@@ -83,7 +83,7 @@ const runtime: NativeUIRuntime = {
         DOCUMENT_COMPARISON_REACT_CSS +
         DOCUMENT_PREPARATION_REACT_CSS +
         METADATA_REVIEW_CSS +
-        SETTINGS_TRANSFER_CSS +
+        SETTINGS_SNAPSHOTS_CSS +
         ITEM_ATTRIBUTES_CSS +
         ANNOTATION_COMMENT_REACT_CSS +
         SELECTION_ACTIONS_REACT_CSS +
@@ -164,8 +164,8 @@ const runtime: NativeUIRuntime = {
         return mountMetadataReviewView(root, model as MetadataReviewModel, (command) =>
           dispatch(command),
         ) as ReactView<unknown>;
-      case 'settings-transfer':
-        return mountSettingsTransferView(root, model as SettingsTransferModel, (command) =>
+      case 'settings-snapshots':
+        return mountSettingsSnapshotsView(root, model as SettingsSnapshotModel, (command) =>
           dispatch(command),
         ) as ReactView<unknown>;
       case 'item-attributes':

@@ -47,7 +47,7 @@ export type BuiltinModuleId =
   | 'reader-excerpts'
   | 'chapter-notes'
   | 'document-preparation'
-  | 'settings-transfer'
+  | 'settings-snapshots'
   | 'extensions'
   | 'item-attributes'
   | 'tab-enhancements';
@@ -356,15 +356,15 @@ export const BUILTIN_MODULES: readonly BuiltinModuleDescriptor[] = [
     ui: ['Document preparation'],
   },
   {
-    id: 'settings-transfer',
-    names: { en: 'Settings Transfer', 'zh-CN': '配置迁移' },
+    id: 'settings-snapshots',
+    names: { en: 'Settings Snapshots', 'zh-CN': '设置快照' },
     hosts: ['main'],
-    scopes: ['Application configuration', 'Main window', 'Transfer operation'],
+    scopes: ['Application configuration', 'Main window', 'Snapshot operation'],
     requires: [],
     optional: [],
-    contributions: [{ host: 'main', context: 'main-normal', actions: ['openSettingsTransfer'] }],
+    contributions: [{ host: 'main', context: 'main-normal', actions: ['openSettingsSnapshots'] }],
     selectionActions: [],
-    ui: ['Encrypted settings export', 'Settings restore preview'],
+    ui: ['Per-plugin settings snapshots', 'Settings restore preview'],
   },
   {
     id: 'ai-qa',

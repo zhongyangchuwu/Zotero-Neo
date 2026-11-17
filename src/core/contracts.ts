@@ -9,7 +9,7 @@ import type { NavigationPort } from '../navigation/types';
 import type { AIQAController } from '../ai-qa/controller';
 import type { ScholarlyMetadataService } from '../scholarly/contracts';
 import type { MetadataReviewPort } from '../metadata-review/controller';
-import type { SettingsTransferPort } from '../settings-transfer/controller';
+import type { SettingsSnapshotPort } from '../settings-snapshots/controller';
 import type { ItemAttributesPort } from '../item-attributes/contracts';
 
 /** Business owners use standard DOM windows; native Zotero fields stay in Toolkit. */
@@ -137,7 +137,7 @@ export interface ReaderControllerDependencies {
 
 export interface MainWindowControllerDependencies {
   readonly metadataReview?: MetadataReviewPort;
-  readonly settingsTransfer?: SettingsTransferPort;
+  readonly settingsSnapshots?: SettingsSnapshotPort;
   readonly itemAttributes?: ItemAttributesPort;
   readonly documentPreparation?: DocumentPreparationPort;
   readonly aiQA?: () => AIQAController | null;

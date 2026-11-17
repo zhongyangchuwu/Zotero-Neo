@@ -167,15 +167,19 @@ XPI 收录项目 `LICENSE`，以及 `licenses/fuzzysort-LICENSE`、`licenses/ai-
 
 ### 配置迁移格式与加密边界
 
-用户入口、支持范围和恢复步骤见[配置迁移](SETTINGS_GUIDE.md#导出和恢复配置)。`src/settings-transfer/` 持有版本化语义文档、操作服务和展示控制器；`createSettingsAdapters()` 静态登记 `zotero`、`zotero-neo`，不是动态插件 SDK。新增适配器需要明确字段归属、无写入预览、最终写入准入和对应宿主能力，不能扫描全部 profile／密码管理器冒充支持。
+用户入口与操作见[设置快照](SETTINGS_GUIDE.md#导出和恢复配置)。`src/settings-snapshots/` 持有版本化语义文档、服务、模板目录、托管发布和展示控制器。Zotero／Neo 使用内置验证模板；其他插件只能由本机审核过的字段模板生成偏好适配器，不是从快照装载执行代码的插件 SDK。扫描通过 Toolkit 读取归属于已安装插件的本地静态偏好标记和默认值声明，不执行脚本、不读用户覆盖值；任意 profile／密码库扫描不构成支持。
+
+模板按确切插件 ID 的稳定摘要独立存储，记录插件版本、声明来源与修订。导入模板始终是草稿，便携性和敏感性必须在本机确认；版本、来源或模板变化使旧审核失效。原生、Neo 私有及共享命名空间有字段归属保护，不能仅凭前缀把某个插件归入全部 `extensions.zotero.*`。模板最多 512 KiB，只保存受限字段元数据，不携带配置值或执行逻辑。
 
 v1 明文封套标识为 `format: zotero-neo-settings`、`schemaVersion: 1`，包含 `createdAt`、`producer`、`zoteroVersion` 和 `sections`。每个 section 记录 `adapterID`、`schemaVersion`、`sourceVersion` 与 `entries`；entry 的 `state` 为 `{ kind: set, value: … }` 或 `{ kind: reset }`。缺席字段不表示恢复默认，`false`、`0` 和空字符串不丢弃。文件不决定执行代码、字段秘密属性、标签或可执行适配器；未知封套版本拒绝，未知适配器报告并跳过。
 
-`content/settings-transfer-crypto.js` 是静态打包的 classic worker。密码模式由固定 age 库完成：scrypt factor 18，约 256 MiB KDF 内存，不自建密码学协议、用户密钥文件或运行时依赖。完整认证后才解析 UTF-8／语义格式；16 KiB 未认证 header 入场上限先于库的 stanza 分配，单 scrypt identity 准入再限制 KDF 成本。技术上限为 32 MiB UTF-8 明文、20,000 entries，单字符串最多 2,097,152 个 UTF-16 code units；密文限制另计 armor／STREAM 开销，不是 1 MB 产品目标。
+容器能力由共享 `SETTINGS_CONTAINERS` 登记：默认 age 加密；显式 JSON 明文禁止包含已知秘密。导入按实际内容识别，不信任扩展名或文件自报的秘密属性。`content/settings-snapshots-crypto.js` 是静态打包的 classic worker，兼容既有 age 文件。密码模式由固定 age 库完成：scrypt factor 18，约 256 MiB KDF 内存，不自建密码学协议、用户密钥文件或运行时依赖。完整认证后才解析 UTF-8／语义格式；16 KiB 未认证 header 入场上限先于库的 stanza 分配，单 scrypt identity 准入再限制 KDF 成本。技术上限为 32 MiB UTF-8 明文、20,000 entries，单字符串最多 2,097,152 个 UTF-16 code units；密文限制另计 armor／STREAM 开销，不是 1 MB 产品目标。
 
-已安装 XPI 中的 worker 通过现有 `chrome://zotero-neo-ui/content/settings-transfer-crypto.js` 映射加载，不把 `jar:` 资源根直接交给 `Worker`；注册和退休沿用原生 UI 的插件级生命周期。
+已安装 XPI 中的 worker 通过现有 `chrome://zotero-neo-ui/content/settings-snapshots-crypto.js` 映射加载，不把 `jar:` 资源根直接交给 `Worker`；注册和退休沿用原生 UI 的插件级生命周期。
 
-服务在 profile 范围串行操作，先复查选择项的审阅基线，再保存只含所选原值的加密备份。文件边界使用同目录暂存、确认过的覆盖策略和发布后读回；适配器在异步排队之后、实际写入之前再次核对当前性与原值。部分提交按回执保留，不宣称跨适配器回滚。密码与明文只限操作内存；React 模型只接收脱敏预览，worker 在取消、失效、窗口退出和销毁时退休。JavaScript 字符串释放不等于可证明的内存清零，不作独立密码学审计声明。
+服务在 profile 范围串行操作，每次捕获同一份适配器登记；预览计划由服务签发，应用前及备份后复查计划、适配器身份、原值和来源字节。恢复无论来源容器都先用独立密码保存仅含所选原值的 age 备份。文件使用同目录暂存、当前预览的覆盖授权和发布后读回；适配器在异步排队之后、实际写入之前再次核对当前性与原值。部分提交按回执保留，不宣称跨适配器回滚。密码与明文只限操作内存；React 模型只接收脱敏预览，worker 在取消、失效、窗口退出和销毁时退休。JavaScript 字符串释放不等于可证明的内存清零，不作独立密码学审计声明。
+
+托管层每个目标仅发布一个插件，目标由明确选择的文库、分类及可见存储附件承载。绑定和内容指纹只在本机 profile 保存，不导出、不保存密码。JSON 无秘密时可每 60 秒检查本机语义变化；age 禁止自动更新。写入核对稳定文库／条目身份与已知字节摘要，保留原生已同步 hash／mtime，通过原生待上传状态交还文件同步。仅元数据变化且字节一致时跟随原生改名／移动；内容冲突、删除、未下载或只读时暂停，不自动覆盖、重建或应用远端配置。失败后保留可恢复文件并报告，不将文件已发布但绑定未保存谎报为成功。实际跨设备传输仍须独立验证 Zotero 数据同步与文件同步。
 
 ## 运行时架构
 

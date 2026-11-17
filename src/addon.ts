@@ -27,11 +27,16 @@ import { registerNativeUIResources } from './platform/native-ui';
 import { createScholarlyMetadataService } from './scholarly';
 import { createArtifactRepository } from './artifacts';
 import { MetadataReviewController } from './metadata-review/controller';
-import { SettingsTransferController } from './settings-transfer/controller';
-import { SettingsTransferService } from './settings-transfer/service';
-import { createSettingsAdapters } from './settings-transfer/registry';
-import { createSettingsFileCodec } from './settings-transfer/codec';
-import { createSettingsTransferFiles } from './platform/settings-transfer-files';
+import { SettingsSnapshotController } from './settings-snapshots/controller';
+import { SettingsSnapshotService } from './settings-snapshots/service';
+import { createSettingsTemplateCatalog } from './settings-snapshots/catalog';
+import { createManagedSettingsSnapshots } from './settings-snapshots/managed';
+import { createSettingsFileCodec } from './settings-snapshots/codec';
+import { createSettingsSnapshotFiles } from './platform/settings-snapshots-files';
+import type {
+  ManagedSettingsSnapshotsPort,
+  SettingsTemplateCatalogPort,
+} from './settings-snapshots/ports';
 import { ItemAttributesController } from './item-attributes/controller';
 
 export interface AddonContext {
@@ -69,7 +74,10 @@ export class ZoteroNeoAddon implements ZoteroNeoController {
   readonly #scholarly = createScholarlyMetadataService();
   readonly #artifacts = createArtifactRepository();
   readonly #metadataReview: MetadataReviewController;
-  readonly #settingsTransfer: SettingsTransferController;
+  readonly #settingsSnapshots: SettingsSnapshotController;
+  readonly #snapshotCatalog: SettingsTemplateCatalogPort;
+  readonly #managedSnapshots: ManagedSettingsSnapshotsPort;
+  readonly #snapshotWindows = new Map<MainWindow, () => void>();
   readonly #itemAttributes: ItemAttributesController;
   readonly #reader: ReaderControllerApi;
   readonly #main: MainWindowControllerApi;
@@ -91,17 +99,29 @@ export class ZoteroNeoAddon implements ZoteroNeoController {
       (message) => this.#logger.debug(message),
     );
     const version = (): string => {
-      if (!this.#context) throw new Error('Settings transfer requires an initialized addon');
+      if (!this.#context) throw new Error('Settings snapshots require an initialized addon');
       return this.#context.version;
     };
-    this.#settingsTransfer = new SettingsTransferController(
-      new SettingsTransferService(createSettingsAdapters(version), () => ({
+    this.#snapshotCatalog = createSettingsTemplateCatalog(version);
+    const snapshots = new SettingsSnapshotService(
+      () => this.#snapshotCatalog.adapters,
+      () => ({
         neo: version(),
         zotero: Zotero.version,
-      })),
-      createSettingsFileCodec(),
-      createSettingsTransferFiles(),
+      }),
+    );
+    const codec = createSettingsFileCodec();
+    this.#managedSnapshots = createManagedSettingsSnapshots(
+      snapshots,
+      codec,
+      this.#snapshotCatalog,
+    );
+    this.#settingsSnapshots = new SettingsSnapshotController(
+      snapshots,
+      codec,
+      createSettingsSnapshotFiles(),
       (message) => this.#logger.debug(message),
+      { catalog: this.#snapshotCatalog, managed: this.#managedSnapshots },
     );
     this.#itemAttributes = new ItemAttributesController(preferences, (message) =>
       this.#logger.debug(message),
@@ -149,7 +169,7 @@ export class ZoteroNeoAddon implements ZoteroNeoController {
       modules: this.#modules,
       documentPreparation: this.#preparation,
       metadataReview: this.#metadataReview,
-      settingsTransfer: this.#settingsTransfer,
+      settingsSnapshots: this.#settingsSnapshots,
       itemAttributes: this.#modules.applied['item-attributes'] ? this.#itemAttributes : undefined,
       aiQA: () => this.aiQA,
       preferences: this.#preferences,
@@ -214,7 +234,11 @@ export class ZoteroNeoAddon implements ZoteroNeoController {
     failure.run(() => this.#managedTags.dispose());
     failure.run(() => this.#preparation.dispose());
     failure.run(() => this.#metadataReview.dispose());
-    failure.run(() => this.#settingsTransfer.dispose());
+    for (const cleanup of this.#snapshotWindows.values()) failure.run(cleanup);
+    this.#snapshotWindows.clear();
+    failure.run(() => this.#managedSnapshots.dispose());
+    failure.run(() => this.#snapshotCatalog.dispose());
+    failure.run(() => this.#settingsSnapshots.dispose());
     failure.run(() => this.#itemAttributes.dispose());
     failure.run(() => this.#scholarly.dispose());
     failure.run(() => this.#reader.shutdown());
@@ -230,10 +254,15 @@ export class ZoteroNeoAddon implements ZoteroNeoController {
   }
 
   addToWindow(window: MainWindow): void {
+    this.#snapshotWindows.get(window)?.();
+    this.#snapshotWindows.set(window, this.#managedSnapshots.start(window));
     this.#main.addWindow(window);
   }
 
   removeFromWindow(window: MainWindow): void {
+    this.#snapshotWindows.get(window)?.();
+    this.#snapshotWindows.delete(window);
+    this.#settingsSnapshots.closeOwner(window);
     this.#main.removeWindow(window);
   }
 

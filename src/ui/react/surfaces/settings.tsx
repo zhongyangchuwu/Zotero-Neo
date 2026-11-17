@@ -211,6 +211,11 @@ export function mountSettingsReactView(
                 {section.label}
               </button>
             ))}
+            {model.snapshotsLabel && (
+              <Button onClick={() => dispatch({ type: 'openSettingsSnapshots', generation })}>
+                {model.snapshotsLabel}
+              </Button>
+            )}
           </nav>
           <div className="neo-settings-main">
             <header className="neo-settings-header">

@@ -14,7 +14,7 @@ const expected = [
   'content/ai-qa-window.xhtml',
   'content/native-ui.js',
   'content/react-runtime.js',
-  'content/settings-transfer-crypto.js',
+  'content/settings-snapshots-crypto.js',
   'content/preferences/pane.js',
   'content/preferences/pane.xhtml',
   'content/zotero-neo.js',
@@ -81,14 +81,14 @@ for (const script of [
   'content/ai-qa-ui.js',
   'content/native-ui.js',
   'content/react-runtime.js',
-  'content/settings-transfer-crypto.js',
+  'content/settings-snapshots-crypto.js',
 ]) {
   const source = readFileSync(resolve(root, 'build/addon', script), 'utf8');
   if (/^\s*(?:import|export)\s/m.test(source)) {
     throw new Error(`Unbundled module syntax in ${script}`);
   }
   if (
-    script === 'content/settings-transfer-crypto.js' &&
+    script === 'content/settings-snapshots-crypto.js' &&
     /\b(?:importScripts|eval)\s*\(|\bimport\s*\(/u.test(source)
   ) {
     throw new Error(

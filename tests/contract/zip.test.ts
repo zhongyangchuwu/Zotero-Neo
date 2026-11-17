@@ -11,7 +11,7 @@ const expectedMembers = [
   'bootstrap.js',
   'content/preferences/pane.js',
   'content/preferences/pane.xhtml',
-  'content/settings-transfer-crypto.js',
+  'content/settings-snapshots-crypto.js',
   'content/zotero-neo.js',
   'icons/icon-128x128.png',
   'icons/icon-16x16.png',
@@ -60,7 +60,7 @@ describe('ZIP package contract', () => {
         ['icons/icon-128x128.png', 'large icon'],
         ['icons/icon-48x48.png', 'toolbar icon'],
         ['content/preferences/pane.js', 'window.Pane = true;'],
-        ['content/settings-transfer-crypto.js', 'self.onmessage = function () {};'],
+        ['content/settings-snapshots-crypto.js', 'self.onmessage = function () {};'],
       ] as const) {
         writeFixtureFile(source, member, contents);
       }

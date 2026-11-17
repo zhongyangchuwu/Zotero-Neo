@@ -63,6 +63,7 @@ export class SettingsCenter {
   #viewEpoch = 0;
   #generation = 0;
   #composing = false;
+  #openSettingsSnapshots: (() => void) | undefined;
   readonly #appearanceState: SettingsAppearanceState = {
     view: 'library',
     editingThemeId: null,
@@ -100,8 +101,10 @@ export class SettingsCenter {
     );
   }
 
-  openWorkspace(): void {
+  openWorkspace(openSettingsSnapshots?: () => void): void {
+    this.#openSettingsSnapshots = openSettingsSnapshots;
     if (this.#panel) {
+      this.#publish();
       (this.#view?.getElement('heading') ?? this.#panel).focus();
       return;
     }
@@ -194,6 +197,7 @@ export class SettingsCenter {
     this.#activePage = null;
     this.#previousElement = null;
     this.#mountedLanguage = null;
+    this.#openSettingsSnapshots = undefined;
     this.#composing = false;
     this.#viewEpoch++;
     this.#pageEpoch++;
@@ -384,6 +388,11 @@ export class SettingsCenter {
       title: settingsText(language, 'Zotero Neo Settings'),
       closeLabel: settingsText(language, 'Close Neo Settings'),
       navigationLabel: settingsText(language, 'Settings sections'),
+      snapshotsLabel: this.#openSettingsSnapshots
+        ? language === 'zh-CN'
+          ? '设置快照'
+          : 'Settings snapshots'
+        : undefined,
       section: this.#section,
       sections: SECTIONS.map((id) => ({ id, label: settingsText(language, id) })),
       page: this.#presentation(),
@@ -404,6 +413,14 @@ export class SettingsCenter {
       return;
     const page = this.#activePage;
     switch (command.type) {
+      case 'openSettingsSnapshots': {
+        const open = this.#openSettingsSnapshots;
+        if (open) {
+          this.close();
+          open();
+        }
+        return;
+      }
       case 'close':
         this.close();
         return;
