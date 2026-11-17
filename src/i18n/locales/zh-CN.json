@@ -298,6 +298,8 @@
   "action.mainYankCitekey": "复制 BetterBibTeX citekey",
   "action.mainAddByIdentifier": "通过标识符添加条目",
   "action.openSettingsTransfer": "导出与恢复 Zotero／Neo 加密配置",
+  "action.manageItemAttributes": "管理文献条目的自定义属性",
+  "action.editItemAttributes": "设置或清除所选文献的自定义属性",
   "action.inspectMetadata": "检查所选条目的论文信息与更新",
   "action.inspectCollectionMetadata": "检查当前分类的论文信息与更新",
   "action.mainOpenPDF": "打开主窗口游标条目或 Note 上下文条目",

@@ -33,8 +33,8 @@ Neo 面板跟随 Zotero 计算出的浅色或深色配色。快捷键草稿操�
 
 ## 模块
 
-当前目录共 21 个模块：15 个固定启用的核心模块和 6 个可选增强；完整目录见[模块所有权表](MODULE_DESIGN.md#模块目录与所有权)。可选 ID 为 `reader-hints`、`extensions`、`translation`、`ai-qa`、`references` 和 `tab-enhancements`。
-模块请求使用 `extensions.zotero-neo.modules.<id>.enabled`。`reader-hints`、`extensions` 和 `references` 默认 `true`；`translation`、`ai-qa` 和 `tab-enhancements` 默认 `false`。`translation` 与 `ai-qa` 依赖固定启用的 `reader-selection`。启用 `ai-qa` 需要单独保存请求；旧版 `reader-ai` 的偏好保留原义。核心功能始终启用，旧 `extensions.zotero-neo.modules.<core>.enabled=false` 值按兼容数据保留。
+当前目录共 23 个模块：16 个固定启用的核心模块和 7 个可选增强；完整目录见[模块所有权表](MODULE_DESIGN.md#模块目录与所有权)。可选 ID 为 `reader-hints`、`extensions`、`translation`、`ai-qa`、`references`、`tab-enhancements` 和 `item-attributes`。
+模块请求使用 `extensions.zotero-neo.modules.<id>.enabled`。`reader-hints`、`extensions` 和 `references` 默认 `true`；其他四项默认 `false`。`translation` 与 `ai-qa` 依赖固定启用的 `reader-selection`。启用 `ai-qa` 需要单独保存请求；旧版 `reader-ai` 的偏好保留原义。核心功能始终启用，旧 `extensions.zotero-neo.modules.<core>.enabled=false` 值按兼容数据保留。
 
 | 模块 ID | 名称 | 功能与依赖 |
 | --- | --- | --- |
@@ -52,6 +52,7 @@ Neo 面板跟随 Zotero 计算出的浅色或深色配色。快捷键草稿操�
 | `reader-excerpts` | 对象摘录 | 图表／公式的预览、复制及显式保存为来源笔记。 |
 | `chapter-notes` | 章节笔记整理 | 来源内容的章节归属、筛选、预览与显式生成笔记。 |
 | `document-preparation` | 文档准备 | Main／Reader 的 PDF 准备入口；应用级队列在界面关闭后继续运行。 |
+| `settings-transfer` | 配置迁移 | Main 加密配置导出与恢复；应用服务持有适配器、备份和操作回执。 |
 | `reader-hints` | 链接与复制提示 | 可选增强：复制／跟随提示，可独立读取 Zotero 原生批注。 |
 | `references` | 引用增强 | 可选增强：在本机定位参考文献和已识别的正文提及，按需查询原始学术元数据。默认开启，使用本机解析和学术元数据 API。操作见[阅读器指南](READER_GUIDE.md#查找和核对参考文献)。 |
 | `ai-qa` | AI 问答（实验） | 可选增强：解释当前 Reader 选区，就选区或有限章节证据提问，并准备章节图文导引；图像输入可选关联图表裁图，数据范围限定为当前任务证据。依赖 `reader-selection`，默认关闭。 |
@@ -59,6 +60,7 @@ Neo 面板跟随 Zotero 计算出的浅色或深色配色。快捷键草稿操�
 | `workspace` | 工作区 | 标签页操作、Show in Library、Reader 分屏与方向焦点，可独立使用。 |
 | `extensions` | 扩展管理面板 | 可选增强：管理 Zotero 附加组件的 Plugin Manager，提供固定官方 Translate 安装及所选插件更新。 |
 | `tab-enhancements` | 标签页增强 | 可选增强：Main 左／右垂直栏或上方横向标签，以及一级活动标签分组；依赖 `workspace`，默认关闭。分组流程见[标签页增强指南](MAIN_GUIDE.md#用标签页增强管理阅读分组)。 |
+| `item-attributes` | 条目自定义属性 | 可选增强：普通文献的文本／数字属性、原生列、Info 单条目编辑和 Main 批量操作；默认关闭。 |
 
 | 运行状态 | 含义 |
 | --- | --- |
@@ -69,11 +71,15 @@ Neo 面板跟随 Zotero 计算出的浅色或深色配色。快捷键草稿操�
 | 等待主机（Pending host） | 等待支持的宿主出现，例如打开 Reader。 |
 | 等待重启（Pending restart） | 已保存请求与已应用值不同；当前功能继续使用已应用值。 |
 
-界面分别显示草稿、已保存请求和已应用值。“恢复默认模块请求”将 `reader-hints`、`extensions`、`references` 设为开启，将 `translation`、`ai-qa`、`tab-enhancements` 设为关闭，并显式保留 `translation=false`。保存或恢复后，完全重启 Zotero 才会应用；热重载继续使用本次启动快照，缺失的可选模块标记按关闭处理。核心模块偏好和其他行为设置保持原样。
+界面分别显示草稿、已保存请求和已应用值。“恢复默认模块请求”将 `reader-hints`、`extensions`、`references` 设为开启，将其余四项设为关闭，并显式保留 `translation=false`。保存或恢复后，完全重启 Zotero 才会应用；热重载继续使用本次启动快照，缺失的可选模块标记按关闭处理。核心模块偏好和其他行为设置保持原样。
 
 行为偏好控制模块内的具体操作：`noteEditor.enabled=false` 保留笔记查找，关闭 Vim 编辑；`annotationCommentEditor.enabled=false` 保留 Select 的添加批注评论和原生评论；`marks.persist=false` 使用会话内 marks；`mode.visual.enabled` 等键各按原义生效。核心 `worksets` 始终启用，Main Visual 由其专属偏好控制。关闭可选增强后，绑定、marks、主题、行为偏好和原生数据继续保留。
 
-设置、共享焦点、Picker 与后退／前进属于核心交互。关闭六项可选增强后，仍可通过 Zotero 原生偏好页的 Open Neo Settings 或 `Zotero.Neo.openSettings` 打开设置。步骤见[模块设置指南](SETTINGS_GUIDE.md#开关可选功能)。
+设置、共享焦点、Picker 与后退／前进属于核心交互。关闭七项可选增强后，仍可通过 Zotero 原生偏好页的 Open Neo Settings 或 `Zotero.Neo.openSettings` 打开设置。步骤见[模块设置指南](SETTINGS_GUIDE.md#开关可选功能)。
+
+## 条目自定义属性
+
+定义保存在本机偏好 `extensions.zotero-neo.itemAttributes.fields.v1`，内容为 `{version:1,fields:[{id,key,label,type}]}`；初始没有定义，类型为 `text` 或 `number`。`id` 保持列身份，`key` 创建后不可变，`label` 可修改。属性值位于普通文献的 Extra，不在这份配置中。配置迁移可搬运定义，Zotero Sync 不同步定义；删除定义或停用模块均不删除条目值。操作和引用风险见[主窗口指南](MAIN_GUIDE.md#给文献添加自定义属性)。
 
 ## 标签页增强的显示设置
 

@@ -176,6 +176,30 @@ export function settingsTransferHostFixture() {
   const native = {
     version: '8.0.2',
     Users: { userID: 42 as number | null },
+    ItemFields: {
+      getAll: () => [
+        { id: 1, name: 'title' },
+        { id: 2, name: 'DOI' },
+        { id: 3, name: 'publicationTitle' },
+        { id: 4, name: 'date' },
+      ],
+    },
+    CreatorTypes: {
+      getAll: () => [
+        { id: 1, name: 'author' },
+        { id: 2, name: 'bookAuthor' },
+        { id: 3, name: 'editor' },
+      ],
+    },
+    Schema: {
+      CSL_TEXT_MAPPINGS: {
+        DOI: ['DOI'],
+        title: ['title'],
+        'container-title': ['publicationTitle'],
+      },
+      CSL_DATE_MAPPINGS: { issued: 'date' },
+      CSL_NAME_MAPPINGS: { author: 'author', bookAuthor: 'container-author', editor: 'editor' },
+    },
     Libraries: {
       userLibraryID: 1,
       getAll: () => [
@@ -274,6 +298,17 @@ export function settingsTransferHostFixture() {
     Utilities: {
       Internal: {
         md5: (text: string) => [...text].map((char) => char.charCodeAt(0).toString(16)).join(''),
+        extractExtraFields: vi.fn((extra: string) => {
+          const key = extra.slice(0, extra.indexOf(':')).toLowerCase();
+          const field = ['title', 'doi', 'container title', 'issued', 'date'].includes(key);
+          const creator = ['author', 'bookauthor', 'container-author', 'editor'].includes(key);
+          return {
+            itemType: key === 'type' ? 'book' : null,
+            fields: field ? new Map([[key, 'x']]) : new Map<string, string>(),
+            creators: creator ? [{ creatorType: 'author', name: 'x' }] : [],
+            extra: field || creator || key === 'type' ? '' : extra,
+          };
+        }),
       },
     },
     File: {

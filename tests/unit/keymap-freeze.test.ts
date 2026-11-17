@@ -67,7 +67,7 @@ describe('0.1.0 default keymap freeze', () => {
     const readerVisual = bindingsForMode(DEFAULT_BINDINGS, 'reader-select');
     const noteInsert = bindingsForMode(DEFAULT_BINDINGS, 'note-insert');
 
-    expect(press('main-select', ' ', mainVisual)).toMatchObject({ kind: 'pass' });
+    expect(press('main-select', ':', mainVisual)).toMatchObject({ kind: 'pass' });
     expect(press('main-select', 'd', mainVisual)).toMatchObject({ kind: 'pass' });
     expect(press('reader-select', ':', readerVisual)).toMatchObject({ kind: 'pass' });
     expect(press('note-insert', ':', noteInsert)).toMatchObject({ kind: 'pass' });
@@ -147,7 +147,7 @@ describe('0.1.0 default keymap freeze', () => {
     expect(press('main-normal', 'N')).toMatchObject({ kind: 'execute', action: 'findPrevious' });
   });
 
-  it('uses Space only as Main leader and s as the persistent-set operation', () => {
+  it('uses Space as the Main command leader and s as the persistent-set operation', () => {
     expect(DEFAULT_BINDINGS['main-normal:s']).toBe('mainToggleSelection');
     expect(DEFAULT_BINDINGS['main-select:s']).toBe('mainSelectFinish');
     expect(DEFAULT_BINDINGS['main-normal:<Space>ss']).toBe('manageSelection');
@@ -174,7 +174,18 @@ describe('0.1.0 default keymap freeze', () => {
       kind: 'execute',
       action: 'mainSelectFinish',
     });
-    expect(press('main-select', ' ', visualBindings)).toMatchObject({ kind: 'pass' });
+    expect(
+      advanceInput(
+        {
+          mode: 'main-select',
+          keyBuffer: ' i',
+          countBuffer: '',
+          bindings: visualBindings,
+          allowCountPrefix: false,
+        },
+        'a',
+      ),
+    ).toMatchObject({ kind: 'execute', action: 'editItemAttributes' });
   });
 
   it('does not confuse named keys with printable prefixes', () => {
@@ -324,10 +335,6 @@ describe('first-class binding nodes', () => {
       JSON.stringify({ 'main-select:<Space>xy': 'mainSelectFinish' }),
     );
     const nodes = bindingNodesFromActions(bindings);
-    expect(nodes['main-select:<Space>']).toEqual({
-      kind: 'prefix',
-      label: { en: 'Prefix <Space>', 'zh-CN': '前缀 <Space>' },
-    });
     expect(nodes['main-select:<Space>x']).toEqual({
       kind: 'prefix',
       label: { en: 'Prefix <Space>x', 'zh-CN': '前缀 <Space>x' },

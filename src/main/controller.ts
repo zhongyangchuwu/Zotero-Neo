@@ -65,6 +65,7 @@ import {
   createSettingsTransferModule,
   type SettingsTransferModule,
 } from '../modules/settings-transfer';
+import { createItemAttributesModule, type ItemAttributesModule } from '../modules/item-attributes';
 import type { PickerOpenOptions } from './picker/types';
 import {
   mainLibrarySelection,
@@ -134,6 +135,7 @@ export class MainWindowController implements MainWindowControllerApi {
       readonly workspace: WorkspaceModule | null;
       readonly preparation: DocumentPreparationModule | null;
       readonly settingsTransfer: SettingsTransferModule | null;
+      readonly itemAttributes: ItemAttributesModule | null;
       tabEnhancements: TabEnhancementsModule | null;
     }
   >();
@@ -214,6 +216,12 @@ export class MainWindowController implements MainWindowControllerApi {
       const settingsTransfer = settingsTransferService
         ? scope.activate('settings-transfer', () =>
             createSettingsTransferModule(host, settingsTransferService),
+          )
+        : null;
+      const itemAttributesService = this.#dependencies.itemAttributes;
+      const itemAttributes = itemAttributesService
+        ? scope.activate('item-attributes', () =>
+            createItemAttributesModule(host, itemAttributesService, window),
           )
         : null;
       const tags = scope.activate('tags', () =>
@@ -477,6 +485,7 @@ export class MainWindowController implements MainWindowControllerApi {
         workspace,
         preparation,
         settingsTransfer,
+        itemAttributes,
         tabEnhancements: null,
       });
       if (this.#dependencies.modules.applied['tab-enhancements']) {
@@ -1099,6 +1108,7 @@ export class MainWindowController implements MainWindowControllerApi {
     }
     if (this.#dependencies.documentPreparation?.handleKey(event)) return;
     if (this.#dependencies.settingsTransfer?.handleKey(event)) return;
+    if (this.#dependencies.itemAttributes?.handleKey(event)) return;
     if (mainIdentifierLookupOwnsInput(window)) {
       this.resetMainInput(window, session);
       return;
@@ -1542,6 +1552,41 @@ export class MainWindowController implements MainWindowControllerApi {
               this.execute(nextAction, window, session, nextCount);
           },
         });
+        break;
+      }
+      case 'manageItemAttributes':
+      case 'editItemAttributes': {
+        const module = this.#modules.get(session)?.itemAttributes;
+        if (!module) break;
+        const targets =
+          action === 'editItemAttributes'
+            ? MAIN_ITEM_TARGET.resolve(
+                window,
+                this.worksetsModule(session)?.selection ?? null,
+                this.worksetsModule(session)?.isVisual
+                  ? this.worksetsModule(session)?.currentTarget()
+                  : undefined,
+              )
+            : null;
+        if (targets?.missing) {
+          this.#navigation.status(
+            session,
+            this.keyGuideLanguage() === 'zh-CN'
+              ? '部分所选条目已不可用，请重新选择'
+              : 'Some selected items are unavailable; select the targets again',
+          );
+          break;
+        }
+        const presentation = {
+          window,
+          mode: action === 'manageItemAttributes' ? ('definitions' as const) : ('values' as const),
+          items: targets?.items ?? [],
+          language: () => this.keyGuideLanguage(),
+          themeRoot: (root: HTMLElement) => session.theme.add(root),
+          isCurrent: () => this.#sessions.get(window) === session && !session.cleanup.disposed,
+        };
+        if (action === 'manageItemAttributes') module.manage(presentation);
+        else module.edit(presentation, this.bindingMode(window));
         break;
       }
       case 'openSettingsTransfer': {

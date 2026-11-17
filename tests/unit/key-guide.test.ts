@@ -86,9 +86,11 @@ describe('leader guide projection', () => {
     const resolved = resolveBindings(
       JSON.stringify({ 'main-select:<Space>xy': 'mainSelectFinish' }),
     );
-    expect(guideEntries(resolved, 'main-select', ' ', 'en')).toEqual([
-      { key: 'x', label: 'Prefix <Space>x', isGroup: true },
-    ]);
+    expect(guideEntries(resolved, 'main-select', ' ', 'en')).toContainEqual({
+      key: 'x',
+      label: 'Prefix <Space>x',
+      isGroup: true,
+    });
     expect(guideEntries(resolved, 'main-select', ' x', 'zh-CN')).toEqual([
       { key: 'y', label: ACTION_LABELS.mainSelectFinish['zh-CN'], isGroup: false },
     ]);

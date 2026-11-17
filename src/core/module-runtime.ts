@@ -70,6 +70,7 @@ export class BuiltinModuleRuntime {
       'ai-qa': flags['ai-qa'] === true,
       references: flags.references === true,
       'tab-enhancements': flags['tab-enhancements'] === true,
+      'item-attributes': flags['item-attributes'] === true,
     });
   }
 
