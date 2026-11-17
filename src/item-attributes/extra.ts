@@ -79,7 +79,8 @@ export function normalizeAttributeValue(
   const value = oneLineValue(input);
   if (definition.type !== 'text' && definition.type !== 'number')
     throw new Error('Unsupported attribute type');
-  if (value === null || definition.type === 'text') return value;
+  if (value === null) return null;
+  if (definition.type === 'text') return value.normalize('NFC');
   if (
     !/^[+-]?(?:\d+(?:\.\d*)?|\.\d+)(?:[eE][+-]?\d+)?$/u.test(value) ||
     !Number.isFinite(Number(value))

@@ -1,4 +1,4 @@
-import type { Cleanup } from '../core/cleanup';
+import { CleanupFailure, type Cleanup } from '../core/cleanup';
 import type { MainWindow } from '../core/contracts';
 import type { PreferenceStore } from '../core/preference-store';
 import { compositionOwnsKey } from '../input/composition';
@@ -71,6 +71,7 @@ export class ItemAttributesController implements ItemAttributesPort {
   readonly #store: ItemAttributeStore;
   readonly #debug: (message: string) => void;
   readonly #windows = new Map<MainWindow, WindowLease>();
+  readonly #pendingDetaches = new Set<Cleanup>();
   #native: ItemAttributeNativeHost | null = null;
   #schema: ItemAttributeSchema | null = null;
   #unobserve: Cleanup | null = null;
@@ -103,12 +104,25 @@ export class ItemAttributesController implements ItemAttributesPort {
         if (this.#disposed) return;
         this.#generation++;
         this.#schema = null;
-        this.#unobserve?.();
-        this.#unobserve = null;
-        this.#native?.dispose();
-        this.#native = null;
-        for (const lease of this.#windows.values()) lease.detach = null;
-        this.#report(error);
+        const failure = new CleanupFailure();
+        failure.run(() => {
+          throw error;
+        });
+        failure.run(() => {
+          this.#unobserve?.();
+          this.#unobserve = null;
+        });
+        for (const lease of this.#windows.values())
+          failure.run(() => this.#releaseNativeWindow(lease));
+        failure.run(() => {
+          this.#native?.dispose();
+          this.#native = null;
+        });
+        try {
+          failure.rethrow();
+        } catch (firstError) {
+          this.#report(firstError);
+        }
       });
   }
 
@@ -138,9 +152,22 @@ export class ItemAttributesController implements ItemAttributesPort {
     const lease = this.#windows.get(window);
     if (!lease) return;
     this.#windows.delete(window);
-    this.closeOwner(window);
-    if (!isDeadObject(window)) window.removeEventListener('unload', lease.unload);
-    lease.detach?.();
+    const failure = new CleanupFailure();
+    failure.run(() => this.closeOwner(window));
+    failure.run(() => {
+      if (!isDeadObject(window)) window.removeEventListener('unload', lease.unload);
+    });
+    failure.run(() => this.#releaseNativeWindow(lease));
+    failure.rethrow();
+  }
+
+  #releaseNativeWindow(lease: WindowLease): void {
+    const detach = lease.detach;
+    lease.detach = null;
+    if (!detach) return;
+    this.#pendingDetaches.add(detach);
+    detach();
+    this.#pendingDetaches.delete(detach);
   }
 
   #text(view: AttributeView, cn: string, en: string): string {
@@ -374,7 +401,12 @@ export class ItemAttributesController implements ItemAttributesPort {
         },
       });
     } catch (error) {
-      this.#close();
+      try {
+        this.#close();
+      } catch {
+        // The mounting failure remains primary; #close attempts every release.
+        this.#debug('Item attributes interface cleanup failed');
+      }
       this.#report(error, host.window);
       return null;
     }
@@ -666,45 +698,75 @@ export class ItemAttributesController implements ItemAttributesPort {
   #close(restore = false): void {
     const view = this.#view;
     if (!view) return;
-    const ownedFocus =
-      !isDeadObject(view.root) && view.root.contains(view.root.ownerDocument.activeElement);
     this.#view = null;
-    if (!isDeadObject(view.host.window)) {
-      view.host.window.removeEventListener('keydown', view.capture, true);
-      view.host.window.removeEventListener('focusin', view.containFocus, true);
-      view.host.window.removeEventListener('unload', view.unload);
-    }
-    if (!isDeadObject(view.root)) {
-      view.root.removeEventListener('compositionstart', view.compositionStart);
-      view.root.removeEventListener('compositionend', view.compositionEnd);
-    }
-    try {
-      view.react?.dispose();
-    } finally {
-      view.untheme();
+    const failure = new CleanupFailure();
+    let ownedFocus = false;
+    failure.run(() => {
+      ownedFocus =
+        !isDeadObject(view.root) && view.root.contains(view.root.ownerDocument.activeElement);
+    });
+    failure.run(() => {
+      if (!isDeadObject(view.host.window))
+        view.host.window.removeEventListener('keydown', view.capture, true);
+    });
+    failure.run(() => {
+      if (!isDeadObject(view.host.window))
+        view.host.window.removeEventListener('focusin', view.containFocus, true);
+    });
+    failure.run(() => {
+      if (!isDeadObject(view.host.window))
+        view.host.window.removeEventListener('unload', view.unload);
+    });
+    failure.run(() => {
+      if (!isDeadObject(view.root))
+        view.root.removeEventListener('compositionstart', view.compositionStart);
+    });
+    failure.run(() => {
+      if (!isDeadObject(view.root))
+        view.root.removeEventListener('compositionend', view.compositionEnd);
+    });
+    failure.run(() => view.react?.dispose());
+    failure.run(() => view.untheme());
+    failure.run(() => {
       if (!isDeadObject(view.backdrop)) view.backdrop.remove();
-    }
-    if (
-      restore &&
-      ownedFocus &&
-      !isDeadObject(view.host.window) &&
-      view.host.isCurrent() &&
-      view.focus?.isConnected
-    )
-      view.focus.focus();
+    });
+    failure.run(() => {
+      if (
+        restore &&
+        ownedFocus &&
+        !isDeadObject(view.host.window) &&
+        view.host.isCurrent() &&
+        view.focus?.isConnected
+      )
+        view.focus.focus();
+    });
+    failure.rethrow();
   }
 
   dispose(): void {
-    if (this.#disposed) return;
-    this.#disposed = true;
-    this.#generation++;
-    this.#close();
-    this.#unobserve?.();
-    this.#unobserve = null;
-    for (const window of [...this.#windows.keys()]) this.#detachWindow(window);
-    this.#native?.dispose();
-    this.#native = null;
+    if (!this.#disposed) {
+      this.#disposed = true;
+      this.#generation++;
+    }
     this.#schema = null;
-    this.#store.dispose();
+    const failure = new CleanupFailure();
+    const pendingDetaches = [...this.#pendingDetaches];
+    failure.run(() => this.#close());
+    failure.run(() => {
+      this.#unobserve?.();
+      this.#unobserve = null;
+    });
+    for (const window of [...this.#windows.keys()]) failure.run(() => this.#detachWindow(window));
+    for (const detach of pendingDetaches)
+      failure.run(() => {
+        detach();
+        this.#pendingDetaches.delete(detach);
+      });
+    failure.run(() => {
+      this.#native?.dispose();
+      this.#native = null;
+    });
+    failure.run(() => this.#store.dispose());
+    failure.rethrow();
   }
 }

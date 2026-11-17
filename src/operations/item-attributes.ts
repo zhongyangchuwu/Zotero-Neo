@@ -1,10 +1,15 @@
+import { reportDiagnosticError, ZoteroLogger } from '../core/logging';
 import {
   normalizeAttributeValue,
   readAttributeValue,
   replaceAttributeValue,
 } from '../item-attributes/extra';
 import type { ItemAttributeDefinition, ItemAttributeState } from '../item-attributes/types';
-import { executeCollectionTransaction } from '../toolkit/main';
+import {
+  captureItemExtraRecovery,
+  executeCollectionTransaction,
+  type ItemExtraRecovery,
+} from '../toolkit/main';
 
 type AttributeLibrary = Exclude<ReturnType<typeof Zotero.Libraries.get>, false>;
 
@@ -14,14 +19,12 @@ type Target = {
   readonly expected: ItemAttributeState;
 };
 
-const SAVE_FIELDS = ['dateModified', 'synced', 'clientVersion'] as const;
-type SaveState = ReadonlyMap<string, string>;
+const recoveryLogger = new ZoteroLogger();
 type Transition = {
   readonly item: Zotero.Item;
   readonly previous: string;
   readonly next: string;
-  readonly primary: SaveState;
-  savedPrimary?: SaveState;
+  readonly recovery: ItemExtraRecovery;
 };
 
 function sameState(left: ItemAttributeState, right: ItemAttributeState): boolean {
@@ -99,31 +102,33 @@ export async function setItemAttribute(
   }
 
   async function restore(): Promise<void> {
-    for (const transition of transitions) {
-      const { item, previous, next, primary, savedPrimary } = transition;
-      const latest = item.getField('extra');
-      if (latest === next) {
-        item.setField('extra', previous);
-      } else if (sameState(readAttributeValue(latest, key), readAttributeValue(next, key))) {
-        // Preserve later edits to unrelated Extra lines, or to any other item field.
-        item.setField(
-          'extra',
-          replaceAttributeValue(latest, key, readAttributeValue(previous, key).value),
-        );
-      }
-      // Do not reload all itemData: it would discard later in-memory metadata edits.
-      if (savedPrimary) {
-        for (const [field, before] of primary) {
-          if (item.getField(field) === savedPrimary.get(field) && item.getField(field) !== before)
-            item.setField(field, before);
-        }
+    for (const { item, previous, next, recovery } of transitions) {
+      try {
+        const latest = item.getField('extra');
+        const desired =
+          latest === next
+            ? previous
+            : sameState(readAttributeValue(latest, key), readAttributeValue(next, key))
+              ? replaceAttributeValue(latest, key, readAttributeValue(previous, key).value)
+              : latest;
+        recovery.restore(desired);
+      } catch (error) {
+        // Every target gets a recovery attempt. Never replace the operation's
+        // original error with an independent cache-recovery failure.
+        reportDiagnosticError(recoveryLogger, 'Attribute rollback recovery failed', error);
       }
     }
   }
 
   return executeCollectionTransaction(
     async () => {
-      for (const target of targets.values()) assertCurrentTarget(target);
+      const recoveries = new Map<number, ItemExtraRecovery>();
+      for (const target of targets.values()) {
+        assertCurrentTarget(target);
+        const previous = target.item.getField('extra');
+        if (replaceAttributeValue(previous, key, value) !== previous)
+          recoveries.set(target.item.id, captureItemExtraRecovery(target.item));
+      }
       for (const target of targets.values()) {
         const { item } = target;
         assertCurrentTarget(target);
@@ -140,7 +145,9 @@ export async function setItemAttribute(
           item,
           previous,
           next,
-          primary: new Map(SAVE_FIELDS.map((field) => [field, item.getField(field)])),
+          // Preflight every target before any mutation; recapture after earlier
+          // awaited saves to use the latest clean native baseline.
+          recovery: transitions.length ? captureItemExtraRecovery(item) : recoveries.get(item.id)!,
         };
         transitions.push(transition);
         item.setField('extra', next);
@@ -160,11 +167,19 @@ export async function setItemAttribute(
         };
         try {
           await item.save(options);
-        } finally {
-          transition.savedPrimary = new Map(
-            SAVE_FIELDS.map((field) => [field, item.getField(field)]),
-          );
+        } catch (error) {
+          try {
+            transition.recovery.saved();
+          } catch (recoveryError) {
+            reportDiagnosticError(
+              recoveryLogger,
+              'Attribute save-state capture failed',
+              recoveryError,
+            );
+          }
+          throw error;
         }
+        transition.recovery.saved();
         assertCurrentTarget(target);
       }
       for (const target of targets.values()) assertCurrentTarget(target);

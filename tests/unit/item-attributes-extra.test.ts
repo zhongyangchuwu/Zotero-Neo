@@ -25,6 +25,27 @@ describe('lossless Extra attributes', () => {
     expect(replaceAttributeValue(extra, text.key, ' old ')).toBe(extra);
   });
 
+  it('normalizes only newly entered owned text to NFC without migrating existing Extra', () => {
+    const extra = 'Other e\u0301: cafe\u0301\r\nResearch Score: re\u0301sume\u0301\r\nTail: \u212b';
+    expect(readAttributeValue(extra, text.key)).toEqual({
+      value: 're\u0301sume\u0301',
+      ambiguous: false,
+    });
+    expect(replaceAttributeValue(extra, text.key, 're\u0301sume\u0301')).toBe(extra);
+    const value = normalizeAttributeValue(text, '  cafe\u0301: \u212b  ');
+    expect(value).toBe('caf\u00e9: \u00c5');
+    expect(replaceAttributeValue(extra, text.key, value)).toBe(
+      'Other e\u0301: cafe\u0301\r\nResearch Score: caf\u00e9: \u00c5\r\nTail: \u212b',
+    );
+    expect(readAttributeValue('\u212b Score: old', '\u00c5 Score')).toEqual({
+      value: 'old',
+      ambiguous: false,
+    });
+    expect(replaceAttributeValue('\u212b Score: old', '\u00c5 Score', 'new')).toBe(
+      '\u212b Score: new',
+    );
+  });
+
   it('removes only the owned line boundary, retaining all remaining separators', () => {
     expect(replaceAttributeValue('A: one\r\nResearch Score: 2\nB: three\r', text.key, null)).toBe(
       'A: one\r\nB: three\r',
@@ -122,6 +143,7 @@ describe('attribute numbers', () => {
     '1e3',
     '9007199254740993',
     '0.123456789012345678901',
+    '1e-400',
   ])('retains the exact finite decimal spelling %s without rounding', (value) => {
     expect(normalizeAttributeValue(number, ` ${value} `)).toBe(value);
   });

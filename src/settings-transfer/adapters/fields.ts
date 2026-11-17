@@ -17,6 +17,7 @@ import {
 import { SettingsTransferError } from '../contracts';
 import { ITEM_ATTRIBUTE_PREFERENCE } from '../../item-attributes/types';
 import { parseItemAttributeDefinitions } from '../../item-attributes/store';
+import { assertCustomExtraKey } from '../../toolkit/main';
 
 export interface TransferField {
   readonly key: string;
@@ -225,7 +226,8 @@ export const NEO_PREFERENCE_FIELDS: readonly TransferField[] = [
     validate: (value) => {
       if (typeof value !== 'string') return false;
       try {
-        parseItemAttributeDefinitions(value);
+        for (const definition of parseItemAttributeDefinitions(value))
+          assertCustomExtraKey(definition.key);
         return true;
       } catch {
         return false;

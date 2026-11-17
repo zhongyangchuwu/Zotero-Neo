@@ -2,6 +2,7 @@ import { afterEach, describe, expect, it, vi } from 'vitest';
 import { readAttributeValue } from '../../src/item-attributes/extra';
 import type { ItemAttributeDefinition, ItemAttributeState } from '../../src/item-attributes/types';
 import { setItemAttribute } from '../../src/operations/item-attributes';
+import { captureItemExtraRecovery } from '../../src/toolkit/main/item-attribute-recovery';
 import { createCollectionTransactionDB } from '../fixtures/collection-transactions';
 
 const definition: ItemAttributeDefinition = {
@@ -16,43 +17,88 @@ afterEach(() => {
   else Reflect.set(globalThis, 'Zotero', originalZotero);
 });
 
-type FieldValue = string | number | boolean;
+type FieldValue = string | number | boolean | null;
+const fieldIDs: Record<string, number> = { extra: 1, title: 2 };
+const primaryFields = ['dateModified', 'synced', 'clientVersion', 'lastModifiedByUserID'];
 function harness(initial: readonly string[]) {
   const db = createCollectionTransactionDB();
   const library = { id: 1, editable: true, archived: false, libraryType: 'user' };
   const disk = new Map<number, Map<string, FieldValue>>();
   const records = initial.map((extra, index) => {
-    const fields = new Map<string, FieldValue>([
-      ['extra', extra],
-      ['title', `Title ${index + 1}`],
-      ['dateModified', 'before'],
-      ['synced', true],
-      ['clientVersion', 1],
-    ]);
+    // Model native own slots and field-ID logs, not a permissive dictionary setter.
+    const fields = {
+      set(name: string, value: FieldValue): void {
+        if (primaryFields.includes(name)) Reflect.set(record, `_${name}`, value);
+        else record._itemData[fieldIDs[name]!] = value || false;
+      },
+      *[Symbol.iterator](): IterableIterator<[string, FieldValue]> {
+        for (const name of ['extra', 'title', ...primaryFields])
+          yield [name, record.getField(name)];
+      },
+    };
     const record = {
       id: index + 1,
       libraryID: 1,
       deleted: false,
       regular: true,
       editable: true,
-      dirty: false,
       isFeedItem: false,
+      _itemData: { 1: extra || false, 2: `Title ${index + 1}` } as Record<number, FieldValue>,
+      _dateModified: 'before',
+      _synced: true,
+      _clientVersion: 1,
+      _lastModifiedByUserID: null as number | null,
+      _loaded: { primaryData: true, itemData: true },
+      _changed: {} as Record<string, Record<string, true>>,
+      _previousData: {} as Record<string, FieldValue>,
+      _changedData: {} as Record<string, unknown>,
       fields,
-      getField: (name: string) => fields.get(name) ?? '',
-      setField: vi.fn((name: string, value: FieldValue) => {
+      getField(name: string): FieldValue {
+        if (primaryFields.includes(name)) return Reflect.get(record, `_${name}`) as FieldValue;
+        return record._itemData[fieldIDs[name]!] || '';
+      },
+      setField: vi.fn((name: string, value: FieldValue): boolean => {
+        if (name === 'clientVersion')
+          throw new Error(
+            'Primary field clientVersion cannot be changed in Zotero.Item.setField()',
+          );
         const normalized = typeof value === 'string' ? value.trim().normalize() : value;
-        if (fields.get(name) !== normalized) record.dirty = true;
-        fields.set(name, normalized);
+        const primary = primaryFields.includes(name);
+        const previous = primary ? record.getField(name) : record._itemData[fieldIDs[name]!];
+        const next = primary ? normalized : normalized || false;
+        if (previous === next && name !== 'synced') return false;
+        if (record._previousData[name] === undefined) record._previousData[name] = previous!;
+        fields.set(name, next);
+        const group = primary ? 'primaryData' : 'itemData';
+        record._changed[group] ??= {};
+        record._changed[group][primary ? name : String(fieldIDs[name])] = true;
+        return true;
       }),
       isRegularItem: () => record.regular,
       isEditable: () => record.editable,
-      hasChanged: () => record.dirty,
-      save: vi.fn(async (_options?: unknown) => {
-        fields.set('dateModified', 'after');
-        fields.set('synced', false);
-        fields.set('clientVersion', 2);
+      hasChanged: (): boolean => {
+        const changed = Object.keys(record._changed)
+          .filter((key) => record._changed[key])
+          .concat(Object.keys(record._changedData));
+        if (
+          changed.length === 1 &&
+          changed[0] === 'primaryData' &&
+          Object.keys(record._changed.primaryData!).length === 1 &&
+          record._changed.primaryData!.synced &&
+          record._previousData.synced === record._synced
+        )
+          return false;
+        return !!changed.length;
+      },
+      save: vi.fn(async (_options?: unknown): Promise<boolean> => {
+        record._dateModified = 'after';
+        record._synced = false;
+        record._clientVersion = 2;
+        if (library.libraryType === 'group') record._lastModifiedByUserID = 7;
         disk.set(record.id, new Map(fields));
-        record.dirty = false;
+        record._changed = {};
+        record._previousData = {};
+        record._changedData = {};
         return true;
       }),
     };
@@ -79,6 +125,10 @@ function harness(initial: readonly string[]) {
   });
   Reflect.set(globalThis, 'Zotero', {
     DB: db,
+    ItemFields: {
+      getID: (name: string) => fieldIDs[name] || false,
+      getName: (id: number) => Object.keys(fieldIDs).find((name) => fieldIDs[name] === id),
+    },
     Items: { get: (id: number) => cache.get(id) },
     Libraries: { get: (id: number) => (id === library.id ? library : undefined) },
     debug: vi.fn(),
@@ -191,13 +241,13 @@ describe('explicit atomic item attribute edits', () => {
         if (change === 'deleted') h.records[1]!.deleted = true;
         if (change === 'type') h.records[1]!.regular = false;
         if (change === 'dirty') {
-          h.records[1]!.fields.set('title', 'Unfinished native edit');
-          h.records[1]!.dirty = true;
+          h.records[1]!.setField('title', 'Unfinished native edit');
         }
       };
       await expect(setItemAttribute(h.items, definition, '0', h.request)).rejects.toThrow();
       expect(h.records.every((item) => item.save.mock.calls.length === 0)).toBe(true);
-      expect(h.records.every((item) => item.setField.mock.calls.length === 0)).toBe(true);
+      expect(h.records[0]!.setField).not.toHaveBeenCalled();
+      expect(h.records[1]!.setField).toHaveBeenCalledTimes(change === 'dirty' ? 1 : 0);
       if (change === 'dirty')
         expect(h.records[1]!.getField('title')).toBe('Unfinished native edit');
     },
@@ -246,10 +296,9 @@ describe('explicit atomic item attribute edits', () => {
 
   it('rolls back earlier successful saves and native save metadata if a later save fails', async () => {
     const h = harness(['Research Score: 2\r\nOther: one', 'Research Score: 3\r\nOther: two']);
-    h.records[1]!.save.mockRejectedValueOnce(new Error('Disk write failed'));
-    await expect(setItemAttribute(h.items, definition, '0', h.request)).rejects.toThrow(
-      'Disk write failed',
-    );
+    const failure = new Error('Disk write failed');
+    h.records[1]!.save.mockRejectedValueOnce(failure);
+    await expect(setItemAttribute(h.items, definition, '0', h.request)).rejects.toBe(failure);
     expect(h.records[0]!.getField('extra')).toBe('Research Score: 2\r\nOther: one');
     expect(h.records[1]!.getField('extra')).toBe('Research Score: 3\r\nOther: two');
     expect(h.records[0]!.getField('dateModified')).toBe('before');
@@ -258,6 +307,12 @@ describe('explicit atomic item attribute edits', () => {
     expect(h.disk.get(1)!.get('extra')).toBe('Research Score: 2\r\nOther: one');
     expect(h.disk.get(2)!.get('extra')).toBe('Research Score: 3\r\nOther: two');
     expect(h.db._commitCount).toBe(0);
+    for (const item of h.records) {
+      expect(new Map(item.fields)).toEqual(h.disk.get(item.id));
+      expect(item.hasChanged()).toBe(false);
+      expect(item.setField.mock.calls.some(([field]) => field === 'clientVersion')).toBe(false);
+    }
+    expect(await setItemAttribute(h.items, definition, '0', h.request)).toBe(2);
   });
 
   it.each(['append', 'clear'])('restores exact Extra after a failed %s batch', async (kind) => {
@@ -288,8 +343,12 @@ describe('explicit atomic item attribute edits', () => {
     );
     expect(h.records[0]!.getField('extra')).toBe('Research Score: 2\r\nOther: edited later');
     expect(h.records[0]!.getField('title')).toBe('Later native edit');
-    expect(h.records[0]!.dirty).toBe(true);
+    expect(h.records[0]!.hasChanged()).toBe(true);
     expect(h.disk.get(1)!.get('extra')).toBe('Research Score: 2\r\nOther: one');
+    expect(h.records[0]!._previousData.extra).toBe('Research Score: 2\r\nOther: one');
+    expect(h.records[0]!._previousData.title).toBe('Title 1');
+    expect(h.records[0]!._changed.itemData).toEqual({ 1: true, 2: true });
+    expect(h.records[1]!.hasChanged()).toBe(false);
   });
 
   it('does not overwrite a later edit to the target field when aborting', async () => {
@@ -300,6 +359,8 @@ describe('explicit atomic item attribute edits', () => {
     });
     await expect(setItemAttribute(h.items, definition, '0', h.request)).rejects.toThrow(/changed/);
     expect(h.records[0]!.getField('extra')).toBe('Research Score: 99');
+    expect(h.records[0]!.hasChanged()).toBe(true);
+    expect(h.records[0]!._previousData.extra).toBe('Research Score: 2');
     expect(h.records[1]!.save).not.toHaveBeenCalled();
   });
 
@@ -307,7 +368,9 @@ describe('explicit atomic item attribute edits', () => {
     const h = harness(['Research Score: 2', 'Research Score: 3']);
     let current = true;
     h.request.isCurrent = () => current;
+    const nativeSave = h.records[0]!.save.getMockImplementation()!;
     h.records[0]!.save.mockImplementationOnce(async () => {
+      await nativeSave();
       current = false;
       return true;
     });
@@ -316,6 +379,10 @@ describe('explicit atomic item attribute edits', () => {
     );
     expect(h.records[0]!.getField('extra')).toBe('Research Score: 2');
     expect(h.records[1]!.save).not.toHaveBeenCalled();
+    expect(h.records.every((item) => !item.hasChanged())).toBe(true);
+    expect(new Map(h.records[0]!.fields)).toEqual(h.disk.get(1));
+    current = true;
+    expect(await setItemAttribute(h.items, definition, '0', h.request)).toBe(2);
     const permissions = harness(['Research Score: 2', 'Research Score: 3']);
     permissions.records[1]!.save.mockImplementationOnce(async () => {
       permissions.records[0]!.editable = false;
@@ -371,5 +438,119 @@ describe('explicit atomic item attribute edits', () => {
       setItemAttribute(h.items, definition, '0', { expected, isCurrent: () => true }),
     ).rejects.toThrow(/changed/);
     expect(h.records[0]!.save).not.toHaveBeenCalled();
+  });
+});
+
+describe('checked native Extra recovery', () => {
+  it.each(['read-only-primary', 'missing-log', 'unloaded', 'wrong-extra-id'])(
+    'refuses unsupported %s state on any target before mutating the batch',
+    async (shape) => {
+      const h = harness(['Research Score: 2', 'Research Score: 3']);
+      const second = h.records[1]!;
+      if (shape === 'read-only-primary')
+        Object.defineProperty(second, '_clientVersion', { writable: false });
+      if (shape === 'missing-log') Reflect.deleteProperty(second, '_changedData');
+      if (shape === 'unloaded') second._loaded.itemData = false;
+      if (shape === 'wrong-extra-id') Reflect.set(Zotero.ItemFields, 'getID', () => 99);
+      await expect(setItemAttribute(h.items, definition, '0', h.request)).rejects.toThrow();
+      for (const [index, item] of h.records.entries()) {
+        expect(item.getField('extra')).toBe(`Research Score: ${index + 2}`);
+        expect(h.disk.get(item.id)!.get('extra')).toBe(`Research Score: ${index + 2}`);
+        expect(item.setField).not.toHaveBeenCalled();
+        expect(item.save).not.toHaveBeenCalled();
+      }
+    },
+  );
+
+  it('models read-only clientVersion and restores partial native-save failure without dirty residue', async () => {
+    const h = harness(['Research Score: 2', 'Research Score: 3']);
+    expect(() => h.records[0]!.setField('clientVersion', 4)).toThrow(/cannot be changed/);
+    const nativeSave = h.records[1]!.save.getMockImplementation()!;
+    const failure = new Error('Failure after native finalization');
+    h.records[1]!.save.mockImplementationOnce(async () => {
+      await nativeSave();
+      throw failure;
+    });
+    await expect(setItemAttribute(h.items, definition, '0', h.request)).rejects.toBe(failure);
+    for (const item of h.records) {
+      expect(new Map(item.fields)).toEqual(h.disk.get(item.id));
+      expect(item.hasChanged()).toBe(false);
+    }
+    expect(await setItemAttribute(h.items, definition, '0', h.request)).toBe(2);
+  });
+
+  it('rebases later primary edits and retains unrelated native dirty categories', async () => {
+    const h = harness(['Research Score: 2', 'Research Score: 3']);
+    h.records[1]!.save.mockImplementationOnce(async () => {
+      const first = h.records[0]!;
+      first.setField('dateModified', 'later');
+      first.setField('synced', false);
+      first._changedData.tags = [{ tag: 'Later tag', type: 0 }];
+      first._changed.creators = { 0: true };
+      first._previousData.creators = 'retained creator history';
+      throw new Error('Second save failed');
+    });
+    await expect(setItemAttribute(h.items, definition, '0', h.request)).rejects.toThrow(
+      'Second save failed',
+    );
+    const first = h.records[0]!;
+    expect(first.getField('extra')).toBe('Research Score: 2');
+    expect(first.getField('dateModified')).toBe('later');
+    expect(first.getField('synced')).toBe(false);
+    expect(first.getField('clientVersion')).toBe(1);
+    expect(first._previousData.dateModified).toBe('before');
+    expect(first._previousData.synced).toBe(true);
+    expect(first._changed.primaryData).toEqual({ dateModified: true, synced: true });
+    expect(first._changed.itemData).toBeUndefined();
+    expect(first._changed.creators).toEqual({ 0: true });
+    expect(first._changedData.tags).toEqual([{ tag: 'Later tag', type: 0 }]);
+    expect(first._previousData.creators).toBe('retained creator history');
+    expect(first.hasChanged()).toBe(true);
+  });
+
+  it('restores group attribution changed by native save', async () => {
+    const h = harness(['Research Score: 2', 'Research Score: 3']);
+    h.library.libraryType = 'group';
+    h.records[1]!.save.mockRejectedValueOnce(new Error('Group save failed'));
+    await expect(setItemAttribute(h.items, definition, '0', h.request)).rejects.toThrow(
+      'Group save failed',
+    );
+    expect(h.records[0]!.getField('lastModifiedByUserID')).toBe(null);
+    expect(new Map(h.records[0]!.fields)).toEqual(h.disk.get(1));
+    expect(h.records[0]!.hasChanged()).toBe(false);
+  });
+
+  it('attempts every recovery and retains the operation error when one cache becomes unsupported', async () => {
+    const h = harness(['Research Score: 2', 'Research Score: 3', 'Research Score: 4']);
+    const failure = new Error('Original third-save failure');
+    h.records[2]!.save.mockImplementationOnce(async () => {
+      Object.defineProperty(h.records[0]!._itemData, '1', { writable: false });
+      throw failure;
+    });
+    await expect(setItemAttribute(h.items, definition, '0', h.request)).rejects.toBe(failure);
+    for (const item of h.records.slice(1)) {
+      expect(new Map(item.fields)).toEqual(h.disk.get(item.id));
+      expect(item.hasChanged()).toBe(false);
+    }
+  });
+
+  it('keeps the native clean no-op synced marker clean after rollback', () => {
+    const h = harness(['Research Score: 2']);
+    const item = h.records[0]!;
+    item.setField('synced', true);
+    expect(item.hasChanged()).toBe(false);
+    const recovery = captureItemExtraRecovery(h.items[0]!);
+    item.setField('extra', 'Research Score: 0');
+    item._dateModified = 'after';
+    item._synced = false;
+    item._clientVersion = 2;
+    item._changed = {};
+    item._previousData = {};
+    recovery.saved();
+    recovery.restore('Research Score: 2');
+    expect(item.getField('clientVersion')).toBe(1);
+    expect(item._changed.primaryData).toEqual({ synced: true });
+    expect(item._previousData.synced).toBe(true);
+    expect(item.hasChanged()).toBe(false);
   });
 });

@@ -1,4 +1,4 @@
-import type { Cleanup } from '../../core/cleanup';
+import { CleanupFailure, type Cleanup } from '../../core/cleanup';
 import type { MainWindow } from '../../core/contracts';
 import type { ItemAttributeNativeHost, NativeItemAttribute } from './item-attributes-types';
 
@@ -16,7 +16,6 @@ type RowOptions = {
   multiline: false;
   editable: true;
   onGetData(context: RowContext): string;
-  onSetData(context: RowContext & { value: string }): void;
   onItemChange(
     context: RowContext & {
       setEnabled(enabled: boolean): void;
@@ -32,7 +31,7 @@ type ColumnOptions = {
   dataProvider(item: Zotero.Item): string;
   renderCell(
     index: number,
-    data: string,
+    data: string | undefined,
     column: { className: string },
     isFirstColumn: boolean,
     doc: Document,
@@ -81,42 +80,45 @@ type Edit = {
   readonly initialValue: string;
   submitted: boolean;
 };
-type CommitContext = {
-  readonly event: Event;
-  readonly lease: WindowLease;
-  readonly field: AttributeField;
-  readonly rowID: string;
-  readonly edit: Edit | undefined;
-};
 
 let nextGeneration = 0;
-const SIGN_BIT = 1n << 63n;
-const UINT64_MASK = (1n << 64n) - 1n;
-const numberBits = new DataView(new ArrayBuffer(8));
+const DECIMAL = /^([+-]?)(?:(\d+)(?:\.(\d*))?|\.(\d+))(?:[eE]([+-]?\d+))?$/;
 
-/**
- * Zotero's custom-column comparator coerces data to strings before collation.
- * Encode finite doubles as fixed-width, unsigned decimal integers in IEEE order:
- * invert negative bits, flip the positive sign bit. Both ordinary and numeric
- * digit collation then compare magnitude correctly, including negatives and zero.
- * Only the renderer decodes these private sort keys; they are never item data.
- */
-function numericSortKey(value: string): string {
-  if (!value.trim()) return '';
-  const number = Number(value);
-  if (!Number.isFinite(number)) return '';
-  numberBits.setFloat64(0, number === 0 ? 0 : number);
-  const bits = numberBits.getBigUint64(0);
-  const ordered = bits & SIGN_BIT ? UINT64_MASK ^ bits : bits ^ SIGN_BIT;
-  return ordered.toString().padStart(20, '0');
+function digitLetters(digits: string): string {
+  return digits.replace(/\d/g, (digit) => String.fromCharCode(digit.charCodeAt(0) + 50));
 }
 
-function numericDisplay(key: string): string {
-  if (!key) return '';
-  const ordered = BigInt(key);
-  const bits = ordered & SIGN_BIT ? ordered ^ SIGN_BIT : UINT64_MASK ^ ordered;
-  numberBits.setBigUint64(0, bits);
-  return String(numberBits.getFloat64(0));
+function reverseLetters(letters: string): string {
+  return letters.replace(/[a-z]/g, (letter) => String.fromCharCode(219 - letter.charCodeAt(0)));
+}
+
+function exponentSortKey(exponent: bigint): string {
+  if (exponent === 0n) return 'c';
+  const digits = (exponent < 0n ? -exponent : exponent).toString();
+  // Unary digit count makes arbitrary-size integer magnitudes prefix-free.
+  const magnitude = `${'l'.repeat(digits.length)}a${digitLetters(digits)}`;
+  return exponent < 0n ? `b${reverseLetters(magnitude)}` : `d${magnitude}`;
+}
+
+/**
+ * Native custom-column data is string-collated, with numeric digit mode optional.
+ * Order exact decimals by sign, leading-digit exponent, then significant digits.
+ * The sortable prefix uses only letters; reversing it reverses negative magnitude.
+ * A low mantissa terminator distinguishes 1.2 from 1.23 before the raw suffix.
+ * Keep the original spelling after "|" for rendering, never reconstruct a double.
+ */
+function numericSortKey(value: string): string {
+  if (!value) return '';
+  const match = DECIMAL.exec(value.trim());
+  if (!match) return `f|${value}`;
+  const integer = match[2] ?? '';
+  const coefficient = integer + (match[3] ?? match[4] ?? '');
+  const first = coefficient.search(/[1-9]/);
+  if (first === -1) return `c|${value}`;
+  const exponent = BigInt(match[5] ?? '0') + BigInt(integer.length) - BigInt(first) - 1n;
+  const significant = coefficient.slice(first).replace(/0+$/, '');
+  const magnitude = `${exponentSortKey(exponent)}${digitLetters(significant)}a`;
+  return `${match[1] === '-' ? `b${reverseLetters(magnitude)}` : `d${magnitude}`}|${value}`;
 }
 
 function stableID(id: string): string {
@@ -148,15 +150,65 @@ function singleSelection(lease: WindowLease, item: Zotero.Item): boolean {
   return Array.isArray(selected) && selected.length === 1 && selected[0] === item;
 }
 
+function normalizedExtraKey(key: string): string {
+  return key
+    .normalize('NFC')
+    .trim()
+    .toLowerCase()
+    .replace(/[\s_-]+/g, '');
+}
+
+function nativeReservedKeys(): Set<string> {
+  type Inventories = {
+    ItemFields?: { getAll?(): unknown };
+    CreatorTypes?: { getAll?(): unknown };
+    Schema?: {
+      CSL_TEXT_MAPPINGS?: unknown;
+      CSL_DATE_MAPPINGS?: unknown;
+      CSL_NAME_MAPPINGS?: unknown;
+    };
+  };
+  const native = Zotero as unknown as Inventories;
+  const unavailable = () => new Error('Zotero Extra key inventories are unavailable or unknown');
+  const reserved = new Set<string>();
+  for (const inventory of [native.ItemFields, native.CreatorTypes]) {
+    if (typeof inventory?.getAll !== 'function') throw unavailable();
+    const entries = inventory.getAll();
+    if (!Array.isArray(entries) || !entries.length) throw unavailable();
+    for (const entry of entries) {
+      if (!entry || typeof entry.name !== 'string' || !entry.name.trim()) throw unavailable();
+      reserved.add(normalizedExtraKey(entry.name));
+    }
+  }
+  // Schema loads these canonical inventories from its bundled/global schema.
+  // extractExtraFields uses these same three maps plus the native field/creator lists.
+  for (const map of [
+    native.Schema?.CSL_TEXT_MAPPINGS,
+    native.Schema?.CSL_DATE_MAPPINGS,
+    native.Schema?.CSL_NAME_MAPPINGS,
+  ]) {
+    if (!map || typeof map !== 'object' || Array.isArray(map)) throw unavailable();
+    const keys = Object.keys(map);
+    if (!keys.length) throw unavailable();
+    for (const key of keys) {
+      if (!key.trim()) throw unavailable();
+      reserved.add(normalizedExtraKey(key));
+    }
+  }
+  // Native CSL name extraction also recognizes mapping values (e.g. container-author).
+  for (const name of Object.values(native.Schema!.CSL_NAME_MAPPINGS!)) {
+    if (typeof name !== 'string' || !name.trim()) throw unavailable();
+    reserved.add(normalizedExtraKey(name));
+  }
+  return reserved;
+}
+
 /** Reject keys that Zotero would interpret as bibliographic metadata in Extra. */
 export function assertCustomExtraKey(key: string): void {
   if (!key.trim() || /[:\u0000-\u001f\u007f-\u009f\u2028\u2029]/u.test(key)) {
     throw new Error('An attribute key must be a nonempty single-line Extra key');
   }
-  const normalized = key
-    .trim()
-    .toLowerCase()
-    .replace(/[\s_-]+/g, '');
+  const normalized = normalizedExtraKey(key);
   if (normalized === 'type' || normalized.startsWith('zvmarks')) {
     throw new Error('This Extra key is reserved by Zotero or Neo');
   }
@@ -171,6 +223,9 @@ export function assertCustomExtraKey(key: string): void {
   const internal = Zotero.Utilities?.Internal as unknown as Classifier | undefined;
   if (typeof internal?.extractExtraFields !== 'function') {
     throw new Error('Zotero Extra key classification is unavailable');
+  }
+  if (nativeReservedKeys().has(normalized)) {
+    throw new Error('Native bibliographic, CSL and creator Extra keys cannot be custom attributes');
   }
   const probe = `${key.trim()}: x`;
   const result = internal.extractExtraFields(probe);
@@ -212,12 +267,10 @@ export function createItemAttributeNativeHost(
   let registrations: Registration[] = [];
   const rows = new Map<string, Registration>();
   const windows = new Map<MainWindow, WindowLease>();
-  let committing: CommitContext | undefined;
 
   const current = (registration: Registration) =>
     !disposed && registration.generation === generation;
   const retireEdits = () => {
-    committing = undefined;
     for (const lease of windows.values()) lease.edit = undefined;
   };
   const editable = (registration: Registration, item: Zotero.Item) =>
@@ -245,56 +298,50 @@ export function createItemAttributeNativeHost(
     );
   };
   const releaseRegistrations = () => {
-    const retired = registrations;
-    registrations = [];
     rows.clear();
-    for (const registration of retired) {
-      for (const [id, remove] of [
-        [registration.rowID, (id: string) => api.ItemPaneManager.unregisterInfoRow(id)],
-        [registration.columnID, (id: string) => api.ItemTreeManager.unregisterColumn(id)],
-      ] as const) {
-        if (!id) continue;
-        try {
-          if (!remove(id)) throw new Error(`Could not unregister native attribute ${id}`);
-        } catch (error) {
-          onError(error);
-        }
-      }
+    const failure = new CleanupFailure();
+    for (const registration of registrations) {
+      failure.run(() => {
+        const id = registration.rowID;
+        if (!id) return;
+        // A false result means the ID is already absent, not a release failure.
+        api.ItemPaneManager.unregisterInfoRow(id);
+        delete registration.rowID;
+      });
+      failure.run(() => {
+        const id = registration.columnID;
+        if (!id) return;
+        api.ItemTreeManager.unregisterColumn(id);
+        delete registration.columnID;
+      });
     }
+    // Failed IDs remain owned and retired, so a later explicit cleanup can retry.
+    registrations = registrations.filter(
+      (registration) => registration.rowID || registration.columnID,
+    );
+    failure.rethrow();
   };
-  const setData = (registration: Registration, context: RowContext & { value: string }) => {
-    if (!current(registration)) return;
-    const commit =
-      committing?.event.eventPhase && committing.rowID === context.rowID ? committing : undefined;
+  const commitEdit = (
+    lease: WindowLease,
+    field: AttributeField,
+    registration: Registration,
+  ): void => {
+    const edit = lease.edit;
+    // A readonly field can still receive focus/blur without an admitted edit.
+    if (!edit) return;
     try {
-      // The public callback has no document/owner/old value. Admit it only
-      // during the exact editable-text blur dispatch captured in attachWindow.
-      // Never infer an owner by scanning windows for the callback's item.
-      if (
-        !commit ||
-        commit.event.eventPhase === 0 ||
-        commit.rowID !== context.rowID ||
-        !commit.edit ||
-        commit.edit.registration !== registration ||
-        commit.edit.item !== context.item ||
-        commit.edit.field !== commit.field ||
-        !context.editable ||
-        context.tabType !== 'library' ||
-        !editCurrent(commit.edit)
-      ) {
-        throw new Error(
-          'Native attribute edit is stale, read-only, multi-selected, or has no exact owner',
-        );
+      if (edit.registration !== registration || edit.field !== field || !editCurrent(edit)) {
+        throw new Error('Native attribute edit is stale, read-only, or multi-selected');
       }
-      const edit = commit.edit;
-      if (edit.submitted || commit.field.cancelled) return;
+      if (edit.submitted || field.cancelled) return;
       edit.submitted = true;
-      if (context.value === edit.initialValue) return;
+      const value = field.value;
+      if (value === edit.initialValue) return;
       void registration.definition
-        .write(edit.item, context.value, edit.expectedExtra, () => editCurrent(edit))
-        .catch((error: unknown) => onError(error, edit.lease.window));
+        .write(edit.item, value, edit.expectedExtra, () => editCurrent(edit))
+        .catch((error: unknown) => onError(error, lease.window));
     } catch (error) {
-      onError(error, commit?.lease.window);
+      onError(error, lease.window);
     }
   };
 
@@ -338,10 +385,11 @@ export function createItemAttributeNativeHost(
             renderCell(_index, data, column, _isFirstColumn, doc) {
               const cell = doc.createElement('span');
               cell.className = `cell ${column.className}`;
+              const value = data ?? '';
               cell.textContent = current(registration)
                 ? definition.type === 'number'
-                  ? numericDisplay(data)
-                  : data
+                  ? value.slice(value.indexOf('|') + 1)
+                  : value
                 : '';
               return cell;
             },
@@ -372,7 +420,6 @@ export function createItemAttributeNativeHost(
                 return '';
               }
             },
-            onSetData: (context) => setData(registration, context),
             onItemChange(context) {
               const enabled =
                 current(registration) && context.tabType === 'library' && ordinary(context.item);
@@ -390,8 +437,12 @@ export function createItemAttributeNativeHost(
       } catch (error) {
         generation = ++nextGeneration;
         retireEdits();
-        releaseRegistrations();
-        throw error;
+        const failure = new CleanupFailure();
+        failure.run(() => {
+          throw error;
+        });
+        failure.run(releaseRegistrations);
+        failure.rethrow();
       }
     },
     attachWindow(window) {
@@ -431,20 +482,17 @@ export function createItemAttributeNativeHost(
         const field = fieldFromEvent(event);
         if (!field || field.ownerDocument !== document) return;
         const rowID = field.closest('.meta-row')?.getAttribute('data-custom-row-id');
-        if (!rowID || !rows.has(rowID)) return;
-        const context: CommitContext = { event, lease, field, rowID, edit: lease.edit };
-        committing = context;
-        // The native callback runs synchronously at the target. This only
-        // releases references; eventPhase also rejects callbacks after dispatch.
-        void Promise.resolve().then(() => {
-          if (committing === context) committing = undefined;
-        });
+        const registration = rowID ? rows.get(rowID) : undefined;
+        if (!registration) return;
+        // Native rows created in a readonly pane lack their own focus/blur
+        // listeners even after becoming editable. Own the captured blur instead
+        // of relying on the ownerless native onSetData callback.
+        commitEdit(lease, field, registration);
       };
       lease.cleanup = () => {
         if (!lease.active) return;
         lease.active = false;
         lease.edit = undefined;
-        if (committing?.lease === lease) committing = undefined;
         if (windows.get(window) === lease) windows.delete(window);
         document.removeEventListener('focus', focus, true);
         document.removeEventListener('blur', blur, true);
@@ -457,11 +505,12 @@ export function createItemAttributeNativeHost(
       return lease.cleanup;
     },
     dispose() {
-      if (disposed) return;
       disposed = true;
       retireEdits();
-      for (const lease of windows.values()) lease.cleanup();
-      releaseRegistrations();
+      const failure = new CleanupFailure();
+      for (const lease of windows.values()) failure.run(lease.cleanup);
+      failure.run(releaseRegistrations);
+      failure.rethrow();
     },
   };
 }

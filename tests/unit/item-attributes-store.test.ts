@@ -55,6 +55,30 @@ describe('versioned local attribute definitions', () => {
     expect(Object.isFrozen(first.definitions[0])).toBe(true);
   });
 
+  it('rejects non-NFC storage keys before creation without rewriting immutable identities', () => {
+    const invalid = { ...field, key: '\u212b Score' };
+    const canonical = { ...field, key: '\u00c5 Score' };
+    expect(() => parseItemAttributeDefinitions(schema([invalid]))).toThrow();
+    expect(parseItemAttributeDefinitions(schema([canonical]))).toEqual([canonical]);
+    const pref = preferences();
+    const classify = vi.fn();
+    const store = new ItemAttributeStore(pref.store, classify);
+    expect(() => store.write([invalid], '')).toThrow();
+    expect(pref.store.set).not.toHaveBeenCalled();
+    expect(classify).not.toHaveBeenCalled();
+    store.write([canonical], '');
+    const revision = schema([canonical]);
+    expect(store.read()).toEqual({ definitions: [canonical], revision });
+    expect(() => store.write([invalid], revision)).toThrow();
+    expect(store.read().revision).toBe(revision);
+    expect(pref.store.set).toHaveBeenCalledTimes(1);
+  });
+
+  it('keeps structural parsing independent of native reserved-key classification', () => {
+    const reserved = { ...field, key: 'Title' };
+    expect(parseItemAttributeDefinitions(schema([reserved]))).toEqual([reserved]);
+  });
+
   it.each([
     'not JSON',
     'null',
@@ -67,6 +91,7 @@ describe('versioned local attribute definitions', () => {
     schema([{ ...field, label: 'bad\nlabel' }]),
     schema([{ ...field, key: 'zV-marks_reader' }]),
     schema([{ ...field, key: 'Score: injection' }]),
+    schema([{ ...field, key: '\u212b Score' }]),
     schema([{ ...field, id: 'bad id' }]),
     schema([field, { ...field, key: 'Other key' }]),
     schema([field, { ...field, id: 'other', key: 'research_score' }]),

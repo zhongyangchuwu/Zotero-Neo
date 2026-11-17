@@ -119,3 +119,4 @@ export type {
 } from './tab-enhancements-types';
 export { createItemAttributeNativeHost, assertCustomExtraKey } from './item-attributes';
 export type { NativeItemAttribute, ItemAttributeNativeHost } from './item-attributes-types';
+export { captureItemExtraRecovery, type ItemExtraRecovery } from './item-attribute-recovery';

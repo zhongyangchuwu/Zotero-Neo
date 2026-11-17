@@ -52,7 +52,7 @@ Neo 自有 React 界面的素材集中在 `src/ui/react/`：`components.tsx` 提
 
 `src/modules/settings-transfer/` 只按 MainWindow 管理 `openSettingsTransfer` 的展示寿命；Addon 持有 `src/settings-transfer/` 的应用级服务与密码文件 codec，配置操作不借用 Reader 或条目 Selection。静态适配器拥有 capture／plan／apply 语义和最终准入，`src/platform/settings-transfer-*` 隔离原生文件、worker、密码存储与配置资源。React 只取得脱敏展示值与显式命令，不持有文件明文、密码或原生对象。格式、资源上限与加密备份屏障见[配置迁移边界](DEVELOPMENT.md#配置迁移格式与加密边界)。
 
-`src/item-attributes/` 按应用拥有本地定义、原生全局列／Info 行和单一管理界面；`src/modules/item-attributes/` 只持有 Main 动作、窗口租约与本次展示。Main 解析明确条目，`src/operations/item-attributes.ts` 在原生事务中核对属性基线和可写性；值仍位于 Zotero Extra，不另建条目数据库。`src/toolkit/main/item-attributes.ts` 隔离原生注册、数值排序及精确 Info 编辑文档接缝；原生多选不借用第一条目写入。定义删除不清理条目值，配置迁移只搬运定义。
+`src/item-attributes/` 按应用拥有本地定义、原生全局列／Info 行和单一管理界面；`src/modules/item-attributes/` 只持有 Main 动作、窗口租约与本次展示。Main 解析明确条目，`src/operations/item-attributes.ts` 在原生事务中核对属性基线和可写性；值仍位于 Zotero Extra，不另建条目数据库。`src/toolkit/main/item-attributes.ts` 隔离原生注册、精确十进制排序及 Info 编辑文档接缝，由精确文档捕获焦点与失焦提交，不依赖缺少窗口身份的原生 `onSetData`；只读界面创建的行切回可写状态后仍可保存，原生多选不借用第一条目写入。`src/toolkit/main/item-attribute-recovery.ts` 在检查原生缓存布局后恢复失败事务的 Extra 和变更日志，保留后来发生的无关编辑；宿主布局不支持时在写入前拒绝。定义删除不清理条目值，配置迁移只搬运定义。
 
 
 

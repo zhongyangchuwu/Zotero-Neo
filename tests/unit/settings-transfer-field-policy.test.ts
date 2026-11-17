@@ -1,4 +1,4 @@
-import { describe, expect, it } from 'vitest';
+import { afterEach, describe, expect, it, vi } from 'vitest';
 import {
   NATIVE_PREFERENCE_FIELDS,
   NEO_PREFERENCE_FIELDS,
@@ -16,6 +16,9 @@ import {
 import type { SettingState, SettingsValue } from '../../src/settings-transfer/contracts';
 import { SettingsTransferError } from '../../src/settings-transfer/contracts';
 import { READER_SCROLL_NUMBER_SPECS, KEY_GUIDE_NUMBER_SPECS } from '../../src/core/preferences';
+import { createSettingsAdapters } from '../../src/settings-transfer/registry';
+import { ITEM_ATTRIBUTE_PREFERENCE } from '../../src/item-attributes/types';
+import { settingsTransferHostFixture } from './settings-transfer-host-fixture';
 
 const set = (value: SettingsValue): SettingState => ({ kind: 'set', value });
 function preference(key: string, fields = NATIVE_PREFERENCE_FIELDS): TransferField {
@@ -298,4 +301,105 @@ it('preserves reset as reset rather than materializing defaults or a credential'
     expect(normalizeTransferFieldState(field, reset)).toBe(reset);
     expect(validFieldState(field, reset)).toBe(true);
   }
+});
+
+describe('item attribute schema transfer admission', () => {
+  const preferenceKey = `extensions.zotero-neo.${ITEM_ATTRIBUTE_PREFERENCE}`;
+  const schema = (...keys: string[]) =>
+    JSON.stringify({
+      version: 1,
+      fields: keys.map((key, index) => ({
+        id: `attribute${index}`,
+        key,
+        label: `Attribute ${index}`,
+        type: 'text',
+      })),
+    });
+  const context = () => ({
+    signal: new AbortController().signal,
+    isCurrent: () => true,
+  });
+  const section = (value: string) => ({
+    adapterID: 'zotero-neo',
+    schemaVersion: 1,
+    sourceVersion: 'source',
+    entries: [{ key: ITEM_ATTRIBUTE_PREFERENCE, state: set(value) }],
+  });
+
+  afterEach(() => vi.unstubAllGlobals());
+
+  it('classifies every transferred definition through the native host before preference writes', async () => {
+    const t = settingsTransferHostFixture();
+    const adapter = createSettingsAdapters(() => 'target')[1]!;
+    const incoming = schema('Research Score', '\u00c5 Score');
+    const plan = await adapter.plan(section(incoming), context());
+    expect(plan.issues).toEqual([]);
+    expect(plan.changes).toHaveLength(1);
+    expect(t.native.Utilities.Internal.extractExtraFields).toHaveBeenCalledWith(
+      'Research Score: x',
+    );
+    expect(t.native.Utilities.Internal.extractExtraFields).toHaveBeenCalledWith('\u00c5 Score: x');
+    expect(t.mutations).toEqual([]);
+    const receipts = await adapter.apply(
+      plan.changes.map((change) => ({ ...change, selected: true })),
+      context(),
+    );
+    expect(receipts).toMatchObject([{ key: ITEM_ATTRIBUTE_PREFERENCE, status: 'applied' }]);
+    expect(t.user.get(preferenceKey)).toBe(incoming);
+  });
+
+  it.each([
+    'Title',
+    'DOI',
+    'Author',
+    'Container Title',
+    'D O I',
+    'Ti_tle',
+    'Cont ainer Title',
+    '\u212b Score',
+  ])(
+    'rejects a schema containing %j without replacing the prior working definitions',
+    async (key) => {
+      const t = settingsTransferHostFixture();
+      const previous = schema('Research Score');
+      t.user.set(preferenceKey, previous);
+      t.user.set('extensions.zotero-neo.modules.item-attributes.enabled', true);
+      const adapter = createSettingsAdapters(() => 'target')[1]!;
+      const plan = await adapter.plan(section(schema('Research Score', key)), context());
+      expect(plan.changes).toEqual([]);
+      expect(plan.issues).toMatchObject([{ code: 'invalid-field' }]);
+      expect(await adapter.apply(plan.changes, context())).toEqual([]);
+      expect(t.mutations).toEqual([]);
+      expect(t.user.get(preferenceKey)).toBe(previous);
+      expect(t.user.get('extensions.zotero-neo.modules.item-attributes.enabled')).toBe(true);
+      const captured = await adapter.capture({
+        ...context(),
+        includeSecrets: false,
+        includeLibrarySettings: false,
+      });
+      expect(captured.section.entries).toContainEqual({
+        key: ITEM_ATTRIBUTE_PREFERENCE,
+        state: set(previous),
+      });
+    },
+  );
+
+  it.each(['extractor', 'inventory'])(
+    'fails closed before any preference mutation when the native %s is unavailable',
+    async (capability) => {
+      const t = settingsTransferHostFixture();
+      const previous = schema('Research Score');
+      t.user.set(preferenceKey, previous);
+      if (capability === 'extractor')
+        Reflect.deleteProperty(t.native.Utilities.Internal, 'extractExtraFields');
+      else Reflect.deleteProperty(t.native.ItemFields, 'getAll');
+      const adapter = createSettingsAdapters(() => 'target')[1]!;
+      const plan = await adapter.plan(section(schema('Research Score', 'Custom Label')), context());
+      expect(plan.changes).toEqual([]);
+      expect(plan.issues).toMatchObject([{ code: 'invalid-field' }]);
+      expect(await adapter.apply(plan.changes, context())).toEqual([]);
+      expect(t.user.get(preferenceKey)).toBe(previous);
+      expect(t.mutations).toEqual([]);
+    },
+  );
 });

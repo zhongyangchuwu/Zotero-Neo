@@ -32,6 +32,7 @@ export function parseItemAttributeDefinitions(raw: string): readonly ItemAttribu
       !/^[A-Za-z0-9][A-Za-z0-9_-]*$/u.test(field.id) ||
       typeof field.key !== 'string' ||
       field.key !== field.key.trim() ||
+      field.key !== field.key.normalize('NFC') ||
       typeof field.label !== 'string' ||
       !field.label.trim() ||
       /[\p{Cc}\p{Cf}\u2028\u2029]/u.test(field.label) ||
