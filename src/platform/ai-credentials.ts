@@ -24,8 +24,34 @@ export function hasAICredential(endpoint: string): boolean {
 export function readAICredential(endpoint: string): string {
   return find(endpoint)[0]?.password ?? '';
 }
-export async function changeAICredential(endpoint: string, value: string | null): Promise<void> {
+let writing: Promise<void> = Promise.resolve();
+
+export async function readSettledAICredential(endpoint: string): Promise<string> {
+  let pending: Promise<void>;
+  do {
+    pending = writing;
+    await pending;
+  } while (pending !== writing);
+  return readAICredential(endpoint);
+}
+
+export function changeAICredential(
+  endpoint: string,
+  value: string | null,
+  admit?: () => void,
+): Promise<void> {
+  const task = writing.then(() => updateAICredential(endpoint, value, admit));
+  writing = task.catch(() => {});
+  return task;
+}
+
+async function updateAICredential(
+  endpoint: string,
+  value: string | null,
+  admit?: () => void,
+): Promise<void> {
   const previous = find(endpoint);
+  admit?.();
   if (value === null) {
     for (const login of previous) manager().removeLogin(login);
     return;

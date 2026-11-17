@@ -61,6 +61,10 @@ import {
   createDocumentPreparationModule,
   type DocumentPreparationModule,
 } from '../modules/document-preparation';
+import {
+  createSettingsTransferModule,
+  type SettingsTransferModule,
+} from '../modules/settings-transfer';
 import type { PickerOpenOptions } from './picker/types';
 import {
   mainLibrarySelection,
@@ -129,6 +133,7 @@ export class MainWindowController implements MainWindowControllerApi {
       readonly notes: NotesModule | null;
       readonly workspace: WorkspaceModule | null;
       readonly preparation: DocumentPreparationModule | null;
+      readonly settingsTransfer: SettingsTransferModule | null;
       tabEnhancements: TabEnhancementsModule | null;
     }
   >();
@@ -203,6 +208,12 @@ export class MainWindowController implements MainWindowControllerApi {
       const preparation = preparationService
         ? scope.activate('document-preparation', () =>
             createDocumentPreparationModule(host, 'main-normal', preparationService),
+          )
+        : null;
+      const settingsTransferService = this.#dependencies.settingsTransfer;
+      const settingsTransfer = settingsTransferService
+        ? scope.activate('settings-transfer', () =>
+            createSettingsTransferModule(host, settingsTransferService),
           )
         : null;
       const tags = scope.activate('tags', () =>
@@ -465,6 +476,7 @@ export class MainWindowController implements MainWindowControllerApi {
         notes,
         workspace,
         preparation,
+        settingsTransfer,
         tabEnhancements: null,
       });
       if (this.#dependencies.modules.applied['tab-enhancements']) {
@@ -1086,6 +1098,7 @@ export class MainWindowController implements MainWindowControllerApi {
       return;
     }
     if (this.#dependencies.documentPreparation?.handleKey(event)) return;
+    if (this.#dependencies.settingsTransfer?.handleKey(event)) return;
     if (mainIdentifierLookupOwnsInput(window)) {
       this.resetMainInput(window, session);
       return;
@@ -1528,6 +1541,15 @@ export class MainWindowController implements MainWindowControllerApi {
             if (this.#sessions.get(window) === session)
               this.execute(nextAction, window, session, nextCount);
           },
+        });
+        break;
+      }
+      case 'openSettingsTransfer': {
+        this.#modules.get(session)?.settingsTransfer?.open({
+          window,
+          language: () => this.keyGuideLanguage(),
+          themeRoot: (root) => session.theme.add(root),
+          isCurrent: () => this.#sessions.get(window) === session && !session.cleanup.disposed,
         });
         break;
       }

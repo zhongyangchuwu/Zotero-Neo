@@ -297,6 +297,7 @@
   "action.mainFocusItems": "Main window: focus items list",
   "action.mainYankCitekey": "Copy BetterBibTeX citekey(s)",
   "action.mainAddByIdentifier": "Add Item by Identifier",
+  "action.openSettingsTransfer": "Export and restore encrypted Zotero / Neo settings",
   "action.inspectMetadata": "Inspect metadata and updates for selected items",
   "action.inspectCollectionMetadata": "Inspect metadata and updates in the current collection",
   "action.mainOpenPDF": "Open the Main Cursor or Note-context item",

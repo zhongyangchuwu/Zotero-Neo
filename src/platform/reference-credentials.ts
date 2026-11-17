@@ -30,17 +30,18 @@ export async function readSettledReferenceKey(): Promise<string> {
   return readReferenceKey();
 }
 
-export function changeReferenceKey(value: string | null): Promise<void> {
+export function changeReferenceKey(value: string | null, admit?: () => void): Promise<void> {
   const normalized = value?.trim() || null;
   if (normalized && (normalized.length > 8192 || /[\r\n]/u.test(normalized)))
     return Promise.reject(new Error('Invalid Semantic Scholar key'));
-  const mutation = mutationQueue.then(() => updateReferenceKey(normalized));
+  const mutation = mutationQueue.then(() => updateReferenceKey(normalized, admit));
   mutationQueue = mutation.catch(() => {});
   return mutation;
 }
 
-async function updateReferenceKey(value: string | null): Promise<void> {
+async function updateReferenceKey(value: string | null, admit?: () => void): Promise<void> {
   const previous = find();
+  admit?.();
   if (value === null) {
     for (const login of previous) manager().removeLogin(login);
     return;

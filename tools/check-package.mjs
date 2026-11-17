@@ -14,6 +14,7 @@ const expected = [
   'content/ai-qa-window.xhtml',
   'content/native-ui.js',
   'content/react-runtime.js',
+  'content/settings-transfer-crypto.js',
   'content/preferences/pane.js',
   'content/preferences/pane.xhtml',
   'content/zotero-neo.js',
@@ -29,6 +30,8 @@ const expected = [
   'licenses/ai-sdk-provenance.json',
   'licenses/react-NOTICE',
   'licenses/react-provenance.json',
+  'licenses/age-encryption-NOTICE',
+  'licenses/age-encryption-provenance.json',
   'locale/en-US/zotero-neo-ai-qa.ftl',
   'locale/zh-CN/zotero-neo-ai-qa.ftl',
   'manifest.json',
@@ -40,7 +43,7 @@ if (JSON.stringify(sortedMembers) !== JSON.stringify(expected)) {
 }
 for (const member of members) {
   if (member.includes('\\')) throw new Error(`Backslash in XPI member: ${member}`);
-  if (/^(?:src|tests|node_modules|build)\//.test(member)) {
+  if (/^(?:src|tests|node_modules|vendor|build)\//.test(member)) {
     throw new Error(`Development file packaged: ${member}`);
   }
   if (member.endsWith('.map') || member.endsWith('.ts')) {
@@ -54,6 +57,11 @@ for (const [member, source] of [
   ['licenses/ai-sdk-provenance.json', resolve(root, 'vendor/ai-sdk/provenance.json')],
   ['licenses/react-NOTICE', resolve(root, 'vendor/react/NOTICE')],
   ['licenses/react-provenance.json', resolve(root, 'vendor/react/provenance.json')],
+  ['licenses/age-encryption-NOTICE', resolve(root, 'vendor/age-encryption/NOTICE')],
+  [
+    'licenses/age-encryption-provenance.json',
+    resolve(root, 'vendor/age-encryption/provenance.json'),
+  ],
 ]) {
   if (!readZipMember(archive, member).equals(readFileSync(source))) {
     throw new Error(`Packaged license notice differs from authoritative source: ${member}`);
@@ -73,10 +81,19 @@ for (const script of [
   'content/ai-qa-ui.js',
   'content/native-ui.js',
   'content/react-runtime.js',
+  'content/settings-transfer-crypto.js',
 ]) {
   const source = readFileSync(resolve(root, 'build/addon', script), 'utf8');
   if (/^\s*(?:import|export)\s/m.test(source)) {
     throw new Error(`Unbundled module syntax in ${script}`);
+  }
+  if (
+    script === 'content/settings-transfer-crypto.js' &&
+    /\b(?:importScripts|eval)\s*\(|\bimport\s*\(/u.test(source)
+  ) {
+    throw new Error(
+      'Settings crypto worker must be statically bundled without dynamic code loading',
+    );
   }
 }
 
