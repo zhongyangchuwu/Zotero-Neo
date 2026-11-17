@@ -102,11 +102,14 @@ npm run docs:preview
 mkdir -p /tmp/zotero-neo-dev/profile /tmp/zotero-neo-dev/data
 ```
 
-在 `/tmp/zotero-neo-dev/profile/user.js` 中写入下面两行，确保测试实例使用自己的数据库：
+在 `/tmp/zotero-neo-dev/profile/user.js` 中显式隔离数据目录，并跳过会触及个人文字处理器配置的插件安装：
 
 ```js
 user_pref('extensions.zotero.dataDir', '/tmp/zotero-neo-dev/data');
 user_pref('extensions.zotero.useDataDir', true);
+user_pref('extensions.zoteroWinWordIntegration.skipInstallation', true);
+user_pref('extensions.zoteroOpenOfficeIntegration.skipInstallation', true);
+user_pref('extensions.zoteroMacWordIntegration.skipInstallation', true);
 ```
 
 指定实际安装目录中的 `zotero` 启动程序，完成一次配置：
@@ -277,13 +280,17 @@ node tools/replay-local-rules.mjs \
 
 `src/core/module-host.ts` 提供按 MainWindow 或 ReaderSession 隔离的模块宿主及独立模块作用域。同步激活失败会释放部分资源并保留原错误；动作贡献按 `(BindingContext, ActionId)` 唯一登记，返回有类型的调用入口。退出先使全部回调失效，再完成其余释放，即使某次清理失败也不会中断其他模块。
 
-`src/modules/index.ts` 是静态内置清单，启动校验 ID、依赖图和精确上下文贡献。完整能力目录见[模块所有权表](MODULE_DESIGN.md#模块目录与所有权)；16 个核心模块固定启用，6 个可选增强为 `reader-hints`、`extensions`、`translation`、`references`、`ai-qa` 与 `tab-enhancements`。`translation` 与 `ai-qa` 依赖核心 `reader-selection`，`references` 不依赖 AI 问答，`tab-enhancements` 依赖核心 `workspace`。
+`src/modules/index.ts` 是静态内置清单，启动校验 ID、依赖图和精确上下文贡献。完整能力目录见[模块所有权表](MODULE_DESIGN.md#模块目录与所有权)；16 个核心模块固定启用，7 个可选增强为 `reader-hints`、`extensions`、`translation`、`references`、`ai-qa`、`tab-enhancements` 与 `item-attributes`。`translation` 与 `ai-qa` 依赖核心 `reader-selection`，`references` 不依赖 AI 问答，`tab-enhancements` 依赖核心 `workspace`。
 
 MainWindow 组合标签、扩展、分类、工作集、Library、Notes、Workspace、文档准备与配置迁移入口；启用时，标签页增强会在 Zotero 初始化完成后按该窗口的有效 session 延迟激活。ReaderSession 直接组合导航、章节查找、图表浏览、解析对照、选择、批注、对象摘录、章节笔记、文档准备、hints、引用增强、可选翻译与 AI 问答、独立 Library citekey 贡献及 Workspace 分屏/焦点。各模块仅接收具名端口；Operations 与 Toolkit 保持各自负责方。
 
-`src/core/module-runtime.ts` 根据六项可选请求应用增强；`reader-hints`、`extensions` 与 `references` 默认开启，`translation`、`ai-qa` 与 `tab-enhancements` 对新配置默认关闭。`src/platform/module-startup.ts` 在 Zotero 应用对象上保留请求的 JSON 快照，因此 Neo 热重载不会应用新请求，完全退出并重启 Zotero 后才会应用。旧启动快照缺少可选字段时，已应用值按关闭处理；旧版 `reader-ai` 启用偏好不构成启用 `ai-qa` 的同意；旧核心键 `extensions.zotero-neo.modules.<core>.enabled=false` 不会关闭核心功能。
+`src/core/module-runtime.ts` 根据七项可选请求应用增强；`reader-hints`、`extensions` 与 `references` 默认开启，其余四项对新配置默认关闭。`src/platform/module-startup.ts` 在 Zotero 应用对象上保留请求的 JSON 快照，因此 Neo 热重载不会应用新请求，完全退出并重启 Zotero 后才会应用。旧启动快照缺少可选字段时，已应用值按关闭处理；旧版 `reader-ai` 启用偏好不构成启用 `ai-qa` 的同意；旧核心键 `extensions.zotero-neo.modules.<core>.enabled=false` 不会关闭核心功能。
 
-实机核对模块配置时使用专用 profile 和自有数据，确认六项可选请求保存、Neo 热重载与 Zotero 完全退出／重启的差异；确认默认引用增强已启用、其本地分析和文库查找不发起元数据请求，只有用户明确查询才访问来源；确认默认状态下 AI 问答无入口／选区动作，且不挂载面板 runtime、不读取凭据或发送请求；确认新配置默认关闭翻译和标签页增强。手动启用 `ai-qa` 并重启后入口可用，关闭再重启后入口撤除且既有成果仍保留。恢复默认后 `reader-hints`、`extensions`、`references` 开启，`translation`、`ai-qa`、`tab-enhancements` 关闭，其中 `translation=false` 显式保留；关闭全部六项后核心模块仍须可用，旧核心 `false` 偏好无效，恢复默认不改变行为偏好（包括 `noteEditor.enabled`）。故障只注入自有宿主并恢复原方法；回读自有数据与偏好，确认进程状态。不要把“关闭全部模块”作为配置场景。完整用户状态说明见[设置参考](SETTINGS_REFERENCE.md#模块)。
+实机核对模块配置时使用专用 profile 和自有数据，确认七项可选请求保存、Neo 热重载与 Zotero 完全退出／重启的差异；确认默认引用增强已启用、其本地分析和文库查找不发起元数据请求，只有用户明确查询才访问来源；确认默认状态下 AI 问答无入口／选区动作，且不挂载面板 runtime、不读取凭据或发送请求；确认新配置默认关闭翻译、标签页增强和条目自定义属性。手动启用 `ai-qa` 并重启后入口可用，关闭再重启后入口撤除且既有成果仍保留。恢复默认后 `reader-hints`、`extensions`、`references` 开启，其余四项关闭，其中 `translation=false` 显式保留；关闭全部七项后核心模块仍须可用，旧核心 `false` 偏好无效，恢复默认不改变行为偏好（包括 `noteEditor.enabled`）。故障只注入自有宿主并恢复原方法；回读自有数据与偏好，确认进程状态。不要把“关闭全部模块”作为配置场景。完整用户状态说明见[设置参考](SETTINGS_REFERENCE.md#模块)。
+
+#### 条目自定义属性手动核对
+
+在隔离配置中启用 `item-attributes` 并完全重启 Zotero。通过 `<Space>pa` 创建文本和数字定义，验证原生列菜单、负数／小数／零／多位数排序、Info 单条目编辑及切换字段时的失焦保存；原生多选不得只改第一条。通过 `<Space>ia` 核对 Neo 选择集优先、临时 Visual、目标固定、混合值、批量确认与清除，回读 Extra 和原生撤销结果。覆盖同键变化、无关行变化、重复键、未保存编辑及只读目标；取消或拒绝不能部分写入。重命名、类型变更、删除定义、双 MainWindow、热重载及停用重启后，列身份与数据保留应符合[主窗口指南](MAIN_GUIDE.md#给文献添加自定义属性)。生命周期改动还需用 XPI 安装／更新验证，不修改个人文库或文字处理器配置。
 
 #### 翻译与安装手动核对
 

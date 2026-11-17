@@ -57,6 +57,8 @@ import { mountMetadataReviewView, METADATA_REVIEW_CSS } from './surfaces/metadat
 import type { MetadataReviewModel } from '../../metadata-review/react-model';
 import { mountSettingsTransferView, SETTINGS_TRANSFER_CSS } from './surfaces/settings-transfer';
 import type { SettingsTransferModel } from '../../settings-transfer/react-model';
+import { mountItemAttributesView, ITEM_ATTRIBUTES_CSS } from './surfaces/item-attributes';
+import type { ItemAttributesModel } from '../../item-attributes/react-model';
 import { NATIVE_UI_CSS } from './styles';
 import type { NativeUIRuntime, ReactView } from './types';
 
@@ -82,6 +84,7 @@ const runtime: NativeUIRuntime = {
         DOCUMENT_PREPARATION_REACT_CSS +
         METADATA_REVIEW_CSS +
         SETTINGS_TRANSFER_CSS +
+        ITEM_ATTRIBUTES_CSS +
         ANNOTATION_COMMENT_REACT_CSS +
         SELECTION_ACTIONS_REACT_CSS +
         READER_SIDEBAR_REACT_CSS +
@@ -163,6 +166,10 @@ const runtime: NativeUIRuntime = {
         ) as ReactView<unknown>;
       case 'settings-transfer':
         return mountSettingsTransferView(root, model as SettingsTransferModel, (command) =>
+          dispatch(command),
+        ) as ReactView<unknown>;
+      case 'item-attributes':
+        return mountItemAttributesView(root, model as ItemAttributesModel, (command) =>
           dispatch(command),
         ) as ReactView<unknown>;
       case 'document-comparison':

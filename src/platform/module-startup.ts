@@ -21,6 +21,7 @@ export function moduleStartupFlags(preferences: PreferenceReader): ModuleFlags {
       'ai-qa': previous['ai-qa'] === true,
       references: previous.references === true,
       'tab-enhancements': previous['tab-enhancements'] === true,
+      'item-attributes': previous['item-attributes'] === true,
     });
   }
   const flags = Object.freeze(

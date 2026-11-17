@@ -10,7 +10,7 @@ Zotero Neo 在 Zotero 之上增加交互能力，不维护另一套文档、选�
 
 共享导航栈及其记录/恢复策略见[导航历史设计](NAVIGATION_HISTORY_DESIGN.md)。本文描述当前运行时所有权；[交互模型](INTERACTION_MODEL.md)定义 Main 交互语义，[命令参考](COMMAND_REFERENCE.md)维护准确的按键说明。
 
-[模块拆分与基座能力设计](MODULE_DESIGN.md)记录内部模块及其组合约束：当前共有 22 个内置模块，其中 16 个核心分区固定启用；`reader-hints`、`extensions`、`references`、`translation`、`ai-qa` 和 `tab-enhancements` 是六个可选增强，前三项默认开启，后三项对新配置默认关闭。用户操作见[模块设置](SETTINGS_GUIDE.md#开关可选功能)和[Reader 指南](READER_GUIDE.md)，下文维护运行时所有权。
+[模块拆分与基座能力设计](MODULE_DESIGN.md)记录内部模块及其组合约束：当前共有 23 个内置模块，其中 16 个核心分区固定启用；`reader-hints`、`extensions`、`references`、`translation`、`ai-qa`、`tab-enhancements` 和 `item-attributes` 是七个可选增强，前三项默认开启，后四项对新配置默认关闭。用户操作见[模块设置](SETTINGS_GUIDE.md#开关可选功能)和[Reader 指南](READER_GUIDE.md)，下文维护运行时所有权。
 
 ## 分层
 
@@ -52,6 +52,9 @@ Neo 自有 React 界面的素材集中在 `src/ui/react/`：`components.tsx` 提
 
 `src/modules/settings-transfer/` 只按 MainWindow 管理 `openSettingsTransfer` 的展示寿命；Addon 持有 `src/settings-transfer/` 的应用级服务与密码文件 codec，配置操作不借用 Reader 或条目 Selection。静态适配器拥有 capture／plan／apply 语义和最终准入，`src/platform/settings-transfer-*` 隔离原生文件、worker、密码存储与配置资源。React 只取得脱敏展示值与显式命令，不持有文件明文、密码或原生对象。格式、资源上限与加密备份屏障见[配置迁移边界](DEVELOPMENT.md#配置迁移格式与加密边界)。
 
+`src/item-attributes/` 按应用拥有本地定义、原生全局列／Info 行和单一管理界面；`src/modules/item-attributes/` 只持有 Main 动作、窗口租约与本次展示。Main 解析明确条目，`src/operations/item-attributes.ts` 在原生事务中核对属性基线和可写性；值仍位于 Zotero Extra，不另建条目数据库。`src/toolkit/main/item-attributes.ts` 隔离原生注册、数值排序及精确 Info 编辑文档接缝；原生多选不借用第一条目写入。定义删除不清理条目值，配置迁移只搬运定义。
+
+
 
 每个 MainWindow 仍只有一份导航历史和协调器。Library 通过具名端口请求现有操作；历史恢复直接取得原生 View 能力，不依赖 Library 的业务动作。Local Find 的查询和精确界面、最近回收批次归 Library 实例，旧恢复完成不能清空后来记录的回收批次。Local Find 的输入提示由静态打包的 React 呈现；搜索提交、IME、焦点和界面寿命仍由 Library 控制器负责。
 
@@ -70,7 +73,7 @@ Zotero 原生标签页清单是已打开 Reader/Note 视图的唯一事实来源
 
 `src/core/module-host.ts` 为每个 MainWindow 或 ReaderSession 的模块提供独立子作用域、同步激活回滚和 `(BindingContext, ActionId)` 贡献所有权。调用返回有类型的业务入口，不新增命令 ID 或跨 Surface 分发器。宿主退出先退休全部贡献，再尝试释放所有资源；原始激活或清理失败仍可观测。
 
-`BuiltinModuleRuntime` 对六个可选增强分别保存已应用值与偏好请求；核心分区固定启用。已有 `extensions.zotero-neo.modules.<core>.enabled=false` 值不会关闭核心功能。`src/platform/module-startup.ts` 在原生 Zotero 应用对象上仅保存请求的不可变布尔图 JSON，不保存窗口、模块或 SDK 对象；Neo 重载沿用本进程快照，只有真正重启 Zotero 进程后才应用新请求。旧快照缺少可选字段时，该进程按关闭处理。Settings 显示请求、已应用值、当前宿主状态与待重启状态；恢复默认恢复六项规范值，并显式写入 `translation=false`，避免迁移重新启用已关闭的请求。
+`BuiltinModuleRuntime` 对七个可选增强分别保存已应用值与偏好请求；核心分区固定启用。已有 `extensions.zotero-neo.modules.<core>.enabled=false` 值不会关闭核心功能。`src/platform/module-startup.ts` 在原生 Zotero 应用对象上仅保存请求的不可变布尔图 JSON，不保存窗口、模块或 SDK 对象；Neo 重载沿用本进程快照，只有真正重启 Zotero 进程后才应用新请求。旧快照缺少可选字段时，该进程按关闭处理。Settings 显示请求、已应用值、当前宿主状态与待重启状态；恢复默认恢复七项规范值，并显式写入 `translation=false`，避免迁移重新启用已关闭的请求。
 
 `src/modules/tags/` 是首条完整接入路径：`index.ts` 组合模块与作用域，`actions.ts` 拥有标签候选/确认与过滤策略，`capabilities.ts` 向现有三个 Surface 能力目录提供动作集合。Main controller 只在各自 Surface 解析目标后调用模块入口，并注入 Picker、状态反馈和 Main 过滤端口。标签事务仍由 `src/operations/item-tags.ts` 执行，候选 provider 仍只处理数据和展示。
 

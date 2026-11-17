@@ -15,6 +15,8 @@ import {
   parseAIConfiguration,
 } from '../../ai/configuration-policy';
 import { SettingsTransferError } from '../contracts';
+import { ITEM_ATTRIBUTE_PREFERENCE } from '../../item-attributes/types';
+import { parseItemAttributeDefinitions } from '../../item-attributes/store';
 
 export interface TransferField {
   readonly key: string;
@@ -215,6 +217,21 @@ export const NEO_PREFERENCE_FIELDS: readonly TransferField[] = [
     restart: true,
     last: true,
   })),
+  {
+    key: ITEM_ATTRIBUTE_PREFERENCE,
+    label: 'Custom item attribute definitions',
+    category: 'Item attributes',
+    type: 'string',
+    validate: (value) => {
+      if (typeof value !== 'string') return false;
+      try {
+        parseItemAttributeDefinitions(value);
+        return true;
+      } catch {
+        return false;
+      }
+    },
+  },
   {
     key: 'bindings',
     label: 'Canonical key bindings',

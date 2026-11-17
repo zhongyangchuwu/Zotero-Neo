@@ -117,3 +117,5 @@ export type {
   TabRailLayout,
   TabRailLayoutOptions,
 } from './tab-enhancements-types';
+export { createItemAttributeNativeHost, assertCustomExtraKey } from './item-attributes';
+export type { NativeItemAttribute, ItemAttributeNativeHost } from './item-attributes-types';

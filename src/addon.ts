@@ -32,6 +32,7 @@ import { SettingsTransferService } from './settings-transfer/service';
 import { createSettingsAdapters } from './settings-transfer/registry';
 import { createSettingsFileCodec } from './settings-transfer/codec';
 import { createSettingsTransferFiles } from './platform/settings-transfer-files';
+import { ItemAttributesController } from './item-attributes/controller';
 
 export interface AddonContext {
   readonly id: string;
@@ -69,6 +70,7 @@ export class ZoteroNeoAddon implements ZoteroNeoController {
   readonly #artifacts = createArtifactRepository();
   readonly #metadataReview: MetadataReviewController;
   readonly #settingsTransfer: SettingsTransferController;
+  readonly #itemAttributes: ItemAttributesController;
   readonly #reader: ReaderControllerApi;
   readonly #main: MainWindowControllerApi;
   readonly api: ZoteroNeoPublicApi;
@@ -100,6 +102,9 @@ export class ZoteroNeoAddon implements ZoteroNeoController {
       createSettingsFileCodec(),
       createSettingsTransferFiles(),
       (message) => this.#logger.debug(message),
+    );
+    this.#itemAttributes = new ItemAttributesController(preferences, (message) =>
+      this.#logger.debug(message),
     );
     this.#modules = new BuiltinModuleRuntime(
       this.#preferences,
@@ -145,6 +150,7 @@ export class ZoteroNeoAddon implements ZoteroNeoController {
       documentPreparation: this.#preparation,
       metadataReview: this.#metadataReview,
       settingsTransfer: this.#settingsTransfer,
+      itemAttributes: this.#modules.applied['item-attributes'] ? this.#itemAttributes : undefined,
       aiQA: () => this.aiQA,
       preferences: this.#preferences,
       logger: this.#logger,
@@ -171,6 +177,7 @@ export class ZoteroNeoAddon implements ZoteroNeoController {
     migrateReaderPreferences(this.#preferences);
     this.#registerPreferences();
     this.#managedTags.start();
+    if (this.#modules.applied['item-attributes']) this.#itemAttributes.start(context.id);
     if (this.#modules.applied['ai-qa'] && !this.aiQA) {
       try {
         this.aiQA = new AIQAController({
@@ -208,6 +215,7 @@ export class ZoteroNeoAddon implements ZoteroNeoController {
     failure.run(() => this.#preparation.dispose());
     failure.run(() => this.#metadataReview.dispose());
     failure.run(() => this.#settingsTransfer.dispose());
+    failure.run(() => this.#itemAttributes.dispose());
     failure.run(() => this.#scholarly.dispose());
     failure.run(() => this.#reader.shutdown());
     failure.run(() => this.aiQA?.dispose());
