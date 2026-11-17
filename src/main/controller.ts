@@ -1558,14 +1558,17 @@ export class MainWindowController implements MainWindowControllerApi {
       case 'editItemAttributes': {
         const module = this.#modules.get(session)?.itemAttributes;
         if (!module) break;
-        const targets = MAIN_ITEM_TARGET.resolve(
-          window,
-          this.worksetsModule(session)?.selection ?? null,
-          this.worksetsModule(session)?.isVisual
-            ? this.worksetsModule(session)?.currentTarget()
-            : undefined,
-        );
-        if (action === 'editItemAttributes' && targets.missing) {
+        const targets =
+          action === 'editItemAttributes'
+            ? MAIN_ITEM_TARGET.resolve(
+                window,
+                this.worksetsModule(session)?.selection ?? null,
+                this.worksetsModule(session)?.isVisual
+                  ? this.worksetsModule(session)?.currentTarget()
+                  : undefined,
+              )
+            : null;
+        if (targets?.missing) {
           this.#navigation.status(
             session,
             this.keyGuideLanguage() === 'zh-CN'
@@ -1577,7 +1580,7 @@ export class MainWindowController implements MainWindowControllerApi {
         const presentation = {
           window,
           mode: action === 'manageItemAttributes' ? ('definitions' as const) : ('values' as const),
-          items: targets.items,
+          items: targets?.items ?? [],
           language: () => this.keyGuideLanguage(),
           themeRoot: (root: HTMLElement) => session.theme.add(root),
           isCurrent: () => this.#sessions.get(window) === session && !session.cleanup.disposed,
