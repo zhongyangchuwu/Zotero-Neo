@@ -10,7 +10,7 @@ Zotero Neo 在 Zotero 之上增加交互能力，不维护另一套文档、选�
 
 共享导航栈及其记录/恢复策略见[导航历史设计](NAVIGATION_HISTORY_DESIGN.md)。本文描述当前运行时所有权；[交互模型](INTERACTION_MODEL.md)定义 Main 交互语义，[命令参考](COMMAND_REFERENCE.md)维护准确的按键说明。
 
-[模块拆分与基座能力设计](MODULE_DESIGN.md)记录内部模块及其组合约束：当前共有 21 个内置模块，其中 15 个核心分区固定启用；`reader-hints`、`extensions`、`references`、`translation`、`ai-qa` 和 `tab-enhancements` 是六个可选增强，前三项默认开启，后三项对新配置默认关闭。用户操作见[模块设置](SETTINGS_GUIDE.md#开关可选功能)和[Reader 指南](READER_GUIDE.md)，下文维护运行时所有权。
+[模块拆分与基座能力设计](MODULE_DESIGN.md)记录内部模块及其组合约束：当前共有 22 个内置模块，其中 16 个核心分区固定启用；`reader-hints`、`extensions`、`references`、`translation`、`ai-qa` 和 `tab-enhancements` 是六个可选增强，前三项默认开启，后三项对新配置默认关闭。用户操作见[模块设置](SETTINGS_GUIDE.md#开关可选功能)和[Reader 指南](READER_GUIDE.md)，下文维护运行时所有权。
 
 ## 分层
 
@@ -26,7 +26,7 @@ Zotero Neo 在 Zotero 之上增加交互能力，不维护另一套文档、选�
 
 `src/input/actions.ts` 是唯一的 `ActionId` 目录。功能能力模块定义可执行动作；controller 分发已解析的语义动作，不模拟键盘事件。Settings、Key Guide、快捷键提示和按键匹配都由同一动作目录、处理方能力与已解析绑定生成。
 
-`src/modules/index.ts` 定义精确上下文/动作归属与依赖，`src/core/module-runtime.ts` 按已应用图和实际宿主实例过滤能力，再交给按键匹配、count/前缀、Guide 和 Palette。核心分区固定启用；只有 `reader-hints`、`extensions`、`references`、`ai-qa` 与 `tab-enhancements` 可按已应用请求关闭。`ai-qa` 依赖核心 `reader-selection`，`references` 无 AI 或选择模块依赖，`tab-enhancements` 依赖核心 `workspace`。不可用贡献的元数据及用户绑定保留；不能按全局 ActionId 删除其他上下文的同名贡献，例如 Library 的 Main Select Trash。独立 Reader 的标识符动作使用实际 Main opener，其余跨窗口委托继续使用各自真实接收方，不借用任意健康 Main。
+`src/modules/index.ts` 定义精确上下文/动作归属与依赖，`src/core/module-runtime.ts` 按已应用图和实际宿主实例过滤能力，再交给按键匹配、count/前缀、Guide 和 Palette。核心分区固定启用；只有 `reader-hints`、`extensions`、`references`、`translation`、`ai-qa` 与 `tab-enhancements` 可按已应用请求关闭。`translation` 和 `ai-qa` 依赖核心 `reader-selection`，`references` 无 AI 或选择模块依赖，`tab-enhancements` 依赖核心 `workspace`。不可用贡献的元数据及用户绑定保留；不能按全局 ActionId 删除其他上下文的同名贡献，例如 Library 的 Main Select Trash。独立 Reader 的标识符动作使用实际 Main opener，其余跨窗口委托继续使用各自真实接收方，不借用任意健康 Main。
 
 条目目标由发起操作的 Surface 解析。`src/core/item-target.ts` 定义共享结果形状；`src/platform/zotero-items.ts` 负责 Zotero 查找、归一化与身份去重。`src/main/main-item-target.ts` 在 Main 中优先解析 Selection，再解析 CurrentTarget；`src/reader/item-target.ts` 解析当前 Reader 条目；`src/main/note-item-target.ts` 解析当前 Note。Reader 和 Note 不借用 Main Selection。
 
@@ -49,6 +49,9 @@ Toolkit 仅从实际 Main document 中已连接、可见且有布局的 Note ifr
 设置中心、Picker 和引用详情使用 `src/ui/react/` 的静态 React 视图；`src/platform/native-ui.ts` 按确切 Window／Document 加载共享运行时、克隆展示模型并退休挂载。领域状态、键盘与组合输入、设置提交、Picker 确认以及引用来源／缓存仍由各自控制器负责。设置中心管理模态 Tab 边界，原生 disclosure 和普通控件均可进入键盘顺序；已保存的凭据不进入共享展示模型。
 
 Neo 自有 React 界面的素材集中在 `src/ui/react/`：`components.tsx` 提供通用控件，`styles.ts` 定义共享基础样式，`surfaces/` 按面板分别保存布局、专属样式及展示组件，`shells/` 保存需同步创建的宿主外壳和 PDF 标记样式；主题变量由 `src/ui/theme.ts` 提供。按键指南以及 Main／Reader 状态提示使用 React 视图，计时和模式仍归各控制器。PDF 目标提示需要同步测量，Flash 输入需要立即取得焦点并维持 IME，二者仍由精确 PDF 文档中的宿主管理 DOM，坐标由交互代码计算。领域数据和命令模型仍归各业务模块，原生 Zotero 控件与宿主生命周期不并入素材库。
+
+`src/modules/settings-transfer/` 只按 MainWindow 管理 `openSettingsTransfer` 的展示寿命；Addon 持有 `src/settings-transfer/` 的应用级服务与密码文件 codec，配置操作不借用 Reader 或条目 Selection。静态适配器拥有 capture／plan／apply 语义和最终准入，`src/platform/settings-transfer-*` 隔离原生文件、worker、密码存储与配置资源。React 只取得脱敏展示值与显式命令，不持有文件明文、密码或原生对象。格式、资源上限与加密备份屏障见[配置迁移边界](DEVELOPMENT.md#配置迁移格式与加密边界)。
+
 
 每个 MainWindow 仍只有一份导航历史和协调器。Library 通过具名端口请求现有操作；历史恢复直接取得原生 View 能力，不依赖 Library 的业务动作。Local Find 的查询和精确界面、最近回收批次归 Library 实例，旧恢复完成不能清空后来记录的回收批次。Local Find 的输入提示由静态打包的 React 呈现；搜索提交、IME、焦点和界面寿命仍由 Library 控制器负责。
 

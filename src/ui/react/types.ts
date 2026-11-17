@@ -16,6 +16,7 @@ export type NativeReactSurface =
   | 'reader-figures'
   | 'document-preparation'
   | 'metadata-review'
+  | 'settings-transfer'
   | 'document-comparison'
   | 'annotation-comment'
   | 'selection-actions'

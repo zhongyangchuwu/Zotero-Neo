@@ -27,6 +27,11 @@ import { registerNativeUIResources } from './platform/native-ui';
 import { createScholarlyMetadataService } from './scholarly';
 import { createArtifactRepository } from './artifacts';
 import { MetadataReviewController } from './metadata-review/controller';
+import { SettingsTransferController } from './settings-transfer/controller';
+import { SettingsTransferService } from './settings-transfer/service';
+import { createSettingsAdapters } from './settings-transfer/registry';
+import { createSettingsFileCodec } from './settings-transfer/codec';
+import { createSettingsTransferFiles } from './platform/settings-transfer-files';
 
 export interface AddonContext {
   readonly id: string;
@@ -63,6 +68,7 @@ export class ZoteroNeoAddon implements ZoteroNeoController {
   readonly #scholarly = createScholarlyMetadataService();
   readonly #artifacts = createArtifactRepository();
   readonly #metadataReview: MetadataReviewController;
+  readonly #settingsTransfer: SettingsTransferController;
   readonly #reader: ReaderControllerApi;
   readonly #main: MainWindowControllerApi;
   readonly api: ZoteroNeoPublicApi;
@@ -80,6 +86,19 @@ export class ZoteroNeoAddon implements ZoteroNeoController {
     this.#metadataReview = new MetadataReviewController(
       this.#scholarly,
       this.#artifacts,
+      (message) => this.#logger.debug(message),
+    );
+    const version = (): string => {
+      if (!this.#context) throw new Error('Settings transfer requires an initialized addon');
+      return this.#context.version;
+    };
+    this.#settingsTransfer = new SettingsTransferController(
+      new SettingsTransferService(createSettingsAdapters(version), () => ({
+        neo: version(),
+        zotero: Zotero.version,
+      })),
+      createSettingsFileCodec(),
+      createSettingsTransferFiles(),
       (message) => this.#logger.debug(message),
     );
     this.#modules = new BuiltinModuleRuntime(
@@ -125,6 +144,7 @@ export class ZoteroNeoAddon implements ZoteroNeoController {
       modules: this.#modules,
       documentPreparation: this.#preparation,
       metadataReview: this.#metadataReview,
+      settingsTransfer: this.#settingsTransfer,
       aiQA: () => this.aiQA,
       preferences: this.#preferences,
       logger: this.#logger,
@@ -187,6 +207,7 @@ export class ZoteroNeoAddon implements ZoteroNeoController {
     failure.run(() => this.#managedTags.dispose());
     failure.run(() => this.#preparation.dispose());
     failure.run(() => this.#metadataReview.dispose());
+    failure.run(() => this.#settingsTransfer.dispose());
     failure.run(() => this.#scholarly.dispose());
     failure.run(() => this.#reader.shutdown());
     failure.run(() => this.aiQA?.dispose());

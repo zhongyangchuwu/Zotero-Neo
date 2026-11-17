@@ -1,6 +1,6 @@
 # 模块拆分与基座能力设计
 
-代码按可组合能力划分内部模块；当前共有 21 个模块，其中 15 个核心模块固定启用，6 个可选增强，完整目录见下文的模块所有权表。
+代码按可组合能力划分内部模块；当前共有 22 个模块，其中 16 个核心模块固定启用，6 个可选增强，完整目录见下文的模块所有权表。
 `reader-hints`（链接与复制提示）、`extensions`（扩展管理面板）、`references`（引用增强）、`translation`（翻译增强）、`ai-qa`（AI 问答（实验））与 `tab-enhancements`（标签页增强）是六项可选增强；前三项默认开启，后三项对新配置默认关闭。运行时所有权见[架构](ARCHITECTURE.md)；可选项配置见[模块设置](SETTINGS_GUIDE.md#开关可选功能)，Reader 操作见[Reader 指南](READER_GUIDE.md)。
 
 ## 范围与取舍
@@ -35,6 +35,7 @@
 - `src/modules/translation/`：按 ReaderSession 拥有手动 `pdf-translate.translate` 选择动作、自动译文保存与侧栏角色；硬依赖核心 `reader-selection`。上游负责翻译服务与凭据，Toolkit 封装精确 popup 来源、2.4.8 私有结果读取和原生侧栏接缝；保存 Operation 只接收已捕获并重新验证的明确来源。
 - `reader-chapters`、`reader-figures`、`document-comparison`、`reader-excerpts` 与 `chapter-notes` 分别通过自己的 `index.ts` 接入 ReaderSession，登记原有动作并拥有界面和释放；来源失效订阅随实际消费者归属。Reader Surface 直接组合这些能力。
 - `document-preparation` 提供应用级 controller 与 Main/Reader 的局部入口。模块作用域只保留本次界面的精确释放句柄，共享队列的停止和销毁权留在应用级。
+- `settings-transfer` 在 Main 提供独立的加密配置导出／恢复入口；应用服务串行编排静态 Zotero／Neo 适配器、差异审阅、加密备份和逐项回执。窗口模块只持有本次展示的释放句柄，不成为其他功能的前置条件；语义文件与原生边界见[开发指南](DEVELOPMENT.md#配置迁移格式与加密边界)。
 - `src/modules/workspace/`：MainWindow 拥有三个 Surface 的标签页候选、切换、循环、关闭及 Reader/Note 的 Show in Library；ReaderSession 拥有分屏切换与方向焦点。共享历史、原生标签页重扫、精确视图发现、NativeInput 及 Main/Note 通用面板焦点仍在基座；方向焦点实际成功才消费按键。
 - `src/modules/tab-enhancements/`：按 MainWindow 拥有左／右侧栏或上方横向模式的标签页增强界面、标题展示与分组交互；默认位置为左侧。上方栏由 Neo 绘制，保留 Zotero 原生工具栏，并逐项适配原生标签操作。应用共享的 `TabGroupManager` 管理打开视图的分组，依赖核心 `workspace` 激活原生标签页并复用共享历史。分组不按 Zotero 分类自动生成；Main 创建／追加动作确认后打开 PDF 并分组成功视图，Reader／Note 不提供导入。成员以原生 `viewID` 区分，关闭时移除，空组保留；关闭和排序只作用于发起窗口，跨窗口激活委托给所属宿主。Toolkit 负责原生清单同步和布局接缝，不重挂 Reader/PDF 内容或 Note editor。
 
@@ -60,7 +61,7 @@ AT 菜单分发先对整批目标执行一次，再逐项执行；Neo 委托 AT 
 
 ## 模块目录与所有权
 
-下表列出 21 个内置模块的能力、实现来源和实例边界；其中 15 个核心模块固定启用，6 个可选增强按设置请求启用。每个模块沿用现有命令标识，不重新命名动作。
+下表列出 22 个内置模块的能力、实现来源和实例边界；其中 16 个核心模块固定启用，6 个可选增强按设置请求启用。每个模块沿用现有命令标识，不重新命名动作。
 
 | 模块 ID | 用户功能与业务状态 | 当前实现来源 | 实例范围及依赖 |
 | --- | --- | --- | --- |
@@ -78,6 +79,7 @@ AT 菜单分发先对整批目标执行一次，再逐项执行；Neo 委托 AT 
 | `reader-excerpts` | 图表／公式摘录、原图预览、复制及显式保存为来源笔记。 | `src/modules/reader-excerpts/`、`src/operations/source-note.ts` | 按 ReaderSession 接入，交互绑定精确 ReaderView；不持有 Select 状态。Surface 固定来源目标，已接纳写入与界面寿命分离。 |
 | `chapter-notes` | 来源内容的章节归属、筛选、预览及显式生成笔记；保留内容去重和生成身份。 | `src/modules/chapter-notes/` | 按 ReaderSession 接入，复用来源读取与保存 Operation；不由 Main 的 `notes` 模块创建或转发。 |
 | `document-preparation` | 固定 PDF 批次的准备界面、进度及明确的开始／继续／停止操作。 | `src/modules/document-preparation/`；队列与记录位于 `src/document-analysis/` | 应用持有共享队列；MainWindow 与 ReaderSession 各持有本次界面的释放句柄。关闭旧作用域不关闭替换界面，也不停止已接纳任务。 |
+| `settings-transfer` | Zotero／Neo 配置的密码文件导出、无写入预览、显式选择、路径映射、加密备份和逐项恢复。 | `src/modules/settings-transfer/`、`src/settings-transfer/`、`src/platform/settings-transfer-*` | 应用持有配置服务、静态适配器和 codec；MainWindow 持有精确展示作用域。没有 Reader、云同步、密码管理器账户或其他可选模块硬依赖。 |
 | `reader-hints` | 可选增强“链接与复制提示”：批注 Excerpt/Comment、DOI/arXiv/URL 等可见目标的复制，以及 PDF 链接/标识符跟随。 | `src/modules/reader-hints/` | 已按 ReaderSession 接入，保留精确 ReaderView 与单次提示交互。不依赖 `reader-annotations`：仍可读取 Zotero 已有批注。 |
 | `references` | 可选引用增强：在 PDF 中跳转到参考文献和识别到的引用位置，反向查看引用上下文；用户明确查询免费学术来源，或查找／添加本地条目。 | `src/modules/references/`、`src/references/`、`src/operations/references.ts`、`src/toolkit/reader/references.ts`、`src/platform/reference-credentials.ts` | ReaderSession / 精确 ReaderView；`openReferences` 属于 Reader Normal。无 `ai-qa` 依赖；元数据查询与本地分析分离。 |
 | `ai-qa` | 可选 AI 问答（实验）：从当前 Reader 接收用户选中的文字或有限章节证据，提供解释、提问和章节图文导引；可明确允许附带相关图表裁图。不检索批注、笔记或其他论文。 | `src/modules/ai-qa/`、`src/ai-qa/`、`src/ai/`、`src/platform/ai-qa-ui.ts`、`src/platform/ai-qa-storage.ts`、`src/toolkit/reader/ai-qa-panel.ts` | ReaderSession 提供入口和选区；AI 问答领域拥有固定任务、证据编排与成果管理，应用级已接纳任务可在 Reader 关闭后继续处理。硬依赖固定启用的 `reader-selection`。 |

@@ -33,12 +33,13 @@ export async function readSettledMinerUToken(): Promise<string> {
 }
 
 /** Store in Zotero's login manager, shared by single/batch analysis; never persist secrets as preferences or journal fields. */
-export function saveMinerUToken(value: string): Promise<void> {
+export function saveMinerUToken(value: string, admit?: () => void): Promise<void> {
   const token = value.trim();
   if (token.length > 8192 || /[\r\n]/u.test(token))
     return Promise.reject(new Error('Invalid MinerU token'));
   const task = writing.then(async () => {
     const previous = logins();
+    admit?.();
     if (!token) {
       for (const login of previous) manager().removeLogin(login);
       return;

@@ -17,7 +17,7 @@ cpSync(resolve(root, 'LICENSE'), resolve(buildRoot, 'LICENSE'));
 const licenseDirectory = resolve(buildRoot, 'licenses');
 mkdirSync(licenseDirectory, { recursive: true });
 cpSync(resolve(root, 'vendor/fuzzysort/LICENSE'), resolve(licenseDirectory, 'fuzzysort-LICENSE'));
-for (const name of ['ai-sdk', 'react']) {
+for (const name of ['ai-sdk', 'react', 'age-encryption']) {
   cpSync(resolve(root, `vendor/${name}/NOTICE`), resolve(licenseDirectory, `${name}-NOTICE`));
   cpSync(
     resolve(root, `vendor/${name}/provenance.json`),
@@ -85,6 +85,7 @@ for (const [entry, output] of [
   ['src/ai-qa/ui/index.tsx', 'content/ai-qa-ui.js'],
   ['src/ui/react/library.ts', 'content/react-runtime.js'],
   ['src/ui/react/index.ts', 'content/native-ui.js'],
+  ['src/settings-transfer/crypto-worker.ts', 'content/settings-transfer-crypto.js'],
 ]) {
   await build({
     ...common,

@@ -11,6 +11,7 @@ const expectedMembers = [
   'bootstrap.js',
   'content/preferences/pane.js',
   'content/preferences/pane.xhtml',
+  'content/settings-transfer-crypto.js',
   'content/zotero-neo.js',
   'icons/icon-128x128.png',
   'icons/icon-16x16.png',
@@ -19,6 +20,8 @@ const expectedMembers = [
   'icons/icon-48x48.png',
   'icons/icon-64x64.png',
   'icons/icon-96x96.png',
+  'licenses/age-encryption-NOTICE',
+  'licenses/age-encryption-provenance.json',
   'licenses/fuzzysort-LICENSE',
   'manifest.json',
 ];
@@ -57,12 +60,18 @@ describe('ZIP package contract', () => {
         ['icons/icon-128x128.png', 'large icon'],
         ['icons/icon-48x48.png', 'toolbar icon'],
         ['content/preferences/pane.js', 'window.Pane = true;'],
+        ['content/settings-transfer-crypto.js', 'self.onmessage = function () {};'],
       ] as const) {
         writeFixtureFile(source, member, contents);
       }
       for (const [member, licenseSource] of [
         ['LICENSE', join(repositoryRoot, 'LICENSE')],
         ['licenses/fuzzysort-LICENSE', join(repositoryRoot, 'vendor/fuzzysort/LICENSE')],
+        ['licenses/age-encryption-NOTICE', join(repositoryRoot, 'vendor/age-encryption/NOTICE')],
+        [
+          'licenses/age-encryption-provenance.json',
+          join(repositoryRoot, 'vendor/age-encryption/provenance.json'),
+        ],
       ]) {
         writeFixtureFile(source, member, readFileSync(licenseSource, 'utf8'));
       }
@@ -87,6 +96,11 @@ describe('ZIP package contract', () => {
       expect(readZipMember(firstArchive, 'licenses/fuzzysort-LICENSE')).toEqual(
         readFileSync(join(repositoryRoot, 'vendor/fuzzysort/LICENSE')),
       );
+      for (const name of ['NOTICE', 'provenance.json']) {
+        expect(readZipMember(firstArchive, `licenses/age-encryption-${name}`)).toEqual(
+          readFileSync(join(repositoryRoot, `vendor/age-encryption/${name}`)),
+        );
+      }
     });
   });
 

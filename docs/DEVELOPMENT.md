@@ -154,13 +154,25 @@ npm run dev:status
 `assets/ui-review/` 保存开发评审用 React 源码、功能截图、捕获来源和架构记录；不复制进 XPI，也不作为 VitePress 页面构建。其运行与截图索引由该目录的 `README.md` 维护。
 
 
-### 静态 AI 与 AI 问答界面 bundle
+### 静态 AI、React 与加密 bundle
 
 `tools/build.mjs` 将 `src/ai/runtime.ts` 打包为 `content/ai-runtime.js`，将 `src/ai-qa/ui/index.tsx` 打包为 `content/ai-qa-ui.js`，并把 AI 问答工具窗静态文档复制到 `content/ai-qa-window.xhtml`。`vendor/ai-sdk/` 固定 `ai@7.0.162`、`@ai-sdk/openai-compatible@3.0.84` 与 `@ai-sdk/openai@4.0.108`，分别通过兼容 Chat 模型和 Responses 模型支持显式协议选择；完整闭包、tarball integrity、上游来源和许可证记录在该目录的 `package-lock.json` 与 `provenance.json`。`vendor/react/` 固定 `react@19.3.1`、`react-dom@19.3.1` 和 `scheduler@0.28.0`，完整闭包记录在对应的 lockfile 和 provenance 文件中。
 
 AI 问答工具窗使用生产 URI `chrome://zotero-neo-ai-qa/content/ai-qa-window.xhtml`，不直接以 file/jar URI 加载。`src/platform/ai-qa-ui.ts` 在首次打开时惰性注册已打包的 `content/` 资源并持有 `destruct()` 句柄；`src/toolkit/reader/ai-qa-panel.ts` 负责精确 Reader 的工具窗，窗口类型为 `zotero-neo:ai-qa`。Addon/Toolkit 退出时先关闭所拥有的窗口，再释放共享注册。
 
-XPI 收录项目 `LICENSE`，以及 `licenses/fuzzysort-LICENSE`、`licenses/ai-sdk-NOTICE`、`licenses/ai-sdk-provenance.json`、`licenses/react-NOTICE` 和 `licenses/react-provenance.json`。AI SDK 闭包包含 Apache-2.0 与 MIT 组件，React 闭包使用 MIT；`NOTICE` 文件保留相应许可证文本。可执行依赖静态进入生成的 bundle，不在运行时安装或下载，也不以原始 vendor 包作为单独的 XPI 成员。`tools/check-package.mjs` 对成员清单和打包后的 notice/provenance 内容作精确校验。
+XPI 收录项目 `LICENSE`，以及 `licenses/fuzzysort-LICENSE`、`licenses/ai-sdk-NOTICE`、`licenses/ai-sdk-provenance.json`、`licenses/react-NOTICE`、`licenses/react-provenance.json`、`licenses/age-encryption-NOTICE` 和 `licenses/age-encryption-provenance.json`。AI SDK 闭包包含 Apache-2.0 与 MIT 组件，React 闭包使用 MIT；固定的 `age-encryption@0.3.1` 使用 BSD-3-Clause，其余闭包组件使用 MIT。版本、完整性和上游来源记录在各 vendor 目录；`NOTICE` 保留许可证文本。可执行依赖静态进入生成的 bundle，不在运行时安装或下载，也不以原始 vendor 包作为单独的 XPI 成员。`tools/check-package.mjs` 对成员清单和打包后的 notice/provenance 内容作精确校验。
+
+### 配置迁移格式与加密边界
+
+用户入口、支持范围和恢复步骤见[配置迁移](SETTINGS_GUIDE.md#导出和恢复配置)。`src/settings-transfer/` 持有版本化语义文档、操作服务和展示控制器；`createSettingsAdapters()` 静态登记 `zotero`、`zotero-neo`，不是动态插件 SDK。新增适配器需要明确字段归属、无写入预览、最终写入准入和对应宿主能力，不能扫描全部 profile／密码管理器冒充支持。
+
+v1 明文封套标识为 `format: zotero-neo-settings`、`schemaVersion: 1`，包含 `createdAt`、`producer`、`zoteroVersion` 和 `sections`。每个 section 记录 `adapterID`、`schemaVersion`、`sourceVersion` 与 `entries`；entry 的 `state` 为 `{ kind: set, value: … }` 或 `{ kind: reset }`。缺席字段不表示恢复默认，`false`、`0` 和空字符串不丢弃。文件不决定执行代码、字段秘密属性、标签或可执行适配器；未知封套版本拒绝，未知适配器报告并跳过。
+
+`content/settings-transfer-crypto.js` 是静态打包的 classic worker。密码模式由固定 age 库完成：scrypt factor 18，约 256 MiB KDF 内存，不自建密码学协议、用户密钥文件或运行时依赖。完整认证后才解析 UTF-8／语义格式；16 KiB 未认证 header 入场上限先于库的 stanza 分配，单 scrypt identity 准入再限制 KDF 成本。技术上限为 32 MiB UTF-8 明文、20,000 entries，单字符串最多 2,097,152 个 UTF-16 code units；密文限制另计 armor／STREAM 开销，不是 1 MB 产品目标。
+
+已安装 XPI 中的 worker 通过现有 `chrome://zotero-neo-ui/content/settings-transfer-crypto.js` 映射加载，不把 `jar:` 资源根直接交给 `Worker`；注册和退休沿用原生 UI 的插件级生命周期。
+
+服务在 profile 范围串行操作，先复查选择项的审阅基线，再保存只含所选原值的加密备份。文件边界使用同目录暂存、确认过的覆盖策略和发布后读回；适配器在异步排队之后、实际写入之前再次核对当前性与原值。部分提交按回执保留，不宣称跨适配器回滚。密码与明文只限操作内存；React 模型只接收脱敏预览，worker 在取消、失效、窗口退出和销毁时退休。JavaScript 字符串释放不等于可证明的内存清零，不作独立密码学审计声明。
 
 ## 运行时架构
 
@@ -265,9 +277,9 @@ node tools/replay-local-rules.mjs \
 
 `src/core/module-host.ts` 提供按 MainWindow 或 ReaderSession 隔离的模块宿主及独立模块作用域。同步激活失败会释放部分资源并保留原错误；动作贡献按 `(BindingContext, ActionId)` 唯一登记，返回有类型的调用入口。退出先使全部回调失效，再完成其余释放，即使某次清理失败也不会中断其他模块。
 
-`src/modules/index.ts` 是静态内置清单，启动校验 ID、依赖图和精确上下文贡献。完整能力目录见[模块所有权表](MODULE_DESIGN.md#模块目录与所有权)；15 个核心模块固定启用，6 个可选增强为 `reader-hints`、`extensions`、`translation`、`references`、`ai-qa` 与 `tab-enhancements`。`translation` 与 `ai-qa` 依赖核心 `reader-selection`，`references` 不依赖 AI 问答，`tab-enhancements` 依赖核心 `workspace`。
+`src/modules/index.ts` 是静态内置清单，启动校验 ID、依赖图和精确上下文贡献。完整能力目录见[模块所有权表](MODULE_DESIGN.md#模块目录与所有权)；16 个核心模块固定启用，6 个可选增强为 `reader-hints`、`extensions`、`translation`、`references`、`ai-qa` 与 `tab-enhancements`。`translation` 与 `ai-qa` 依赖核心 `reader-selection`，`references` 不依赖 AI 问答，`tab-enhancements` 依赖核心 `workspace`。
 
-MainWindow 组合标签、扩展、分类、工作集、Library、Notes、Workspace 与文档准备入口；启用时，标签页增强会在 Zotero 初始化完成后按该窗口的有效 session 延迟激活。ReaderSession 直接组合导航、章节查找、图表浏览、解析对照、选择、批注、对象摘录、章节笔记、文档准备、hints、引用增强、可选翻译与 AI 问答、独立 Library citekey 贡献及 Workspace 分屏/焦点。各模块仅接收具名端口；Operations 与 Toolkit 保持各自负责方。
+MainWindow 组合标签、扩展、分类、工作集、Library、Notes、Workspace、文档准备与配置迁移入口；启用时，标签页增强会在 Zotero 初始化完成后按该窗口的有效 session 延迟激活。ReaderSession 直接组合导航、章节查找、图表浏览、解析对照、选择、批注、对象摘录、章节笔记、文档准备、hints、引用增强、可选翻译与 AI 问答、独立 Library citekey 贡献及 Workspace 分屏/焦点。各模块仅接收具名端口；Operations 与 Toolkit 保持各自负责方。
 
 `src/core/module-runtime.ts` 根据六项可选请求应用增强；`reader-hints`、`extensions` 与 `references` 默认开启，`translation`、`ai-qa` 与 `tab-enhancements` 对新配置默认关闭。`src/platform/module-startup.ts` 在 Zotero 应用对象上保留请求的 JSON 快照，因此 Neo 热重载不会应用新请求，完全退出并重启 Zotero 后才会应用。旧启动快照缺少可选字段时，已应用值按关闭处理；旧版 `reader-ai` 启用偏好不构成启用 `ai-qa` 的同意；旧核心键 `extensions.zotero-neo.modules.<core>.enabled=false` 不会关闭核心功能。
 

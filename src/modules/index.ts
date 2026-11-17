@@ -47,6 +47,7 @@ export type BuiltinModuleId =
   | 'reader-excerpts'
   | 'chapter-notes'
   | 'document-preparation'
+  | 'settings-transfer'
   | 'extensions'
   | 'tab-enhancements';
 
@@ -350,6 +351,17 @@ export const BUILTIN_MODULES: readonly BuiltinModuleDescriptor[] = [
     ],
     selectionActions: [],
     ui: ['Document preparation'],
+  },
+  {
+    id: 'settings-transfer',
+    names: { en: 'Settings Transfer', 'zh-CN': '配置迁移' },
+    hosts: ['main'],
+    scopes: ['Application configuration', 'Main window', 'Transfer operation'],
+    requires: [],
+    optional: [],
+    contributions: [{ host: 'main', context: 'main-normal', actions: ['openSettingsTransfer'] }],
+    selectionActions: [],
+    ui: ['Encrypted settings export', 'Settings restore preview'],
   },
   {
     id: 'ai-qa',

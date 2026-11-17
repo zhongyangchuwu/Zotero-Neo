@@ -93,6 +93,7 @@ const BASE_ACTION_IDS = [
   'yankAnnotationComment',
   'openCommandPalette',
   'openNeoSettings',
+  'openSettingsTransfer',
   'prepareDocuments',
   'inspectMetadata',
   'inspectCollectionMetadata',

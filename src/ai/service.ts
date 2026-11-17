@@ -11,6 +11,11 @@ import type {
   AIService,
 } from './contracts';
 import { AIServiceError } from './errors';
+import {
+  normalizeAIConfiguration,
+  normalizeAICredential,
+  parseAIConfiguration,
+} from './configuration-policy';
 
 const KEY = 'ai.configuration';
 const empty: AIConfiguration = {
@@ -30,37 +35,6 @@ const codes: readonly AIErrorCode[] = [
   'unsupported',
 ];
 
-function normalize(value: AIConfiguration): AIConfiguration {
-  let url: URL;
-  try {
-    url = new URL(value.endpoint);
-  } catch {
-    throw new AIServiceError('unsupported');
-  }
-  const loopback =
-    url.hostname === 'localhost' || url.hostname === '127.0.0.1' || url.hostname === '[::1]';
-  if (
-    (value.api !== 'openai-chat-completions' && value.api !== 'openai-responses') ||
-    (url.protocol !== 'https:' && !(url.protocol === 'http:' && loopback)) ||
-    url.username ||
-    url.password ||
-    value.endpoint.includes('?') ||
-    value.endpoint.includes('#') ||
-    !value.model.trim() ||
-    !Number.isSafeInteger(value.maxOutputTokens) ||
-    value.maxOutputTokens < 1 ||
-    typeof value.sendImages !== 'boolean'
-  )
-    throw new AIServiceError('unsupported');
-  return {
-    api: value.api,
-    endpoint: url.href.replace(/\/$/u, ''),
-    model: value.model.trim(),
-    maxOutputTokens: value.maxOutputTokens,
-    sendImages: value.sendImages,
-  };
-}
-
 export function createAIService(options: {
   rootURI: string;
   preferences: PreferenceStore;
@@ -73,29 +47,7 @@ export function createAIService(options: {
   const pending = new Set<() => void>();
   function settings(): AIConfiguration {
     try {
-      const parsed: unknown = JSON.parse(options.preferences.get(KEY, 'null'));
-      if (
-        !parsed ||
-        typeof parsed !== 'object' ||
-        !('endpoint' in parsed) ||
-        typeof parsed.endpoint !== 'string' ||
-        !('model' in parsed) ||
-        typeof parsed.model !== 'string' ||
-        !('maxOutputTokens' in parsed) ||
-        typeof parsed.maxOutputTokens !== 'number' ||
-        !('sendImages' in parsed) ||
-        typeof parsed.sendImages !== 'boolean'
-      )
-        return empty;
-      const api = 'api' in parsed ? parsed.api : 'openai-chat-completions';
-      if (api !== 'openai-chat-completions' && api !== 'openai-responses') return empty;
-      return normalize({
-        api,
-        endpoint: parsed.endpoint,
-        model: parsed.model,
-        maxOutputTokens: parsed.maxOutputTokens,
-        sendImages: parsed.sendImages,
-      });
+      return parseAIConfiguration(JSON.parse(options.preferences.get(KEY, 'null')));
     } catch {
       return empty;
     }
@@ -117,20 +69,21 @@ export function createAIService(options: {
   return {
     configuration,
     configure(config: AIConfiguration, credential: AICredentialChange): Promise<void> {
-      const normalized = normalize(config);
-      if (
-        credential.kind === 'replace' &&
-        (!credential.value.trim() ||
-          credential.value.length > 8192 ||
-          /[\r\n]/u.test(credential.value))
-      )
-        return Promise.reject(new AIServiceError('unsupported'));
+      const normalized = normalizeAIConfiguration(config);
+      let replacement: string | undefined;
+      if (credential.kind === 'replace') {
+        try {
+          replacement = normalizeAICredential(credential.value);
+        } catch (error) {
+          return Promise.reject(error);
+        }
+      }
       const task = writing
         .catch(() => {})
         .then(async () => {
           if (disposed) throw new AIServiceError('cancelled');
           if (credential.kind === 'replace')
-            await changeAICredential(normalized.endpoint, credential.value.trim());
+            await changeAICredential(normalized.endpoint, replacement!);
           else if (credential.kind === 'forget')
             await changeAICredential(normalized.endpoint, null);
           options.preferences.set(KEY, JSON.stringify(normalized));
