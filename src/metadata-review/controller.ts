@@ -123,7 +123,7 @@ export class MetadataReviewController implements MetadataReviewPort {
     root.setAttribute('aria-modal', 'true');
     root.setAttribute(
       'aria-label',
-      host.language() === 'zh-CN' ? '论文信息检查与更新' : 'Inspect paper metadata',
+      host.language() === 'zh-CN' ? '检查论文信息' : 'Check paper details',
     );
     backdrop.append(root);
     const focus = doc.activeElement as HTMLElement | null;
@@ -184,7 +184,7 @@ export class MetadataReviewController implements MetadataReviewPort {
       model: this.#model(view),
       isCurrent: () => this.#current(view),
       loadingText: this.#text(view, '正在载入…', 'Loading…'),
-      errorText: this.#text(view, '审阅界面不可用', 'Review interface unavailable'),
+      errorText: this.#text(view, '无法打开论文信息检查', 'Could not open the paper details check'),
       onError: (error) => this.#debug(String(error)),
       dispatch: (command) => {
         if (this.#current(view)) this.#dispatch(view, command);
@@ -412,8 +412,8 @@ export class MetadataReviewController implements MetadataReviewPort {
             this.#plan(row, snapshot, result.paper);
             row.status = this.#text(
               view,
-              '已按标识符匹配；请审阅字段。',
-              'Matched an identifier; review the proposed fields.',
+              '已按标识符找到论文。请核对建议值。',
+              'Paper matched by identifier. Check the suggested values.',
             );
           } else if (result.kind === 'candidates') {
             row.papers = result.papers;
@@ -491,7 +491,7 @@ export class MetadataReviewController implements MetadataReviewPort {
       await projectArtifactNote(
         row.item,
         row.savedAttachment,
-        `Neo · ${this.#text(view, '元数据审阅', 'Metadata review')} · ${row.plan.paper.title}`,
+        `Neo · ${this.#text(view, '论文信息检查结果', 'Paper details check results')} · ${row.plan.paper.title}`,
         [
           `${row.plan.paper.source} / ${row.plan.paper.sourceID} / ${row.plan.paper.retrievedAt}`,
           this.#text(
@@ -517,8 +517,8 @@ export class MetadataReviewController implements MetadataReviewPort {
       await this.#persist(view, row, true);
       row.status = this.#text(
         view,
-        '成果附件与展示笔记已在本机保存；远端可用性取决于 Zotero 同步。',
-        'Artifact and display note saved locally; remote availability depends on Zotero sync.',
+        '结果和笔记已保存在本机。要在其他设备查看，请使用 Zotero 同步。',
+        'Results and note saved locally. Use Zotero sync to view them on another device.',
       );
       await this.#history(view, row);
     } catch (error) {
@@ -543,15 +543,15 @@ export class MetadataReviewController implements MetadataReviewPort {
         await this.#persist(view, row, true);
         row.status = this.#text(
           view,
-          '字段已更新，回执已在本机保存。',
-          'Fields updated and receipt saved locally.',
+          '字段已更新，更新记录已保存在本机。',
+          'Fields updated and the update record saved locally.',
         );
       } catch (error) {
         row.status =
           this.#text(
             view,
-            '字段已更新，但回执保存失败；不要重复应用，可重试保存成果。',
-            'Fields were updated, but receipt storage failed. Do not apply again; retry saving the result.',
+            '字段已更新，但更新记录未保存。请重试保存结果，不要再次更新字段。',
+            'Fields were updated, but the update record could not be saved. Save the results again instead of updating fields.',
           ) +
           '\n' +
           String(error);

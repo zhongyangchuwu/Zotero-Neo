@@ -771,8 +771,8 @@ export class SettingsSnapshotController implements SettingsSnapshotPort {
           await this.#refresh(view, context);
           view.status = this.#text(
             view,
-            '托管快照操作完成；忘记仅移除本机绑定，不会删除附件。',
-            'Managed snapshot operation completed; forgetting removes only the local binding, never the attachment.',
+            '操作完成。取消本机关联不会删除文库附件。',
+            'Done. Removing the local link does not delete the library attachment.',
           );
         });
         return;

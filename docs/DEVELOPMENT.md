@@ -196,7 +196,7 @@ Zotero 管理 Items、视图、标签页、Notes 和 Reader 状态。功能负�
 
 学术来源及应用用例的依赖方向见[架构：引用增强](ARCHITECTURE.md#引用增强)。`src/scholarly/` 是共享查询、来源适配、限速与缓存的规范位置；`src/metadata-review/` 管理差异和审阅界面，文库写入属于 `src/operations/metadata.ts`。成果封套、各 payload、原生附件与旧旁路迁移见[成果附件格式](ARTIFACT_FORMAT.md)；缓存不能代替审阅回执。
 
-当前开发环境的 zotero-mcp 附件工具互通路径和实测限制记录在该格式参考中，工具描述不等于端到端验证。本轮在 Zotero 10.0.8 的隔离 profile 核对了 Crossref 字段更新、无 DOI／arXiv ID 的 INSPIRE 标题候选、未默认勾选的 `Maldacena:1997re`、取消不写入、两条目 collection 的批量进度与只读检查、JSON 与笔记保存、重复保存保留人工编辑，以及真实 PDF Reader 的 arXiv 详情获取和缓存重开。真实双 profile 数据和文件同步、未下载文件的实机恢复与外部 harness 导入／发现仍须单独核验，不能以复制 storage 或本地保存代替。
+元数据审阅的双端同步、按需下载与离线分支已有实测；外部 harness 的附件读取／导入仍需用实际 MCP 工具单独核验。具体范围与证据见[成果附件格式](ARTIFACT_FORMAT.md#跨设备可用性)，不以本机保存或复制附件替代同步验收。
 
 **来源选择与社区参考**
 

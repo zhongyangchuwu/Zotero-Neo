@@ -155,13 +155,15 @@ it('retries an imported receipt with the same revision instead of creating a fal
     expect(view.model.fields.some((field) => field.field === 'volume')).toBe(true),
   );
   view.dispatch({ type: 'apply' });
-  await vi.waitFor(() => expect(view.model.status).toContain('receipt storage failed'));
+  await vi.waitFor(() => {
+    expect(view.model.busy).toBe(false);
+    expect(view.model.error).toBe(true);
+  });
   expect(fields.volume).toBe('12');
   expect(view.model.canApply).toBe(false);
   view.dispatch({ type: 'save' });
-  await vi.waitFor(() =>
-    expect(view.model.status).toContain('Artifact and display note saved locally'),
-  );
+  await vi.waitFor(() => expect(view.model.busy).toBe(false));
+  expect(view.model.error).toBe(false);
   expect(save).toHaveBeenCalledTimes(1);
   expect(artifacts).toHaveLength(2);
   const heads = artifactHeads(artifacts, artifacts[0]!.recordID);

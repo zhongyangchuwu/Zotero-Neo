@@ -64,7 +64,7 @@ export function mountSettingsSnapshotsView(
                     disabled={model.busy || model.mode === 'managed'}
                     onClick={() => dispatch({ type: 'mode', value: 'managed' })}
                   >
-                    {text('托管快照', 'Managed snapshots')}
+                    {text('文库中的快照', 'Snapshots in library')}
                   </Button>
                 )}
               </>
@@ -771,7 +771,7 @@ export function mountSettingsSnapshotsView(
                       disabled={model.busy}
                       onClick={() => dispatch({ type: 'target-forget', id: target.id })}
                     >
-                      {text('忘记本机绑定（保留附件）', 'Forget local binding (keep attachment)')}
+                      {text('取消本机关联（保留附件）', 'Remove local link (keep attachment)')}
                     </Button>
                   </div>
                 </section>
