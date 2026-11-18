@@ -32,7 +32,6 @@ export interface SettingsSnapshotFiles {
     ciphertext: string,
     context: SettingsCryptoContext,
   ): Promise<void>;
-  backupPath(source: string): string;
 }
 function picker(): NativePicker {
   const module = ChromeUtils.importESModule('chrome://zotero/content/modules/filePicker.mjs') as {
@@ -137,7 +136,7 @@ export function createSettingsSnapshotFiles(): SettingsSnapshotFiles {
         if ((await read(destination.path, context)) !== ciphertext)
           return fileError(
             'verification-failed',
-            'The file was not read back correctly; no configuration restore was admitted',
+            'The saved file could not be read back correctly',
           );
       } catch (error) {
         if (error instanceof SettingsSnapshotError) throw error;
@@ -149,18 +148,6 @@ export function createSettingsSnapshotFiles(): SettingsSnapshotFiles {
         await Zotero.File.removeIfExists(temporary.path);
         await Zotero.File.removeIfExists(`${temporary.path}.tmp`);
       }
-    },
-    backupPath(source) {
-      const file = Zotero.File.pathToFile(source),
-        parent = file.parent;
-      if (!parent)
-        return fileError('file-unavailable', 'The import file has no backup destination');
-      const name = file.leafName.replace(/\.(?:age|json)$/iu, '');
-      const result = parent.clone();
-      result.append(
-        `${name}.before-${new Date().toISOString().replace(/[:.]/gu, '-')}-${Zotero.Utilities.randomString(8)}.age`,
-      );
-      return result.path;
     },
   };
 }

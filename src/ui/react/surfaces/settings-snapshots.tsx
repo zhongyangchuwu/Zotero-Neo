@@ -16,6 +16,8 @@ export const SETTINGS_SNAPSHOTS_CSS = `
 .neo-settings-snapshots th,.neo-settings-snapshots td { padding:8px;border-bottom:1px solid var(--zotero-neo-border);text-align:start;vertical-align:top;white-space:pre-wrap;overflow-wrap:anywhere; }
 .neo-settings-snapshots .neo-snapshot-path { overflow-wrap:anywhere; }
 .neo-settings-snapshots details { margin:12px 0; }
+.neo-settings-snapshots .neo-snapshot-confirm { border:1px solid var(--zotero-neo-border);padding:8px 12px;margin-top:12px; }
+.neo-settings-snapshots [role=status],.neo-settings-snapshots [role=alert] { overflow-wrap:anywhere; }
 `;
 export function mountSettingsSnapshotsView(
   root: HTMLElement,
@@ -45,19 +47,35 @@ export function mountSettingsSnapshotsView(
             )}
           </p>
           <div className="neo-snapshot-toolbar">
-            <Button
-              disabled={model.busy || model.mode === 'export'}
-              onClick={() => dispatch({ type: 'mode', value: 'export' })}
-            >
-              {text('保存与导出', 'Save and export')}
-            </Button>
-            <Button
-              disabled={model.busy || model.mode === 'import'}
-              onClick={() => dispatch({ type: 'mode', value: 'import' })}
-            >
-              {text('导入与恢复', 'Import and restore')}
-            </Button>
-            {(model.catalogAvailable || model.managedAvailable) && (
+            {model.exportFromReview ? (
+              <Button disabled={model.busy} onClick={() => dispatch({ type: 'return-to-preview' })}>
+                {text('返回差异预览', 'Back to preview')}
+              </Button>
+            ) : (
+              <>
+                <Button
+                  disabled={model.busy || model.mode === 'export'}
+                  onClick={() => dispatch({ type: 'mode', value: 'export' })}
+                >
+                  {text('导出', 'Export')}
+                </Button>
+                <Button
+                  disabled={model.busy || model.mode === 'import'}
+                  onClick={() => dispatch({ type: 'mode', value: 'import' })}
+                >
+                  {text('恢复', 'Restore')}
+                </Button>
+                {model.managedAvailable && (
+                  <Button
+                    disabled={model.busy || model.mode === 'managed'}
+                    onClick={() => dispatch({ type: 'mode', value: 'managed' })}
+                  >
+                    {text('托管快照', 'Managed snapshots')}
+                  </Button>
+                )}
+              </>
+            )}
+            {!model.exportFromReview && (model.catalogAvailable || model.managedAvailable) && (
               <Button disabled={model.busy} onClick={() => dispatch({ type: 'refresh' })}>
                 {text('刷新', 'Refresh')}
               </Button>
@@ -69,7 +87,8 @@ export function mountSettingsSnapshotsView(
               {text('关闭', 'Close')}
             </Button>
           </div>
-          {model.catalogAvailable && (
+          <Status error={model.error}>{model.status}</Status>
+          {model.catalogAvailable && !model.exportFromReview && (
             <details>
               <summary>{text('插件模板与支持范围', 'Plugin templates and coverage')}</summary>
               <p>
@@ -206,6 +225,17 @@ export function mountSettingsSnapshotsView(
           )}
           {model.mode === 'export' ? (
             <>
+              {model.exportFromReview && (
+                <>
+                  <h3>{text('导出当前配置', 'Export current settings')}</h3>
+                  <p>
+                    {text(
+                      '已预选本次恢复涉及的插件。导出它们当前可移植的设置，不会应用预览中的值。',
+                      'Plugins selected for restore are preselected here. Export their current portable settings without applying the previewed values.',
+                    )}
+                  </p>
+                </>
+              )}
               <fieldset disabled={model.busy}>
                 <legend>{text('快照容器', 'Snapshot container')}</legend>
                 <select
@@ -258,26 +288,28 @@ export function mountSettingsSnapshotsView(
                   </label>
                 </p>
               </fieldset>
-              <div className="neo-snapshot-toolbar">
-                <label>
-                  {text('文件密码', 'File password')}{' '}
-                  <input
-                    data-neo-ui-part="export-password"
-                    type="password"
-                    autoComplete="new-password"
-                    disabled={model.busy || model.container !== 'age'}
-                  />
-                </label>
-                <label>
-                  {text('确认密码', 'Confirm password')}{' '}
-                  <input
-                    data-neo-ui-part="export-confirm"
-                    type="password"
-                    autoComplete="new-password"
-                    disabled={model.busy || model.container !== 'age'}
-                  />
-                </label>
-              </div>
+              {model.container === 'age' && (
+                <div className="neo-snapshot-toolbar">
+                  <label>
+                    {text('文件密码', 'File password')}{' '}
+                    <input
+                      data-neo-ui-part="export-password"
+                      type="password"
+                      autoComplete="new-password"
+                      disabled={model.busy}
+                    />
+                  </label>
+                  <label>
+                    {text('确认密码', 'Confirm password')}{' '}
+                    <input
+                      data-neo-ui-part="export-confirm"
+                      type="password"
+                      autoComplete="new-password"
+                      disabled={model.busy}
+                    />
+                  </label>
+                </div>
+              )}
               <fieldset disabled={model.busy}>
                 <legend>
                   {text('每插件导出／选择合并', 'Per-plugin export / combined selection')}
@@ -308,7 +340,7 @@ export function mountSettingsSnapshotsView(
                   disabled={!model.adapters.some((adapter) => adapter.selected)}
                   onClick={() => dispatch({ type: 'export' })}
                 >
-                  {text('导出所选插件合并快照…', 'Export combined snapshot of selected plugins…')}
+                  {text('导出所选插件…', 'Export selected plugins…')}
                 </Button>
               </fieldset>
               <p className="neo-muted">
@@ -318,63 +350,116 @@ export function mountSettingsSnapshotsView(
                 )}
               </p>
             </>
-          ) : (
+          ) : model.mode === 'import' ? (
             <>
               <div className="neo-snapshot-toolbar">
                 <Button disabled={model.busy} onClick={() => dispatch({ type: 'choose-file' })}>
                   {text('选择快照文件…', 'Choose snapshot file…')}
                 </Button>
-                <label>
-                  {text('来源密码（仅 age）', 'Source password (age only)')}{' '}
-                  <input
-                    data-neo-ui-part="import-password"
-                    type="password"
-                    autoComplete="off"
-                    disabled={model.busy}
-                  />
-                </label>
-                <label>
-                  {text(
-                    '恢复前加密备份密码（始终必填）',
-                    'Encrypted pre-restore backup password (always required)',
-                  )}{' '}
-                  <input
-                    data-neo-ui-part="backup-password"
-                    type="password"
-                    autoComplete="new-password"
-                    disabled={model.busy}
-                  />
-                </label>
-                <Button
-                  disabled={model.busy || !model.sourcePath}
-                  onClick={() => dispatch({ type: 'inspect' })}
-                >
-                  {text('读取并预览', 'Read and preview')}
-                </Button>
+                {model.sourceLabel &&
+                  !model.hasPreview &&
+                  model.sourceContainer === 'age' &&
+                  (!model.receipts.length || model.error) && (
+                    <form
+                      onSubmit={(event) => {
+                        event.preventDefault();
+                        dispatch({ type: 'inspect' });
+                      }}
+                    >
+                      <label>
+                        {text('来源密码', 'Source password')}{' '}
+                        <input
+                          data-neo-ui-part="import-password"
+                          type="password"
+                          autoComplete="off"
+                          disabled={model.busy}
+                        />
+                      </label>{' '}
+                      <Button type="submit" disabled={model.busy}>
+                        {text('解锁并预览', 'Unlock and preview')}
+                      </Button>
+                    </form>
+                  )}
+                {model.sourceLabel &&
+                  !model.hasPreview &&
+                  model.sourceContainer !== 'age' &&
+                  model.error && (
+                    <Button disabled={model.busy} onClick={() => dispatch({ type: 'inspect' })}>
+                      {text('重新预览', 'Preview again')}
+                    </Button>
+                  )}
               </div>
-              <p className="neo-snapshot-path">
-                {model.sourcePath}
-                {model.sourceContainer && ` · ${model.sourceContainer}`}
-              </p>
-              <p className="neo-muted">
-                {text(
-                  '根据内容识别 JSON 或 age，不根据扩展名。预览不会写配置。即使导入明文，也必须提供独立备份密码；密码只留在本次操作内存，结束或关闭后释放。',
-                  'JSON or age is detected from contents, not the extension. Preview never writes settings. Even plaintext imports require an independent backup password, held only in operation memory and released on completion or close.',
-                )}
-              </p>
-              {!!model.groups.length && (
+              {model.managedAvailable && (
+                <details>
+                  <summary>{text('从 Zotero 附件选择', 'Choose a Zotero attachment')}</summary>
+                  <label>
+                    {text('来源文库', 'Source library')}{' '}
+                    <select
+                      disabled={model.busy}
+                      value={model.sourceLibraryID}
+                      onChange={(event) =>
+                        dispatch({
+                          type: 'source-library',
+                          libraryID: Number(event.currentTarget.value),
+                        })
+                      }
+                    >
+                      {model.locations.map((entry) => (
+                        <option key={entry.libraryID} value={entry.libraryID}>
+                          {entry.label}
+                        </option>
+                      ))}
+                    </select>
+                  </label>
+                  {model.sources.length ? (
+                    <ul>
+                      {model.sources.map((source) => (
+                        <li key={`${source.libraryID}:${source.itemKey}`}>
+                          <Button
+                            disabled={model.busy}
+                            onClick={() =>
+                              dispatch({
+                                type: 'source',
+                                libraryID: source.libraryID,
+                                itemKey: source.itemKey,
+                              })
+                            }
+                          >
+                            {source.title} · {source.itemKey}
+                          </Button>
+                        </li>
+                      ))}
+                    </ul>
+                  ) : (
+                    <p>
+                      {text('此文库暂无可用快照附件。', 'No snapshot attachments in this library.')}
+                    </p>
+                  )}
+                </details>
+              )}
+              {model.sourceLabel && (
+                <p className="neo-snapshot-path">
+                  {text('来源：', 'Source: ')}
+                  {model.sourceLabel}
+                  {model.sourceContainer &&
+                    ` · ${model.sourceContainer === 'age' ? 'age' : 'JSON'}`}
+                </p>
+              )}
+              {model.hasPreview && !model.groups.length && (
+                <p>
+                  {text(
+                    '没有可预览的设置。请检查下方的跳过原因。',
+                    'No settings to preview. Review any skipped items below.',
+                  )}
+                </p>
+              )}
+              {model.hasPreview && !!model.groups.length && (
                 <>
-                  <Button disabled={model.busy} onClick={() => dispatch({ type: 'choose-backup' })}>
-                    {text('选择加密备份位置…', 'Choose encrypted backup destination…')}
-                  </Button>
-                  <p className="neo-snapshot-path">
-                    {text('恢复前备份：', 'Pre-restore backup: ')}
-                    {model.backupPath || text('请先选择位置', 'Choose a destination first')}
-                  </p>
+                  <h3>{text('差异预览', 'Preview changes')}</h3>
                   <p className="neo-muted">
                     {text(
-                      '先保存并读回加密备份，再逐项写入；不是跨插件原子事务。停止或部分失败不会撤销已接纳的修改。恢复前会重新读取来源并检查配置是否已变更。',
-                      'The encrypted backup is saved and read back before any setting is written. This is not atomic across plugins; stop or partial failure does not undo admitted writes. Source contents and current settings are rechecked before restore.',
+                      '勾选要恢复的设置。预览不会修改本机配置。',
+                      'Select the settings to restore. Preview does not change current settings.',
                     )}
                   </p>
                   {model.groups.map((group) => (
@@ -401,9 +486,9 @@ export function mountSettingsSnapshotsView(
                       <table>
                         <thead>
                           <tr>
-                            <th>{text('恢复项', 'Restore setting')}</th>
-                            <th>{text('当前值', 'Current value')}</th>
-                            <th>{text('来源值／映射值', 'Source / mapped value')}</th>
+                            <th>{text('设置', 'Setting')}</th>
+                            <th>{text('本机当前值', 'Current value')}</th>
+                            <th>{text('恢复为', 'Restore to')}</th>
                           </tr>
                         </thead>
                         <tbody>
@@ -447,25 +532,52 @@ export function mountSettingsSnapshotsView(
                       </table>
                     </details>
                   ))}
-                  <Button
-                    primary
-                    disabled={model.busy || !model.canApply}
-                    onClick={() => dispatch({ type: 'apply' })}
-                  >
-                    {text(
-                      `保存加密备份并恢复 ${model.selectedCount} 项`,
-                      `Save encrypted backup and restore ${model.selectedCount} fields`,
-                    )}
-                  </Button>
+                  {model.confirmingRestore ? (
+                    <section
+                      className="neo-snapshot-confirm"
+                      aria-label={text('确认恢复', 'Confirm restore')}
+                    >
+                      <p>
+                        {text(
+                          `将覆盖所选 ${model.selectedCount} 项设置，不会自动保留旧值。`,
+                          `This overwrites ${model.selectedCount} selected settings. Previous values are not saved automatically.`,
+                        )}
+                      </p>
+                      <div className="neo-snapshot-toolbar">
+                        <Button onClick={() => dispatch({ type: 'cancel-restore' })}>
+                          {text('取消', 'Cancel')}
+                        </Button>
+                        <Button primary onClick={() => dispatch({ type: 'apply' })}>
+                          {text('确认恢复', 'Confirm restore')}
+                        </Button>
+                      </div>
+                    </section>
+                  ) : (
+                    <div className="neo-snapshot-toolbar">
+                      <Button
+                        disabled={model.busy || !model.canApply}
+                        onClick={() => dispatch({ type: 'export-current' })}
+                      >
+                        {text('导出当前配置…', 'Export current settings…')}
+                      </Button>
+                      <Button
+                        primary
+                        disabled={model.busy || !model.canApply}
+                        onClick={() => dispatch({ type: 'review-restore' })}
+                      >
+                        {text(
+                          `恢复所选 ${model.selectedCount} 项…`,
+                          `Restore ${model.selectedCount} selected settings…`,
+                        )}
+                      </Button>
+                    </div>
+                  )}
                 </>
               )}
             </>
-          )}
-          {model.managedAvailable && (
-            <details>
-              <summary>
-                {text('Zotero 附件托管与同步来源', 'Managed Zotero attachments and sync sources')}
-              </summary>
+          ) : null}
+          {model.mode === 'managed' && model.managedAvailable && (
+            <section>
               <p>
                 {text(
                   '明确选择后才创建可见附件。同步依赖 Zotero 原生数据同步和文件同步，本功能不配置同步。自动更新只发布本机设置，绝不自动应用下载配置。外部修改、删除或只读会暂停，不覆盖、不自动重建。加密快照永不自动更新。',
@@ -697,14 +809,27 @@ export function mountSettingsSnapshotsView(
               {model.targets.map((target) => (
                 <section key={target.id}>
                   <h4>
-                    {target.title} · {target.adapterID} · {target.container}
+                    {target.title} ·{' '}
+                    {model.plugins.find((plugin) => plugin.adapterID === target.adapterID)?.label ??
+                      target.adapterID}{' '}
+                    · {target.container === 'age' ? 'age' : 'JSON'}
                   </h4>
                   <p>
-                    {target.status} · {target.message} · {target.updatedAt} ·{' '}
+                    {target.status === 'ready'
+                      ? text('可用', 'Ready')
+                      : target.status === 'paused'
+                        ? text('已暂停', 'Paused')
+                        : text('出错', 'Error')}
+                    {' · '}
+                    {new Date(target.updatedAt).toLocaleString(
+                      model.chinese ? 'zh-CN' : undefined,
+                    )}{' '}
+                    ·{' '}
                     {target.autoUpdate
                       ? text('自动发布', 'Auto-publish')
                       : text('仅手动', 'Manual only')}
                   </p>
+                  {target.message && <p className="neo-muted">{target.message}</p>}
                   <div className="neo-snapshot-toolbar">
                     <Button
                       disabled={model.busy}
@@ -727,55 +852,8 @@ export function mountSettingsSnapshotsView(
                   </div>
                 </section>
               ))}
-              <h3>{text('选择恢复来源', 'Choose restore source')}</h3>
-              <label>
-                {text('来源文库', 'Source library')}{' '}
-                <select
-                  disabled={model.busy}
-                  value={model.sourceLibraryID}
-                  onChange={(event) =>
-                    dispatch({
-                      type: 'source-library',
-                      libraryID: Number(event.currentTarget.value),
-                    })
-                  }
-                >
-                  {model.locations.map((entry) => (
-                    <option key={entry.libraryID} value={entry.libraryID}>
-                      {entry.label}
-                    </option>
-                  ))}
-                </select>
-              </label>
-              <ul>
-                {model.sources.map((source) => (
-                  <li key={`${source.libraryID}:${source.itemKey}`}>
-                    <Button
-                      disabled={model.busy}
-                      onClick={() =>
-                        dispatch({
-                          type: 'source',
-                          libraryID: source.libraryID,
-                          itemKey: source.itemKey,
-                        })
-                      }
-                    >
-                      {source.title} · {source.itemKey} — {text('选择来源…', 'Select source…')}
-                    </Button>
-                  </li>
-                ))}
-              </ul>
-              {!model.sources.length && (
-                <p>
-                  {text(
-                    '此文库暂无可用快照附件。',
-                    'No snapshot attachments available in this library.',
-                  )}
-                </p>
-              )}
-            </details>
+            </section>
           )}
-          <Status error={model.error}>{model.status}</Status>
           {!!model.issues.length && (
             <details open>
               <summary>
@@ -791,7 +869,6 @@ export function mountSettingsSnapshotsView(
           {!!model.receipts.length && (
             <section>
               <h3>{text('逐项恢复回执', 'Per-setting restore receipts')}</h3>
-              <p className="neo-snapshot-path">{model.backupPath}</p>
               <ul>
                 {model.receipts.map((receipt, index) => (
                   <li key={index}>{receipt}</li>
