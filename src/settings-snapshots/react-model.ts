@@ -48,7 +48,9 @@ export interface SettingsSnapshotModel {
   readonly sources: readonly SnapshotAttachmentSource[];
   readonly sourceLibraryID: number;
   readonly targetForm: SnapshotTargetForm;
-  readonly mode: 'export' | 'import';
+  readonly mode: 'export' | 'import' | 'managed';
+  readonly exportFromReview: boolean;
+  readonly confirmingRestore: boolean;
   readonly adapters: readonly {
     readonly id: string;
     readonly label: string;
@@ -59,8 +61,8 @@ export interface SettingsSnapshotModel {
   readonly busy: boolean;
   readonly status: string;
   readonly error: boolean;
-  readonly sourcePath: string;
-  readonly backupPath: string;
+  readonly sourceLabel: string;
+  readonly hasPreview: boolean;
   readonly groups: readonly {
     readonly id: string;
     readonly label: string;
@@ -80,10 +82,13 @@ export type SettingsSnapshotCommand =
         | 'export'
         | 'choose-file'
         | 'inspect'
-        | 'choose-backup'
+        | 'export-current'
+        | 'return-to-preview'
+        | 'review-restore'
+        | 'cancel-restore'
         | 'apply';
     }
-  | { readonly type: 'mode'; readonly value: 'export' | 'import' }
+  | { readonly type: 'mode'; readonly value: SettingsSnapshotModel['mode'] }
   | {
       readonly type: 'adapter' | 'field' | 'category';
       readonly id: string;

@@ -4,10 +4,7 @@ import { compositionOwnsKey } from '../input/composition';
 import { keyString } from '../input/keys';
 import { isDeadObject } from '../platform/cross-compartment';
 import { mountNativeReactView } from '../platform/native-ui';
-import type {
-  SettingsFileChoice,
-  SettingsSnapshotFiles,
-} from '../platform/settings-snapshots-files';
+import type { SettingsSnapshotFiles } from '../platform/settings-snapshots-files';
 import type { NativeReactView } from '../ui/react/types';
 import { PREPARATION_BACKDROP_STYLE, PREPARATION_PANEL_STYLE } from '../ui/react/shells/reader';
 import {
@@ -60,7 +57,9 @@ interface SnapshotView {
   readonly selected: Set<string>;
   readonly paths: Record<string, string>;
   react: NativeReactView<SettingsSnapshotModel> | null;
-  mode: 'export' | 'import';
+  mode: SettingsSnapshotModel['mode'];
+  reviewExport?: Set<string>;
+  confirmingRestore: boolean;
   includeSecrets: boolean;
   includeLibrarySettings: boolean;
   busy: boolean;
@@ -68,13 +67,10 @@ interface SnapshotView {
   status: string;
   error: boolean;
   sourcePath: string;
-  backup: SettingsFileChoice | null;
   issues: readonly string[];
   receipt?: SettingsRestoreReceipt;
   document?: SettingsDocument;
   plan?: SettingsSnapshotPlan;
-  /** Operation-only business memory; never persisted, rendered, logged or included in commands. */
-  backupPassword: string;
   sourceContents: string;
   source?: SnapshotAttachmentSource;
   sourceContainer?: SettingsContainer;
@@ -162,6 +158,7 @@ export class SettingsSnapshotController implements SettingsSnapshotPort {
       paths: Object.create(null) as Record<string, string>,
       react: null,
       mode: 'export',
+      confirmingRestore: false,
       includeSecrets: false,
       includeLibrarySettings: false,
       busy: false,
@@ -169,9 +166,7 @@ export class SettingsSnapshotController implements SettingsSnapshotPort {
       status: '',
       error: false,
       sourcePath: '',
-      backup: null,
       issues: [],
-      backupPassword: '',
       sourceContents: '',
       container: 'age',
       plugins: [],
@@ -239,7 +234,7 @@ export class SettingsSnapshotController implements SettingsSnapshotPort {
         if (!group) {
           group = {
             id: groupID,
-            label: `${plan.adapterID} · ${change.category}`,
+            label: `${this.#adapterLabel(view, plan.adapterID)} · ${change.category === 'Native options' ? this.#text(view, '常规设置', 'Native options') : change.category}`,
             selected: true,
             fields: [],
           };
@@ -282,28 +277,37 @@ export class SettingsSnapshotController implements SettingsSnapshotPort {
       sources: view.sources,
       sourceLibraryID: view.sourceLibraryID,
       targetForm: view.targetForm,
-      mode: view.mode,
+      mode: view.reviewExport ? 'export' : view.mode,
+      exportFromReview: !!view.reviewExport,
+      confirmingRestore: view.confirmingRestore,
       adapters: this.#service.adapters.map((adapter) => ({
         ...adapter,
-        selected: view.adapters.has(adapter.id),
+        selected: (view.reviewExport ?? view.adapters).has(adapter.id),
       })),
       includeSecrets: view.includeSecrets,
       includeLibrarySettings: view.includeLibrarySettings,
       busy: view.busy,
       status: view.status,
       error: view.error,
-      sourcePath: view.sourcePath,
-      backupPath: view.backup?.path ?? '',
+      sourceLabel: view.source?.title ?? view.sourcePath,
+      hasPreview: !!view.plan,
       groups: [...groups.values()],
       issues: view.issues,
       receipts:
         view.receipt?.entries.map(
           (entry) =>
-            `${entry.adapterID} · ${entry.key}: ${entry.status}${entry.message ? ` — ${entry.message}` : ''}${entry.requiresRestart ? this.#text(view, '（需重启）', ' (restart required)') : ''}`,
+            `${this.#adapterLabel(view, entry.adapterID)} · ${entry.key}: ${entry.status}${entry.message ? ` — ${entry.message}` : ''}${entry.requiresRestart ? this.#text(view, '（需重启）', ' (restart required)') : ''}`,
         ) ?? [],
-      canApply: !!view.plan && !!view.selected.size && !!view.backup && !!view.backupPassword,
+      canApply: !!view.plan && !!view.selected.size,
       selectedCount: view.selected.size,
     };
+  }
+  #adapterLabel(view: SnapshotView, id: string): string {
+    return (
+      view.plugins.find((plugin) => plugin.adapterID === id)?.label ??
+      this.#service.adapters.find((adapter) => adapter.id === id)?.label ??
+      id
+    );
   }
   #render(view: SnapshotView): void {
     if (this.#current(view)) view.react?.update(this.#model(view));
@@ -315,7 +319,7 @@ export class SettingsSnapshotController implements SettingsSnapshotPort {
     return value;
   }
   #clearReview(view: SnapshotView): void {
-    view.backupPassword = '';
+    view.confirmingRestore = false;
     view.sourceContents = '';
     view.document = undefined;
     view.plan = undefined;
@@ -323,6 +327,7 @@ export class SettingsSnapshotController implements SettingsSnapshotPort {
   }
   #setPlan(view: SnapshotView, plan: SettingsSnapshotPlan, preserve?: ReadonlySet<string>): void {
     view.plan = plan;
+    view.confirmingRestore = false;
     view.selected.clear();
     for (const adapter of plan.plans)
       for (const change of adapter.changes) {
@@ -354,6 +359,8 @@ export class SettingsSnapshotController implements SettingsSnapshotPort {
     void task(context)
       .catch((error: unknown) => {
         if (!this.#current(view)) return;
+        if (error instanceof SettingsSnapshotError && error.code === 'stale-plan')
+          this.#clearReview(view);
         view.error = !abort.signal.aborted;
         view.status = abort.signal.aborted
           ? this.#text(
@@ -372,7 +379,7 @@ export class SettingsSnapshotController implements SettingsSnapshotPort {
           this.#debug('Settings snapshots operation failed');
       })
       .finally(() => {
-        if (abort.signal.aborted) this.#clearReview(view);
+        if (abort.signal.aborted && !view.reviewExport) this.#clearReview(view);
         if (this.#current(view)) {
           view.busy = false;
           view.abort = undefined;
@@ -447,11 +454,52 @@ export class SettingsSnapshotController implements SettingsSnapshotPort {
     if (view.source && this.#managed) return this.#managed.read(view.source, context);
     return this.#files.read(view.sourcePath, context);
   }
+  #chooseSource(view: SnapshotView, path: string, source?: SnapshotAttachmentSource): void {
+    this.#clearReview(view);
+    for (const key of Object.keys(view.paths)) delete view.paths[key];
+    view.receipt = undefined;
+    view.issues = [];
+    view.source = source;
+    view.sourcePath = path;
+    view.sourceContainer = undefined;
+  }
+  async #inspect(
+    view: SnapshotView,
+    context: SettingsCryptoContext & SettingsPlanContext,
+    password = '',
+  ): Promise<void> {
+    const contents = await this.#readSource(view, context);
+    assertSettingsCurrent(context);
+    const container = settingsContainerFor(contents);
+    view.sourceContainer = container;
+    if (container === 'age' && !password) {
+      view.status = this.#text(
+        view,
+        '输入来源密码以解锁预览。',
+        'Enter the source password to unlock the preview.',
+      );
+      return;
+    }
+    const sourceContext = { ...context, container };
+    const document = await this.#codec.open(
+      contents,
+      container === 'age' ? password : '',
+      sourceContext,
+    );
+    assertSettingsCurrent(sourceContext);
+    const plan = await this.#service.plan(document, sourceContext);
+    assertSettingsCurrent(sourceContext);
+    view.document = document;
+    view.sourceContents = contents;
+    this.#setPlan(view, plan);
+    view.status = '';
+  }
   async #assertSourceCurrent(view: SnapshotView, context: SettingsCryptoContext): Promise<void> {
     const contents = await this.#readSource(view, context);
     assertSettingsCurrent(context);
     if (contents !== view.sourceContents) {
       this.#clearReview(view);
+      view.sourceContainer = undefined;
       throw new SettingsSnapshotError(
         'source-changed',
         this.#text(
@@ -483,7 +531,10 @@ export class SettingsSnapshotController implements SettingsSnapshotPort {
         `zotero-neo-settings-${new Date().toISOString().slice(0, 10)}.${container}`,
       );
       assertSettingsCurrent(context);
-      if (!choice) return;
+      if (!choice) {
+        view.reviewExport = undefined;
+        return;
+      }
       const captured = await this.#service.capture(adapterIDs, {
         ...context,
         includeSecrets: container === 'age' && view.includeSecrets,
@@ -497,15 +548,24 @@ export class SettingsSnapshotController implements SettingsSnapshotPort {
       );
       await this.#files.write(choice, contents, context);
       assertSettingsCurrent(context);
-      view.issues = captured.issues.map(
+      const issues = captured.issues.map(
         (issue) =>
-          `${issue.adapterID ?? ''}${issue.key ? ` · ${issue.key}` : ''}: ${issue.message}`,
+          `${issue.adapterID ? this.#adapterLabel(view, issue.adapterID) : ''}${issue.key ? ` · ${issue.key}` : ''}: ${issue.message}`,
+      );
+      view.issues = view.reviewExport ? [...view.issues, ...issues] : issues;
+      const labels = captured.document.sections
+        .map(({ adapterID }) => this.#adapterLabel(view, adapterID))
+        .join('、');
+      const fields = captured.document.sections.reduce(
+        (count, section) => count + section.entries.length,
+        0,
       );
       view.status = this.#text(
         view,
-        '快照已保存并读回核对。请自行保管文件与密码。',
-        'Snapshot saved and verified by readback. Keep the file and password yourself.',
+        `已保存到 ${choice.path}（${labels}；${fields} 项设置）。`,
+        `Saved to ${choice.path} (${labels}; ${fields} settings).`,
       );
+      view.reviewExport = undefined;
     });
   }
   #dispatch(view: SnapshotView, command: SettingsSnapshotCommand): void {
@@ -713,29 +773,17 @@ export class SettingsSnapshotController implements SettingsSnapshotPort {
           (entry) => entry.libraryID === command.libraryID && entry.itemKey === command.itemKey,
         );
         if (!source) break;
-        this.#clearReview(view);
-        for (const key of Object.keys(view.paths)) delete view.paths[key];
-        view.receipt = undefined;
-        view.issues = [];
-        view.source = source;
-        view.sourcePath = source.title;
-        view.sourceContainer = undefined;
-        view.backup = null;
-        view.mode = 'import';
         this.#password(view, 'import-password');
-        this.#password(view, 'backup-password');
-        view.status = this.#text(
-          view,
-          '已选择附件。预览不会写入配置。',
-          'Attachment selected. Preview never writes settings.',
-        );
-        break;
+        this.#chooseSource(view, source.title, source);
+        view.mode = 'import';
+        this.#run(view, (context) => this.#inspect(view, context));
+        return;
       }
       case 'mode':
+        if (view.reviewExport || view.mode === command.value) break;
         this.#password(view, 'export-password');
         this.#password(view, 'export-confirm');
         this.#password(view, 'import-password');
-        this.#password(view, 'backup-password');
         this.#password(view, 'managed-password');
         this.#clearReview(view);
         view.mode = command.value;
@@ -744,12 +792,14 @@ export class SettingsSnapshotController implements SettingsSnapshotPort {
         view.error = false;
         view.issues = [];
         break;
-      case 'adapter':
+      case 'adapter': {
+        const adapters = view.reviewExport ?? view.adapters;
         if (this.#service.adapters.some(({ id }) => id === command.id)) {
-          if (command.checked) view.adapters.add(command.id);
-          else view.adapters.delete(command.id);
+          if (command.checked) adapters.add(command.id);
+          else adapters.delete(command.id);
         }
         break;
+      }
       case 'include-secrets':
         view.includeSecrets = view.container === 'age' && command.checked;
         break;
@@ -758,6 +808,7 @@ export class SettingsSnapshotController implements SettingsSnapshotPort {
         break;
       case 'field':
       case 'category':
+        view.confirmingRestore = false;
         for (const plan of view.plan?.plans ?? [])
           for (const change of plan.changes) {
             const id = settingsChangeID(plan.adapterID, change.key);
@@ -773,96 +824,62 @@ export class SettingsSnapshotController implements SettingsSnapshotPort {
           }
         break;
       case 'export':
-        this.#export(view, new Set(view.adapters));
+        this.#export(view, new Set(view.reviewExport ?? view.adapters));
         return;
       case 'choose-file':
-        this.#clearReview(view);
-        view.receipt = undefined;
-        view.issues = [];
-        this.#password(view, 'import-password');
-        this.#password(view, 'backup-password');
         this.#run(view, async (context) => {
           const path = await this.#files.chooseOpen(view.host.window);
           assertSettingsCurrent(context);
           if (!path) return;
-          for (const key of Object.keys(view.paths)) delete view.paths[key];
-          view.sourcePath = path;
-          view.source = undefined;
-          view.sourceContainer = undefined;
-          view.backup = null;
-          view.status = this.#text(
-            view,
-            '输入源文件密码（仅 age 需要）以及独立的恢复前加密备份密码；尚未修改配置。',
-            'Enter the source password (age only) and an independent encrypted-backup password; no settings have changed.',
-          );
+          this.#password(view, 'import-password');
+          this.#chooseSource(view, path);
+          await this.#inspect(view, { ...context, paths: {} });
         });
         return;
       case 'inspect': {
-        const password = this.#password(view, 'import-password'),
-          backupPassword = this.#password(view, 'backup-password');
-        if (!view.sourcePath || !backupPassword) {
-          view.error = true;
-          view.status = this.#text(
-            view,
-            '先选择来源并输入恢复前加密备份密码（导入明文也必须提供）。',
-            'Choose a source and enter the encrypted-backup password, required even for plaintext imports.',
-          );
-          break;
-        }
+        if (!view.sourcePath) break;
+        const password = this.#password(view, 'import-password');
         this.#clearReview(view);
         view.receipt = undefined;
         view.issues = [];
-        view.status = this.#text(
-          view,
-          '正在完整认证与解密；尚未修改配置…',
-          'Authenticating and decrypting the complete file; no settings are changed…',
-        );
-        this.#run(view, async (context) => {
-          const contents = await this.#readSource(view, context);
-          assertSettingsCurrent(context);
-          const container = settingsContainerFor(contents);
-          view.sourceContainer = container;
-          const sourceContext = { ...context, container };
-          const document = await this.#codec.open(
-            contents,
-            container === 'age' ? password : '',
-            sourceContext,
-          );
-          assertSettingsCurrent(sourceContext);
-          const plan = await this.#service.plan(document, sourceContext);
-          assertSettingsCurrent(context);
-          // Each authenticated review gets a fresh destination, not an earlier overwrite grant.
-          view.backup = view.source
-            ? null
-            : { path: this.#files.backupPath(view.sourcePath), replace: false };
-          view.document = document;
-          view.backupPassword = backupPassword;
-          view.sourceContents = contents;
-          view.sourceContainer = container;
-          this.#setPlan(view, plan);
-          view.status = this.#text(
-            view,
-            '请检查并选择恢复项。秘密不显示，长值预览会截断；写入前必须保存加密备份。',
-            'Review and select settings. Secrets are hidden and long previews truncated; an encrypted backup must be saved before any write.',
-          );
-        });
+        this.#run(view, (context) => this.#inspect(view, context, password));
         return;
       }
-      case 'choose-backup':
-        this.#run(view, async (context) => {
-          const choice = await this.#files.chooseSave(
-            view.host.window,
-            'zotero-neo-settings-before.age',
-          );
-          assertSettingsCurrent(context);
-          if (choice) view.backup = choice;
-        });
-        return;
+      case 'export-current': {
+        if (!view.plan || !view.selected.size || view.reviewExport) break;
+        view.reviewExport = new Set(
+          view.plan.plans
+            .filter(({ adapterID, changes }) =>
+              changes.some(({ key }) => view.selected.has(settingsChangeID(adapterID, key))),
+            )
+            .map(({ adapterID }) => adapterID),
+        );
+        view.includeSecrets = false;
+        view.includeLibrarySettings = false;
+        view.confirmingRestore = false;
+        view.status = '';
+        view.error = false;
+        break;
+      }
+      case 'return-to-preview':
+        this.#password(view, 'export-password');
+        this.#password(view, 'export-confirm');
+        view.reviewExport = undefined;
+        view.status = '';
+        view.error = false;
+        break;
+      case 'review-restore':
+        if (view.plan && view.selected.size && !view.reviewExport) view.confirmingRestore = true;
+        break;
+      case 'cancel-restore':
+        view.confirmingRestore = false;
+        break;
       case 'map': {
         const change = view.plan?.plans
           .flatMap((plan) => plan.changes)
           .find((entry) => settingsChangeID(entry.adapterID, entry.key) === command.id);
         if (!change?.mapping || !view.document) break;
+        view.confirmingRestore = false;
         const document = view.document,
           selected = new Set(view.selected);
         this.#run(view, async (context) => {
@@ -877,33 +894,18 @@ export class SettingsSnapshotController implements SettingsSnapshotPort {
         return;
       }
       case 'apply': {
-        if (!view.plan || !view.backupPassword || !view.backup || !view.selected.size) break;
-        const plan = view.plan,
-          password = view.backupPassword,
-          backupChoice = view.backup;
+        if (!view.plan || !view.selected.size || !view.confirmingRestore || view.reviewExport)
+          break;
+        const plan = view.plan;
+        view.confirmingRestore = false;
         view.status = this.#text(
           view,
-          '正在保存加密备份；完成后逐项恢复。停止不会撤销已接纳的写入。',
-          'Saving an encrypted backup, then restoring each selected setting. Stop does not roll back admitted writes.',
+          '正在检查并恢复所选设置…',
+          'Checking and restoring selected settings…',
         );
         this.#run(view, async (context) => {
-          await this.#assertSourceCurrent(view, context);
-          const receipt = await this.#service.apply(
-            plan,
-            new Set(view.selected),
-            context,
-            async (backup) => {
-              const ciphertext = await this.#codec.seal(
-                backup,
-                password,
-                { ...context, container: 'age' },
-                'age',
-              );
-              await this.#files.write(backupChoice, ciphertext, context);
-              assertSettingsCurrent(context);
-              await this.#assertSourceCurrent(view, context);
-              return backupChoice.path;
-            },
+          const receipt = await this.#service.apply(plan, new Set(view.selected), context, () =>
+            this.#assertSourceCurrent(view, context),
           );
           this.#clearReview(view);
           view.receipt = receipt;
@@ -913,15 +915,15 @@ export class SettingsSnapshotController implements SettingsSnapshotPort {
           view.status = this.#text(
             view,
             receipt.cancelled
-              ? '已停止；已接纳的修改保留。请核对逐项回执，备份使用独立的备份密码。'
+              ? '已停止；已完成的修改保留。请核对逐项结果。'
               : view.error
-                ? '部分恢复失败；已接纳的修改保留。请核对逐项回执，备份使用独立的备份密码。'
-                : '恢复操作已完成。请核对逐项回执；需要回退时，以备份密码导入恢复前备份。',
+                ? '部分恢复失败；已完成的修改保留。请核对逐项结果。'
+                : '恢复已完成。请核对逐项结果。',
             receipt.cancelled
-              ? 'Stopped; admitted changes are retained. Inspect the receipts. Use the independent backup password.'
+              ? 'Stopped; completed changes were kept. Review the individual results.'
               : view.error
-                ? 'Restore partially failed; admitted changes are retained. Inspect the receipts. Use the independent backup password.'
-                : 'Restore completed. Inspect the receipts; import the pre-restore backup with its backup password to recover.',
+                ? 'Restore partially failed; completed changes were kept. Review the individual results.'
+                : 'Restore complete. Review the individual results.',
           );
           if (receipt.entries.some((entry) => entry.requiresRestart))
             view.status += this.#text(
@@ -950,7 +952,10 @@ export class SettingsSnapshotController implements SettingsSnapshotPort {
     const key = keyString(event);
     if (key === 'escape') {
       event.preventDefault();
-      this.close(true);
+      if (!view.busy && view.reviewExport) this.#dispatch(view, { type: 'return-to-preview' });
+      else if (!view.busy && view.confirmingRestore)
+        this.#dispatch(view, { type: 'cancel-restore' });
+      else this.close(true);
     } else if (!view.root.contains(target)) {
       event.preventDefault();
       view.react?.getElement('close')?.focus();
@@ -980,13 +985,7 @@ export class SettingsSnapshotController implements SettingsSnapshotPort {
     this.#view = null;
     view.abort?.abort();
     this.#clearReview(view);
-    for (const part of [
-      'export-password',
-      'export-confirm',
-      'import-password',
-      'backup-password',
-      'managed-password',
-    ])
+    for (const part of ['export-password', 'export-confirm', 'import-password', 'managed-password'])
       this.#password(view, part);
     if (!isDeadObject(view.host.window)) {
       view.host.window.removeEventListener('keydown', view.capture, true);

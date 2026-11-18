@@ -111,7 +111,6 @@ export interface SettingsFileCodec {
 }
 export interface SettingsRestoreReceipt {
   readonly entries: readonly SettingsEntryReceipt[];
-  readonly backupPath: string;
   readonly cancelled: boolean;
 }
 export class SettingsSnapshotError extends Error {

@@ -152,12 +152,12 @@ export class SettingsSnapshotService {
       return transfer;
     });
   }
-  /** Backup publication must succeed before admitting any configuration mutation. */
+  /** Validate the reviewed settings and source before admitting any configuration mutation. */
   apply(
     transfer: SettingsSnapshotPlan,
     selected: ReadonlySet<string>,
     context: SettingsCryptoContext & SettingsPlanContext,
-    writeBackup: (backup: SettingsDocument) => Promise<string>,
+    verifySource: () => Promise<void>,
   ): Promise<SettingsRestoreReceipt> {
     return this.#exclusive(context, async () => {
       const issued = this.#issuedPlans.get(transfer);
@@ -199,7 +199,7 @@ export class SettingsSnapshotService {
           'blocked-setting',
           'A selected setting needs mapping or manual attention before it can be restored',
         );
-      // Re-plan the selected target values to reject stale review baselines before making a backup.
+      // Reject stale review baselines, then verify the source as close to admission as possible.
       for (const { plan, changes } of groups) {
         const adapter = registry.get(plan.adapterID);
         if (!adapter)
@@ -231,20 +231,7 @@ export class SettingsSnapshotService {
             );
         }
       }
-      const backup = this.#document(
-        groups.map(({ plan, changes }) => ({
-          adapterID: plan.adapterID,
-          schemaVersion: registry.get(plan.adapterID)!.schemaVersion,
-          sourceVersion: plan.sourceVersion,
-          entries: changes.map(({ key, before }) => ({ key, state: before })),
-        })),
-      );
-      const backupPath = await writeBackup(backup);
-      if (!backupPath)
-        throw new SettingsSnapshotError(
-          'backup-unavailable',
-          'The encrypted backup was not saved; no settings were admitted',
-        );
+      await verifySource();
       assertSettingsCurrent(context);
       const currentRegistry = this.#registry();
       if (
@@ -254,7 +241,7 @@ export class SettingsSnapshotService {
       )
         throw new SettingsSnapshotError(
           'stale-plan',
-          'A configuration template changed while saving the backup',
+          'A configuration template changed after review',
         );
       const entries: SettingsEntryReceipt[] = [];
       let stopped = false;
@@ -321,7 +308,6 @@ export class SettingsSnapshotService {
       }
       return {
         entries,
-        backupPath,
         cancelled:
           context.signal.aborted ||
           !context.isCurrent() ||

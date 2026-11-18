@@ -103,17 +103,19 @@ describe('locally reviewed preference control constraints', () => {
     [choice, 3],
   ] as const)('never plans or writes out-of-policy values: %s = %s', async (key, value) => {
     const f = fixture(),
-      backup = vi.fn(async () => '/backup.age');
+      verifySource = vi.fn(async () => {});
     const plan = await f.service.plan(f.document({ [key]: set(value) }), f.context);
     expect(plan.plans[0]!.changes).toEqual([]);
     expect(plan.issues).toEqual(
       expect.arrayContaining([expect.objectContaining({ code: 'invalid-field' })]),
     );
-    await expect(f.service.apply(plan, f.selected(key), f.context, backup)).rejects.toMatchObject({
+    await expect(
+      f.service.apply(plan, f.selected(key), f.context, verifySource),
+    ).rejects.toMatchObject({
       code: 'empty-selection',
     });
     expect(f.host.writePreference).not.toHaveBeenCalled();
-    expect(backup).not.toHaveBeenCalled();
+    expect(verifySource).not.toHaveBeenCalled();
   });
 
   it.each([1, 10])(
@@ -124,12 +126,11 @@ describe('locally reviewed preference control constraints', () => {
         f.document({ [count]: set(value), [mode]: set('b'), [choice]: set(2) }),
         f.context,
       );
-      const backup = vi.fn(async (_document: SettingsDocument) => '/backup.age');
       const receipt = await f.service.apply(
         plan,
         f.selected(count, mode, choice),
         f.context,
-        backup,
+        async () => {},
       );
       expect(receipt.entries.map((entry) => entry.status)).toEqual([
         'applied',
@@ -139,11 +140,6 @@ describe('locally reviewed preference control constraints', () => {
       expect(f.values.get(count)).toEqual(set(value));
       expect(f.values.get(mode)).toEqual(set('b'));
       expect(f.values.get(choice)).toEqual(set(2));
-      expect(backup.mock.calls[0]![0].sections[0]!.entries).toEqual([
-        { key: count, state: set(5) },
-        { key: mode, state: set('a') },
-        { key: choice, state: set(1) },
-      ]);
     },
   );
 
@@ -159,7 +155,7 @@ describe('locally reviewed preference control constraints', () => {
       plan,
       f.selected(count, mode, choice),
       f.context,
-      async () => '/backup.age',
+      async () => {},
     );
     expect(receipt.entries.map((entry) => entry.status)).toEqual(['applied', 'applied', 'applied']);
     for (const key of [count, mode, choice]) expect(f.values.get(key)).toEqual(reset);
@@ -172,17 +168,12 @@ describe('locally reviewed preference control constraints', () => {
     expect(captured.section.entries.some((entry) => entry.key === count)).toBe(false);
     expect(captured.issues).toEqual([expect.objectContaining({ code: 'invalid-field' })]);
     const plan = await f.service.plan(f.document({ [count]: set(10) }), f.context);
-    const receipt = await f.service.apply(
-      plan,
-      f.selected(count),
-      f.context,
-      async () => '/backup.age',
-    );
+    const receipt = await f.service.apply(plan, f.selected(count), f.context, async () => {});
     expect(receipt.entries[0]!.status).toBe('applied');
     expect(f.values.get(count)).toEqual(set(10));
   });
 
-  it('rejects a changed live template at final admission after backup', async () => {
+  it('rejects a changed live template at final admission after source verification', async () => {
     const f = fixture();
     let current = true;
     const adapter = new ReviewedPreferenceAdapter(
@@ -195,7 +186,6 @@ describe('locally reviewed preference control constraints', () => {
     const plan = await service.plan(f.document({ [count]: set(10) }), f.context);
     const receipt = await service.apply(plan, f.selected(count), f.context, async () => {
       current = false;
-      return '/backup.age';
     });
     expect(receipt.entries[0]!.status).toBe('conflict');
     expect(f.host.writePreference).not.toHaveBeenCalled();

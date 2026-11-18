@@ -36,7 +36,6 @@ vi.mock('../../src/platform/native-ui', () => ({
       'export-password',
       'export-confirm',
       'import-password',
-      'backup-password',
       'managed-password',
     ]) {
       const input = document.createElement('input');
@@ -62,7 +61,7 @@ import { SettingsSnapshotController } from '../../src/settings-snapshots/control
 import { SettingsSnapshotService } from '../../src/settings-snapshots/service';
 
 const password = 'file-password-not-in-model',
-  backupPassword = 'independent-backup-password-not-in-model',
+  exportPassword = 'separate-export-password-not-in-model',
   secret = 'api-key-not-in-model',
   age = '-----BEGIN AGE ENCRYPTED FILE-----\nciphertext';
 const source: SettingsDocument = {
@@ -99,11 +98,9 @@ function setup(
     managed?: ManagedSettingsSnapshotsPort;
   } = {},
 ) {
-  const order: string[] = [];
-  let backupSequence = 0;
+  const otherAdapterID = 'zotero';
   const apply = vi.fn<SettingsAdapter['apply']>(
     async (changes: readonly SettingsChange[], _context: SettingsOperationContext) => {
-      order.push('apply');
       return changes.map((change) => ({
         adapterID: 'zotero-neo',
         key: change.key,
@@ -150,20 +147,31 @@ function setup(
       async () => '-----BEGIN AGE ENCRYPTED FILE-----\nciphertext',
     );
   const codec: SettingsFileCodec = { open, seal, dispose: vi.fn() };
-  const write = vi.fn<SettingsSnapshotFiles['write']>(async () => {
-    order.push('backup');
-  });
+  const write = vi.fn<SettingsSnapshotFiles['write']>(async () => {});
   const files: SettingsSnapshotFiles = {
     chooseOpen: async () => '/input.age',
     chooseSave: async () => ({ path: '/output.age', replace: false }),
     choosePath: async () => null,
-    backupPath: () => `/before-${++backupSequence}.age`,
     read: async () => age,
     write,
   };
   const debug = vi.fn();
   controller = new SettingsSnapshotController(
-    new SettingsSnapshotService([adapter], () => ({ neo: '2', zotero: '10' })),
+    new SettingsSnapshotService(
+      [
+        adapter,
+        {
+          ...adapter,
+          id: otherAdapterID,
+          label: 'Zotero',
+          capture: async () => ({
+            section: { ...source.sections[0]!, adapterID: otherAdapterID, entries: [] },
+            issues: [],
+          }),
+        },
+      ],
+      () => ({ neo: '2', zotero: '10' }),
+    ),
     codec,
     files,
     debug,
@@ -175,7 +183,7 @@ function setup(
     themeRoot: () => () => {},
     isCurrent: () => true,
   });
-  return { apply, plan, open, seal, capture, write, debug, order, files };
+  return { apply, plan, open, seal, capture, write, debug, files };
 }
 const dispatch = (command: SettingsSnapshotCommand) => ui.view!.dispatch(command);
 async function chooseAndInspect() {
@@ -183,20 +191,23 @@ async function chooseAndInspect() {
   dispatch({ type: 'choose-file' });
   await vi.waitFor(() => expect(ui.view!.model.busy).toBe(false));
   ui.view!.inputs.get('import-password')!.value = password;
-  ui.view!.inputs.get('backup-password')!.value = backupPassword;
   dispatch({ type: 'inspect' });
+}
+function confirmRestore() {
+  dispatch({ type: 'review-restore' });
+  dispatch({ type: 'apply' });
 }
 const idle = () => vi.waitFor(() => expect(ui.view!.model.busy).toBe(false));
 function expectRedacted() {
   const models = JSON.stringify(ui.models);
   expect(models).not.toContain(password);
-  expect(models).not.toContain(backupPassword);
+  expect(models).not.toContain(exportPassword);
   expect(models).not.toContain(secret);
   expect(models).not.toContain('previous-secret');
 }
 
-it('keeps passwords out of models and commands, clears password DOM immediately, and encrypts the backup before any secret mutation', async () => {
-  const { seal, apply, order } = setup();
+it('uses the source password only for preview and restores selected secrets without an export', async () => {
+  const { open, seal, write, apply } = setup();
   await chooseAndInspect();
   expect(ui.view!.inputs.get('import-password')!.value).toBe('');
   await idle();
@@ -204,17 +215,22 @@ it('keeps passwords out of models and commands, clears password DOM immediately,
   expect(ui.view!.model.canApply).toBe(false);
   dispatch({ type: 'field', id: 'zotero-neo:secret:api', checked: true });
   dispatch({ type: 'apply' });
+  expect(apply).not.toHaveBeenCalled();
+  dispatch({ type: 'review-restore' });
+  dispatch({ type: 'cancel-restore' });
+  expect(apply).not.toHaveBeenCalled();
+  confirmRestore();
   await idle();
-  expect(order).toEqual(['backup', 'apply']);
   expect(apply).toHaveBeenCalledOnce();
-  expect(seal.mock.calls[0]?.[1]).toBe(backupPassword);
-  expect(seal.mock.calls[0]?.[3]).toBe('age');
+  expect(open.mock.calls[0]?.[1]).toBe(password);
+  expect(seal).not.toHaveBeenCalled();
+  expect(write).not.toHaveBeenCalled();
   expect(ui.view!.model.canApply).toBe(false);
   expect(ui.view!.model.receipts[0]).toContain('applied');
   expectRedacted();
 });
 
-it('never creates a plan or backup after an authentication failure', async () => {
+it('never creates a plan or writes after an authentication failure', async () => {
   const { open, plan, seal, apply } = setup();
   open.mockRejectedValueOnce(
     new SettingsSnapshotError('authentication-failed', 'Wrong password or damaged file'),
@@ -246,17 +262,22 @@ it('does not plan or resurrect secrets after closing a pending decryption', asyn
   expectRedacted();
 });
 
-it('retains a retryable review but admits no settings when backup publication fails, without leaking native error details', async () => {
+it('retains a retryable export after a save failure without admitting settings or leaking error details', async () => {
   const { write, apply, debug } = setup();
   await chooseAndInspect();
   await idle();
   write.mockRejectedValueOnce(new Error(`${password}:${secret}`));
   dispatch({ type: 'field', id: 'zotero-neo:secret:api', checked: true });
-  dispatch({ type: 'apply' });
+  dispatch({ type: 'export-current' });
+  dispatch({ type: 'container', value: 'json' });
+  dispatch({ type: 'export' });
   await idle();
   expect(apply).not.toHaveBeenCalled();
-  expect(ui.view!.model.canApply).toBe(true);
+  expect(ui.view!.model.exportFromReview).toBe(true);
   expect(ui.view!.model.error).toBe(true);
+  dispatch({ type: 'return-to-preview' });
+  expect(ui.view!.model.canApply).toBe(true);
+  expect(ui.view!.model.selectedCount).toBe(1);
   expectRedacted();
   expect(JSON.stringify(debug.mock.calls)).not.toContain(password);
   expect(JSON.stringify(debug.mock.calls)).not.toContain(secret);
@@ -286,47 +307,32 @@ it('warns prominently before using settings whose stored state needs full restar
     { adapterID: 'zotero-neo', key: 'secret:api', status: 'applied', requiresRestart: true },
   ]);
   dispatch({ type: 'field', id: 'zotero-neo:secret:api', checked: true });
-  dispatch({ type: 'apply' });
+  confirmRestore();
   await idle();
   expect(ui.view!.model.status).toContain('Completely restart Zotero');
   expect(ui.view!.model.receipts[0]).toContain('restart required');
   expectRedacted();
 });
 
-it('keeps the previous backup intact and requires fresh overwrite consent on another inspection', async () => {
-  const { apply, files, seal, write } = setup();
-  const storage = new Map<string, string>();
-  write.mockImplementation(async (choice, ciphertext) => {
-    if (storage.has(choice.path) && !choice.replace)
-      throw new SettingsSnapshotError('file-exists', 'Backup already exists');
-    storage.set(choice.path, ciphertext);
-  });
-  files.chooseSave = async () => ({ path: '/chosen-before.age', replace: true });
-  seal
-    .mockResolvedValueOnce('encrypted-original-backup')
-    .mockResolvedValueOnce('encrypted-next-backup');
+it('returns to the same preview when cancelling the optional export file picker', async () => {
+  const { files, apply, seal, write } = setup();
+  files.chooseSave = async () => null;
   await chooseAndInspect();
   await idle();
-  dispatch({ type: 'choose-backup' });
-  await idle();
   dispatch({ type: 'field', id: 'zotero-neo:secret:api', checked: true });
-  dispatch({ type: 'apply' });
+  const groups = ui.view!.model.groups;
+  dispatch({ type: 'export-current' });
+  expect(ui.view!.model.adapters.filter(({ selected }) => selected).map(({ id }) => id)).toEqual([
+    'zotero-neo',
+  ]);
+  dispatch({ type: 'container', value: 'json' });
+  dispatch({ type: 'export' });
   await idle();
-  expect(storage.get('/chosen-before.age')).toBe('encrypted-original-backup');
-  ui.view!.inputs.get('import-password')!.value = password;
-  ui.view!.inputs.get('backup-password')!.value = backupPassword;
-  dispatch({ type: 'inspect' });
-  await idle();
-  dispatch({ type: 'field', id: 'zotero-neo:secret:api', checked: true });
-  dispatch({ type: 'apply' });
-  await idle();
-  expect(apply).toHaveBeenCalledTimes(2);
-  expect(storage.get('/chosen-before.age')).toBe('encrypted-original-backup');
-  const nextChoice = write.mock.calls[1]![0];
-  expect(nextChoice.path).not.toBe('/chosen-before.age');
-  expect(nextChoice.replace).toBe(false);
-  expect(storage.get(nextChoice.path)).toBe('encrypted-next-backup');
-  expectRedacted();
+  expect(ui.view!.model.mode).toBe('import');
+  expect(ui.view!.model.groups).toEqual(groups);
+  expect(apply).not.toHaveBeenCalled();
+  expect(seal).not.toHaveBeenCalled();
+  expect(write).not.toHaveBeenCalled();
 });
 
 it('clears secret consent and password DOM when switching to JSON and passes actual container policy to capture and seal', async () => {
@@ -349,20 +355,12 @@ it('clears secret consent and password DOM when switching to JSON and passes act
   expectRedacted();
 });
 
-it('requires an independent backup password for plaintext imports and detects the source from contents, not its extension', async () => {
+it('detects plaintext from contents rather than the extension and refuses plaintext credentials', async () => {
   const { files, open, plan } = setup();
   files.read = async () => JSON.stringify(source);
   dispatch({ type: 'mode', value: 'import' });
   dispatch({ type: 'choose-file' });
   await idle();
-  dispatch({ type: 'inspect' });
-  expect(open).not.toHaveBeenCalled();
-  expect(plan).not.toHaveBeenCalled();
-  expect(ui.view!.model.status).toContain('required even for plaintext');
-  ui.view!.inputs.get('backup-password')!.value = backupPassword;
-  dispatch({ type: 'inspect' });
-  await idle();
-  expect(ui.view!.inputs.get('backup-password')!.value).toBe('');
   expect(open.mock.calls[0]?.[1]).toBe('');
   expect(open.mock.calls[0]?.[2].container).toBe('json');
   expect(ui.view!.model.sourceContainer).toBe('json');
@@ -371,13 +369,13 @@ it('requires an independent backup password for plaintext imports and detects th
   expectRedacted();
 });
 
-it('invalidates the review without backup or mutation when a file changes after preview', async () => {
+it('invalidates the review without writing when a file changes after preview', async () => {
   const { files, seal, apply } = setup();
   await chooseAndInspect();
   await idle();
   files.read = async () => `${age}\nchanged`;
   dispatch({ type: 'field', id: 'zotero-neo:secret:api', checked: true });
-  dispatch({ type: 'apply' });
+  confirmRestore();
   await idle();
   expect(seal).not.toHaveBeenCalled();
   expect(apply).not.toHaveBeenCalled();
@@ -386,18 +384,19 @@ it('invalidates the review without backup or mutation when a file changes after 
   expectRedacted();
 });
 
-it('rechecks source contents after publishing the backup and prevents restore if the source changed during encryption', async () => {
-  const { files, seal, apply, write } = setup();
+it('rechecks source contents after revalidating local baselines', async () => {
+  const { files, plan, apply, write } = setup();
   await chooseAndInspect();
   await idle();
-  seal.mockImplementationOnce(async () => {
-    files.read = async () => `${age}\nchanged-during-backup`;
-    return age;
+  const replan = await plan.mock.results[0]!.value;
+  plan.mockImplementationOnce(async () => {
+    files.read = async () => `${age}\nchanged-during-replan`;
+    return replan;
   });
   dispatch({ type: 'field', id: 'zotero-neo:secret:api', checked: true });
-  dispatch({ type: 'apply' });
+  confirmRestore();
   await idle();
-  expect(write).toHaveBeenCalledOnce();
+  expect(write).not.toHaveBeenCalled();
   expect(apply).not.toHaveBeenCalled();
   expect(ui.view!.model.canApply).toBe(false);
   expectRedacted();
@@ -436,26 +435,24 @@ function managedFixture() {
   return { managed, source };
 }
 
-it('reads attachment sources through the same authenticated preview and encrypted backup barrier, including a fresh read before apply', async () => {
+it('reads attachment sources through the same authenticated preview and rechecks them before restoring', async () => {
   const { managed, source } = managedFixture();
-  const { apply, open, seal, order } = setup({ managed });
+  const { apply, open, seal, write } = setup({ managed });
   await idle();
   dispatch({ type: 'source', libraryID: source.libraryID, itemKey: source.itemKey });
+  await idle();
   ui.view!.inputs.get('import-password')!.value = password;
-  ui.view!.inputs.get('backup-password')!.value = backupPassword;
   dispatch({ type: 'inspect' });
   await idle();
   expect(open).toHaveBeenCalledOnce();
   expect(apply).not.toHaveBeenCalled();
-  expect(ui.view!.model.backupPath).toBe('');
-  dispatch({ type: 'choose-backup' });
-  await idle();
   dispatch({ type: 'field', id: 'zotero-neo:secret:api', checked: true });
-  dispatch({ type: 'apply' });
+  confirmRestore();
   await idle();
   expect(managed.read).toHaveBeenCalledTimes(3);
-  expect(order).toEqual(['backup', 'apply']);
-  expect(seal.mock.calls[0]?.[1]).toBe(backupPassword);
+  expect(apply).toHaveBeenCalledOnce();
+  expect(seal).not.toHaveBeenCalled();
+  expect(write).not.toHaveBeenCalled();
   expectRedacted();
 });
 
@@ -464,15 +461,13 @@ it('does not apply an attachment that changed after preview', async () => {
   const { apply, seal } = setup({ managed });
   await idle();
   dispatch({ type: 'source', libraryID: source.libraryID, itemKey: source.itemKey });
-  ui.view!.inputs.get('import-password')!.value = password;
-  ui.view!.inputs.get('backup-password')!.value = backupPassword;
-  dispatch({ type: 'inspect' });
   await idle();
-  dispatch({ type: 'choose-backup' });
+  ui.view!.inputs.get('import-password')!.value = password;
+  dispatch({ type: 'inspect' });
   await idle();
   managed.read = vi.fn(async () => `${age}\nexternal-change`);
   dispatch({ type: 'field', id: 'zotero-neo:secret:api', checked: true });
-  dispatch({ type: 'apply' });
+  confirmRestore();
   await idle();
   expect(apply).not.toHaveBeenCalled();
   expect(seal).not.toHaveBeenCalled();
@@ -518,58 +513,78 @@ it('clears automatic publication when choosing encryption and invokes the real m
   expectRedacted();
 });
 
-it('restores a plaintext source only after publishing an age backup with the independent backup password', async () => {
-  const { files, open, plan, capture, apply, seal, order } = setup();
-  const current = { key: 'safe:theme', state: { kind: 'set' as const, value: 'old' } };
-  const document: SettingsDocument = {
-    ...source,
-    sections: [
-      {
-        ...source.sections[0]!,
-        entries: [{ key: 'safe:theme', state: { kind: 'set', value: 'new' } }],
-      },
-    ],
-  };
-  files.read = async () => JSON.stringify(document);
-  open.mockResolvedValue(document);
-  plan.mockResolvedValue({
-    adapterID: 'zotero-neo',
-    sourceVersion: '2',
-    issues: [],
-    changes: [
-      {
-        adapterID: 'zotero-neo',
-        key: current.key,
-        label: 'Theme',
-        category: 'Appearance',
-        secret: false,
-        before: current.state,
-        after: { kind: 'set', value: 'new' },
-        selected: true,
-        requiresRestart: false,
-      },
-    ],
-  });
-  capture.mockResolvedValue({
-    section: { ...source.sections[0]!, entries: [current] },
-    issues: [],
-  });
-  dispatch({ type: 'mode', value: 'import' });
-  dispatch({ type: 'choose-file' });
-  await idle();
-  ui.view!.inputs.get('backup-password')!.value = backupPassword;
-  dispatch({ type: 'inspect' });
-  await idle();
-  expect(ui.view!.model.canApply).toBe(true);
-  dispatch({ type: 'apply' });
-  await idle();
-  expect(order).toEqual(['backup', 'apply']);
-  expect(apply).toHaveBeenCalledOnce();
-  expect(seal.mock.calls[0]?.[1]).toBe(backupPassword);
-  expect(seal.mock.calls[0]?.[2].container).toBe('age');
-  expect(seal.mock.calls[0]?.[3]).toBe('age');
-  expectRedacted();
-});
+it.each(['no export', 'JSON', 'age'] as const)(
+  'previews plaintext without passwords and can restore after %s',
+  async (format) => {
+    const { files, open, plan, capture, apply, seal, write } = setup();
+    const current = { key: 'safe:theme', state: { kind: 'set' as const, value: 'old' } };
+    const document: SettingsDocument = {
+      ...source,
+      sections: [
+        {
+          ...source.sections[0]!,
+          entries: [{ key: 'safe:theme', state: { kind: 'set', value: 'new' } }],
+        },
+      ],
+    };
+    files.read = async () => JSON.stringify(document);
+    open.mockResolvedValue(document);
+    plan.mockResolvedValue({
+      adapterID: 'zotero-neo',
+      sourceVersion: '2',
+      issues: [],
+      changes: [
+        {
+          adapterID: 'zotero-neo',
+          key: current.key,
+          label: 'Theme',
+          category: 'Appearance',
+          secret: false,
+          before: current.state,
+          after: { kind: 'set', value: 'new' },
+          selected: true,
+          requiresRestart: false,
+        },
+      ],
+    });
+    capture.mockResolvedValue({
+      section: { ...source.sections[0]!, entries: [current] },
+      issues: [],
+    });
+    dispatch({ type: 'mode', value: 'import' });
+    dispatch({ type: 'choose-file' });
+    await idle();
+    expect(open.mock.calls[0]?.[1]).toBe('');
+    expect(open.mock.calls[0]?.[2].container).toBe('json');
+    expect(ui.view!.model.groups[0]?.fields[0]).toMatchObject({ before: 'old', after: 'new' });
+    expect(ui.view!.model.canApply).toBe(true);
+    if (format !== 'no export') {
+      dispatch({ type: 'export-current' });
+      expect(
+        ui.view!.model.adapters.filter(({ selected }) => selected).map(({ id }) => id),
+      ).toEqual(['zotero-neo']);
+      dispatch({ type: 'container', value: format === 'age' ? 'age' : 'json' });
+      if (format === 'age') {
+        ui.view!.inputs.get('export-password')!.value = exportPassword;
+        ui.view!.inputs.get('export-confirm')!.value = exportPassword;
+      }
+      dispatch({ type: 'export' });
+      await idle();
+      expect(apply).not.toHaveBeenCalled();
+      expect(write).toHaveBeenCalledOnce();
+      expect(seal.mock.calls[0]?.[0].sections[0]?.entries).toEqual([current]);
+      expect(seal.mock.calls[0]?.[1]).toBe(format === 'age' ? exportPassword : '');
+      expect(ui.view!.model.mode).toBe('import');
+      expect(ui.view!.model.selectedCount).toBe(1);
+    }
+    confirmRestore();
+    await idle();
+    expect(apply).toHaveBeenCalledOnce();
+    expect(seal).toHaveBeenCalledTimes(format === 'no export' ? 0 : 1);
+    expect(write).toHaveBeenCalledTimes(format === 'no export' ? 0 : 1);
+    expectRedacted();
+  },
+);
 
 it('exports and imports data-only template JSON through native file ports and requires explicit review of supported local fields', async () => {
   const template = {

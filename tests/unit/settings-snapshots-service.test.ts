@@ -92,7 +92,7 @@ const serviceFor = (...adapters: SettingsAdapter[]) =>
 const selected = (id: string, ...keys: string[]) =>
   new Set(keys.map((key) => settingsChangeID(id, key)));
 
-it('preserves false, zero, empty strings and explicit resets, and keeps absent fields out of the backup and restore', async () => {
+it('restores selected false, zero and explicit resets without touching unselected values', async () => {
   const { adapter, values } = fixture(),
     service = serviceFor(adapter),
     ctx = context();
@@ -104,37 +104,23 @@ it('preserves false, zero, empty strings and explicit resets, and keeps absent f
   });
   const parsed = parseSettingsDocument(serializeSettingsDocument(input));
   const plan = await service.plan(parsed, ctx);
-  let backup: SettingsDocument | undefined;
   const receipt = await service.apply(
     plan,
     selected(adapter.id, 'flag', 'count', 'default'),
     ctx,
-    async (value) => {
-      backup = value;
-      return '/backup.age';
-    },
+    async () => {},
   );
   expect(values.get('flag')).toEqual(set(false));
   expect(values.get('count')).toEqual(set(0));
   expect(values.get('default')).toEqual(reset);
   expect(values.get('empty')).toEqual(set('old'));
-  expect(backup?.sections[0]).toEqual({
-    adapterID: adapter.id,
-    schemaVersion: 1,
-    sourceVersion: '2',
-    entries: [
-      { key: 'flag', state: set(true) },
-      { key: 'count', state: set(5) },
-      { key: 'default', state: set('override') },
-    ],
-  });
   expect(receipt.entries.map((entry) => entry.status)).toEqual(['applied', 'applied', 'applied']);
   const repeated = await service.plan(input, ctx);
   const again = await service.apply(
     repeated,
     selected(adapter.id, 'flag', 'count', 'default'),
     ctx,
-    async () => '/backup-2.age',
+    async () => {},
   );
   expect(again.entries.map((entry) => entry.status)).toEqual([
     'unchanged',
@@ -143,48 +129,45 @@ it('preserves false, zero, empty strings and explicit resets, and keeps absent f
   ]);
 });
 
-it('never admits changes if encrypted backup publication fails or returns no acknowledged path', async () => {
+it('admits no settings if final source verification rejects', async () => {
   const { adapter, apply, values } = fixture(),
     service = serviceFor(adapter),
     ctx = context();
   const plan = await service.plan(documentFor(adapter.id, { flag: set(false) }), ctx);
   await expect(
     service.apply(plan, selected(adapter.id, 'flag'), ctx, async () => {
-      throw new Error('Disk is full');
+      throw new Error('Source contents changed');
     }),
-  ).rejects.toThrow('Disk is full');
-  await expect(
-    service.apply(plan, selected(adapter.id, 'flag'), ctx, async () => ''),
-  ).rejects.toMatchObject({ code: 'backup-unavailable' });
+  ).rejects.toThrow('Source contents changed');
   expect(apply).not.toHaveBeenCalled();
   expect(values.get('flag')).toEqual(set(true));
 });
 
-it('rejects a changed review baseline before creating a backup', async () => {
+it('rejects a changed review baseline before verifying the source for admission', async () => {
   const { adapter, values, apply } = fixture(),
     service = serviceFor(adapter),
     ctx = context(),
-    backup = vi.fn(async () => '/backup.age');
+    verifySource = vi.fn(async () => {});
   const plan = await service.plan(documentFor(adapter.id, { count: set(0) }), ctx);
   values.set('count', set(9));
   await expect(
-    service.apply(plan, selected(adapter.id, 'count'), ctx, backup),
+    service.apply(plan, selected(adapter.id, 'count'), ctx, verifySource),
   ).rejects.toMatchObject({ code: 'stale-plan' });
-  expect(backup).not.toHaveBeenCalled();
+  expect(verifySource).not.toHaveBeenCalled();
   expect(apply).not.toHaveBeenCalled();
   expect(values.get('count')).toEqual(set(9));
 });
 
-it('cancels admission after awaiting the backup and holds the application-wide operation slot until then', async () => {
+it('cancels admission during final source verification and holds the application-wide operation slot until then', async () => {
   const { adapter, apply } = fixture(),
     service = serviceFor(adapter),
     abort = new AbortController(),
     ctx = context(abort);
   const plan = await service.plan(documentFor(adapter.id, { flag: set(false) }), ctx);
-  const gate = Promise.withResolvers<string>();
-  const backup = vi.fn(() => gate.promise);
-  const pending = service.apply(plan, selected(adapter.id, 'flag'), ctx, backup);
-  await vi.waitFor(() => expect(backup).toHaveBeenCalledOnce());
+  const gate = Promise.withResolvers<void>();
+  const verifySource = vi.fn(() => gate.promise);
+  const pending = service.apply(plan, selected(adapter.id, 'flag'), ctx, verifySource);
+  await vi.waitFor(() => expect(verifySource).toHaveBeenCalledOnce());
   await expect(
     service.capture(new Set([adapter.id]), {
       ...ctx,
@@ -193,7 +176,7 @@ it('cancels admission after awaiting the backup and holds the application-wide o
     }),
   ).rejects.toMatchObject({ code: 'busy' });
   abort.abort();
-  gate.resolve('/backup.age');
+  gate.resolve();
   await expect(pending).rejects.toMatchObject({ code: 'cancelled' });
   expect(apply).not.toHaveBeenCalled();
 });
@@ -217,13 +200,12 @@ it('keeps an unacknowledged partial write visible and skips later adapters inste
     plan,
     new Set([...selected(first.adapter.id, 'flag'), ...selected(second.adapter.id, 'count')]),
     ctx,
-    async () => '/backup.age',
+    async () => {},
   );
   expect(first.values.get('flag')).toEqual(set(false));
   expect(second.apply).not.toHaveBeenCalled();
   expect(receipt.entries.map((entry) => entry.status)).toEqual(['failed', 'skipped']);
   expect(receipt.entries[0]!.message).toContain('review the current value');
-  expect(receipt.backupPath).toBe('/backup.age');
 });
 
 it('reports unknown adapters without executing them and refuses unknown envelope versions and unsafe nested keys', async () => {
@@ -294,15 +276,15 @@ it('uses newly reviewed plugin adapters and invalidates their previews on replac
   ]);
   const reviewed = await service.plan(document, context());
   available[0] = fixture(original.adapter.id).adapter;
-  const backup = vi.fn(async () => 'backup.age');
+  const verifySource = vi.fn(async () => {});
   await expect(
-    service.apply(reviewed, selected(original.adapter.id, 'flag'), context(), backup),
+    service.apply(reviewed, selected(original.adapter.id, 'flag'), context(), verifySource),
   ).rejects.toMatchObject({ code: 'stale-plan' });
-  expect(backup).not.toHaveBeenCalled();
+  expect(verifySource).not.toHaveBeenCalled();
   expect(original.values.get('flag')).toEqual(set(true));
 });
 
-it('does not apply a stale template when replacement occurs during backup publication', async () => {
+it('does not apply a stale template when replacement occurs during source verification', async () => {
   const original = fixture('plugin.example');
   const available = [original.adapter];
   const service = new SettingsSnapshotService(
@@ -316,7 +298,6 @@ it('does not apply a stale template when replacement occurs during backup public
   await expect(
     service.apply(plan, selected(original.adapter.id, 'flag'), context(), async () => {
       available[0] = fixture(original.adapter.id).adapter;
-      return 'retained-backup.age';
     }),
   ).rejects.toMatchObject({ code: 'stale-plan' });
   expect(original.values.get('flag')).toEqual(set(true));
@@ -339,10 +320,10 @@ it('rejects credentials in plaintext capture and restore independently of file c
   const input = documentFor(source.adapter.id, { secret: set('private-fixture') });
   await expect(service.plan(input, json)).rejects.toMatchObject({ code: 'plaintext-secrets' });
   const encryptedPlan = await service.plan(input, context());
-  const backup = vi.fn(async () => 'backup.age');
+  const verifySource = vi.fn(async () => {});
   await expect(
-    service.apply(encryptedPlan, selected(source.adapter.id, 'secret'), json, backup),
+    service.apply(encryptedPlan, selected(source.adapter.id, 'secret'), json, verifySource),
   ).rejects.toMatchObject({ code: 'plaintext-secrets' });
-  expect(backup).not.toHaveBeenCalled();
+  expect(verifySource).not.toHaveBeenCalled();
   expect(source.apply).not.toHaveBeenCalled();
 });

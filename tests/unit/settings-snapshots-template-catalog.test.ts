@@ -555,7 +555,7 @@ describe('consumer-visible reviewed preference behavior', () => {
     catalog.dispose();
   });
 
-  it('uses the service backup barrier and preserves identity until a new review replaces it', async () => {
+  it('preserves reviewed adapter identity across a catalog refresh and verifies the source before writing', async () => {
     state.preferences.set(key, set(true));
     const catalog = await reviewedCatalog(),
       adapter = catalog.adapters[2]!;
@@ -575,17 +575,16 @@ describe('consumer-visible reviewed preference behavior', () => {
     const plan = await service.plan(document, context());
     await catalog.list(context());
     expect(catalog.adapters[2]).toBe(adapter);
-    const backup = vi.fn(async () => {
+    const verifySource = vi.fn(async () => {
       expect(state.writes).toEqual([]);
-      return '/owned/recovery.age';
     });
     const receipt = await service.apply(
       plan,
       new Set([settingsChangeID(adapter.id, key)]),
       { ...context(), window: {} as Window },
-      backup,
+      verifySource,
     );
-    expect(backup).toHaveBeenCalledOnce();
+    expect(verifySource).toHaveBeenCalledOnce();
     expect(receipt.entries[0]!.status).toBe('applied');
     catalog.dispose();
   });
