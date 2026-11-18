@@ -798,6 +798,24 @@ export class MainWindowController implements MainWindowControllerApi {
     }
   }
 
+  /** Menu selections are explicit; only keyboard dispatch resolves Neo EffectiveSelection. */
+  openItemAttributes(window: MainWindow, selectedItems?: readonly Zotero.Item[]): boolean {
+    const session = this.#sessions.get(window);
+    const module = session && this.#modules.get(session)?.itemAttributes;
+    if (!session || !module || session.cleanup.disposed) return false;
+    const presentation = {
+      window,
+      mode: selectedItems ? ('values' as const) : ('definitions' as const),
+      items: selectedItems ?? [],
+      language: () => this.keyGuideLanguage(),
+      themeRoot: (root: HTMLElement) => session.theme.add(root),
+      isCurrent: () => this.#sessions.get(window) === session && !session.cleanup.disposed,
+    };
+    return selectedItems
+      ? module.edit(presentation, this.bindingMode(window))
+      : module.manage(presentation);
+  }
+
   private resetMainInput(window: MainWindow, session: MainWindowSession): void {
     session.input.reset();
     this.clearKeyGuide(window, session);
@@ -1581,16 +1599,7 @@ export class MainWindowController implements MainWindowControllerApi {
           );
           break;
         }
-        const presentation = {
-          window,
-          mode: action === 'manageItemAttributes' ? ('definitions' as const) : ('values' as const),
-          items: targets?.items ?? [],
-          language: () => this.keyGuideLanguage(),
-          themeRoot: (root: HTMLElement) => session.theme.add(root),
-          isCurrent: () => this.#sessions.get(window) === session && !session.cleanup.disposed,
-        };
-        if (action === 'manageItemAttributes') module.manage(presentation);
-        else module.edit(presentation, this.bindingMode(window));
+        this.openItemAttributes(window, targets?.items);
         break;
       }
       case 'openSettingsSnapshots': {

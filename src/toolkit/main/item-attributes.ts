@@ -1,5 +1,6 @@
 import { CleanupFailure, type Cleanup } from '../../core/cleanup';
 import type { MainWindow } from '../../core/contracts';
+import { exactDecimalSortKey } from '../../item-attributes/decimal';
 import type { ItemAttributeNativeHost, NativeItemAttribute } from './item-attributes-types';
 
 type RowContext = {
@@ -82,43 +83,11 @@ type Edit = {
 };
 
 let nextGeneration = 0;
-const DECIMAL = /^([+-]?)(?:(\d+)(?:\.(\d*))?|\.(\d+))(?:[eE]([+-]?\d+))?$/;
 
-function digitLetters(digits: string): string {
-  return digits.replace(/\d/g, (digit) => String.fromCharCode(digit.charCodeAt(0) + 50));
-}
-
-function reverseLetters(letters: string): string {
-  return letters.replace(/[a-z]/g, (letter) => String.fromCharCode(219 - letter.charCodeAt(0)));
-}
-
-function exponentSortKey(exponent: bigint): string {
-  if (exponent === 0n) return 'c';
-  const digits = (exponent < 0n ? -exponent : exponent).toString();
-  // Unary digit count makes arbitrary-size integer magnitudes prefix-free.
-  const magnitude = `${'l'.repeat(digits.length)}a${digitLetters(digits)}`;
-  return exponent < 0n ? `b${reverseLetters(magnitude)}` : `d${magnitude}`;
-}
-
-/**
- * Native custom-column data is string-collated, with numeric digit mode optional.
- * Order exact decimals by sign, leading-digit exponent, then significant digits.
- * The sortable prefix uses only letters; reversing it reverses negative magnitude.
- * A low mantissa terminator distinguishes 1.2 from 1.23 before the raw suffix.
- * Keep the original spelling after "|" for rendering, never reconstruct a double.
- */
+// Keep the original spelling after "|" for native column rendering.
 function numericSortKey(value: string): string {
   if (!value) return '';
-  const match = DECIMAL.exec(value.trim());
-  if (!match) return `f|${value}`;
-  const integer = match[2] ?? '';
-  const coefficient = integer + (match[3] ?? match[4] ?? '');
-  const first = coefficient.search(/[1-9]/);
-  if (first === -1) return `c|${value}`;
-  const exponent = BigInt(match[5] ?? '0') + BigInt(integer.length) - BigInt(first) - 1n;
-  const significant = coefficient.slice(first).replace(/0+$/, '');
-  const magnitude = `${exponentSortKey(exponent)}${digitLetters(significant)}a`;
-  return `${match[1] === '-' ? `b${reverseLetters(magnitude)}` : `d${magnitude}`}|${value}`;
+  return `${exactDecimalSortKey(value) ?? 'f'}|${value}`;
 }
 
 function stableID(id: string): string {

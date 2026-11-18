@@ -1,4 +1,6 @@
 /** Main host capabilities. Native pane/tree/tab/editor objects remain internal. */
+export { registerLiteratureMenus } from './literature-menus';
+export { createLiteratureTableHost } from './literature-table';
 export {
   selectedMainTabID,
   selectedMainTabInfo,

@@ -13,6 +13,7 @@ import { ZoteroPreferenceStore } from './core/preference-store';
 import { BuiltinModuleRuntime } from './core/module-runtime';
 import {
   migrateBindingPreferences,
+  neoCommandLanguage,
   migrateInteractionPreferences,
   migrateReaderPreferences,
 } from './core/preferences';
@@ -22,7 +23,7 @@ import { moduleStartupFlags } from './platform/module-startup';
 import { migrateTranslationModulePreference } from './modules/translation/preferences';
 import { AIQAController } from './ai-qa/controller';
 import { isSourceNoteIdentity, migrateLegacySourceNoteIdentities } from './platform/note-relations';
-import { ManagedTagsUI } from './toolkit/main';
+import { ManagedTagsUI, registerLiteratureMenus } from './toolkit/main';
 import { registerNativeUIResources } from './platform/native-ui';
 import { createScholarlyMetadataService } from './scholarly';
 import { createArtifactRepository } from './artifacts';
@@ -38,6 +39,8 @@ import type {
   SettingsTemplateCatalogPort,
 } from './settings-snapshots/ports';
 import { ItemAttributesController } from './item-attributes/controller';
+import { LiteratureTableWindows } from './main/literature-table-windows';
+import { nativeObjectIdentity } from './platform/cross-compartment';
 
 export interface AddonContext {
   readonly id: string;
@@ -77,14 +80,16 @@ export class ZoteroNeoAddon implements ZoteroNeoController {
   readonly #settingsSnapshots: SettingsSnapshotController;
   readonly #snapshotCatalog: SettingsTemplateCatalogPort;
   readonly #managedSnapshots: ManagedSettingsSnapshotsPort;
-  readonly #snapshotWindows = new Map<MainWindow, () => void>();
+  readonly #mainWindows = new Map<Window, { owner: MainWindow; releaseSnapshots: () => void }>();
   readonly #itemAttributes: ItemAttributesController;
+  readonly #literatureTables: LiteratureTableWindows;
   readonly #reader: ReaderControllerApi;
   readonly #main: MainWindowControllerApi;
   readonly api: ZoteroNeoPublicApi;
   #context: AddonContext | null = null;
   #preferencesRegistered = false;
   #releaseNativeUI: (() => void) | null = null;
+  #releaseLiteratureMenus: (() => void) | null = null;
   aiQA: AIQAController | null = null;
 
   constructor(preferences: ZoteroPreferenceStore) {
@@ -130,6 +135,11 @@ export class ZoteroNeoAddon implements ZoteroNeoController {
       this.#preferences,
       this.#logger,
       moduleStartupFlags(this.#preferences),
+    );
+    this.#literatureTables = new LiteratureTableWindows(
+      preferences,
+      this.#modules.applied['item-attributes'],
+      (error) => this.#logger.debug(`Literature table: ${String(error)}`),
     );
     let main: MainWindowControllerApi | null = null;
     this.#reader = createReaderController({
@@ -196,6 +206,7 @@ export class ZoteroNeoAddon implements ZoteroNeoController {
     migrateBindingPreferences(this.#preferences);
     migrateReaderPreferences(this.#preferences);
     this.#registerPreferences();
+    this.#registerLiteratureMenus(context.id);
     this.#managedTags.start();
     if (this.#modules.applied['item-attributes']) this.#itemAttributes.start(context.id);
     if (this.#modules.applied['ai-qa'] && !this.aiQA) {
@@ -232,10 +243,13 @@ export class ZoteroNeoAddon implements ZoteroNeoController {
     this.#context = null;
     const failure = new CleanupFailure();
     failure.run(() => this.#managedTags.dispose());
+    failure.run(() => this.#releaseLiteratureMenus?.());
+    this.#releaseLiteratureMenus = null;
+    failure.run(() => this.#literatureTables.dispose());
     failure.run(() => this.#preparation.dispose());
     failure.run(() => this.#metadataReview.dispose());
-    for (const cleanup of this.#snapshotWindows.values()) failure.run(cleanup);
-    this.#snapshotWindows.clear();
+    for (const { releaseSnapshots } of this.#mainWindows.values()) failure.run(releaseSnapshots);
+    this.#mainWindows.clear();
     failure.run(() => this.#managedSnapshots.dispose());
     failure.run(() => this.#snapshotCatalog.dispose());
     failure.run(() => this.#settingsSnapshots.dispose());
@@ -254,16 +268,48 @@ export class ZoteroNeoAddon implements ZoteroNeoController {
   }
 
   addToWindow(window: MainWindow): void {
-    this.#snapshotWindows.get(window)?.();
-    this.#snapshotWindows.set(window, this.#managedSnapshots.start(window));
-    this.#main.addWindow(window);
+    const identity = nativeObjectIdentity(window);
+    const previous = this.#mainWindows.get(identity);
+    const owner = previous?.owner ?? window;
+    previous?.releaseSnapshots();
+    this.#mainWindows.set(identity, {
+      owner,
+      releaseSnapshots: this.#managedSnapshots.start(owner),
+    });
+    this.#main.addWindow(owner);
   }
 
   removeFromWindow(window: MainWindow): void {
-    this.#snapshotWindows.get(window)?.();
-    this.#snapshotWindows.delete(window);
-    this.#settingsSnapshots.closeOwner(window);
-    this.#main.removeWindow(window);
+    const identity = nativeObjectIdentity(window);
+    const entry = this.#mainWindows.get(identity);
+    const owner = entry?.owner ?? window;
+    this.#mainWindows.delete(identity);
+    const failure = new CleanupFailure();
+    if (entry) failure.run(entry.releaseSnapshots);
+    failure.run(() => this.#literatureTables.closeOwner(owner));
+    failure.run(() => this.#settingsSnapshots.closeOwner(owner));
+    failure.run(() => this.#main.removeWindow(owner));
+    failure.rethrow();
+  }
+
+  #registerLiteratureMenus(pluginID: string): void {
+    if (this.#releaseLiteratureMenus || !Zotero.MenuManager) return;
+    const attributes = this.#modules.applied['item-attributes'];
+    try {
+      this.#releaseLiteratureMenus = registerLiteratureMenus(pluginID, {
+        resolveOwner: (window) => this.#mainWindows.get(nativeObjectIdentity(window))?.owner,
+        language: () => neoCommandLanguage(this.#preferences, Zotero.locale ?? ''),
+        openTable: (window) => this.#literatureTables.open(window),
+        ...(attributes
+          ? {
+              manageAttributes: (window) => this.#main.openItemAttributes(window),
+              editAttributes: (window, items) => this.#main.openItemAttributes(window, items),
+            }
+          : {}),
+      });
+    } catch (error) {
+      this.#logger.debug(`Literature menus: ${String(error)}`);
+    }
   }
 
   #registerPreferences(): void {

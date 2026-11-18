@@ -15,7 +15,7 @@ import {
 import type { NativeReactView } from '../ui/react/types';
 import { PREPARATION_BACKDROP_STYLE, PREPARATION_PANEL_STYLE } from '../ui/react/shells/reader';
 import type { ItemAttributesPort, ItemAttributesPresentation } from './contracts';
-import { normalizeAttributeValue, readAttributeValue } from './extra';
+import { normalizeAttributeKey, normalizeAttributeValue, readAttributeValue } from './extra';
 import type { ItemAttributesCommand, ItemAttributesModel } from './react-model';
 import { ItemAttributeStore } from './store';
 import type {
@@ -24,6 +24,23 @@ import type {
   ItemAttributeState,
   ItemAttributeType,
 } from './types';
+
+type AttributeDestination = NonNullable<ItemAttributesModel['discard']>;
+
+function newAttributeIdentity(
+  definitions: readonly ItemAttributeDefinition[],
+  key: string,
+): Pick<ItemAttributeDefinition, 'id' | 'key'> {
+  const ids = new Set(definitions.map((definition) => definition.id));
+  const keys = new Set(definitions.map((definition) => normalizeAttributeKey(definition.key)));
+  for (let attempt = 0; attempt < 10; attempt++) {
+    const id = `neo-attribute-${Zotero.Utilities.randomString(20).toLowerCase()}`;
+    if (!ids.has(id) && (key || !keys.has(normalizeAttributeKey(id)))) {
+      return { id, key: key || id };
+    }
+  }
+  throw new Error('Could not generate a unique attribute identity');
+}
 
 interface WindowLease {
   readonly leases: Set<symbol>;
@@ -62,8 +79,13 @@ interface AttributeView {
     label: string;
     type: ItemAttributeType;
     revision: string;
+    original: ItemAttributeDefinition | null;
   } | null;
   removing: { definition: ItemAttributeDefinition; revision: string } | null;
+  discard: {
+    readonly destination: AttributeDestination;
+    readonly focus: HTMLElement | null;
+  } | null;
 }
 
 /** Application-owned native registrations and one owner-fenced, explicit-target editor. */
@@ -346,7 +368,7 @@ export class ItemAttributesController implements ItemAttributesPort {
       },
       containFocus: (event) => {
         if (this.#current(view) && event.target && !root.contains(event.target as Node))
-          (view.react?.getElement('close') ?? root).focus();
+          (view.react?.getElement(view.discard ? 'keep-editing' : 'close') ?? root).focus();
       },
       unload: () => this.closeOwner(host.window),
       compositionStart: () => {
@@ -371,6 +393,7 @@ export class ItemAttributesController implements ItemAttributesPort {
       review: null,
       draft: null,
       removing: null,
+      discard: null,
     };
     this.#view = view;
     this.#captureValues(view);
@@ -423,7 +446,9 @@ export class ItemAttributesController implements ItemAttributesPort {
   }
 
   #captureValues(view: AttributeView): void {
-    const definition = this.#schema?.definitions.find(({ id }) => id === view.selectedID);
+    const definitions = this.#schema?.definitions ?? [];
+    const definition = definitions.find(({ id }) => id === view.selectedID) ?? definitions[0];
+    view.selectedID = definition?.id ?? '';
     const expected = new Map<number, ItemAttributeState>();
     view.admitted =
       !!view.items.length && new Set(view.items.map(({ id }) => id)).size === view.items.length;
@@ -451,6 +476,7 @@ export class ItemAttributesController implements ItemAttributesPort {
   }
 
   #model(view: AttributeView): ItemAttributesModel {
+    const draft = view.draft;
     return {
       chinese: view.host.language() === 'zh-CN',
       mode: view.mode,
@@ -470,8 +496,9 @@ export class ItemAttributesController implements ItemAttributesPort {
         view.baselineRevision === this.#schema.revision &&
         this.#schema.definitions.some(({ id }) => id === view.selectedID),
       review: view.review,
-      draft: view.draft,
+      draft: draft && { id: draft.id, key: draft.key, label: draft.label, type: draft.type },
       removing: view.removing?.definition ?? null,
+      discard: view.discard?.destination ?? null,
     };
   }
 
@@ -479,23 +506,72 @@ export class ItemAttributesController implements ItemAttributesPort {
     if (this.#current(view)) view.react?.update(this.#model(view));
   }
 
-  #dispatch(view: AttributeView, command: ItemAttributesCommand): void {
-    if (command.type === 'close') {
+  #hasUnsavedChanges(view: AttributeView): boolean {
+    if (view.mode === 'values') {
+      const original = view.mixed ? '' : (view.targets[0]?.value ?? '');
+      return view.review !== null || view.input !== original;
+    }
+    const draft = view.draft;
+    return (
+      draft !== null &&
+      (draft.label !== (draft.original?.label ?? '') ||
+        draft.type !== (draft.original?.type ?? 'text') ||
+        draft.key !== (draft.original?.key ?? ''))
+    );
+  }
+
+  #leave(view: AttributeView, destination: AttributeDestination): void {
+    if (destination === 'close') {
       this.#close(true);
       return;
     }
+    view.mode = destination;
+    view.discard = null;
+    view.draft = null;
+    view.removing = null;
+    view.review = null;
+    view.status = '';
+    view.error = false;
+    if (destination === 'values') this.#captureValues(view);
+    this.#render(view);
+    view.react?.getElement('close')?.focus();
+  }
+
+  #dispatch(view: AttributeView, command: ItemAttributesCommand): void {
     if (view.busy) return;
+    const pending = view.discard;
+    if (pending) {
+      if (command.type === 'confirm-discard') this.#leave(view, pending.destination);
+      else if (command.type === 'keep-editing') {
+        view.discard = null;
+        this.#render(view);
+        const focus = pending.focus;
+        if (focus && view.root.contains(focus)) focus.focus();
+        else view.react?.getElement('close')?.focus();
+      }
+      return;
+    }
+    if (command.type === 'close' || command.type === 'mode') {
+      const destination = command.type === 'mode' ? command.value : 'close';
+      if (destination === view.mode || (destination === 'values' && !view.items.length)) return;
+      if (this.#hasUnsavedChanges(view)) {
+        view.discard = {
+          destination,
+          focus: view.root.ownerDocument.activeElement as HTMLElement | null,
+        };
+        this.#render(view);
+        view.react?.getElement('keep-editing')?.focus();
+      } else this.#leave(view, destination);
+      return;
+    }
+    if (command.type === 'keep-editing' || command.type === 'confirm-discard') return;
+    const editingDefinition = view.draft !== null;
+    const reviewingValues = view.review !== null;
     try {
       view.error = false;
       view.status = '';
       const schema = this.#schema;
       switch (command.type) {
-        case 'mode':
-          if (command.value === 'values' && !view.items.length) break;
-          view.mode = command.value;
-          if (command.value === 'values') this.#captureValues(view);
-          view.review = null;
-          break;
         case 'select':
           if (!schema?.definitions.some(({ id }) => id === command.id)) break;
           view.selectedID = command.id;
@@ -509,13 +585,22 @@ export class ItemAttributesController implements ItemAttributesPort {
           view.review = null;
           break;
         case 'new-definition':
-          if (schema)
-            view.draft = { id: null, key: '', label: '', type: 'text', revision: schema.revision };
+          if (schema) {
+            view.draft = {
+              id: null,
+              key: '',
+              label: '',
+              type: 'text',
+              revision: schema.revision,
+              original: null,
+            };
+          }
           view.removing = null;
           break;
         case 'edit-definition': {
           const definition = schema?.definitions.find(({ id }) => id === command.id);
-          if (definition && schema) view.draft = { ...definition, revision: schema.revision };
+          if (definition && schema)
+            view.draft = { ...definition, revision: schema.revision, original: definition };
           view.removing = null;
           break;
         }
@@ -534,15 +619,16 @@ export class ItemAttributesController implements ItemAttributesPort {
         case 'save-definition': {
           const draft = view.draft;
           if (!schema || !draft) break;
+          const identity = draft.original ?? newAttributeIdentity(schema.definitions, draft.key);
           const definition: ItemAttributeDefinition = {
-            id: draft.id ?? `neo-attribute-${Zotero.Utilities.randomString(20)}`,
-            key: draft.key,
+            id: identity.id,
+            key: identity.key,
             label: draft.label,
             type: draft.type,
           };
           this.#store.write(
-            draft.id
-              ? schema.definitions.map((entry) => (entry.id === draft.id ? definition : entry))
+            draft.original
+              ? schema.definitions.map((entry) => (entry.id === definition.id ? definition : entry))
               : [...schema.definitions, definition],
             draft.revision,
           );
@@ -550,8 +636,8 @@ export class ItemAttributesController implements ItemAttributesPort {
           this.#refreshSchema();
           view.status = this.#text(
             view,
-            '定义已保存；已有条目值未改写。',
-            'Definition saved; existing item values were not rewritten.',
+            '属性已保存。通过 Zotero 列表的列菜单显示该列，在条目的「信息」面板填写值。',
+            'Attribute saved. Show its column from the Zotero item-list column menu; enter values in the item’s Info pane.',
           );
           break;
         }
@@ -574,8 +660,8 @@ export class ItemAttributesController implements ItemAttributesPort {
             this.#refreshSchema();
             view.status = this.#text(
               view,
-              '定义已删除；所有 Extra 值已保留。',
-              'Definition removed; all Extra values were kept.',
+              '属性已删除，原有值已保留。',
+              'Attribute removed; existing values were kept.',
             );
           }
           break;
@@ -613,6 +699,11 @@ export class ItemAttributesController implements ItemAttributesPort {
       view.status = error instanceof Error ? error.message : String(error);
     }
     this.#render(view);
+    if (editingDefinition !== (view.draft !== null)) {
+      view.react?.getElement(view.draft ? 'definition-label' : 'new-definition')?.focus();
+    } else if (reviewingValues !== (view.review !== null)) {
+      view.react?.getElement(view.review ? 'value-review' : 'value-input')?.focus();
+    }
   }
 
   #writeValues(
@@ -648,6 +739,7 @@ export class ItemAttributesController implements ItemAttributesPort {
         if (this.#current(view)) {
           view.busy = false;
           this.#render(view);
+          (view.react?.getElement('value-input') ?? view.root).focus();
         }
       });
   }
@@ -667,14 +759,14 @@ export class ItemAttributesController implements ItemAttributesPort {
     const key = keyString(event);
     if (key === 'escape') {
       event.preventDefault();
-      this.#close(true);
+      this.#dispatch(view, { type: view.discard ? 'keep-editing' : 'close' });
     } else if (!view.root.contains(target)) {
       event.preventDefault();
-      (view.react?.getElement('close') ?? view.root).focus();
+      (view.react?.getElement(view.discard ? 'keep-editing' : 'close') ?? view.root).focus();
     } else if (key === 'tab' || key === 'shift+tab') {
       const controls = (
         Array.from(
-          view.root.querySelectorAll<HTMLElement>('input,select,textarea,button,[tabindex="0"]'),
+          view.root.querySelectorAll('input,select,textarea,button,summary,[tabindex="0"]'),
         ) as HTMLElement[]
       ).filter((element) => !element.matches(':disabled') && element.getClientRects().length);
       if (
