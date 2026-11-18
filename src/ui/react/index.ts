@@ -59,8 +59,6 @@ import { mountSettingsSnapshotsView, SETTINGS_SNAPSHOTS_CSS } from './surfaces/s
 import type { SettingsSnapshotModel } from '../../settings-snapshots/react-model';
 import { mountItemAttributesView, ITEM_ATTRIBUTES_CSS } from './surfaces/item-attributes';
 import type { ItemAttributesModel } from '../../item-attributes/react-model';
-import { mountLiteratureTableView, LITERATURE_TABLE_CSS } from './surfaces/literature-table';
-import type { LiteratureTableModel } from '../../literature-table/model';
 import { NATIVE_UI_CSS } from './styles';
 import type { NativeUIRuntime, ReactView } from './types';
 
@@ -87,7 +85,6 @@ const runtime: NativeUIRuntime = {
         METADATA_REVIEW_CSS +
         SETTINGS_SNAPSHOTS_CSS +
         ITEM_ATTRIBUTES_CSS +
-        LITERATURE_TABLE_CSS +
         ANNOTATION_COMMENT_REACT_CSS +
         SELECTION_ACTIONS_REACT_CSS +
         READER_SIDEBAR_REACT_CSS +
@@ -173,10 +170,6 @@ const runtime: NativeUIRuntime = {
         ) as ReactView<unknown>;
       case 'item-attributes':
         return mountItemAttributesView(root, model as ItemAttributesModel, (command) =>
-          dispatch(command),
-        ) as ReactView<unknown>;
-      case 'literature-table':
-        return mountLiteratureTableView(root, model as LiteratureTableModel, (command) =>
           dispatch(command),
         ) as ReactView<unknown>;
       case 'document-comparison':

@@ -17,7 +17,7 @@ cpSync(resolve(root, 'LICENSE'), resolve(buildRoot, 'LICENSE'));
 const licenseDirectory = resolve(buildRoot, 'licenses');
 mkdirSync(licenseDirectory, { recursive: true });
 cpSync(resolve(root, 'vendor/fuzzysort/LICENSE'), resolve(licenseDirectory, 'fuzzysort-LICENSE'));
-for (const name of ['ai-sdk', 'react', 'age-encryption']) {
+for (const name of ['ai-sdk', 'react', 'age-encryption', 'base-ui']) {
   cpSync(resolve(root, `vendor/${name}/NOTICE`), resolve(licenseDirectory, `${name}-NOTICE`));
   cpSync(
     resolve(root, `vendor/${name}/provenance.json`),
@@ -40,14 +40,18 @@ const common = {
 const nativeReactBinding = {
   name: 'native-react-binding',
   setup(builder) {
-    builder.onResolve({ filter: /vendor[\\/]react[\\/]index\.js$/ }, () => ({
-      path: 'native-react',
-      namespace: 'neo-native-react',
-    }));
+    const binding = { path: 'native-react', namespace: 'neo-native-react' };
+    builder.onResolve({ filter: /vendor[\\/]react[\\/]index\.js$/ }, () => binding);
+    // The generated Base UI closure imports the same React owner via its sibling path.
+    builder.onResolve({ filter: /^\.\.\/react\/index\.js$/ }, ({ resolveDir }) => {
+      if (resolveDir === resolve(root, 'vendor/base-ui')) return binding;
+    });
     builder.onLoad({ filter: /.*/, namespace: 'neo-native-react' }, () => ({
       contents: `const library = globalThis.NeoReactRuntime;
 if (!library) throw new Error('Native React library has not been loaded in this window');
 export const React = library.React;
+export const ReactDOM = library.ReactDOM;
+export const JSXRuntime = library.JSXRuntime;
 export const createRoot = library.createRoot;
 export const flushSync = library.flushSync;`,
       loader: 'js',
@@ -85,9 +89,14 @@ for (const [entry, output] of [
   ['src/ai-qa/ui/index.tsx', 'content/ai-qa-ui.js'],
   ['src/ui/react/library.ts', 'content/react-runtime.js'],
   ['src/ui/react/index.ts', 'content/native-ui.js'],
+  ['src/ui/react/literature-runtime.ts', 'content/literature-ui.js'],
   ['src/settings-snapshots/crypto-worker.ts', 'content/settings-snapshots-crypto.js'],
 ]) {
-  await build({
+  const usesOwnerReact =
+    output === 'content/native-ui.js' ||
+    output === 'content/ai-qa-ui.js' ||
+    output === 'content/literature-ui.js';
+  const result = await build({
     ...common,
     entryPoints: [resolve(root, entry)],
     outfile: resolve(buildRoot, output),
@@ -96,11 +105,17 @@ for (const [entry, output] of [
     platform: 'browser',
     minify: true,
     define: { 'process.env.NODE_ENV': '"production"' },
-    plugins:
-      output === 'content/native-ui.js' || output === 'content/ai-qa-ui.js'
-        ? [nativeReactBinding]
-        : [],
+    plugins: usesOwnerReact ? [nativeReactBinding] : [],
+    metafile: usesOwnerReact,
   });
+  if (
+    usesOwnerReact &&
+    (!result.metafile?.inputs['neo-native-react:native-react'] ||
+      Object.keys(result.metafile.inputs).some((path) =>
+        /(?:^|\/)(?:vendor\/react\/index\.js|node_modules\/react(?:-dom)?\/)/u.test(path),
+      ))
+  )
+    throw new Error(`${output} must use the owner window's React runtime`);
 }
 
 zipDirectory(buildRoot, outputXpi);

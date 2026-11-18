@@ -1,5 +1,7 @@
 import type {
   React as ReactTypes,
+  ReactDOM as ReactDOMTypes,
+  JSXRuntime as JSXRuntimeTypes,
   createRoot as createReactRoot,
 } from '../../../vendor/react/index.js';
 import type { flushSync as flushReactSync } from 'react-dom';
@@ -43,6 +45,8 @@ export interface NativeReactView<Model> extends ReactView<Model> {
 
 export interface NativeReactLibrary {
   readonly React: typeof ReactTypes;
+  readonly ReactDOM: typeof ReactDOMTypes;
+  readonly JSXRuntime: typeof JSXRuntimeTypes;
   readonly createRoot: typeof createReactRoot;
   readonly flushSync: typeof flushReactSync;
 }
@@ -72,4 +76,5 @@ export interface NativeReactViewOptions<Model extends object, Command> {
 declare global {
   var NeoReactRuntime: NativeReactLibrary | undefined;
   var NeoNativeUI: NativeUIRuntime | undefined;
+  var NeoLiteratureUI: NativeUIRuntime | undefined;
 }

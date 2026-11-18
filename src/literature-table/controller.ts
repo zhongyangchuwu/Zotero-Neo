@@ -1,5 +1,6 @@
 import { CleanupFailure, type Cleanup } from '../core/cleanup';
-import type { ItemAttributeDefinition } from '../item-attributes/types';
+import { normalizeAttributeValue, readAttributeValue } from '../item-attributes/extra';
+import type { ItemAttributeDefinition, ItemAttributeState } from '../item-attributes/types';
 import { compileLiteratureFilters, validLiteratureFilter } from './filters';
 import { cleanLiteratureViewName, readLiteratureViews, writeLiteratureViews } from './view-storage';
 import {
@@ -18,6 +19,7 @@ import {
   isLiteratureNativeFieldID,
   projectLiteratureRows,
   sortLiteratureItems,
+  type LiteratureCellEdit,
   type LiteratureColumn,
   type LiteratureColumnID,
   type LiteratureLanguage,
@@ -40,6 +42,7 @@ export interface LiteratureItem {
   readonly title: string;
   readonly year: string;
   readonly extra: string;
+  readonly attributesWritable?: boolean;
   readonly hasPDF?: boolean;
   readonly native?: Readonly<Partial<Record<LiteratureNativeFieldID, LiteratureNativeValue>>>;
 }
@@ -49,17 +52,41 @@ export interface LiteratureReadOptions {
   readonly nativeFields: ReadonlySet<LiteratureNativeFieldID>;
 }
 
+type LiteratureChange = 'items' | 'catalog';
+
 export interface LiteratureTableHost {
   scopes(): readonly LiteratureScope[];
   initialScopeID(): string | undefined;
   readItems(id: string, options: LiteratureReadOptions): Promise<readonly LiteratureItem[]>;
   nativeFields(language: LiteratureLanguage): readonly LiteratureNativeField[];
   definitions(): readonly ItemAttributeDefinition[];
-  observe(change: () => void): Cleanup;
+  prepareEdit(scopeID: string, item: LiteratureItem): LiteratureEditTarget | undefined;
+  observe(change: (kind: LiteratureChange) => void): Cleanup;
   locate(id: number): Promise<boolean>;
   readViews(): string;
   writeViews(raw: string): void;
   observeViews(change: () => void): Cleanup;
+}
+
+interface LiteratureEditTarget {
+  isWritable(): boolean;
+  readExtra(): string;
+  save(
+    definition: ItemAttributeDefinition,
+    value: string | null,
+    expected: ItemAttributeState,
+    isCurrent: () => boolean,
+  ): Promise<void>;
+}
+
+interface ActiveLiteratureEdit {
+  readonly scopeID: string;
+  readonly target: LiteratureEditTarget;
+  readonly expected: ItemAttributeState;
+  readonly baseline: Pick<LiteratureCellEdit, 'id' | 'column' | 'label' | 'definition' | 'value'>;
+  readonly requests: Set<number>;
+  result: Pick<LiteratureCellEdit, 'status' | 'message' | 'requestId'>;
+  committed: boolean;
 }
 
 const PAGE_SIZE = 50;
@@ -105,7 +132,7 @@ class LiteratureTableController {
   #unobserve?: Cleanup;
   #unobserveViews?: Cleanup;
   #disposed = false;
-  #refreshQueued = false;
+  #queuedRefresh?: LiteratureChange;
   #readVersion = 0;
   #scopeVersion = 0;
   #status: LiteratureTableModel['status'] = 'loading';
@@ -141,6 +168,7 @@ class LiteratureTableController {
   #page = 0;
   #locating = false;
   #locateFailed = false;
+  #edit?: ActiveLiteratureEdit;
 
   constructor(
     readonly host: LiteratureTableHost,
@@ -150,8 +178,8 @@ class LiteratureTableController {
     this.#collator = new Intl.Collator(language, { sensitivity: 'base', numeric: true });
     const text = LITERATURE_TABLE_TEXT[language];
     this.#columns = this.#headings = [
-      { id: 'title', label: text.title },
-      { id: 'year', label: text.year },
+      { id: 'title', label: text.title, kind: 'text' },
+      { id: 'year', label: text.year, kind: 'number' },
     ];
   }
 
@@ -168,7 +196,7 @@ class LiteratureTableController {
       dispatch: (command) => this.#dispatch(command),
     });
     try {
-      this.#unobserve = this.host.observe(() => this.#queueRefresh());
+      this.#unobserve = this.host.observe((kind) => this.#queueRefresh(kind));
       this.#unobserveViews = this.host.observeViews(() => {
         this.#loadViews();
         this.#publish();
@@ -185,10 +213,9 @@ class LiteratureTableController {
   #dispose(): void {
     if (this.#disposed) return;
     this.#disposed = true;
-    this.#refreshQueued = false;
-    this.#source = [];
-    this.#items = [];
-    this.#rows = [];
+    this.#queuedRefresh = undefined;
+    this.#edit = undefined;
+    this.#clearProjection();
     const failure = new CleanupFailure();
     if (this.#unobserve) failure.run(this.#unobserve);
     if (this.#unobserveViews) failure.run(this.#unobserveViews);
@@ -210,6 +237,7 @@ class LiteratureTableController {
       sortColumn: this.#sortColumn,
       sortDirection: this.#sortDirection,
       rows: this.#rows,
+      ...(this.#edit ? { edit: { ...this.#edit.baseline, ...this.#edit.result } } : {}),
       total: this.#items.length,
       page: this.#page + 1,
       pageCount: this.#pageCount(),
@@ -239,26 +267,25 @@ class LiteratureTableController {
     return Math.max(1, Math.ceil(this.#items.length / PAGE_SIZE));
   }
 
-  #queueRefresh(): void {
-    if (this.#disposed || this.#refreshQueued) return;
+  #queueRefresh(kind: LiteratureChange): void {
+    if (this.#disposed) return;
+    if (this.#queuedRefresh) {
+      if (kind === 'catalog') this.#queuedRefresh = kind;
+      return;
+    }
     // Retire an in-flight read at notification time, not when the batch runs.
     ++this.#readVersion;
-    this.#refreshQueued = true;
+    this.#queuedRefresh = kind;
     // Promise jobs are available in Zotero's bootstrap global; queueMicrotask is not.
     void Promise.resolve().then(() => {
-      if (this.#refreshQueued) return this.#refresh();
+      if (this.#queuedRefresh) return this.#refresh(this.#queuedRefresh);
       return undefined;
     });
   }
 
-  async #refresh(): Promise<void> {
-    this.#refreshQueued = false;
+  async #refresh(reason?: LiteratureChange | 'view'): Promise<void> {
+    this.#queuedRefresh = undefined;
     const version = ++this.#readVersion;
-    this.#status = 'loading';
-    this.#source = [];
-    this.#requested = undefined;
-    this.#items = [];
-    this.#rows = [];
     try {
       const scopes = this.host.scopes();
       const definitions = this.host.definitions();
@@ -267,6 +294,15 @@ class LiteratureTableController {
       const scope =
         scopes.find(({ id }) => id === preferredID) ?? (!this.#scope ? scopes[0] : undefined);
       if (!this.#currentRead(version)) return;
+      if (reason === 'view') this.#retireEditOutside(scope?.id ?? preferredID);
+      const previousColumns = this.#columns;
+      const sameEditContext =
+        reason === 'items' &&
+        !!this.#edit &&
+        this.#status === 'ready' &&
+        !!scope &&
+        scope.id === this.#scope?.id &&
+        definitions === this.#definitions;
       this.#scopes = scopes;
       this.#scope = scope ?? this.#scope;
       this.#definitions = definitions;
@@ -282,28 +318,54 @@ class LiteratureTableController {
       }
       this.#updateColumns();
       this.#updateFilterFields();
+      // Keep the last committed projection during item-only background reads
+      // so an anchored editor does not detach just because a read is pending.
+      const keepRows =
+        sameEditContext &&
+        previousColumns.length === this.#columns.length &&
+        previousColumns.every((column, index) => {
+          const current = this.#columns[index]!;
+          return (
+            column.id === current.id &&
+            column.kind === current.kind &&
+            column.label === current.label &&
+            column.definition === current.definition
+          );
+        });
+      if (!keepRows) {
+        this.#status = 'loading';
+        this.#clearProjection();
+      }
       if (!scope) {
         this.#status = 'unavailable';
+        this.#finishEditRefresh(false);
         this.#publish();
         return;
       }
       const options = this.#readOptions();
       this.#requested = options;
-      this.#publish();
+      if (!keepRows) this.#publish();
       const items = await this.host.readItems(scope.id, options);
       if (!this.#currentRead(version)) return;
       this.#source = items;
       this.#status = 'ready';
       this.#applyFilters();
+      this.#finishEditRefresh(true);
     } catch (error) {
       if (!this.#currentRead(version)) return;
       this.#status = 'error';
-      this.#items = [];
-      this.#rows = [];
-      this.#source = [];
+      this.#clearProjection();
+      this.#finishEditRefresh(false);
       this.reportError(error);
     }
     this.#publish();
+  }
+
+  #clearProjection(): void {
+    this.#source = [];
+    this.#requested = undefined;
+    this.#items = [];
+    this.#rows = [];
   }
 
   #currentRead(version: number): boolean {
@@ -322,7 +384,7 @@ class LiteratureTableController {
         const label = (labelCounts.get(name) ?? 0) > 1 ? `${name} (${key})` : name;
         const shown = this.#shown.has(id);
         const columnID: LiteratureColumnID = `attribute:${id}`;
-        if (shown) columns.push({ id: columnID, label, definition });
+        if (shown) columns.push({ id: columnID, label, kind: definition.type, definition });
         return { id, columnID, label, shown };
       },
     );
@@ -334,7 +396,9 @@ class LiteratureTableController {
     }
     this.#choices = choices;
     this.#columns = columns;
-    this.#headings = columns.map(({ id, label }) => ({ id, label }));
+    this.#headings = columns.map(({ id, label, kind }) =>
+      kind ? { id, label, kind } : { id, label },
+    );
     if (!columns.some(({ id }) => id === this.#sortColumn)) {
       if (this.#activeView) this.#layoutUnavailable = true;
       this.#sortColumn = 'title';
@@ -472,7 +536,7 @@ class LiteratureTableController {
     this.#locateFailed = false;
     this.#page = 0;
     ++this.#scopeVersion;
-    void this.#refresh();
+    void this.#refresh('view');
   }
 
   #changeSavedView(change: { name: string; replace: boolean } | null): void {
@@ -533,6 +597,112 @@ class LiteratureTableController {
     this.#rows = projectLiteratureRows(this.#items.slice(start, start + PAGE_SIZE), this.#columns);
   }
 
+  #retireEditOutside(scopeID: string | undefined): void {
+    if (this.#edit?.scopeID !== scopeID && !this.#edit?.committed) this.#edit = undefined;
+  }
+
+  #openEdit(id: number, column: LiteratureColumnID): void {
+    const scopeID = this.#scope?.id;
+    if (
+      !scopeID ||
+      this.#status !== 'ready' ||
+      this.#edit?.result.status === 'saving' ||
+      this.#edit?.committed
+    )
+      return;
+    const index = this.#columns.findIndex((heading) => heading.id === column);
+    const heading = this.#columns[index];
+    const row = this.#rows.findIndex((candidate) => candidate.id === id);
+    if (!heading?.definition || !this.#rows[row]?.cells[index]?.editable) return;
+    const { definition, label } = heading;
+    try {
+      if (!this.host.definitions().includes(definition)) return;
+      const item = this.#items[this.#page * PAGE_SIZE + row]!;
+      const target = this.host.prepareEdit(scopeID, item);
+      if (!target) return;
+      const expected = readAttributeValue(item.extra, definition.key);
+      this.#edit = {
+        scopeID,
+        target,
+        expected,
+        baseline: { id, column, label, definition, value: expected.value },
+        requests: new Set(),
+        result: { status: 'idle' },
+        committed: false,
+      };
+      this.#publish();
+    } catch (error) {
+      this.reportError(error);
+    }
+  }
+
+  async #saveEdit(requestId: number, value: string | null): Promise<void> {
+    const edit = this.#edit;
+    if (!edit || edit.committed || edit.result.status === 'saving' || edit.requests.has(requestId))
+      return;
+    if (!Number.isSafeInteger(requestId) || (value !== null && typeof value !== 'string')) return;
+    edit.requests.add(requestId);
+    edit.result = { status: 'saving', requestId };
+    this.#publish();
+    const { definition } = edit.baseline;
+    const isCurrent = () =>
+      this.#edit === edit &&
+      this.#scope?.id === edit.scopeID &&
+      this.host.definitions().includes(definition) &&
+      edit.target.isWritable();
+    const text = LITERATURE_TABLE_TEXT[this.language];
+    try {
+      if (!isCurrent()) {
+        edit.result = { status: 'error', requestId, message: text.editUnavailable };
+        this.#publish();
+        return;
+      }
+      await edit.target.save(definition, value, edit.expected, isCurrent);
+    } catch (error) {
+      if (this.#edit !== edit) return;
+      const message = this.#editError(edit, value, isCurrent);
+      edit.result = { status: 'error', requestId, message };
+      this.#publish();
+      this.reportError(error);
+      return;
+    }
+    if (this.#edit !== edit) return;
+    edit.committed = true;
+    // A notifier can start a read before the operation returns. Only a fresh
+    // projection after the operation can acknowledge this request as saved.
+    this.#queueRefresh('items');
+  }
+
+  #editError(edit: ActiveLiteratureEdit, input: string | null, isCurrent: () => boolean): string {
+    const text = LITERATURE_TABLE_TEXT[this.language];
+    const { definition } = edit.baseline;
+    try {
+      if (!isCurrent()) return text.editUnavailable;
+      const latest = readAttributeValue(edit.target.readExtra(), definition.key);
+      if (latest.ambiguous || latest.value !== edit.expected.value) return text.editConflict;
+    } catch (error) {
+      this.reportError(error);
+      return text.editFailed;
+    }
+    try {
+      normalizeAttributeValue(definition, input);
+    } catch {
+      return text.editInvalid;
+    }
+    return text.editFailed;
+  }
+
+  #finishEditRefresh(ready: boolean): void {
+    const edit = this.#edit;
+    if (!edit?.committed || edit.result.status === 'saved') return;
+    edit.result = {
+      requestId: edit.result.requestId!,
+      ...(ready
+        ? { status: 'saved' }
+        : { status: 'error', message: LITERATURE_TABLE_TEXT[this.language].editReloadFailed }),
+    };
+  }
+
   #dispatch(command: LiteratureTableCommand): void {
     if (this.#disposed) return;
     switch (command.type) {
@@ -540,6 +710,7 @@ class LiteratureTableController {
         const scope = this.#scopes.find(({ id }) => id === command.id);
         if (!scope || this.#scope?.id === scope.id) return;
         this.#scope = scope;
+        this.#retireEditOutside(scope.id);
         ++this.#scopeVersion;
         this.#locateFailed = false;
         this.#page = 0;
@@ -575,13 +746,26 @@ class LiteratureTableController {
       case 'sort':
         if (!this.#columns.some(({ id }) => id === command.id)) return;
         this.#sortDirection =
-          this.#sortColumn === command.id && this.#sortDirection === 'ascending'
+          command.direction ??
+          (this.#sortColumn === command.id && this.#sortDirection === 'ascending'
             ? 'descending'
-            : 'ascending';
+            : 'ascending');
         this.#sortColumn = command.id;
         this.#page = 0;
         if (this.#status === 'ready') this.#orderItems();
         this.#publish();
+        break;
+      case 'cell-open':
+        this.#openEdit(command.id, command.column);
+        break;
+      case 'cell-save':
+        void this.#saveEdit(command.requestId, command.value);
+        break;
+      case 'cell-cancel':
+        if (this.#edit && this.#edit.result.status !== 'saving') {
+          this.#edit = undefined;
+          this.#publish();
+        }
         break;
       case 'page': {
         if (this.#status !== 'ready') return;

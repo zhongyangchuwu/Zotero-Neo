@@ -1,6 +1,15 @@
-import { exactDecimalSortKey } from '../item-attributes/decimal';
-import { displayAttributeValue, readAttributeValue } from '../item-attributes/extra';
-import { isChoiceAttribute, type ItemAttributeDefinition } from '../item-attributes/types';
+import { exactDecimalSortKey, isExactDecimal } from '../item-attributes/decimal';
+import {
+  displayAttributeValue,
+  readAttributeChoices,
+  readAttributeValue,
+} from '../item-attributes/extra';
+import {
+  isChoiceAttribute,
+  type ItemAttributeDefinition,
+  type ItemAttributeOption,
+  type ItemAttributeType,
+} from '../item-attributes/types';
 import type { LiteratureItem, LiteratureScope } from './controller';
 import type { LiteratureFilter, LiteratureFilterField, LiteratureViewMessage } from './views';
 
@@ -12,6 +21,7 @@ export type LiteratureSortDirection = 'ascending' | 'descending';
 interface LiteratureHeading {
   readonly id: LiteratureColumnID;
   readonly label: string;
+  readonly kind?: ItemAttributeType | 'tags' | 'date';
 }
 
 export interface LiteratureNativeField extends LiteratureHeading {
@@ -54,20 +64,34 @@ export function literatureDateKey(value: string): string | null {
 
 export interface LiteratureColumn extends LiteratureHeading {
   readonly definition?: ItemAttributeDefinition;
-  readonly kind?: LiteratureNativeField['kind'];
 }
 
-type LiteratureCell =
+export type LiteratureCell = {
+  readonly editable?: boolean;
+  readonly choices?: readonly ItemAttributeOption[];
+} & (
   | { readonly state: 'missing' | 'ambiguous' }
   | {
       readonly state: 'value' | 'invalid' | 'invalid-date' | 'invalid-choice';
       readonly value: string;
     }
-  | { readonly state: 'value'; readonly values: readonly string[] };
+  | { readonly state: 'value'; readonly values: readonly string[] }
+);
 
 export interface LiteratureRow {
   readonly id: number;
   readonly cells: readonly LiteratureCell[];
+}
+
+export interface LiteratureCellEdit {
+  readonly id: number;
+  readonly column: LiteratureColumnID;
+  readonly label: string;
+  readonly definition: ItemAttributeDefinition;
+  readonly value: string | null;
+  readonly status: 'idle' | 'saving' | 'error' | 'saved';
+  readonly message?: string;
+  readonly requestId?: number;
 }
 
 export interface LiteratureTableModel {
@@ -85,6 +109,7 @@ export interface LiteratureTableModel {
   readonly sortColumn: LiteratureColumnID;
   readonly sortDirection: LiteratureSortDirection;
   readonly rows: readonly LiteratureRow[];
+  readonly edit?: LiteratureCellEdit;
   readonly total: number;
   readonly page: number;
   readonly pageCount: number;
@@ -105,7 +130,14 @@ export interface LiteratureTableModel {
 export type LiteratureTableCommand =
   | { readonly type: 'scope'; readonly id: string }
   | { readonly type: 'column'; readonly id: string }
-  | { readonly type: 'sort'; readonly id: LiteratureColumnID }
+  | {
+      readonly type: 'sort';
+      readonly id: LiteratureColumnID;
+      readonly direction?: LiteratureSortDirection;
+    }
+  | { readonly type: 'cell-open'; readonly id: number; readonly column: LiteratureColumnID }
+  | { readonly type: 'cell-save'; readonly requestId: number; readonly value: string | null }
+  | { readonly type: 'cell-cancel' }
   | { readonly type: 'page'; readonly delta: -1 | 1 }
   | { readonly type: 'retry' }
   | { readonly type: 'locate'; readonly id: number }
@@ -116,6 +148,7 @@ export type LiteratureTableCommand =
   | { readonly type: 'view-delete' };
 
 const MISSING: LiteratureCell = { state: 'missing' };
+const EDITABLE_MISSING: LiteratureCell = { state: 'missing', editable: true };
 const AMBIGUOUS: LiteratureCell = { state: 'ambiguous' };
 
 function cell(item: LiteratureItem, column: LiteratureColumn): LiteratureCell {
@@ -135,17 +168,30 @@ function cell(item: LiteratureItem, column: LiteratureColumn): LiteratureCell {
   }
   const state = readAttributeValue(item.extra, definition.key);
   if (state.ambiguous) return AMBIGUOUS;
-  if (state.value === null) return MISSING;
-  const value = displayAttributeValue(definition, state.value);
-  if (!value.text) return MISSING;
-  return {
-    state: value.valid
-      ? 'value'
-      : isChoiceAttribute(definition.type)
-        ? 'invalid-choice'
-        : 'invalid',
-    value: value.text,
-  };
+  const missing = item.attributesWritable ? EDITABLE_MISSING : MISSING;
+  if (state.value === null) return missing;
+  const editability = item.attributesWritable ? { editable: true } : undefined;
+  if (!isChoiceAttribute(definition.type)) {
+    return {
+      state: definition.type === 'number' && !isExactDecimal(state.value) ? 'invalid' : 'value',
+      value: state.value,
+      ...editability,
+    };
+  }
+  const ids = readAttributeChoices(definition, state.value);
+  if (!ids) return { state: 'invalid-choice', value: state.value, ...editability };
+  if (!ids.length) return missing;
+  const choices: ItemAttributeOption[] = [];
+  const labels: string[] = [];
+  for (const id of ids) {
+    const option = definition.options?.find((candidate) => candidate.id === id);
+    if (option) choices.push(option);
+    labels.push(option?.label ?? `[${id}]`);
+  }
+  const value = labels.join(' · ');
+  return choices.length === ids.length
+    ? { state: 'value', value, choices, ...editability }
+    : { state: 'invalid-choice', value, ...editability };
 }
 
 export function projectLiteratureRows(
@@ -246,6 +292,14 @@ export const LITERATURE_TABLE_TEXT = {
     invalid: 'Invalid number',
     invalidDate: 'Date cannot be compared',
     invalidChoice: 'Value uses an unavailable or invalid choice',
+    editUnavailable:
+      'This item or attribute is no longer editable here. Close the editor and reopen it to try again.',
+    editConflict:
+      'This value changed in Zotero. Close the editor and reopen it to use the latest value.',
+    editInvalid: 'Enter a valid value for this attribute.',
+    editFailed: 'Could not save this attribute. Review the value and try again.',
+    editReloadFailed:
+      'The attribute was saved, but the table could not reload. Retry loading the table.',
   },
   'zh-CN': {
     heading: '文献表格',
@@ -277,5 +331,10 @@ export const LITERATURE_TABLE_TEXT = {
     invalid: '数字无效',
     invalidDate: '此日期无法比较',
     invalidChoice: '值含不可用或无效选项',
+    editUnavailable: '此条目或属性已无法在此编辑。请关闭编辑器后重新打开。',
+    editConflict: '此属性值已在 Zotero 中更改。请关闭编辑器后重新打开，以使用最新值。',
+    editInvalid: '请输入有效的属性值。',
+    editFailed: '无法保存此属性。请检查属性值后重试。',
+    editReloadFailed: '属性已保存，但无法重新载入表格。请重试载入表格。',
   },
 } as const;
