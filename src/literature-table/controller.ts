@@ -261,9 +261,7 @@ class LiteratureTableController {
     this.#rows = [];
     try {
       const scopes = this.host.scopes();
-      const definitions = this.host
-        .definitions()
-        .filter(({ type }) => type === 'text' || type === 'number');
+      const definitions = this.host.definitions();
       const nativeFields = this.host.nativeFields(this.language);
       const preferredID = this.#scope?.id ?? this.host.initialScopeID();
       const scope =

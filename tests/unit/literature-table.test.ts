@@ -309,6 +309,34 @@ describe('literature filters and saved views', () => {
     value: '',
   };
 
+  it('offers single-select definitions in the column chooser and applies their option filters', async () => {
+    const table = open();
+    table.catalog.definitions.push({
+      id: 'phase',
+      key: 'Reading Phase',
+      label: 'Phase',
+      type: 'single-select',
+      options: [{ id: 'reading', label: 'Reading' }],
+    });
+    table.notify();
+    await Promise.resolve();
+    table.reads[1]!.resolve([item(1, 'Reading Phase: ["reading"]'), item(2)]);
+    await Promise.resolve();
+    table.send({ type: 'column', id: 'phase' });
+    table.send({
+      type: 'filter-set',
+      filter: {
+        field: 'attribute:phase',
+        kind: 'single-select',
+        operator: 'equals',
+        value: 'reading',
+      },
+    });
+    expect(table.model.rows.map(({ id }) => id)).toEqual([1]);
+    expect(table.model.columns.at(-1)?.label).toBe('Phase');
+    expect(table.model.rows[0]?.cells.at(-1)).toEqual({ state: 'value', value: 'Reading' });
+  });
+
   it('saves the scope, columns, sort and intersected filters, then restores them after reopening', async () => {
     const storage = { raw: '' };
     const table = open(collection.id, storage);
