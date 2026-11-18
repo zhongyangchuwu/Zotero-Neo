@@ -77,7 +77,7 @@
 ## 构建、兼容与验证
 
 - 插件使用严格 TypeScript，经 esbuild 生成 JavaScript 并打包为单个 XPI；运行时不动态加载 npm 包、远程脚本或本地辅助程序。
-- 仓库提供离线 React UI 评审工作台，设置中心、Picker 与参考详情有交互样例；当前实机与设计截图分开保存于 `assets/ui-review/`，附架构审查和重现说明。工作台不切换生产界面、不改变插件打包内容，也不引入新的运行时依赖。
+- 文档截图和视频归档在 `assets/docs/media/`；实机评审、历史基线与设计截图归档在 `assets/ui-review/screenshots/`，附采集记录和架构说明。两处素材均不进入 XPI。
 - 构建包包含完整项目许可证、fuzzysort 的 MIT 声明，以及静态 AI SDK／React／age-encryption 依赖闭包的声明和来源记录；密码派生使用单独打包的 worker。包成员及实际许可载荷由仓库验证检查。
 - 支持范围以当前 `manifest.json` 为准；CI 验证格式、类型、契约、构建及包装，Zotero GUI、真实输入法和物理输入另按 [main 验收规范](docs/ACCEPTANCE.md)验证。
 - 正式版本通过 GitHub Releases 分发，由 Zotero 原生插件更新机制接收后续稳定版；开发包仍可从 CI 或源码构建取得。候选准备、公开资产回验与正式更新清单推广分开进行，正式清单只接纳已验证的更高稳定版本，不覆盖同版本发行包。文档站说明当前 `main`，文档合并不等于正式发布。

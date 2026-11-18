@@ -10,6 +10,7 @@ on:
       - CHANGELOG.md
       - README.md
       - assets/branding/**
+      - assets/docs/**
       - docs/**/*.md
       - index.md
       - package-lock.json
@@ -23,6 +24,7 @@ on:
       - CHANGELOG.md
       - README.md
       - assets/branding/**
+      - assets/docs/**
       - docs/**/*.md
       - index.md
       - package-lock.json

@@ -116,6 +116,7 @@ export default defineConfig({
     'vendor/**',
   ],
   vite: {
+    publicDir: fileURLToPath(new URL('../assets/docs/', import.meta.url)),
     resolve: {
       alias: [
         {
