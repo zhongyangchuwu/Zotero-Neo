@@ -221,7 +221,7 @@ export class ReviewedPreferenceAdapter implements SettingsAdapter {
         }
         if (!sameSettingState(current, plan.before))
           throw new SettingsSnapshotError('conflict', 'Preference changed after preview');
-        this.host.writePreference(field.key, after, () => {
+        const outcome = this.host.writePreference(field.key, after, () => {
           this.#assert(context);
           normalize(field, after);
           if (
@@ -230,9 +230,9 @@ export class ReviewedPreferenceAdapter implements SettingsAdapter {
           )
             throw new SettingsSnapshotError('conflict', 'Preference changed after preview');
         });
-        if (!sameSettingState(this.#read(field), plan.after))
+        if (outcome !== 'default' && !sameSettingState(this.#read(field), plan.after))
           throw new SettingsSnapshotError('write-failed', 'Preference write did not persist');
-        receipt('applied');
+        receipt(outcome === 'default' && current.kind === 'reset' ? 'unchanged' : 'applied');
       } catch (error) {
         stopped = true;
         const code = error instanceof SettingsSnapshotError ? error.code : '';

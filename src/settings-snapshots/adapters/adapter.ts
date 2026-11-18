@@ -676,12 +676,17 @@ export class BuiltinSettingsAdapter implements SettingsAdapter {
               value ? { kind: 'set', value: BINDING_SCHEMA_VERSION } : RESET,
               () => {},
             );
-          } else
-            writeTransferPreference(
+          } else {
+            const outcome = writeTransferPreference(
               plan.key.startsWith('pref:') ? plan.key.slice(5) : this.#prefix + plan.key,
               plan.after,
               admit,
             );
+            if (outcome === 'default' && current.kind === 'reset') {
+              receipt('unchanged');
+              continue;
+            }
+          }
         } else if (plan.key.startsWith('secret:'))
           await writeTransferCredential(
             plan.key,

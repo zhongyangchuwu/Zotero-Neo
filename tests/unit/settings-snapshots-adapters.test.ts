@@ -193,6 +193,75 @@ describe('standalone built-in settings adapters at the native OS boundary', () =
     expect(t.mutations).toHaveLength(count);
   });
 
+  it.each([
+    ['hideContextAnnotationRows', true, false],
+    ['fulltext.pdfMaxPages', 0, 4],
+    ['openURL.resolver', '', 'https://example.org/resolver'],
+  ] as const)(
+    'uses the target default for %s without stopping later entries',
+    async (key, value, other) => {
+      const t = settingsSnapshotHostFixture();
+      const pref = `extensions.zotero.${key}`;
+      t.defaults.set(pref, value);
+      const adapter = createSettingsAdapters(() => 'neo-target')[0]!;
+      const input = section('zotero', [set(key, value), set('showTrashWhenEmpty', true)]);
+
+      const apply = async (source: SettingsSection) =>
+        adapter.apply(selected((await adapter.plan(source, context())).changes), context());
+
+      expect(await apply(input)).toMatchObject([
+        { key, status: 'unchanged' },
+        { key: 'showTrashWhenEmpty', status: 'applied' },
+      ]);
+      expect(t.user.has(pref)).toBe(false);
+      expect(t.user.get('extensions.zotero.showTrashWhenEmpty')).toBe(true);
+
+      t.user.set(pref, other);
+      expect(await apply(section('zotero', [set(key, value)]))).toMatchObject([
+        { key, status: 'applied' },
+      ]);
+      expect(t.user.has(pref)).toBe(false);
+
+      t.defaults.set(pref, other);
+      expect(await apply(section('zotero', [set(key, value)]))).toMatchObject([
+        { key, status: 'applied' },
+      ]);
+      expect(t.user.get(pref)).toBe(value);
+      await apply(section('zotero', [reset(key)]));
+      expect(t.user.has(pref)).toBe(false);
+    },
+  );
+
+  it('still stops the adapter if a write does not produce the requested value', async () => {
+    const t = settingsSnapshotHostFixture();
+    t.defaults.set('extensions.zotero.hideContextAnnotationRows', false);
+    vi.spyOn(Services.prefs, 'setBoolPref').mockImplementation(() => {});
+    const adapter = createSettingsAdapters(() => 'neo-target')[0]!;
+    const plan = await adapter.plan(
+      section('zotero', [set('hideContextAnnotationRows', true), set('showTrashWhenEmpty', true)]),
+      context(),
+    );
+    expect(await adapter.apply(selected(plan.changes), context())).toMatchObject([
+      { key: 'hideContextAnnotationRows', status: 'failed' },
+      { key: 'showTrashWhenEmpty', status: 'skipped' },
+    ]);
+    expect(t.user.has('extensions.zotero.showTrashWhenEmpty')).toBe(false);
+  });
+
+  it('does not invalidate WebDAV verification when the restored preference is already the default', async () => {
+    const t = settingsSnapshotHostFixture();
+    const key = 'sync.storage.scheme';
+    const verified = 'extensions.zotero.sync.storage.verified';
+    t.defaults.set(`extensions.zotero.${key}`, 'https');
+    t.user.set(verified, true);
+    const adapter = createSettingsAdapters(() => 'neo-target')[0]!;
+    const plan = await adapter.plan(section('zotero', [set(key, 'https')]), context());
+    expect(await adapter.apply(selected(plan.changes), context())).toMatchObject([
+      { key, status: 'unchanged' },
+    ]);
+    expect(t.user.get(verified)).toBe(true);
+  });
+
   it('rejects foreign keys and unsupported schemas without exposing their values', async () => {
     settingsSnapshotHostFixture();
     const [native, neo] = createSettingsAdapters(() => 'neo-target');
