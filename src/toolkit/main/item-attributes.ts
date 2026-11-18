@@ -1,6 +1,8 @@
 import { CleanupFailure, type Cleanup } from '../../core/cleanup';
 import type { MainWindow } from '../../core/contracts';
+import type { KeyGuideLanguage } from '../../input/key-guide-config';
 import { exactDecimalSortKey } from '../../item-attributes/decimal';
+import { isChoiceAttribute } from '../../item-attributes/types';
 import type { ItemAttributeNativeHost, NativeItemAttribute } from './item-attributes-types';
 
 type RowContext = {
@@ -15,7 +17,7 @@ type RowOptions = {
   label: { l10nID: string; text: string };
   position: 'end';
   multiline: false;
-  editable: true;
+  editable: boolean;
   onGetData(context: RowContext): string;
   onItemChange(
     context: RowContext & {
@@ -221,6 +223,7 @@ export function assertCustomExtraKey(key: string): void {
 export function createItemAttributeNativeHost(
   pluginID: string,
   onError: (error: unknown, window?: MainWindow) => void,
+  language: () => KeyGuideLanguage,
 ): ItemAttributeNativeHost {
   const api = Zotero as unknown as NativeAPI;
   if (
@@ -243,7 +246,10 @@ export function createItemAttributeNativeHost(
     for (const lease of windows.values()) lease.edit = undefined;
   };
   const editable = (registration: Registration, item: Zotero.Item) =>
-    current(registration) && ordinary(item) && registration.definition.canEdit(item);
+    current(registration) &&
+    !isChoiceAttribute(registration.definition.type) &&
+    ordinary(item) &&
+    registration.definition.canEdit(item);
   const editCurrent = (edit: Edit): boolean => {
     const { lease, field, box, item, registration } = edit;
     return (
@@ -334,6 +340,7 @@ export function createItemAttributeNativeHost(
             canEdit: source.canEdit.bind(source),
             write: source.write.bind(source),
           };
+          const choice = isChoiceAttribute(definition.type);
           const registration: Registration = { definition, generation };
           registrations.push(registration);
           const columnID = api.ItemTreeManager.registerColumn({
@@ -374,7 +381,7 @@ export function createItemAttributeNativeHost(
             label: { l10nID: '', text: definition.label },
             position: 'end',
             multiline: false,
-            editable: true,
+            editable: !choice,
             onGetData(context) {
               if (
                 !current(registration) ||
@@ -383,7 +390,15 @@ export function createItemAttributeNativeHost(
               )
                 return '';
               try {
-                return definition.read(context.item);
+                const value = definition.read(context.item);
+                // The native Info row API only provides a text editor. Route
+                // choice edits through the existing explicit-target item menu.
+                if (!choice || !definition.canEdit(context.item)) return value;
+                const hint =
+                  language() === 'zh-CN'
+                    ? '右键单击条目 → 编辑自定义属性…'
+                    : 'Right-click the item → Edit Custom Attributes…';
+                return value ? `${value} — ${hint}` : hint;
               } catch (error) {
                 onError(error);
                 return '';
@@ -428,7 +443,7 @@ export function createItemAttributeNativeHost(
         const rowID = field.closest('.meta-row')?.getAttribute('data-custom-row-id');
         const registration = rowID ? rows.get(rowID) : undefined;
         const box = field.closest('info-box') as InfoBox | null;
-        if (!registration || !box) return;
+        if (!registration || !box || isChoiceAttribute(registration.definition.type)) return;
         try {
           const edit: Edit = {
             lease,
@@ -452,7 +467,7 @@ export function createItemAttributeNativeHost(
         if (!field || field.ownerDocument !== document) return;
         const rowID = field.closest('.meta-row')?.getAttribute('data-custom-row-id');
         const registration = rowID ? rows.get(rowID) : undefined;
-        if (!registration) return;
+        if (!registration || isChoiceAttribute(registration.definition.type)) return;
         // Native rows created in a readonly pane lack their own focus/blur
         // listeners even after becoming editable. Own the captured blur instead
         // of relying on the ownerless native onSetData callback.

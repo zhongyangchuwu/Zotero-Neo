@@ -1,4 +1,4 @@
-import type { LiteratureColumnID } from './model';
+import { isLiteratureNativeFieldID, type LiteratureColumnID } from './model';
 import { literatureFilterOperators } from './filters';
 import {
   MAX_LITERATURE_FILTERS,
@@ -39,6 +39,7 @@ function columnID(value: unknown): value is LiteratureColumnID {
   return (
     value === 'title' ||
     value === 'year' ||
+    (boundedString(value) && isLiteratureNativeFieldID(value)) ||
     (boundedString(value) &&
       value.startsWith('attribute:') &&
       boundedString(value.slice('attribute:'.length)))
@@ -49,24 +50,45 @@ function validStoredFilter(value: unknown): value is LiteratureFilter {
   if (
     !record(value, ['field', 'kind', 'operator', 'value']) ||
     (!columnID(value.field) && value.field !== 'pdf') ||
-    (value.kind !== 'text' && value.kind !== 'number' && value.kind !== 'pdf') ||
+    (value.kind !== 'text' &&
+      value.kind !== 'number' &&
+      value.kind !== 'pdf' &&
+      value.kind !== 'tags' &&
+      value.kind !== 'date' &&
+      value.kind !== 'single-select' &&
+      value.kind !== 'multi-select') ||
     typeof value.operator !== 'string' ||
     typeof value.value !== 'string' ||
     value.value.length > MAX_LITERATURE_FILTER_VALUE
   )
     return false;
   const filter = value as unknown as LiteratureFilter;
+  const { field, kind, operator } = filter;
+  if (field === 'pdf') return kind === 'pdf' && literatureFilterOperators(kind).includes(operator);
+  if (field === 'title' && kind !== 'text') return false;
+  if (field === 'year' && kind !== 'number') return false;
+  if (field === 'native:tags' && kind !== 'tags') return false;
   if (
-    filter.field === 'pdf'
-      ? filter.kind !== 'pdf'
-      : filter.field === 'title'
-        ? filter.kind !== 'text'
-        : filter.field === 'year'
-          ? filter.kind !== 'number'
-          : filter.kind === 'pdf'
+    (field === 'native:date' || field === 'native:dateAdded' || field === 'native:dateModified') &&
+    kind !== 'date'
   )
     return false;
-  return literatureFilterOperators(filter.kind).includes(filter.operator);
+  if (
+    isLiteratureNativeFieldID(field) &&
+    field !== 'native:tags' &&
+    kind !== 'text' &&
+    kind !== 'date'
+  )
+    return false;
+  if (
+    field.startsWith('attribute:') &&
+    kind !== 'text' &&
+    kind !== 'number' &&
+    kind !== 'single-select' &&
+    kind !== 'multi-select'
+  )
+    return false;
+  return literatureFilterOperators(kind).includes(operator);
 }
 
 export function readLiteratureViews(raw: string): readonly SavedLiteratureView[] {

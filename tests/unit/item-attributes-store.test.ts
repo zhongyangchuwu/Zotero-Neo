@@ -15,6 +15,16 @@ const field: ItemAttributeDefinition = {
 const schema = (fields: readonly ItemAttributeDefinition[]) =>
   JSON.stringify({ version: 1, fields });
 
+const choice: ItemAttributeDefinition = {
+  id: 'phase',
+  key: 'Reading Phase',
+  label: 'Reading Phase',
+  type: 'single-select',
+  options: [{ id: 'phase-read', label: '待读' }],
+};
+const choiceSchema = (...fields: readonly ItemAttributeDefinition[]) =>
+  JSON.stringify({ version: 2, fields });
+
 function preferences(initial: unknown = '') {
   let raw = initial;
   const listeners = new Set<() => void>();
@@ -84,7 +94,7 @@ describe('versioned local attribute definitions', () => {
     'null',
     '[]',
     '{}',
-    '{"version":2,"fields":[]}',
+    '{"version":3,"fields":[]}',
     '{"version":1,"fields":[],"other":true}',
     '{"version":1,"fields":[{"id":"x","key":"Score","type":"text"}]}',
     schema([{ ...field, type: 'date' } as unknown as ItemAttributeDefinition]),
@@ -128,6 +138,33 @@ describe('versioned local attribute definitions', () => {
     expect(store.read().definitions).toEqual([renamed]);
     store.write([], store.read().revision);
     expect(store.read().definitions).toEqual([]);
+  });
+
+  it('preserves legacy definitions while storing stable choice IDs and changing labels', () => {
+    const pref = preferences(schema([field]));
+    const store = new ItemAttributeStore(pref.store, () => undefined);
+    store.write([field, choice], store.read().revision);
+    expect(store.read().revision).toBe(choiceSchema(field, choice));
+    const renamed = { ...choice, options: [{ id: 'phase-read', label: '待精读' }] };
+    store.write([field, renamed], store.read().revision);
+    expect(store.read().definitions).toEqual([field, renamed]);
+    expect(() =>
+      store.write([field, { ...renamed, type: 'multi-select' }], store.read().revision),
+    ).toThrow(/immutable/);
+    expect(store.read().definitions).toEqual([field, renamed]);
+  });
+
+  it('rejects ambiguous and unversioned option definitions', () => {
+    expect(() => parseItemAttributeDefinitions(schema([choice]))).toThrow();
+    const option = choice.options![0]!;
+    expect(() =>
+      parseItemAttributeDefinitions(choiceSchema({ ...choice, options: [option, option] })),
+    ).toThrow(/Duplicate/);
+    expect(() =>
+      parseItemAttributeDefinitions(
+        choiceSchema({ ...choice, options: [option, { id: 'other', label: option.label }] }),
+      ),
+    ).toThrow(/Duplicate/);
   });
 
   it('rejects key mutation, identity replacement, duplicate keys, and stale revisions without writing', () => {

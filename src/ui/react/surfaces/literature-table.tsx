@@ -29,6 +29,7 @@ export const LITERATURE_TABLE_CSS = `
 .neo-literature-toolbar details { padding: 6px 10px; border: 1px solid var(--zotero-neo-border, GrayText); border-radius: 5px; }
 .neo-literature-toolbar summary, .neo-literature-column { cursor: pointer; }
 .neo-literature-column { display: flex; align-items: baseline; gap: 6px; padding: 2px 0; }
+.neo-literature-column-list { max-height: min(22rem, 40vh); overflow-y: auto; }
 .neo-literature-grid { min-height: 0; overflow: auto; border: 1px solid var(--zotero-neo-border, GrayText); border-radius: 5px; }
 .neo-literature-grid table { width: 100%; border-collapse: separate; border-spacing: 0; }
 .neo-literature-grid th, .neo-literature-grid td { text-align: start; overflow-wrap: anywhere; border-bottom: 1px solid var(--zotero-neo-border, GrayText); padding: 6px 10px; }
@@ -38,7 +39,9 @@ export const LITERATURE_TABLE_CSS = `
 .neo-literature-grid [data-column-id="year"] { min-width: 5rem; }
 .neo-literature-grid th button { width: 100%; text-align: start; }
 .neo-literature-grid td[data-cell-state="missing"], .neo-literature-grid td[data-cell-state="ambiguous"] { color: var(--zotero-neo-muted, GrayText); }
-.neo-literature-grid td[data-cell-state="invalid"] span { text-decoration: underline dotted; }
+.neo-literature-grid td[data-cell-state^="invalid"] span { text-decoration: underline dotted; }
+.neo-literature-cell-values { display: flex; flex-wrap: wrap; gap: 4px; list-style: none; padding: 0; margin: 0; }
+.neo-literature-cell-values li { border: 1px solid var(--zotero-neo-border, GrayText); border-radius: 4px; padding-inline: 4px; min-width: 0; }
 .neo-literature-pages { display: flex; align-items: center; gap: 10px; flex-wrap: wrap; }
 .neo-literature-view-controls, .neo-literature-filter-controls { display: flex; flex-direction: column; gap: 8px; }
 .neo-literature-view-actions, .neo-literature-filter-editor, .neo-literature-filter-rule { display: flex; align-items: center; gap: 8px; flex-wrap: wrap; }
@@ -59,15 +62,18 @@ const VIEW_TEXT = {
     chooseField: 'Choose a field',
     operator: 'Operator',
     value: 'Value',
+    chooseOption: 'Choose an option',
+    missingOption: 'Unavailable option',
     apply: 'Apply filter',
     edit: 'Edit',
     remove: 'Remove',
     cancel: 'Cancel',
     editingChanged: 'This rule changed while you were editing. Cancel and edit it again.',
-    invalidFilter:
-      'Choose a compatible operator and enter a valid value. Number fields require a number.',
+    invalidFilter: 'Choose a compatible operator and enter a valid value.',
     filterLimit: 'Remove a filter before adding another.',
     savedViews: 'Saved views',
+    tagHint: 'Enter one exact, case-sensitive tag. Add another tag filter to require both.',
+    dateHint: 'Enter YYYY, YYYY-MM or YYYY-MM-DD.',
     temporary: 'Temporary view',
     dirty: 'Unsaved changes',
     reload: 'Reload saved view',
@@ -96,6 +102,11 @@ const VIEW_TEXT = {
       contains: 'contains',
       equals: 'equals',
       'at-least': 'at least',
+      'has-tag': 'has tag',
+      'has-choice': 'includes option',
+      on: 'on',
+      'on-or-after': 'on or after',
+      'on-or-before': 'on or before',
       'at-most': 'at most',
       has: 'has PDF',
       missing: 'missing PDF',
@@ -112,14 +123,18 @@ const VIEW_TEXT = {
     chooseField: '选择字段',
     operator: '运算符',
     value: '值',
+    chooseOption: '选择一项',
+    missingOption: '不可用的选项',
     apply: '应用筛选',
     edit: '编辑',
     remove: '移除',
     cancel: '取消',
     editingChanged: '编辑期间此条件已更改。请取消并重新编辑。',
-    invalidFilter: '请选择兼容的运算符并输入有效的值。数字字段需要输入数字。',
+    invalidFilter: '请选择兼容的条件，并输入有效值或选择现有选项。',
     filterLimit: '请先移除一个筛选条件，再添加新条件。',
     savedViews: '已保存的视图',
+    tagHint: '输入一个完整的标签，区分大小写。添加另一条标签筛选可同时要求两个标签。',
+    dateHint: '请输入 YYYY、YYYY-MM 或 YYYY-MM-DD。',
     temporary: '临时视图',
     dirty: '未保存的更改',
     reload: '重新载入已保存的视图',
@@ -147,6 +162,11 @@ const VIEW_TEXT = {
       'at-least': '至少',
       'at-most': '至多',
       has: '有 PDF',
+      'has-tag': '有标签',
+      'has-choice': '包含选项',
+      on: '在此日期',
+      'on-or-after': '在此日期或之后',
+      'on-or-before': '在此日期或之前',
       missing: '无 PDF',
     },
   },
@@ -243,7 +263,28 @@ function FilterControls({ model, dispatch }: ControlsProps) {
                   ))}
                 </select>
               </label>
-              {field.kind !== 'pdf' && (
+              {field.options ? (
+                <label>
+                  {text.value}
+                  <select
+                    data-neo-ui-part="filter-value"
+                    value={draft.value}
+                    onChange={(event) => setDraft({ ...draft, value: event.currentTarget.value })}
+                  >
+                    <option value="">{text.chooseOption}</option>
+                    {draft.value && !field.options.some(({ id }) => id === draft.value) && (
+                      <option value={draft.value} disabled>
+                        {text.missingOption}: {draft.value}
+                      </option>
+                    )}
+                    {field.options.map(({ id, label }) => (
+                      <option key={id} value={id}>
+                        {label}
+                      </option>
+                    ))}
+                  </select>
+                </label>
+              ) : field.kind !== 'pdf' ? (
                 <label>
                   {text.value}
                   <input
@@ -253,7 +294,7 @@ function FilterControls({ model, dispatch }: ControlsProps) {
                     onChange={(event) => setDraft({ ...draft, value: event.currentTarget.value })}
                   />
                 </label>
-              )}
+              ) : null}
               {field.kind === 'pdf' && (
                 <p className="neo-muted">
                   {model.language === 'zh-CN'
@@ -261,6 +302,8 @@ function FilterControls({ model, dispatch }: ControlsProps) {
                     : 'Uses attachment records, not download status.'}
                 </p>
               )}
+              {field.kind === 'tags' && <p className="neo-muted">{text.tagHint}</p>}
+              {field.kind === 'date' && <p className="neo-muted">{text.dateHint}</p>}
             </>
           )}
           <Button
@@ -269,7 +312,7 @@ function FilterControls({ model, dispatch }: ControlsProps) {
               !draft ||
               !field ||
               changed ||
-              !validLiteratureFilter(draft, field.kind) ||
+              !validLiteratureFilter(draft, field.kind, field.options) ||
               (!editing && model.filters.length >= MAX_LITERATURE_FILTERS)
             }
             onClick={() => {
@@ -286,7 +329,9 @@ function FilterControls({ model, dispatch }: ControlsProps) {
           </Button>
           {(draft || editing) && <Button onClick={cancel}>{text.cancel}</Button>}
         </div>
-        {draft && field && !validLiteratureFilter(draft, field.kind) && <p>{text.invalidFilter}</p>}
+        {draft && field && !validLiteratureFilter(draft, field.kind, field.options) && (
+          <p>{text.invalidFilter}</p>
+        )}
         {!editing && model.filters.length >= MAX_LITERATURE_FILTERS && <p>{text.filterLimit}</p>}
         {changed && <p role="alert">{text.editingChanged}</p>}
       </details>
@@ -304,13 +349,18 @@ function FilterControls({ model, dispatch }: ControlsProps) {
         <ul className="neo-literature-filter-rules">
           {model.filters.map((filter, index) => {
             const ruleField = model.filterFields.find(({ id }) => id === filter.field);
-            const valid = ruleField && validLiteratureFilter(filter, ruleField.kind);
+            const valid =
+              ruleField && validLiteratureFilter(filter, ruleField.kind, ruleField.options);
+            const value = ruleField?.options
+              ? (ruleField.options.find(({ id }) => id === filter.value)?.label ??
+                `${text.missingOption}: ${filter.value}`)
+              : filter.value;
             return (
               <li key={index} className="neo-literature-filter-rule">
                 <span>
                   {ruleField?.label ?? `${text.missingField}: ${filter.field}`}{' '}
                   {text.operators[filter.operator] ?? filter.operator}
-                  {filter.value ? `: ${filter.value}` : ''}
+                  {value ? `: ${value}` : ''}
                   {!valid && ` — ${text.filterUnavailable}`}
                 </span>
                 <Button
@@ -584,18 +634,20 @@ export function mountLiteratureTableView(
             <details>
               <summary data-neo-ui-part="columns">{text.columns}</summary>
               {model.choices.length === 0 && <p className="neo-muted">{text.noColumns}</p>}
-              {model.choices.map(({ id, label, shown }) => (
-                <label key={id} className="neo-literature-column">
-                  <input
-                    type="checkbox"
-                    data-neo-ui-part="column-toggle"
-                    data-column-id={`attribute:${id}`}
-                    checked={shown}
-                    onChange={() => dispatch({ type: 'column', id })}
-                  />
-                  <span>{label}</span>
-                </label>
-              ))}
+              <div className="neo-literature-column-list">
+                {model.choices.map(({ id, columnID, label, shown }) => (
+                  <label key={id} className="neo-literature-column">
+                    <input
+                      type="checkbox"
+                      data-neo-ui-part="column-toggle"
+                      data-column-id={columnID}
+                      checked={shown}
+                      onChange={() => dispatch({ type: 'column', id })}
+                    />
+                    <span>{label}</span>
+                  </label>
+                ))}
+              </div>
             </details>
           </div>
           <SavedViewControls model={model} dispatch={dispatch} />
@@ -656,8 +708,24 @@ export function mountLiteratureTableView(
                         const cell = cells[index]!;
                         return (
                           <td key={id} data-column-id={id} data-cell-state={cell.state}>
-                            {'value' in cell ? (
-                              <span title={cell.state === 'invalid' ? text.invalid : undefined}>
+                            {'values' in cell ? (
+                              <ul className="neo-literature-cell-values" role="list">
+                                {cell.values.map((value, index) => (
+                                  <li key={index}>{value}</li>
+                                ))}
+                              </ul>
+                            ) : 'value' in cell ? (
+                              <span
+                                title={
+                                  cell.state === 'invalid'
+                                    ? text.invalid
+                                    : cell.state === 'invalid-date'
+                                      ? text.invalidDate
+                                      : cell.state === 'invalid-choice'
+                                        ? text.invalidChoice
+                                        : undefined
+                                }
+                              >
                                 {cell.value}
                               </span>
                             ) : cell.state === 'ambiguous' ? (

@@ -1,17 +1,22 @@
 import { afterEach, describe, expect, it, vi } from 'vitest';
 import type { Cleanup } from '../../src/core/cleanup';
+import type { MainWindow } from '../../src/core/contracts';
+import type { PreferenceStore } from '../../src/core/preference-store';
 import type { ItemAttributeDefinition } from '../../src/item-attributes/types';
 import {
   mountLiteratureTable,
   type LiteratureItem,
+  type LiteratureReadOptions,
   type LiteratureScope,
 } from '../../src/literature-table/controller';
 import { readLiteratureViews, writeLiteratureViews } from '../../src/literature-table/view-storage';
 import type { LiteratureFilter } from '../../src/literature-table/views';
 import type {
+  LiteratureNativeField,
   LiteratureTableCommand,
   LiteratureTableModel,
 } from '../../src/literature-table/model';
+import { createLiteratureTableHost } from '../../src/toolkit/main/literature-table';
 import type { NativeReactViewOptions } from '../../src/ui/react/types';
 
 const bridge = vi.hoisted(() => ({ mount: vi.fn() }));
@@ -25,11 +30,19 @@ const score: ItemAttributeDefinition = {
   label: 'Score',
   type: 'number',
 };
+const nativeFields: readonly LiteratureNativeField[] = [
+  { id: 'native:tags', kind: 'tags', label: 'Tags' },
+  { id: 'native:date', kind: 'date', label: 'Publication date' },
+  { id: 'native:dateAdded', kind: 'date', label: 'Date added (UTC)' },
+  { id: 'native:dateModified', kind: 'date', label: 'Date modified (UTC)' },
+  { id: 'native:DOI', kind: 'text', label: 'DOI' },
+];
 
 const cleanups: Cleanup[] = [];
 afterEach(() => {
   for (const cleanup of cleanups.splice(0)) cleanup();
   bridge.mount.mockReset();
+  vi.unstubAllGlobals();
 });
 
 function item(id: number, extra = ''): LiteratureItem {
@@ -39,7 +52,7 @@ function item(id: number, extra = ''): LiteratureItem {
 function open(initialID: string | undefined = collection.id, storage = { raw: '' }) {
   const updates: LiteratureTableModel[] = [];
   const reads: Array<
-    { id: string; includePDF: boolean } & PromiseWithResolvers<readonly LiteratureItem[]>
+    { id: string } & LiteratureReadOptions & PromiseWithResolvers<readonly LiteratureItem[]>
   > = [];
   let dispatch!: (command: LiteratureTableCommand) => void;
   let changed: (() => void) | undefined;
@@ -72,9 +85,10 @@ function open(initialID: string | undefined = collection.id, storage = { raw: ''
       scopes: () => catalog.scopes,
       initialScopeID: () => initialID,
       definitions: () => catalog.definitions,
-      readItems(id, includePDF) {
+      nativeFields: () => nativeFields,
+      readItems(id, options) {
         const gate = Promise.withResolvers<readonly LiteratureItem[]>();
-        reads.push({ id, includePDF, ...gate });
+        reads.push({ id, ...options, ...gate });
         return gate.promise;
       },
       observe(change) {
@@ -295,6 +309,34 @@ describe('literature filters and saved views', () => {
     value: '',
   };
 
+  it('offers single-select definitions in the column chooser and applies their option filters', async () => {
+    const table = open();
+    table.catalog.definitions.push({
+      id: 'phase',
+      key: 'Reading Phase',
+      label: 'Phase',
+      type: 'single-select',
+      options: [{ id: 'reading', label: 'Reading' }],
+    });
+    table.notify();
+    await Promise.resolve();
+    table.reads[1]!.resolve([item(1, 'Reading Phase: ["reading"]'), item(2)]);
+    await Promise.resolve();
+    table.send({ type: 'column', id: 'phase' });
+    table.send({
+      type: 'filter-set',
+      filter: {
+        field: 'attribute:phase',
+        kind: 'single-select',
+        operator: 'equals',
+        value: 'reading',
+      },
+    });
+    expect(table.model.rows.map(({ id }) => id)).toEqual([1]);
+    expect(table.model.columns.at(-1)?.label).toBe('Phase');
+    expect(table.model.rows[0]?.cells.at(-1)).toEqual({ state: 'value', value: 'Reading' });
+  });
+
   it('saves the scope, columns, sort and intersected filters, then restores them after reopening', async () => {
     const storage = { raw: '' };
     const table = open(collection.id, storage);
@@ -380,5 +422,267 @@ describe('literature filters and saved views', () => {
     expect(table.model.activeViewName).toBeNull();
     expect(readLiteratureViews(storage.raw).map(({ name }) => name)).toEqual(['Copy']);
     expect(table.model.rows.map(({ id }) => id)).toEqual([1]);
+  });
+});
+
+describe('native literature fields', () => {
+  it('loads only shown and filtered fields, discards stale reads, and restores native views', async () => {
+    const storage = { raw: '' };
+    const table = open(collection.id, storage);
+    const rows = [
+      {
+        ...item(1),
+        native: {
+          'native:date': { text: 'February 2024', key: '2024-02' },
+          'native:tags': { tags: ['Systematic, review', 'Trial'] },
+          'native:DOI': '10.1000/example',
+        },
+      },
+      {
+        ...item(2),
+        native: {
+          'native:date': { text: '2024', key: '2024' },
+          'native:tags': { tags: ['Trial'] },
+          'native:DOI': '10.1000/preprint',
+        },
+      },
+      { ...item(3), native: { 'native:date': { text: 'Spring 2024', key: null } } },
+      { ...item(4), native: { 'native:date': { text: '2024-02-29', key: '2024-02-29' } } },
+    ];
+    expect([...table.reads[0]!.nativeFields]).toEqual([]);
+    table.catalog.definitions.push({
+      id: 'tags',
+      key: 'Tag Description',
+      label: 'Description',
+      type: 'text',
+    });
+    table.send({ type: 'column', id: 'native:date' });
+    expect([...table.reads[1]!.nativeFields]).toEqual(['native:date']);
+    table.reads[0]!.resolve([item(99)]);
+    await Promise.resolve();
+    expect(table.model.status).toBe('loading');
+    table.reads[1]!.resolve(rows);
+    await Promise.resolve();
+    expect(table.model.choices).toEqual(
+      expect.arrayContaining([
+        expect.objectContaining({ id: 'tags', columnID: 'attribute:tags', shown: false }),
+        expect.objectContaining({ id: 'native:tags', columnID: 'native:tags', shown: false }),
+      ]),
+    );
+    table.send({ type: 'sort', id: 'native:date' });
+    expect(table.model.rows.map(({ id }) => id)).toEqual([2, 1, 4, 3]);
+    expect(table.model.rows.map(({ cells }) => cells[2])).toEqual([
+      { state: 'value', value: '2024' },
+      { state: 'value', value: 'February 2024' },
+      { state: 'value', value: '2024-02-29' },
+      { state: 'invalid-date', value: 'Spring 2024' },
+    ]);
+    table.send({ type: 'sort', id: 'native:date' });
+    expect(table.model.rows.map(({ id }) => id)).toEqual([4, 1, 2, 3]);
+
+    const trial: LiteratureFilter = {
+      field: 'native:tags',
+      kind: 'tags',
+      operator: 'has-tag',
+      value: 'Trial',
+    };
+    table.send({ type: 'filter-set', filter: trial });
+    table.send({ type: 'filter-set', filter: { ...trial, value: 'Systematic, review' } });
+    expect(table.reads).toHaveLength(3);
+    expect([...table.reads[2]!.nativeFields]).toEqual(['native:date', 'native:tags']);
+    table.send({ type: 'column', id: 'native:tags' });
+    table.reads[2]!.resolve(rows);
+    await Promise.resolve();
+    expect(table.model.rows.map(({ id }) => id)).toEqual([1]);
+    expect(table.model.rows[0]!.cells[2]).toEqual({
+      state: 'value',
+      values: ['Systematic, review', 'Trial'],
+    });
+    table.send({
+      type: 'filter-set',
+      filter: {
+        field: 'native:DOI',
+        kind: 'text',
+        operator: 'contains',
+        value: 'example',
+      },
+    });
+    expect(table.reads[3]!.nativeFields).toEqual(
+      new Set(['native:date', 'native:tags', 'native:DOI']),
+    );
+    table.reads[3]!.resolve(rows);
+    await Promise.resolve();
+
+    table.send({ type: 'view-save', replace: false, name: 'Native fields' });
+    expect(readLiteratureViews(storage.raw)[0]).toMatchObject({
+      columns: ['native:date', 'native:tags'],
+      sort: 'native:date',
+      direction: 'descending',
+    });
+    table.dispose();
+    const restored = open(library.id, storage);
+    restored.send({ type: 'view-open', name: 'Native fields' });
+    restored.reads[1]!.resolve(rows);
+    await Promise.resolve();
+    expect(restored.model.rows.map(({ id }) => id)).toEqual([1]);
+    expect(restored.model.viewDirty).toBe(false);
+    restored.notify();
+    await Promise.resolve();
+    restored.reads[2]!.resolve([
+      { ...rows[0]!, native: { ...rows[0]!.native, 'native:tags': { tags: ['Trial'] } } },
+    ]);
+    await Promise.resolve();
+    expect(restored.model.rows).toEqual([]);
+  });
+
+  it('uses native mapped fields and bulk tags, excludes Extra and internal fields, and keeps Zotero precision', async () => {
+    const fields = [
+      'title',
+      'date',
+      'extra',
+      'DOI',
+      'blogTitle',
+      'publicationTitle',
+      'path',
+      'accessDate',
+    ];
+    function sdkItem(id: number, rawDate: string, text: string) {
+      return {
+        id,
+        deleted: false,
+        isFeedItem: false,
+        isRegularItem: () => true,
+        dateAdded: '2023-09-29 01:03:04',
+        dateModified: '2024-10-02 17:01:58',
+        itemTypeID: 1,
+        getCreators: () => [
+          { firstName: 'Alex', lastName: 'Chen', fieldMode: 0 },
+          { firstName: '', lastName: 'Neo Archive', fieldMode: 1 },
+        ],
+        getTags: vi.fn(() => [
+          { tag: 'Case Sensitive', type: 0 },
+          { tag: 'with, punctuation', type: 1 },
+          { tag: `urn:zotero-neo:chapter-note:v1:${'a'.repeat(32)}` },
+        ]),
+        getField: vi.fn((name: string, raw?: boolean, map?: boolean) => {
+          if (name === 'date') return raw ? rawDate : text;
+          if (name === 'title') return `Paper ${id}`;
+          if (name === 'publicationTitle' && map) return 'Mapped journal';
+          if (name === 'accessDate') return '2025-01-01 00:00:00';
+          return '';
+        }),
+      };
+    }
+    const papers = [
+      sdkItem(1, '2024-00-00 2024', '2024'),
+      sdkItem(2, '2024-06-00 2024-06', '2024-06'),
+      sdkItem(3, '2024-02-30 2024-02-30', '2024-02-30'),
+      sdkItem(4, '2023-00-00 2023–2024', '2023–2024'),
+      sdkItem(5, '2024-00-00 Spring 2024', 'Spring 2024'),
+      sdkItem(6, '2024-06-12 June 12, 2024', 'June 12, 2024'),
+    ];
+    const load = vi.fn(() => Promise.resolve());
+    const register = vi.fn(() => 'literature-observer');
+    const unregister = vi.fn();
+    const writes = vi.fn();
+    vi.stubGlobal('Zotero', {
+      Libraries: { userLibraryID: 1, get: () => ({ libraryType: 'user' }) },
+      Items: { getAll: () => Promise.resolve(papers), loadDataTypes: load },
+      ItemTypes: {
+        getAll: () => [
+          { id: 1, name: 'blogPost' },
+          { id: 2, name: 'attachment' },
+        ],
+        getLocalizedString: () => 'Blog post',
+      },
+      ItemFields: {
+        getItemTypeFields: (id: number) => (id === 1 ? [1, 2, 3, 4, 5, 8] : [7]),
+        getBaseIDFromTypeAndField: (_type: number, field: number) => (field === 5 ? 6 : false),
+        getName: (id: number) => fields[id - 1],
+        getLocalizedString: (id: number) => fields[id - 1],
+        isCustom: () => false,
+        isDate: (id: number) => id === 2,
+      },
+      Date: {
+        isMultipart: (text: string) => /^\d{4}-\d{2}-\d{2} (?!\d{2}:\d{2}:\d{2}$)/u.test(text),
+        multipartToSQL: (text: string) => text.slice(0, 10),
+        multipartToStr: (text: string) => text.slice(11),
+        strToDate: (text: string) =>
+          ({
+            '2023–2024': { year: '2023', part: '2024' },
+            'Spring 2024': { year: '2024', part: 'Spring' },
+            'June 12, 2024': { year: '2024', month: 5, day: 12 },
+          })[text],
+      },
+      localeCompare: (a: string, b: string) => a.localeCompare(b),
+      Notifier: { registerObserver: register, unregisterObserver: unregister },
+    });
+    const host = createLiteratureTableHost(
+      {} as MainWindow,
+      { set: writes } as unknown as PreferenceStore,
+      false,
+      () => true,
+    );
+    const catalog = host.nativeFields('en').map(({ id }) => id);
+    expect(catalog).toEqual(
+      expect.arrayContaining(['native:DOI', 'native:publicationTitle', 'native:accessDate']),
+    );
+    expect(catalog).not.toContain('native:extra');
+    expect(catalog).not.toContain('native:path');
+    expect(catalog).not.toContain('native:title');
+    const defaultRows = await host.readItems('user', {
+      includePDF: false,
+      nativeFields: new Set(),
+    });
+    expect(defaultRows[0]).toEqual({ id: 1, title: 'Paper 1', year: '2024', extra: '' });
+    expect(load).toHaveBeenLastCalledWith(papers, ['itemData']);
+    expect(papers[0]!.getTags).not.toHaveBeenCalled();
+    expect(papers[0]!.getField.mock.calls.map(([field]) => field)).toEqual(['date', 'title']);
+
+    const rows = await host.readItems('user', {
+      includePDF: false,
+      nativeFields: new Set([
+        'native:date',
+        'native:dateAdded',
+        'native:dateModified',
+        'native:tags',
+        'native:publicationTitle',
+        'native:accessDate',
+        'native:itemType',
+        'native:creators',
+      ]),
+    });
+    expect(load).toHaveBeenLastCalledWith(
+      papers,
+      expect.arrayContaining(['tags', 'creators', 'itemData']),
+    );
+    expect(rows[0]!.native).toMatchObject({
+      'native:tags': { tags: ['Case Sensitive', 'with, punctuation'] },
+      'native:dateAdded': { text: '2023-09-29 01:03:04', key: '2023-09-29 01:03:04' },
+      'native:dateModified': { text: '2024-10-02 17:01:58', key: '2024-10-02 17:01:58' },
+      'native:accessDate': { text: '2025-01-01 00:00:00', key: '2025-01-01 00:00:00' },
+      'native:publicationTitle': 'Mapped journal',
+      'native:itemType': 'Blog post',
+      'native:creators': 'Alex Chen; Neo Archive',
+    });
+    expect(rows.map(({ native }) => native?.['native:date'])).toEqual([
+      { text: '2024', key: '2024' },
+      { text: '2024-06', key: '2024-06' },
+      { text: '2024-02-30', key: null },
+      { text: '2023–2024', key: null },
+      { text: 'Spring 2024', key: null },
+      { text: 'June 12, 2024', key: '2024-06-12' },
+    ]);
+    expect(rows.map(({ year }) => year)).toEqual(['2024', '2024', '2024', '2023', '2024', '2024']);
+    const modified = vi.fn();
+    const dispose = host.observe(modified);
+    expect(register).toHaveBeenCalledWith(
+      { notify: modified },
+      expect.arrayContaining(['item', 'item-tag', 'tag']),
+      'neo-literature-table',
+    );
+    dispose();
+    expect(unregister).toHaveBeenCalledWith('literature-observer');
+    expect(writes).not.toHaveBeenCalled();
   });
 });

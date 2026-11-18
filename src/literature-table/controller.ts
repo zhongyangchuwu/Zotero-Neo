@@ -15,11 +15,15 @@ import { mountNativeReactView } from '../platform/native-ui';
 import type { NativeReactView } from '../ui/react/types';
 import {
   LITERATURE_TABLE_TEXT,
+  isLiteratureNativeFieldID,
   projectLiteratureRows,
   sortLiteratureItems,
   type LiteratureColumn,
   type LiteratureColumnID,
   type LiteratureLanguage,
+  type LiteratureNativeField,
+  type LiteratureNativeFieldID,
+  type LiteratureNativeValue,
   type LiteratureRow,
   type LiteratureSortDirection,
   type LiteratureTableCommand,
@@ -37,12 +41,19 @@ export interface LiteratureItem {
   readonly year: string;
   readonly extra: string;
   readonly hasPDF?: boolean;
+  readonly native?: Readonly<Partial<Record<LiteratureNativeFieldID, LiteratureNativeValue>>>;
+}
+
+export interface LiteratureReadOptions {
+  readonly includePDF: boolean;
+  readonly nativeFields: ReadonlySet<LiteratureNativeFieldID>;
 }
 
 export interface LiteratureTableHost {
   scopes(): readonly LiteratureScope[];
   initialScopeID(): string | undefined;
-  readItems(id: string, includePDF: boolean): Promise<readonly LiteratureItem[]>;
+  readItems(id: string, options: LiteratureReadOptions): Promise<readonly LiteratureItem[]>;
+  nativeFields(language: LiteratureLanguage): readonly LiteratureNativeField[];
   definitions(): readonly ItemAttributeDefinition[];
   observe(change: () => void): Cleanup;
   locate(id: number): Promise<boolean>;
@@ -101,17 +112,22 @@ class LiteratureTableController {
   #scopes: readonly LiteratureScope[] = [];
   #scope?: LiteratureScope;
   #definitions: readonly ItemAttributeDefinition[] = [];
+  #nativeFields: readonly LiteratureNativeField[] = [];
   #columns: readonly LiteratureColumn[];
   #headings: LiteratureTableModel['columns'];
   #choices: LiteratureTableModel['choices'] = [];
   #sortColumn: LiteratureColumnID = 'title';
   #sortDirection: LiteratureSortDirection = 'ascending';
   #source: readonly LiteratureItem[] = [];
-  #pdfLoaded = false;
+  #requested?: LiteratureReadOptions;
   #filterFields: readonly LiteratureFilterField[] = [];
   #fieldTypes = new Map<
     LiteratureFilterFieldID,
-    { readonly kind: LiteratureFilterKind; readonly key?: string }
+    {
+      readonly kind: LiteratureFilterKind;
+      readonly key?: string;
+      readonly definition?: ItemAttributeDefinition;
+    }
   >();
   #filters: readonly LiteratureFilter[] = [];
   #predicate: ((item: LiteratureItem) => boolean) | null = null;
@@ -240,12 +256,13 @@ class LiteratureTableController {
     const version = ++this.#readVersion;
     this.#status = 'loading';
     this.#source = [];
-    this.#pdfLoaded = false;
+    this.#requested = undefined;
     this.#items = [];
     this.#rows = [];
     try {
       const scopes = this.host.scopes();
       const definitions = this.host.definitions();
+      const nativeFields = this.host.nativeFields(this.language);
       const preferredID = this.#scope?.id ?? this.host.initialScopeID();
       const scope =
         scopes.find(({ id }) => id === preferredID) ?? (!this.#scope ? scopes[0] : undefined);
@@ -253,8 +270,13 @@ class LiteratureTableController {
       this.#scopes = scopes;
       this.#scope = scope ?? this.#scope;
       this.#definitions = definitions;
+      this.#nativeFields = nativeFields;
       for (const id of this.#shown) {
-        if (definitions.some((definition) => definition.id === id)) continue;
+        if (
+          nativeFields.some((field) => field.id === id) ||
+          definitions.some((definition) => definition.id === id)
+        )
+          continue;
         this.#shown.delete(id);
         if (this.#activeView) this.#layoutUnavailable = true;
       }
@@ -265,12 +287,12 @@ class LiteratureTableController {
         this.#publish();
         return;
       }
+      const options = this.#readOptions();
+      this.#requested = options;
       this.#publish();
-      const includePDF = this.#needsPDF();
-      const items = await this.host.readItems(scope.id, includePDF);
+      const items = await this.host.readItems(scope.id, options);
       if (!this.#currentRead(version)) return;
       this.#source = items;
-      this.#pdfLoaded = includePDF;
       this.#status = 'ready';
       this.#applyFilters();
     } catch (error) {
@@ -293,14 +315,24 @@ class LiteratureTableController {
     const labelCounts = new Map<string, number>();
     for (const { label } of this.#definitions)
       labelCounts.set(label, (labelCounts.get(label) ?? 0) + 1);
-    this.#choices = this.#definitions.map((definition) => {
-      const { id, key } = definition;
-      const name = definition.label;
-      const label = (labelCounts.get(name) ?? 0) > 1 ? `${name} (${key})` : name;
+    const choices: Array<LiteratureTableModel['choices'][number]> = this.#definitions.map(
+      (definition) => {
+        const { id, key } = definition;
+        const name = definition.label;
+        const label = (labelCounts.get(name) ?? 0) > 1 ? `${name} (${key})` : name;
+        const shown = this.#shown.has(id);
+        const columnID: LiteratureColumnID = `attribute:${id}`;
+        if (shown) columns.push({ id: columnID, label, definition });
+        return { id, columnID, label, shown };
+      },
+    );
+    for (const field of this.#nativeFields) {
+      const { id, label } = field;
       const shown = this.#shown.has(id);
-      if (shown) columns.push({ id: `attribute:${id}`, label, definition });
-      return { id, label, shown };
-    });
+      if (shown) columns.push(field);
+      choices.push({ id, columnID: id, label, shown });
+    }
+    this.#choices = choices;
     this.#columns = columns;
     this.#headings = columns.map(({ id, label }) => ({ id, label }));
     if (!columns.some(({ id }) => id === this.#sortColumn)) {
@@ -317,12 +349,18 @@ class LiteratureTableController {
       { id: 'title', kind: 'text', label: text.title },
       { id: 'year', kind: 'number', label: text.year },
       { id: 'pdf', kind: 'pdf', label: this.language === 'zh-CN' ? 'PDF 附件' : 'PDF attachment' },
+      ...this.#nativeFields,
     ];
     this.#fieldTypes = new Map(fields.map(({ id, kind }) => [id, { kind }]));
     for (const [index, definition] of this.#definitions.entries()) {
       const id = `attribute:${definition.id}` as const;
-      this.#fieldTypes.set(id, { kind: definition.type, key: definition.key });
-      fields.push({ id, kind: definition.type, label: this.#choices[index]!.label });
+      this.#fieldTypes.set(id, { kind: definition.type, key: definition.key, definition });
+      fields.push({
+        id,
+        kind: definition.type,
+        label: this.#choices[index]!.label,
+        options: definition.options,
+      });
     }
     this.#filterFields = fields;
     this.#compileFilters();
@@ -334,8 +372,26 @@ class LiteratureTableController {
       : null;
   }
 
-  #needsPDF(): boolean {
-    return !!this.#predicate && this.#filters.some(({ field }) => field === 'pdf');
+  #readOptions(): LiteratureReadOptions {
+    const nativeFields = new Set<LiteratureNativeFieldID>();
+    for (const { id } of this.#columns) if (isLiteratureNativeFieldID(id)) nativeFields.add(id);
+    let includePDF = false;
+    if (this.#predicate) {
+      for (const { field } of this.#filters) {
+        if (field === 'pdf') includePDF = true;
+        else if (isLiteratureNativeFieldID(field)) nativeFields.add(field);
+      }
+    }
+    return { includePDF, nativeFields };
+  }
+
+  #needsRead(): boolean {
+    const requested = this.#requested;
+    if (!requested) return false;
+    const active = this.#readOptions();
+    if (active.includePDF && !requested.includePDF) return true;
+    for (const id of active.nativeFields) if (!requested.nativeFields.has(id)) return true;
+    return false;
   }
 
   #applyFilters(): void {
@@ -350,7 +406,7 @@ class LiteratureTableController {
   #filtersChanged(): void {
     this.#page = 0;
     this.#compileFilters();
-    if ((this.#needsPDF() && !this.#pdfLoaded) || this.#status === 'error') {
+    if (this.#needsRead() || this.#status === 'error') {
       void this.#refresh();
       return;
     }
@@ -494,16 +550,21 @@ class LiteratureTableController {
         if (this.#status === 'error' || this.#status === 'unavailable') void this.#refresh();
         break;
       case 'column': {
-        if (!this.#definitions.some(({ id }) => id === command.id)) return;
+        const choice = this.#choices.find(({ id }) => id === command.id);
+        if (!choice) return;
         if (!this.#shown.delete(command.id)) this.#shown.add(command.id);
         const sortColumn = this.#sortColumn;
         // Hiding the sorted column is an intentional layout change.
-        if (sortColumn === `attribute:${command.id}` && !this.#shown.has(command.id)) {
+        if (sortColumn === choice.columnID && !this.#shown.has(command.id)) {
           this.#sortColumn = 'title';
           this.#sortDirection = 'ascending';
           this.#page = 0;
         }
         this.#updateColumns();
+        if (this.#needsRead()) {
+          void this.#refresh();
+          break;
+        }
         if (this.#status === 'ready') {
           if (this.#sortColumn !== sortColumn) this.#orderItems();
           else this.#projectPage();
@@ -543,9 +604,12 @@ class LiteratureTableController {
       case 'filter-set': {
         const { index, filter } = command;
         const field = this.#fieldTypes.get(filter.field);
-        if (!field || !validLiteratureFilter(filter, field.kind)) return;
+        if (!field || !validLiteratureFilter(filter, field.kind, field.definition?.options)) return;
         const next = [...this.#filters];
-        const normalized = { ...filter, value: filter.value.trim() };
+        const normalized = {
+          ...filter,
+          value: filter.kind === 'tags' ? filter.value : filter.value.trim(),
+        };
         if (index === undefined) {
           if (next.length >= MAX_LITERATURE_FILTERS) return;
           next.push(normalized);

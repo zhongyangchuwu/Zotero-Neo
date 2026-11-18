@@ -1,8 +1,11 @@
 import { describe, expect, it } from 'vitest';
 import {
+  displayAttributeValue,
+  encodeAttributeChoices,
   normalizeAttributeKey,
   normalizeAttributeValue,
   readAttributeValue,
+  readAttributeChoices,
   replaceAttributeValue,
 } from '../../src/item-attributes/extra';
 import type { ItemAttributeDefinition } from '../../src/item-attributes/types';
@@ -14,6 +17,43 @@ const text: ItemAttributeDefinition = {
   type: 'text',
 };
 const number: ItemAttributeDefinition = { ...text, type: 'number' };
+const multiChoice: ItemAttributeDefinition = {
+  ...text,
+  type: 'multi-select',
+  options: [
+    { id: 'proof', label: '证明, 附录' },
+    { id: 'survey', label: '综述' },
+  ],
+};
+
+describe('portable choice values', () => {
+  it('stores IDs, sorts their representation, and shows current labels after rename', () => {
+    const encoded = encodeAttributeChoices(['survey', 'proof']);
+    expect(normalizeAttributeValue(multiChoice, encoded)).toBe('["proof","survey"]');
+    const extra = replaceAttributeValue('Unrelated: yes', text.key, encoded);
+    const saved = readAttributeValue(extra, text.key).value!;
+    const renamed = { ...multiChoice, options: [{ id: 'proof', label: '复核' }] };
+    expect(readAttributeChoices(renamed, saved)).toEqual(['proof', 'survey']);
+    expect(displayAttributeValue(renamed, saved)).toEqual({
+      text: '复核 · [survey]',
+      valid: false,
+    });
+    expect(() => normalizeAttributeValue(renamed, saved)).toThrow(/current option IDs/);
+    expect(normalizeAttributeValue(renamed, encodeAttributeChoices(['proof']))).toBe('["proof"]');
+    expect(replaceAttributeValue(extra, text.key, null)).toBe('Unrelated: yes');
+  });
+
+  it('never treats legacy text, duplicate IDs, or multiple selections as a single choice', () => {
+    const single = { ...multiChoice, type: 'single-select' as const };
+    expect(readAttributeChoices(single, null)).toEqual([]);
+    for (const invalid of ['综述', '["survey","survey"]', '["proof","survey"]']) {
+      expect(readAttributeChoices(single, invalid)).toBeNull();
+      expect(displayAttributeValue(single, invalid).valid).toBe(false);
+      expect(() => normalizeAttributeValue(single, invalid)).toThrow();
+    }
+    expect(normalizeAttributeValue(single, encodeAttributeChoices(['survey']))).toBe('["survey"]');
+  });
+});
 
 describe('lossless Extra attributes', () => {
   it('changes only the matching value, preserving mixed line endings and unrelated bytes', () => {

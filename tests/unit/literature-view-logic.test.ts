@@ -1,10 +1,12 @@
 import { describe, expect, it } from 'vitest';
+import type { ItemAttributeDefinition } from '../../src/item-attributes/types';
 import type { LiteratureItem } from '../../src/literature-table/controller';
 import {
   compileLiteratureFilters,
   literatureFilterOperators,
   validLiteratureFilter,
 } from '../../src/literature-table/filters';
+import { projectLiteratureRows, sortLiteratureItems } from '../../src/literature-table/model';
 import {
   cleanLiteratureViewName,
   readLiteratureViews,
@@ -24,6 +26,10 @@ const fields = new Map<LiteratureFilterFieldID, { kind: LiteratureFilterKind; ke
   ['title', { kind: 'text' }],
   ['year', { kind: 'number' }],
   ['pdf', { kind: 'pdf' }],
+  ['native:tags', { kind: 'tags' }],
+  ['native:date', { kind: 'date' }],
+  ['native:dateAdded', { kind: 'date' }],
+  ['native:dateModified', { kind: 'date' }],
   ['attribute:score', { kind: 'number', key: 'Research Score' }],
   ['attribute:note', { kind: 'text', key: 'Note' }],
 ]);
@@ -202,6 +208,111 @@ describe('literature filters', () => {
     expect(combined(item('', { hasPDF: false }))).toBe(false);
     expect(combined(item('', { hasPDF: true }))).toBe(true);
   });
+
+  it('matches whole native tags exactly and combines rules on the same field with AND', () => {
+    const tag = (value: string): LiteratureFilter => ({
+      field: 'native:tags',
+      kind: 'tags',
+      operator: 'has-tag',
+      value,
+    });
+    const match = compileLiteratureFilters([tag('Trial'), tag('Search, Strategy')], fields)!;
+    const matches = (tags: string[]) => match(item('', { native: { 'native:tags': { tags } } }));
+    expect(matches(['Search, Strategy', 'Trial', 'Extra'])).toBe(true);
+    expect(matches(['Trial', 'Search', 'Strategy'])).toBe(false);
+    expect(matches(['trial', 'Search, Strategy'])).toBe(false);
+    expect(matches(['Clinical Trial', 'Search, Strategy'])).toBe(false);
+    expect(matches([' Trial ', 'Search, Strategy'])).toBe(false);
+    expect(matches([])).toBe(false);
+    expect(match(item())).toBe(false);
+    expect(
+      compileLiteratureFilters([{ ...tag('Trial'), operator: 'contains' }], fields),
+    ).toBeNull();
+  });
+
+  it('uses chronological date comparisons at the requested precision, never guessing a partial date', () => {
+    function publication(key: string | null) {
+      return item('', { native: { 'native:date': { text: key ?? 'n.d.', key } } });
+    }
+    const rule: LiteratureFilter = {
+      field: 'native:date',
+      kind: 'date',
+      operator: 'on',
+      value: '2024-02',
+    };
+    const on = predicate(rule);
+    expect(on(publication('2024-02'))).toBe(true);
+    expect(on(publication('2024-02-29'))).toBe(true);
+    expect(on(publication('2024'))).toBe(false);
+    expect(on(publication(null))).toBe(false);
+    expect(on(item())).toBe(false);
+
+    const before = predicate({ ...rule, operator: 'on-or-before' });
+    expect(before(publication('2023'))).toBe(true);
+    expect(before(publication('2024-02-29'))).toBe(true);
+    expect(before(publication('2024'))).toBe(false);
+    expect(before(publication('2024-03'))).toBe(false);
+    const after = predicate({ ...rule, operator: 'on-or-after' });
+    expect(after(publication('2024'))).toBe(false);
+    expect(after(publication('2024-01-31'))).toBe(false);
+    expect(after(publication('2024-02-01'))).toBe(true);
+    expect(after(publication('2025'))).toBe(true);
+    for (const value of [
+      '0000',
+      '2024-00',
+      '2024-02-00',
+      '2024-02-30',
+      '1900-02-29',
+      '2024-2',
+      '2024-04-31',
+    ])
+      expect(validLiteratureFilter({ ...rule, value }, 'date')).toBe(false);
+    expect(validLiteratureFilter({ ...rule, value: '2000-02-29' }, 'date')).toBe(true);
+
+    const timed = item('', {
+      native: {
+        'native:dateAdded': { text: '2024-02-29 23:59:59', key: '2024-02-29 23:59:59' },
+        'native:dateModified': { text: '2024-03-01 00:00:00', key: '2024-03-01 00:00:00' },
+      },
+    });
+    expect(predicate({ ...rule, field: 'native:dateAdded', value: '2024-02-29' })(timed)).toBe(
+      true,
+    );
+    expect(predicate({ ...rule, field: 'native:dateModified', value: '2024-02-29' })(timed)).toBe(
+      false,
+    );
+  });
+
+  it('sorts tags as lists and same-day native timestamps in time order', () => {
+    const collator = new Intl.Collator('en', { sensitivity: 'base', numeric: true });
+    const source = [
+      {
+        ...item(),
+        id: 1,
+        native: {
+          'native:tags': { tags: ['Zulu', 'A'] },
+          'native:dateAdded': { text: '2024-02-29 10:01:00', key: '2024-02-29 10:01:00' },
+        },
+      },
+      {
+        ...item(),
+        id: 2,
+        native: {
+          'native:tags': { tags: ['B', 'A'] },
+          'native:dateAdded': { text: '2024-02-29 09:05:00', key: '2024-02-29 09:05:00' },
+        },
+      },
+      { ...item(), id: 3 },
+    ];
+    const tags = { id: 'native:tags', kind: 'tags', label: 'Tags' } as const;
+    const date = { id: 'native:dateAdded', kind: 'date', label: 'Date added' } as const;
+    for (const column of [tags, date]) {
+      const asc = sortLiteratureItems(source, column, 'ascending', collator);
+      const desc = sortLiteratureItems(source, column, 'descending', collator);
+      expect(asc.map(({ id }) => id)).toEqual([2, 1, 3]);
+      expect(desc.map(({ id }) => id)).toEqual([1, 2, 3]);
+    }
+  });
 });
 
 describe('literature saved views', () => {
@@ -210,6 +321,69 @@ describe('literature saved views', () => {
     const raw = writeLiteratureViews([saved]);
     expect(JSON.parse(raw)).toEqual({ version: 1, views: [saved] });
     expect(readLiteratureViews(raw)).toEqual([saved]);
+  });
+
+  it('round-trips native field identities and repeated tag filters without migrating old views', () => {
+    const native: SavedLiteratureView = {
+      ...saved,
+      name: 'Native',
+      columns: ['native:tags', 'native:date', 'oldCustomId'],
+      sort: 'native:date',
+      filters: [
+        { field: 'native:tags', kind: 'tags', operator: 'has-tag', value: 'Case, Sensitive' },
+        { field: 'native:tags', kind: 'tags', operator: 'has-tag', value: 'Another Tag' },
+        { field: 'native:date', kind: 'date', operator: 'on-or-before', value: '2025-03' },
+        { field: 'native:removedDate', kind: 'date', operator: 'on', value: '2025' },
+      ],
+    };
+    expect(readLiteratureViews(writeLiteratureViews([saved, native]))).toEqual([saved, native]);
+    expect(compileLiteratureFilters(native.filters, fields)).toBeNull();
+  });
+
+  it('keeps option identity through a rename and refuses rules for removed options', () => {
+    const definition: ItemAttributeDefinition = {
+      id: 'focus',
+      key: 'Reading Focus',
+      label: 'Reading focus',
+      type: 'multi-select',
+      options: [
+        { id: 'proof', label: '证明' },
+        { id: 'source', label: '来源' },
+      ],
+    };
+    const id = 'attribute:focus';
+    const choice: SavedLiteratureView = {
+      ...saved,
+      name: 'Choice',
+      columns: ['focus'],
+      sort: id,
+      filters: [
+        { field: id, kind: 'multi-select', operator: 'has-choice', value: 'proof' },
+        { field: id, kind: 'multi-select', operator: 'has-choice', value: 'source' },
+      ],
+    };
+    const rules = readLiteratureViews(writeLiteratureViews([choice]))[0]!.filters;
+    const renamed = {
+      ...definition,
+      options: [{ id: 'proof', label: '证明过程' }, definition.options![1]!],
+    };
+    const catalog = (field: ItemAttributeDefinition) =>
+      new Map([[id, { kind: field.type, definition: field }]] as const);
+    const matches = compileLiteratureFilters(rules, catalog(renamed))!;
+    const full = item('Reading Focus: ["proof","source"]');
+    expect(matches(full)).toBe(true);
+    expect(matches(item('Reading Focus: ["proof"]'))).toBe(false);
+    expect(matches(item('Reading Focus: ["proof","source","unknown"]'))).toBe(false);
+    expect(matches(item('Reading Focus: 证明'))).toBe(false);
+    expect(
+      projectLiteratureRows([full], [{ id, label: 'Focus', definition: renamed }])[0]?.cells,
+    ).toEqual([{ state: 'value', value: '证明过程 · 来源' }]);
+    expect(
+      compileLiteratureFilters(
+        rules,
+        catalog({ ...renamed, options: renamed.options.slice(0, 1) }),
+      ),
+    ).toBeNull();
   });
 
   it('preserves incomplete filter values without making them executable', () => {

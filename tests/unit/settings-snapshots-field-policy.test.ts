@@ -348,6 +348,45 @@ describe('item attribute schema transfer admission', () => {
     expect(t.user.get(preferenceKey)).toBe(incoming);
   });
 
+  it('roundtrips select definitions without losing stable option IDs', async () => {
+    settingsSnapshotHostFixture();
+    const adapter = createSettingsAdapters(() => 'target')[1]!;
+    const incoming = JSON.stringify({
+      version: 2,
+      fields: [
+        {
+          id: 'stage',
+          key: 'Research Stage',
+          label: '阅读阶段',
+          type: 'single-select',
+          options: [{ id: 'in-progress', label: '在读' }],
+        },
+        {
+          id: 'theme',
+          key: 'Research Themes',
+          label: '主题',
+          type: 'multi-select',
+          options: [{ id: 'survey', label: '综述' }],
+        },
+      ],
+    });
+    const plan = await adapter.plan(section(incoming), context());
+    const receipts = await adapter.apply(
+      plan.changes.map((change) => ({ ...change, selected: true })),
+      context(),
+    );
+    expect(receipts).toMatchObject([{ key: ITEM_ATTRIBUTE_PREFERENCE, status: 'applied' }]);
+    const captured = await adapter.capture({
+      ...context(),
+      includeSecrets: false,
+      includeLibrarySettings: false,
+    });
+    expect(captured.section.entries).toContainEqual({
+      key: ITEM_ATTRIBUTE_PREFERENCE,
+      state: set(incoming),
+    });
+  });
+
   it.each([
     'Title',
     'DOI',
