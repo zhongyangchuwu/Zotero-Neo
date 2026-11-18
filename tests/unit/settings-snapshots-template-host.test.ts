@@ -7,6 +7,7 @@ vi.mock('../../src/toolkit/main/plugins', () => ({ mainInstalledPlugins: async (
 import {
   mainSettingsTemplatePlugins,
   mainSettingsTemplateDigest,
+  scanMainSettingsBindings,
 } from '../../src/toolkit/main/settings-snapshot-templates';
 const HostTextEncoder = TextEncoder,
   HostTextDecoder = TextDecoder,
@@ -95,6 +96,54 @@ beforeEach(() => {
 afterEach(() => vi.unstubAllGlobals());
 
 describe('installed plugin bundled template source boundary', () => {
+  it('takes only host-attached preference names from the requested loaded pane', async () => {
+    const element = (key: string) => ({
+      nodeType: 1,
+      getAttribute: (attribute: string) => {
+        if (attribute !== 'preference') throw new Error('Only binding attributes may be read');
+        return key;
+      },
+    });
+    const owned = element('extensions.sample.enabled');
+    const unbound = element('extensions.sample.unverified');
+    const foreign = element('extensions.other.enabled');
+    const pane = (id: string, controls: ReturnType<typeof element>[]) => ({
+      id,
+      pluginID: `${id}@test`,
+      src: `${id}.xhtml`,
+      loaded: true,
+      container: { isConnected: true, querySelectorAll: () => controls },
+    });
+    const sample = pane('sample', [owned, unbound]);
+    const other = pane('other', [foreign]);
+    const window = {
+      closed: false,
+      close: vi.fn(),
+      document: { documentURI: 'chrome://zotero/content/preferences/preferences.xhtml' },
+      Zotero_Preferences: {
+        panes: new Map([
+          ['sample', sample],
+          ['other', other],
+        ]),
+        _observerSymbols: new Map([
+          [owned, Symbol()],
+          [foreign, Symbol()],
+        ]),
+      },
+    };
+    vi.stubGlobal('Services', { ...Services, wm: { getMostRecentWindow: () => window } });
+    vi.stubGlobal('Zotero', {
+      ...Zotero,
+      Utilities: { Internal: {} },
+      PreferencePanes: { pluginPanes: [sample, other] },
+    });
+
+    expect(await scanMainSettingsBindings('sample@test', () => true)).toEqual(
+      new Set(['extensions.sample.enabled']),
+    );
+    expect(window.close).not.toHaveBeenCalled();
+  });
+
   it('hashes exact UTF-8 identity through the live Main window without global DOM constructors', () => {
     const id = 'Plugin-插件@Example.test';
     expect(mainSettingsTemplateDigest(id)).toBe(createHash('sha256').update(id).digest('hex'));

@@ -149,9 +149,11 @@ export function createSettingsTemplateCatalog(
   const records = new Map<string, TemplateRecord>();
   const templates = new Map<string, SnapshotPluginTemplate>();
   const adapters = new Map<string, SettingsAdapter>();
+  const scans = new Map<string, { revision: string; keys: ReadonlySet<string> }>();
   let disposed = false,
     loaded = false,
     stopObserving: (() => void) | undefined;
+  let pluginGeneration = 0;
   let tail: Promise<unknown> = Promise.resolve();
   const assert = (context: SettingsOperationContext): void => {
     assertSettingsCurrent(context);
@@ -185,6 +187,8 @@ export function createSettingsTemplateCatalog(
       for (const [id, record] of hydrated) records.set(id, record);
       loaded = true;
       stopObserving = settingsTemplateHost.observePlugins(() => {
+        pluginGeneration++;
+        scans.clear();
         adapters.clear();
         for (const [id, record] of records)
           if (record.status === 'reviewed') records.set(id, { ...record, status: 'needs-review' });
@@ -202,6 +206,23 @@ export function createSettingsTemplateCatalog(
     for (const draft of discovered) {
       present.add(draft.pluginID);
       let record = records.get(draft.pluginID);
+      const scan = scans.get(draft.pluginID);
+      const verified = scan?.revision === draft.revision ? scan.keys : undefined;
+      const previouslyReviewed =
+        record?.status === 'reviewed' &&
+        record.version === draft.version &&
+        record.revision === draft.revision
+          ? new Set(record.fields.map((field) => field.key))
+          : undefined;
+      const fields = draft.fields.map((field) =>
+        field.requiresLiveBinding && !(verified ?? previouslyReviewed)?.has(field.key)
+          ? {
+              ...field,
+              supported: false,
+              reason: 'Scan the loaded Zotero settings pane to confirm this preference binding',
+            }
+          : field,
+      );
       const sensitiveKeys = mergeSensitiveKeys(record, draft.fields);
       if (sensitiveKeys.length && sensitiveKeys !== record?.sensitiveKeys) {
         adapters.delete(draft.pluginID);
@@ -212,7 +233,7 @@ export function createSettingsTemplateCatalog(
             pluginID: draft.pluginID,
             version: draft.version,
             revision: draft.revision,
-            fields: draft.fields
+            fields: fields
               .filter((field) => field.supported)
               .map(({ key, type, secret }) => ({ key, type, secret })),
             status: 'draft',
@@ -227,7 +248,7 @@ export function createSettingsTemplateCatalog(
         record.version === draft.version &&
         record.revision === draft.revision &&
         record.fields.every((selected) =>
-          draft.fields.some(
+          fields.some(
             (field) =>
               field.key === selected.key && field.supported && field.type === selected.type,
           ),
@@ -247,7 +268,7 @@ export function createSettingsTemplateCatalog(
               : record?.status === 'needs-review'
                 ? 'needs-review'
                 : 'draft',
-        fields: draft.fields.map((field) => ({
+        fields: fields.map((field) => ({
           ...field,
           secret: field.secret || !!record?.sensitiveKeys.includes(field.key),
         })),
@@ -367,6 +388,24 @@ export function createSettingsTemplateCatalog(
     scan(pluginID, context) {
       return serial(context, async () => {
         await refresh(context);
+        const template = requireTemplate(pluginID);
+        if (template.fields.some((field) => field.requiresLiveBinding)) {
+          const generation = pluginGeneration;
+          const current = () =>
+            !disposed &&
+            !context.signal.aborted &&
+            context.isCurrent() &&
+            generation === pluginGeneration;
+          const keys = await settingsTemplateHost.scanBindings(pluginID, current);
+          assert(context);
+          if (!current())
+            throw new SettingsSnapshotError(
+              'stale-template',
+              'The installed plugin changed during scanning',
+            );
+          scans.set(pluginID, { revision: template.revision, keys });
+          await refresh(context);
+        }
         return requireTemplate(pluginID);
       });
     },
@@ -472,6 +511,7 @@ export function createSettingsTemplateCatalog(
       disposed = true;
       adapters.clear();
       templates.clear();
+      scans.clear();
       records.clear();
       stopObserving?.();
     },

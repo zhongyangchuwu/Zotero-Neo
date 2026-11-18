@@ -3,6 +3,7 @@ import type { MainTemplatePlugin } from '../../toolkit/main';
 
 export interface TemplateDiscovery {
   preferenceType(key: string): SnapshotTemplateField['type'] | null;
+  defaultPreferenceType?(key: string): SnapshotTemplateField['type'] | null;
   digest(text: string): string;
 }
 const MAX_FIELDS = 2048;
@@ -308,6 +309,11 @@ export function discoverPluginTemplates(
   host: TemplateDiscovery,
 ): readonly SnapshotPluginTemplate[] {
   const declarations = new Map(plugins.map((plugin) => [plugin.id, declaredDefaults(plugin)]));
+  const scopedNames = new Map<string, number>();
+  for (const { id } of plugins) {
+    const name = id.split('@')[0]!;
+    scopedNames.set(name, (scopedNames.get(name) ?? 0) + 1);
+  }
   const owners = new Map<string, Set<string>>();
   for (const [id, defaults] of declarations)
     for (const key of defaults.keys()) {
@@ -322,6 +328,15 @@ export function discoverPluginTemplates(
       'Static bindings only: scripted/dynamic controls, custom stores and unbound settings are not discovered; this is not universal plugin support',
     ];
     const defaults = declarations.get(plugin.id)!;
+    const name = plugin.id.split('@')[0]!;
+    const scopedKey = /^[a-z][a-z0-9_-]*$/u.test(name) && scopedNames.get(name) === 1;
+    const namespaces = scopedKey
+      ? [
+          `extensions.${name}.`,
+          `extensions.zotero.${name}.`,
+          `extensions.zotero.translators.${name}.`,
+        ]
+      : [];
     const nativeKeys = plugin.nativePreferenceKeys ? new Set(plugin.nativePreferenceKeys) : null;
     const fields = new Map<string, SnapshotTemplateField>();
     let unbound = 0;
@@ -368,7 +383,20 @@ export function discoverPluginTemplates(
         }
         const declared = preferences.get(binding);
         const key = declared?.key ?? binding;
-        const type = defaults.get(key) ?? host.preferenceType(key) ?? 'string';
+        const full = defaults.get(key);
+        const namespace = namespaces.find((prefix) => key.startsWith(prefix));
+        const relative = namespace && key.slice(namespace.length);
+        // A loaded binding can resolve a short declaration, but cannot claim any arbitrary key.
+        const short =
+          !defaults.has(key) &&
+          attrs.get('preference') === binding &&
+          relative &&
+          /^[A-Za-z0-9_-]+$/u.test(relative)
+            ? defaults.get(relative)
+            : undefined;
+        const requiresLiveBinding =
+          !!short && !owners.has(key) && host.defaultPreferenceType?.(key) === short;
+        const type = full ?? short ?? host.preferenceType(key) ?? 'string';
         const inputType = (attrs.get('type') ?? 'text').toLowerCase();
         const nativeTarget =
           key === 'extensions.zotero' ||
@@ -381,8 +409,7 @@ export function discoverPluginTemplates(
           !KEY.test(key) ||
           RESERVED.test(key) ||
           nativeTarget ||
-          !defaults.get(key) ||
-          owners.get(key)?.size !== 1
+          !(full ? owners.get(key)?.size === 1 : requiresLiveBinding)
         )
           reason =
             'This target is reserved, shared, or not uniquely declared by this installed plugin';
@@ -436,6 +463,7 @@ export function discoverPluginTemplates(
             secret: SENSITIVE.test(key) || inputType === 'password' || !!previous?.secret,
             requiresRestart: true,
             supported: !reason,
+            ...(requiresLiveBinding && !reason ? { requiresLiveBinding: true as const } : {}),
             ...(reason ? { reason } : {}),
             source: source.source,
           }),

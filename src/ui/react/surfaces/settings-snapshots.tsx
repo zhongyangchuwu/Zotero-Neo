@@ -799,8 +799,8 @@ export function mountSettingsSnapshotsView(
               <summary>{text('插件模板与支持范围', 'Plugin templates and coverage')}</summary>
               <p>
                 {text(
-                  '想迁移其他插件的设置？先扫描，然后确认哪些设置可以保存。',
-                  'To move another plugin’s settings, scan it and choose what to include.',
+                  '先扫描，再确认要纳入的设置。必要时，Neo 会打开所选插件的 Zotero 设置页，读取偏好绑定，不读取字段值。',
+                  'Scan, then choose what to include. If needed, Neo opens the selected plugin’s Zotero settings to read bindings, not field values.',
                 )}
               </p>
               <Button disabled={model.busy} onClick={() => dispatch({ type: 'template-import' })}>
