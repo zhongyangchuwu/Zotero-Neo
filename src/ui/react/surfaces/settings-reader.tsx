@@ -151,7 +151,7 @@ export function ReaderPage({ model, dispatch }: { model: ReaderPageModel; dispat
   );
   return (
     <div className="neo-settings-reader">
-      <h2>{l.title}</h2>
+      <p className="neo-muted">{l.description}</p>
       <section className="neo-reader-group">
         <h3>{l.input}</h3>
         {toggle('visual', l.visual, l.visualHint, model.visual)}

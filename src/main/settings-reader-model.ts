@@ -20,6 +20,7 @@ export interface ReaderCredentialModel {
 export interface ReaderPageModel {
   readonly labels: {
     readonly title: string;
+    readonly description: string;
     readonly input: string;
     readonly visual: string;
     readonly visualHint: string;

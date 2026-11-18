@@ -1,9 +1,11 @@
 import type { Cleanup } from '../core/cleanup';
+import { t } from '../i18n';
 import type { KeyGuideLanguage } from '../input/key-guide-config';
 import { compositionOwnsKey } from '../input/composition';
 import { keyString } from '../input/keys';
 import { isDeadObject } from '../platform/cross-compartment';
 import { mountNativeReactView } from '../platform/native-ui';
+import { openSettingsHelp } from '../platform/settings-help';
 import type { SettingsSnapshotFiles } from '../platform/settings-snapshots-files';
 import type { NativeReactView } from '../ui/react/types';
 import { PREPARATION_BACKDROP_STYLE, PREPARATION_PANEL_STYLE } from '../ui/react/shells/reader';
@@ -16,7 +18,7 @@ import {
   type SettingsRestoreReceipt,
   type SettingsContainer,
 } from './contracts';
-import { assertSettingsCurrent, settingStateText } from './document';
+import { assertSettingsCurrent } from './document';
 import { settingsChangeID, SettingsSnapshotService, type SettingsSnapshotPlan } from './service';
 import type {
   SettingsSnapshotCommand,
@@ -222,6 +224,7 @@ export class SettingsSnapshotController implements SettingsSnapshotPort {
     };
   }
   #model(view: SnapshotView): SettingsSnapshotModel {
+    const language = view.host.language();
     const groups = new Map<
       string,
       { id: string; label: string; selected: boolean; fields: SettingsSnapshotField[] }
@@ -241,13 +244,24 @@ export class SettingsSnapshotController implements SettingsSnapshotPort {
           groups.set(groupID, group);
         }
         const preview = (state: typeof change.before): string => {
-          const value = settingStateText(state, change.secret);
+          if (state.kind === 'reset') return this.#text(view, '默认值', 'Default');
+          if (change.secret)
+            return state.value
+              ? this.#text(view, '已设置', 'Set')
+              : this.#text(view, '空', 'Empty');
+          if (state.value === '') return this.#text(view, '空', 'Empty');
+          if (typeof state.value === 'boolean')
+            return state.value ? this.#text(view, '开启', 'On') : this.#text(view, '关闭', 'Off');
+          const value = typeof state.value === 'string' ? state.value : JSON.stringify(state.value);
           return value.length > 600 ? `${value.slice(0, 600)}… (${value.length})` : value;
         };
         const selected = view.selected.has(id);
+        const nativeLabelKey = `settingsSnapshot.nativePreference.${change.key}`;
+        const nativeLabel =
+          plan.adapterID === 'zotero' ? t(nativeLabelKey, language) : nativeLabelKey;
         group.fields.push({
           id,
-          label: change.label,
+          label: nativeLabel === nativeLabelKey ? change.label : nativeLabel,
           before: preview(change.before),
           after: preview(change.after),
           selected,
@@ -259,7 +273,7 @@ export class SettingsSnapshotController implements SettingsSnapshotPort {
         if (!change.blocked && !selected) group.selected = false;
       }
     return {
-      chinese: view.host.language() === 'zh-CN',
+      chinese: language === 'zh-CN',
       container: view.container,
       sourceContainer: view.sourceContainer,
       catalogAvailable: !!this.#catalog,
@@ -571,6 +585,10 @@ export class SettingsSnapshotController implements SettingsSnapshotPort {
   #dispatch(view: SnapshotView, command: SettingsSnapshotCommand): void {
     if (command.type === 'close') {
       this.close(true);
+      return;
+    }
+    if (command.type === 'help') {
+      openSettingsHelp('snapshots');
       return;
     }
     if (command.type === 'stop') {

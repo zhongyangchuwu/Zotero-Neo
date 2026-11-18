@@ -78,6 +78,7 @@ export type SettingsSnapshotCommand =
   | {
       readonly type:
         | 'close'
+        | 'help'
         | 'stop'
         | 'export'
         | 'choose-file'

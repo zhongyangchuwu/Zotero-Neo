@@ -12,7 +12,6 @@ import {
   OPTIONAL_MODULE_DEFAULTS,
   OPTIONAL_MODULES,
   type BuiltinModuleId,
-  type OptionalModuleDescriptor,
   type OptionalModuleId,
 } from '../modules';
 import type {
@@ -25,6 +24,36 @@ import { SettingsTabs } from './settings-tabs';
 import { SettingsTranslation } from './settings-translation';
 
 type ModuleFlags = Record<OptionalModuleId, boolean>;
+const MODULE_DESCRIPTIONS: Record<OptionalModuleId, { en: string; 'zh-CN': string }> = {
+  'reader-hints': {
+    en: 'Use keyboard hints to open links and copy content in the reader.',
+    'zh-CN': '在阅读器中使用键盘提示打开链接和复制内容。',
+  },
+  extensions: {
+    en: 'Manage Zotero plugins from Neo.',
+    'zh-CN': '在 Neo 中管理 Zotero 插件。',
+  },
+  translation: {
+    en: 'Translate selected text in the reader with Translate for Zotero.',
+    'zh-CN': '使用 Translate for Zotero 翻译阅读器中选中的文字。',
+  },
+  'ai-qa': {
+    en: 'Ask questions about a document and inspect the supporting evidence.',
+    'zh-CN': '就文档提问并查看回答依据。',
+  },
+  references: {
+    en: 'Browse references from the reader.',
+    'zh-CN': '在阅读器中浏览参考文献。',
+  },
+  'tab-enhancements': {
+    en: 'Use a tab sidebar and save groups of reading tabs.',
+    'zh-CN': '使用标签页侧栏，并保存阅读标签页分组。',
+  },
+  'item-attributes': {
+    en: 'Define and edit custom attributes for items.',
+    'zh-CN': '为条目定义和编辑自定义属性。',
+  },
+};
 
 /** Shows startup-applied module state separately from editable persisted requests. */
 export class SettingsModules {
@@ -82,12 +111,16 @@ export class SettingsModules {
     const groups: SettingsFormGroup[] = [
       {
         id: 'module-actions',
-        title: settingsText(language, 'Optional enhancements'),
+        title: language === 'zh-CN' ? '启用与停用' : 'Turn features on or off',
+        description:
+          language === 'zh-CN'
+            ? '保存后，重启 Zotero 生效。切到其他设置页会丢弃未保存的更改。'
+            : 'Save changes, then restart Zotero. Leaving this section discards unsaved changes.',
         fields: [
           {
             kind: 'action',
             id: 'modules.save',
-            label: settingsText(language, 'Save module requests'),
+            label: language === 'zh-CN' ? '保存更改' : 'Save changes',
             primary: true,
             disabled:
               this.#translation.busy ||
@@ -96,7 +129,11 @@ export class SettingsModules {
           {
             kind: 'action',
             id: 'modules.restore',
-            label: settingsText(language, 'Restore default module requests'),
+            label: language === 'zh-CN' ? '恢复模块默认值' : 'Restore module defaults',
+            description:
+              language === 'zh-CN'
+                ? '只重置本页的功能开关，立即保存。'
+                : 'Resets only the feature switches on this page and saves immediately.',
             disabled: this.#translation.busy,
           },
         ],
@@ -104,27 +141,27 @@ export class SettingsModules {
     ];
     for (const descriptor of OPTIONAL_MODULES) {
       const state = states.get(descriptor.id);
-      const summary = state
-        ? [
-            `${settingsText(language, 'Applied')}: ${settingsText(language, state.applied ? 'On' : 'Off')}`,
-            `${settingsText(language, 'Requested')}: ${settingsText(language, state.requested ? 'On' : 'Off')}`,
-            `${settingsText(language, 'Draft request')}: ${settingsText(language, this.#draft[descriptor.id] ? 'On' : 'Off')}`,
-            `${settingsText(language, 'Runtime status')}: ${this.#statusText(state.status)}`,
-            ...(state.pendingRestart ? [settingsText(language, 'Pending restart')] : []),
-            this.#runtimeDetails(descriptor, state),
-          ]
-            .filter(Boolean)
-            .join(' · ')
-        : '';
+      const summary = [
+        ...(this.#draft[descriptor.id] !== this.#saved[descriptor.id]
+          ? [language === 'zh-CN' ? '有未保存的更改' : 'Unsaved changes']
+          : []),
+        ...(state?.pendingRestart ? [settingsText(language, 'Pending restart')] : []),
+        ...(state ? [this.#runtimeDetails(state)] : []),
+      ]
+        .filter(Boolean)
+        .join(' · ');
       groups.push({
         id: `module.${descriptor.id}`,
         title: descriptor.names[language],
-        description: `${settingsText(language, 'Scope:')} ${descriptor.scopes.map((item) => settingsScopeText(language, item)).join(', ')}`,
+        description: MODULE_DESCRIPTIONS[descriptor.id][language],
         fields: [
           {
             kind: 'boolean',
             id: `modules.request.${descriptor.id}`,
-            label: `${settingsText(language, 'Draft request')}: ${descriptor.names[language]}`,
+            label:
+              language === 'zh-CN'
+                ? `启用${descriptor.names[language]}`
+                : `Enable ${descriptor.names[language]}`,
             value: this.#draft[descriptor.id],
             disabled: this.#translation.busy,
             note: summary,
@@ -137,10 +174,6 @@ export class SettingsModules {
     const status = this.#status || this.#tabs.status;
     return {
       title: settingsText(language, 'Optional enhancements'),
-      description: settingsText(
-        language,
-        'Choose which optional enhancements to request after restarting Zotero. Core library, worksets, tags, collections, reader navigation, selection, annotations, notes, and workspace remain available and are not affected.',
-      ),
       groups,
       ...(status ? { status: { text: status, error: true } } : {}),
     };
@@ -231,6 +264,33 @@ export class SettingsModules {
     if (!this.#disposed) this.#changed();
   }
 
+  #runtimeDetails(state: ModuleSettingsState): string {
+    const details = state.instances
+      .filter((instance) => instance.status === 'failed' || instance.status === 'blocked')
+      .map((instance) => {
+        const host = settingsScopeText(
+          this.#language,
+          instance.host === 'main' ? 'Main window' : 'Reader session',
+        );
+        const parts = [`${host}: ${this.#statusText(instance.status)}`];
+        if (instance.dependencyIds.length)
+          parts.push(
+            `${settingsText(this.#language, 'Requires:')} ${instance.dependencyIds.map((id) => this.#moduleName(id)).join(', ')}`,
+          );
+        if (instance.failure)
+          parts.push(`${settingsText(this.#language, 'Failure:')} ${instance.failure}`);
+        return parts.join(' · ');
+      });
+    if (!details.length && (state.status === 'blocked' || state.status === 'failed')) {
+      details.push(this.#statusText(state.status));
+      if (state.dependencyIds.length)
+        details.push(
+          `${settingsText(this.#language, 'Requires:')} ${state.dependencyIds.map((id) => this.#moduleName(id)).join(', ')}`,
+        );
+    }
+    return details.join(' · ');
+  }
+
   #statusText(status: ModuleStatus): string {
     switch (status) {
       case 'enabled':
@@ -244,37 +304,6 @@ export class SettingsModules {
       case 'pending':
         return settingsText(this.#language, 'Pending host');
     }
-  }
-
-  #runtimeDetails(descriptor: OptionalModuleDescriptor, state: ModuleSettingsState): string {
-    const details = state.instances.map((instance) => {
-      const host = settingsScopeText(
-        this.#language,
-        instance.host === 'main' ? 'Main window' : 'Reader session',
-      );
-      const parts = [`${host}: ${this.#statusText(instance.status)}`];
-      if (instance.dependencyIds.length)
-        parts.push(
-          `${settingsText(this.#language, 'Requires:')} ${instance.dependencyIds.map((id) => this.#moduleName(id)).join(', ')}`,
-        );
-      if (instance.failure)
-        parts.push(`${settingsText(this.#language, 'Failure:')} ${instance.failure}`);
-      return parts.join(' — ');
-    });
-    if (!state.instances.length && state.status === 'pending') {
-      const hosts = descriptor.hosts.map((host) =>
-        settingsScopeText(this.#language, host === 'main' ? 'Main window' : 'Reader session'),
-      );
-      details.push(
-        `${settingsText(this.#language, 'Waiting for supported hosts:')} ${hosts.join(', ')}`,
-      );
-    }
-    if (state.status === 'blocked' && state.dependencyIds.length && !details.length) {
-      details.push(
-        `${settingsText(this.#language, 'Requires:')} ${state.dependencyIds.map((id) => this.#moduleName(id)).join(', ')}`,
-      );
-    }
-    return details.join(' · ');
   }
 
   #moduleName(id: BuiltinModuleId): string {

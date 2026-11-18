@@ -45,18 +45,24 @@ export class SettingsInteraction {
     const language = this.#language;
     return {
       title: settingsText(language, 'Interaction'),
+      description: language === 'zh-CN' ? '更改立即生效。' : 'Changes take effect immediately.',
       groups: [
         {
           id: 'picker',
           title: settingsText(language, 'Picker'),
-          description: settingsText(
-            language,
-            'Mouse controls apply to all shared pickers, including items, collections, tags, tabs, and notes.',
-          ),
+          description:
+            language === 'zh-CN'
+              ? '适用于条目、分类、标签、标签页和笔记等选择器。'
+              : 'Applies to pickers for items, collections, tags, tabs, and notes.',
           fields: [
             {
               id: PICKER_MOUSE_FIELD_ID,
-              label: settingsText(language, 'Mouse row selection and double-click confirmation'),
+              label:
+                language === 'zh-CN' ? '使用鼠标选择和确认' : 'Select and confirm with the mouse',
+              description:
+                language === 'zh-CN'
+                  ? '点击选择一行，双击确认。'
+                  : 'Click to select a row and double-click to confirm.',
               kind: 'boolean',
               value: pickerMouseEnabled(this.#preferences),
             },
@@ -65,14 +71,18 @@ export class SettingsInteraction {
         {
           id: 'note-editing',
           title: settingsText(language, 'Note editing'),
-          description: settingsText(
-            language,
-            'Applies to Zotero context-pane notes and standalone note tabs.',
-          ),
+          description:
+            language === 'zh-CN'
+              ? '适用于 Zotero 上下文面板中的笔记和独立笔记标签页。'
+              : 'Applies to notes in the Zotero context pane and standalone note tabs.',
           fields: [
             {
               id: NOTE_EDITOR_FIELD_ID,
               label: settingsText(language, 'Vim-style note editing'),
+              description:
+                language === 'zh-CN'
+                  ? '在笔记中使用 Vim 风格的键盘编辑。'
+                  : 'Use Vim-style keyboard editing in notes.',
               kind: 'boolean',
               value: noteEditorEnabled(this.#preferences),
             },

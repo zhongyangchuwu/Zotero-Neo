@@ -58,11 +58,11 @@ export class SettingsTranslation {
               : !snapshot.runtimeReady
                 ? 'starting'
                 : 'ready';
-    const details = `${snapshot?.version ? `Translate for Zotero ${snapshot.version}: ` : ''}${this.#text(state)}`;
+    const details = state === 'ready' ? '' : this.#text(state);
     return {
       id: 'translation.setup',
       title: 'Translate for Zotero',
-      description: `${details} · ${this.#text('notice')}${this.#status ? ` · ${this.#status}` : ''}`,
+      description: [details, this.#status].filter(Boolean).join(' · '),
       fields: [
         {
           kind: 'action',

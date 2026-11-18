@@ -51,19 +51,17 @@ export class SettingsAdvanced {
       groups: [
         {
           id: 'language',
-          title: settingsText(language, 'Interface and command language'),
-          description: settingsText(
-            language,
-            'Controls Neo Settings and localized command labels in Prefix Guide, Command Palette, and Keybindings. Follow Zotero uses the host locale.',
-          ),
+          title: language === 'zh-CN' ? '界面语言' : 'Interface language',
+          description:
+            language === 'zh-CN'
+              ? '更改 Neo 设置、前缀指南、命令面板和快捷键中的命令名称。选择“跟随 Zotero”使用 Zotero 的语言。'
+              : 'Changes Neo Settings and command labels in the Prefix Guide, Command Palette, and Keybindings. Follow Zotero uses Zotero’s language.',
           fields: [
             {
               id: LANGUAGE_FIELD_ID,
               label: settingsText(language, 'Language'),
-              description: settingsText(
-                language,
-                'Changes the Neo Settings interface and localized command labels immediately.',
-              ),
+              description:
+                language === 'zh-CN' ? '更改立即生效。' : 'Changes take effect immediately.',
               kind: 'choice',
               value: configuredNeoLanguage(this.#preferences),
               options: [
@@ -76,19 +74,19 @@ export class SettingsAdvanced {
         },
         {
           id: 'tag-namespaces',
-          title: settingsText(language, 'Tag namespaces'),
-          description: settingsText(
-            language,
-            'Neo can interpret ordinary Zotero tag strings as virtual paths inside tag pickers without changing stored tag data.',
-          ),
+          title: language === 'zh-CN' ? '标签层级' : 'Tag hierarchy',
+          description:
+            language === 'zh-CN'
+              ? '在标签选择器中按分隔符显示标签层级，不会修改 Zotero 中保存的标签。'
+              : 'Show tags as a hierarchy in tag pickers without changing the tags saved in Zotero.',
           fields: [
             {
               id: TAG_SEPARATOR_FIELD_ID,
-              label: settingsText(language, 'Namespace separator'),
-              description: settingsText(
-                language,
-                "Default '/'. Leave empty for completely flat tag matching; existing Zotero tags are never rewritten.",
-              ),
+              label: language === 'zh-CN' ? '层级分隔符' : 'Hierarchy separator',
+              description:
+                language === 'zh-CN'
+                  ? '默认为 /。留空可按完整标签名称匹配。修改后生效。'
+                  : 'The default is /. Leave empty to match full tag names without a hierarchy. Applies when changed.',
               kind: 'text',
               value: tagSeparatorFromPreferences(this.#preferences),
               commit: 'change',

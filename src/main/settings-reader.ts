@@ -114,19 +114,26 @@ export class SettingsReader {
     return {
       labels: {
         title: s('Reader'),
+        description:
+          this.#language === 'zh-CN'
+            ? '阅读器设置会在修改时保存。'
+            : 'Reader preferences are saved as you change them.',
         input: s('Reader input'),
         visual: s('Text Select mode'),
-        visualHint: s(
-          'Allow v and Zotero text selections to enter Neo Select mode for selection actions.',
-        ),
+        visualHint:
+          this.#language === 'zh-CN'
+            ? '按 v 或用鼠标选中文字后，可用 Neo 的选区快捷键。'
+            : 'Press v or select text with the mouse to use Neo’s selection shortcuts.',
         comment: s('Annotation comment editing'),
-        commentHint: s(
-          "When enabled, i / Enter opens the selected annotation's comment editor. When disabled, i gives native inputs keyboard ownership; Enter does nothing.",
-        ),
+        commentHint:
+          this.#language === 'zh-CN'
+            ? '按 i 或 Enter 编辑所选批注的评论。'
+            : 'Press i or Enter to edit the selected annotation’s comment.',
         scrolling: s('Scrolling'),
-        scrollingHint: s(
-          'Reader j/k/zh/zl use the selected motion model. Only controls for the active model are shown.',
-        ),
+        scrollingHint:
+          this.#language === 'zh-CN'
+            ? '选择 j、k、zh 和 zl 在阅读器中的滚动方式。'
+            : 'Choose how j, k, zh, and zl scroll in the reader.',
         mode: s('Scrolling mode'),
         modes: { step: s('Step'), follow: s('Constant'), trapezoid: s('Accelerating') },
         numbers: {
@@ -137,17 +144,23 @@ export class SettingsReader {
           acceleration: s('Acceleration (px/s²)'),
           deceleration: s('Deceleration (px/s²)'),
         },
-        stop: s('Stop immediately on key release'),
-        stopHint: s('Otherwise accelerating scrolling decelerates after release.'),
+        stop:
+          this.#language === 'zh-CN' ? '松开按键时立即停止' : 'Stop as soon as the key is released',
+        stopHint:
+          this.#language === 'zh-CN'
+            ? '关闭后，加速滚动会在松开按键后减速。'
+            : 'Otherwise, accelerating scrolling slows down after release.',
         marks: s('Marks'),
-        persist: s('Persist marks'),
-        persistHint: s(
-          "Store marks in the parent item's Extra field so they survive restarts and sync with the item.",
-        ),
+        persist: this.#language === 'zh-CN' ? '保存位置标记' : 'Save marks',
+        persistHint:
+          this.#language === 'zh-CN'
+            ? '重启 Zotero 后仍可跳回保存的位置。'
+            : 'Return to marked positions after restarting Zotero.',
         annotations: s('Annotations'),
-        annotationsHint: s(
-          'The default color is used when underlining selected text or adding a note without an explicit color.',
-        ),
+        annotationsHint:
+          this.#language === 'zh-CN'
+            ? '为选中文字添加下划线或创建笔记时，未指定颜色则使用此颜色。'
+            : 'Used when underlining selected text or adding a note without choosing a color.',
         color: s('Default color'),
         colors: {
           yellow: s('Yellow'),

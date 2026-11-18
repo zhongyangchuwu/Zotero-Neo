@@ -118,9 +118,12 @@ describe('headless module settings', () => {
       [modulePreferenceKey('reader-hints'), false],
       [modulePreferenceKey('extensions'), false],
     ]);
-    expect(field(test.page, 'modules.request.reader-hints').note).toContain('Applied: On');
-    expect(field(test.page, 'modules.request.reader-hints').note).toContain('Requested: Off');
-    expect(field(test.page, 'modules.request.reader-hints').note).toContain('Pending restart');
+    expect(test.modules.inspect(test.owner).find(({ id }) => id === 'reader-hints')).toMatchObject({
+      applied: true,
+      requested: false,
+      pendingRestart: true,
+    });
+    expect(field(test.page, 'modules.request.reader-hints')).toMatchObject({ value: false });
     expect(field(test.page, 'modules.save').disabled).toBe(true);
     expect(test.preferences.values.get('modules.library.enabled')).toBe(false);
     expect(test.preferences.values.get('noteEditor.enabled')).toBe(false);
@@ -180,7 +183,9 @@ describe('headless module settings', () => {
     });
     expect(field(test.page, 'modules.request.extensions').note).toContain('Only window A failed');
     expect(field(pageB, 'modules.request.extensions').note).not.toContain('Only window A failed');
-    expect(field(pageB, 'modules.request.extensions').note).toContain('Pending host');
+    expect(test.modules.inspect(other).find(({ id }) => id === 'extensions')?.status).toBe(
+      'pending',
+    );
     test.preferences.failCleanupKey = modulePreferenceKey('reader-hints');
     test.page.dispose();
     pageB.dispose();
@@ -255,7 +260,9 @@ describe('translation dependency admission in module settings', () => {
     await vi.waitFor(() => expect(test.modules.requested().translation).toBe(true));
     expect(test.modules.applied.translation).toBe(false);
     expect(test.modules.requested().extensions).toBe(false);
-    expect(field(test.page, 'modules.request.translation').note).toContain('Pending restart');
+    expect(
+      test.modules.inspect(test.owner).find(({ id }) => id === 'translation')?.pendingRestart,
+    ).toBe(true);
     test.page.dispose();
   });
 
