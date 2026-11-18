@@ -377,7 +377,16 @@ describe('literature saved views', () => {
     expect(matches(item('Reading Focus: 证明'))).toBe(false);
     expect(
       projectLiteratureRows([full], [{ id, label: 'Focus', definition: renamed }])[0]?.cells,
-    ).toEqual([{ state: 'value', value: '证明过程 · 来源' }]);
+    ).toEqual([
+      {
+        state: 'value',
+        value: '证明过程 · 来源',
+        choices: [
+          { id: 'proof', label: '证明过程' },
+          { id: 'source', label: '来源' },
+        ],
+      },
+    ]);
     expect(
       compileLiteratureFilters(
         rules,
