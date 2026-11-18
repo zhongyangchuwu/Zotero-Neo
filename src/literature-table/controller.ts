@@ -1,5 +1,16 @@
 import { CleanupFailure, type Cleanup } from '../core/cleanup';
 import type { ItemAttributeDefinition } from '../item-attributes/types';
+import { compileLiteratureFilters, validLiteratureFilter } from './filters';
+import { cleanLiteratureViewName, readLiteratureViews, writeLiteratureViews } from './view-storage';
+import {
+  MAX_LITERATURE_FILTERS,
+  type LiteratureFilter,
+  type LiteratureFilterField,
+  type LiteratureFilterFieldID,
+  type LiteratureFilterKind,
+  type LiteratureViewMessage,
+  type SavedLiteratureView,
+} from './views';
 import { mountNativeReactView } from '../platform/native-ui';
 import type { NativeReactView } from '../ui/react/types';
 import {
@@ -25,24 +36,63 @@ export interface LiteratureItem {
   readonly title: string;
   readonly year: string;
   readonly extra: string;
+  readonly hasPDF?: boolean;
 }
 
 export interface LiteratureTableHost {
   scopes(): readonly LiteratureScope[];
   initialScopeID(): string | undefined;
-  readItems(id: string): Promise<readonly LiteratureItem[]>;
+  readItems(id: string, includePDF: boolean): Promise<readonly LiteratureItem[]>;
   definitions(): readonly ItemAttributeDefinition[];
   observe(change: () => void): Cleanup;
   locate(id: number): Promise<boolean>;
+  readViews(): string;
+  writeViews(raw: string): void;
+  observeViews(change: () => void): Cleanup;
 }
 
 const PAGE_SIZE = 50;
+
+function sameView(
+  left: SavedLiteratureView,
+  right: SavedLiteratureView | null | undefined,
+): boolean {
+  return (
+    !!right &&
+    left.name === right.name &&
+    left.scope.id === right.scope.id &&
+    left.sort === right.sort &&
+    left.direction === right.direction &&
+    left.columns.length === right.columns.length &&
+    left.columns.every((column, index) => column === right.columns[index]) &&
+    sameFilters(left.filters, right.filters)
+  );
+}
+
+function sameFilters(
+  left: readonly LiteratureFilter[],
+  right: readonly LiteratureFilter[],
+): boolean {
+  return (
+    left.length === right.length &&
+    left.every(({ field, kind, operator, value }, index) => {
+      const other = right[index];
+      return (
+        other?.field === field &&
+        other.kind === kind &&
+        other.operator === operator &&
+        other.value === value
+      );
+    })
+  );
+}
 
 class LiteratureTableController {
   readonly #collator: Intl.Collator;
   readonly #shown = new Set<string>();
   #view?: NativeReactView<LiteratureTableModel>;
   #unobserve?: Cleanup;
+  #unobserveViews?: Cleanup;
   #disposed = false;
   #refreshQueued = false;
   #readVersion = 0;
@@ -56,6 +106,20 @@ class LiteratureTableController {
   #choices: LiteratureTableModel['choices'] = [];
   #sortColumn: LiteratureColumnID = 'title';
   #sortDirection: LiteratureSortDirection = 'ascending';
+  #source: readonly LiteratureItem[] = [];
+  #pdfLoaded = false;
+  #filterFields: readonly LiteratureFilterField[] = [];
+  #fieldTypes = new Map<
+    LiteratureFilterFieldID,
+    { readonly kind: LiteratureFilterKind; readonly key?: string }
+  >();
+  #filters: readonly LiteratureFilter[] = [];
+  #predicate: ((item: LiteratureItem) => boolean) | null = null;
+  #layoutUnavailable = false;
+  #savedViews: readonly SavedLiteratureView[] = [];
+  #activeView: SavedLiteratureView | null = null;
+  #viewStorageValid = true;
+  #viewMessage: LiteratureViewMessage | null = null;
   #items: readonly LiteratureItem[] = [];
   #rows: readonly LiteratureRow[] = [];
   #page = 0;
@@ -89,6 +153,11 @@ class LiteratureTableController {
     });
     try {
       this.#unobserve = this.host.observe(() => this.#queueRefresh());
+      this.#unobserveViews = this.host.observeViews(() => {
+        this.#loadViews();
+        this.#publish();
+      });
+      this.#loadViews();
     } catch (error) {
       this.#dispose();
       throw error;
@@ -101,12 +170,15 @@ class LiteratureTableController {
     if (this.#disposed) return;
     this.#disposed = true;
     this.#refreshQueued = false;
+    this.#source = [];
     this.#items = [];
     this.#rows = [];
     const failure = new CleanupFailure();
     if (this.#unobserve) failure.run(this.#unobserve);
+    if (this.#unobserveViews) failure.run(this.#unobserveViews);
     failure.run(() => this.#view?.dispose());
     this.#unobserve = undefined;
+    this.#unobserveViews = undefined;
     this.#view = undefined;
     failure.rethrow();
   }
@@ -127,6 +199,19 @@ class LiteratureTableController {
       pageCount: this.#pageCount(),
       locating: this.#locating,
       locateFailed: this.#locateFailed,
+      filterFields: this.#filterFields,
+      filters: this.#filters,
+      filterUnavailable: this.#filters.length > 0 && !this.#predicate,
+      layoutUnavailable: this.#layoutUnavailable,
+      scopeTotal: this.#source.length,
+      viewNames: this.#savedViews.map(({ name }) => name),
+      activeViewName: this.#activeView?.name ?? null,
+      viewDirty: this.#viewDirty(),
+      viewCanSave:
+        this.#viewStorageValid &&
+        this.#status === 'ready' &&
+        (!this.#filters.length || !!this.#predicate),
+      viewMessage: this.#viewMessage,
     };
   }
 
@@ -154,6 +239,8 @@ class LiteratureTableController {
     this.#refreshQueued = false;
     const version = ++this.#readVersion;
     this.#status = 'loading';
+    this.#source = [];
+    this.#pdfLoaded = false;
     this.#items = [];
     this.#rows = [];
     try {
@@ -167,25 +254,31 @@ class LiteratureTableController {
       this.#scope = scope ?? this.#scope;
       this.#definitions = definitions;
       for (const id of this.#shown) {
-        if (!definitions.some((definition) => definition.id === id)) this.#shown.delete(id);
+        if (definitions.some((definition) => definition.id === id)) continue;
+        this.#shown.delete(id);
+        if (this.#activeView) this.#layoutUnavailable = true;
       }
       this.#updateColumns();
+      this.#updateFilterFields();
       if (!scope) {
         this.#status = 'unavailable';
         this.#publish();
         return;
       }
       this.#publish();
-      const items = await this.host.readItems(scope.id);
+      const includePDF = this.#needsPDF();
+      const items = await this.host.readItems(scope.id, includePDF);
       if (!this.#currentRead(version)) return;
-      this.#items = items;
-      this.#orderItems();
+      this.#source = items;
+      this.#pdfLoaded = includePDF;
       this.#status = 'ready';
+      this.#applyFilters();
     } catch (error) {
       if (!this.#currentRead(version)) return;
       this.#status = 'error';
       this.#items = [];
       this.#rows = [];
+      this.#source = [];
       this.reportError(error);
     }
     this.#publish();
@@ -211,9 +304,164 @@ class LiteratureTableController {
     this.#columns = columns;
     this.#headings = columns.map(({ id, label }) => ({ id, label }));
     if (!columns.some(({ id }) => id === this.#sortColumn)) {
+      if (this.#activeView) this.#layoutUnavailable = true;
       this.#sortColumn = 'title';
       this.#sortDirection = 'ascending';
       this.#page = 0;
+    }
+  }
+
+  #updateFilterFields(): void {
+    const text = LITERATURE_TABLE_TEXT[this.language];
+    const fields: LiteratureFilterField[] = [
+      { id: 'title', kind: 'text', label: text.title },
+      { id: 'year', kind: 'number', label: text.year },
+      { id: 'pdf', kind: 'pdf', label: this.language === 'zh-CN' ? 'PDF 附件' : 'PDF attachment' },
+    ];
+    this.#fieldTypes = new Map(fields.map(({ id, kind }) => [id, { kind }]));
+    for (const [index, definition] of this.#definitions.entries()) {
+      const id = `attribute:${definition.id}` as const;
+      this.#fieldTypes.set(id, { kind: definition.type, key: definition.key });
+      fields.push({ id, kind: definition.type, label: this.#choices[index]!.label });
+    }
+    this.#filterFields = fields;
+    this.#compileFilters();
+  }
+
+  #compileFilters(): void {
+    this.#predicate = this.#filters.length
+      ? compileLiteratureFilters(this.#filters, this.#fieldTypes)
+      : null;
+  }
+
+  #needsPDF(): boolean {
+    return !!this.#predicate && this.#filters.some(({ field }) => field === 'pdf');
+  }
+
+  #applyFilters(): void {
+    this.#items = !this.#filters.length
+      ? this.#source
+      : this.#predicate
+        ? this.#source.filter(this.#predicate)
+        : [];
+    this.#orderItems();
+  }
+
+  #filtersChanged(): void {
+    this.#page = 0;
+    this.#compileFilters();
+    if ((this.#needsPDF() && !this.#pdfLoaded) || this.#status === 'error') {
+      void this.#refresh();
+      return;
+    }
+    if (this.#status === 'ready') this.#applyFilters();
+    this.#publish();
+  }
+
+  #loadViews(): void {
+    try {
+      this.#savedViews = readLiteratureViews(this.host.readViews());
+      if (!this.#viewStorageValid) this.#viewMessage = null;
+      this.#viewStorageValid = true;
+    } catch (error) {
+      this.#savedViews = [];
+      this.#viewStorageValid = false;
+      this.#viewMessage = 'storage-error';
+      this.reportError(error);
+    }
+  }
+
+  #viewDirty(): boolean {
+    const view = this.#activeView;
+    return (
+      !!view &&
+      (view.scope.id !== this.#scope?.id ||
+        view.sort !== this.#sortColumn ||
+        view.direction !== this.#sortDirection ||
+        view.columns.length !== this.#shown.size ||
+        view.columns.some((id) => !this.#shown.has(id)) ||
+        !sameFilters(view.filters, this.#filters))
+    );
+  }
+
+  #snapshot(name: string): SavedLiteratureView | null {
+    if (!this.#scope) return null;
+    return {
+      name,
+      scope: this.#scope,
+      columns: [...this.#shown].sort(),
+      sort: this.#sortColumn,
+      direction: this.#sortDirection,
+      filters: this.#filters,
+    };
+  }
+
+  #openView(name: string | null): void {
+    this.#loadViews();
+    const saved = name === null ? null : this.#savedViews.find((view) => view.name === name);
+    if (saved === undefined) {
+      if (this.#viewStorageValid) this.#viewMessage = 'conflict';
+      this.#publish();
+      return;
+    }
+    if (this.#viewStorageValid) this.#viewMessage = null;
+    this.#activeView = saved;
+    this.#scope = saved?.scope;
+    this.#shown.clear();
+    for (const id of saved?.columns ?? []) this.#shown.add(id);
+    this.#sortColumn = saved?.sort ?? 'title';
+    this.#sortDirection = saved?.direction ?? 'ascending';
+    this.#filters = saved?.filters ?? [];
+    this.#layoutUnavailable = false;
+    this.#locateFailed = false;
+    this.#page = 0;
+    ++this.#scopeVersion;
+    void this.#refresh();
+  }
+
+  #changeSavedView(change: { name: string; replace: boolean } | null): void {
+    try {
+      const latest = readLiteratureViews(this.host.readViews());
+      this.#savedViews = latest;
+      const active = this.#activeView;
+      const replacing = change === null || change.replace;
+      const index = active ? latest.findIndex((view) => view.name === active.name) : -1;
+      if (replacing && (!active || !sameView(active, latest[index]))) {
+        this.#viewMessage = 'conflict';
+        return;
+      }
+      const next = [...latest];
+      if (change === null) {
+        next.splice(index, 1);
+        this.host.writeViews(writeLiteratureViews(next));
+        this.#activeView = null;
+        this.#viewMessage = 'deleted';
+      } else {
+        const name = cleanLiteratureViewName(change.name);
+        const saved = name && this.#snapshot(name);
+        if (!saved || this.#status !== 'ready' || (this.#filters.length && !this.#predicate))
+          return;
+        const identity = saved.name.toLowerCase().normalize('NFC');
+        const duplicate = latest.findIndex(
+          (view) => view.name.toLowerCase().normalize('NFC') === identity,
+        );
+        if (duplicate !== -1 && (!replacing || duplicate !== index)) {
+          this.#viewMessage = 'duplicate';
+          return;
+        }
+        if (replacing) next[index] = saved;
+        else next.push(saved);
+        this.host.writeViews(writeLiteratureViews(next));
+        this.#activeView = saved;
+        this.#layoutUnavailable = false;
+        this.#viewMessage = 'saved';
+      }
+      this.#savedViews = next;
+    } catch (error) {
+      this.#viewMessage = 'storage-error';
+      this.reportError(error);
+    } finally {
+      this.#publish();
     }
   }
 
@@ -249,6 +497,12 @@ class LiteratureTableController {
         if (!this.#definitions.some(({ id }) => id === command.id)) return;
         if (!this.#shown.delete(command.id)) this.#shown.add(command.id);
         const sortColumn = this.#sortColumn;
+        // Hiding the sorted column is an intentional layout change.
+        if (sortColumn === `attribute:${command.id}` && !this.#shown.has(command.id)) {
+          this.#sortColumn = 'title';
+          this.#sortDirection = 'ascending';
+          this.#page = 0;
+        }
         this.#updateColumns();
         if (this.#status === 'ready') {
           if (this.#sortColumn !== sortColumn) this.#orderItems();
@@ -285,6 +539,37 @@ class LiteratureTableController {
         ) {
           void this.#locate(command.id);
         }
+        break;
+      case 'filter-set': {
+        const { index, filter } = command;
+        const field = this.#fieldTypes.get(filter.field);
+        if (!field || !validLiteratureFilter(filter, field.kind)) return;
+        const next = [...this.#filters];
+        const normalized = { ...filter, value: filter.value.trim() };
+        if (index === undefined) {
+          if (next.length >= MAX_LITERATURE_FILTERS) return;
+          next.push(normalized);
+        } else {
+          if (!Number.isInteger(index) || !next[index]) return;
+          next[index] = normalized;
+        }
+        this.#filters = next;
+        this.#filtersChanged();
+        break;
+      }
+      case 'filter-remove':
+        if (!Number.isInteger(command.index) || !this.#filters[command.index]) return;
+        this.#filters = this.#filters.filter((_, index) => index !== command.index);
+        this.#filtersChanged();
+        break;
+      case 'view-open':
+        this.#openView(command.name);
+        break;
+      case 'view-save':
+        this.#changeSavedView(command);
+        break;
+      case 'view-delete':
+        this.#changeSavedView(null);
         break;
     }
   }

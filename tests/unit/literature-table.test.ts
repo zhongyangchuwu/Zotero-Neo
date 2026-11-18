@@ -6,6 +6,8 @@ import {
   type LiteratureItem,
   type LiteratureScope,
 } from '../../src/literature-table/controller';
+import { readLiteratureViews, writeLiteratureViews } from '../../src/literature-table/view-storage';
+import type { LiteratureFilter } from '../../src/literature-table/views';
 import type {
   LiteratureTableCommand,
   LiteratureTableModel,
@@ -34,11 +36,14 @@ function item(id: number, extra = ''): LiteratureItem {
   return { id, title: `Paper ${id}`, year: '2026', extra };
 }
 
-function open(initialID: string | undefined = collection.id) {
+function open(initialID: string | undefined = collection.id, storage = { raw: '' }) {
   const updates: LiteratureTableModel[] = [];
-  const reads: Array<{ id: string } & PromiseWithResolvers<readonly LiteratureItem[]>> = [];
+  const reads: Array<
+    { id: string; includePDF: boolean } & PromiseWithResolvers<readonly LiteratureItem[]>
+  > = [];
   let dispatch!: (command: LiteratureTableCommand) => void;
   let changed: (() => void) | undefined;
+  let viewsChanged: (() => void) | undefined;
   const disposeView = vi.fn();
   const reportError = vi.fn();
   const locate = vi.fn((_id: number) => Promise.resolve(true));
@@ -67,9 +72,9 @@ function open(initialID: string | undefined = collection.id) {
       scopes: () => catalog.scopes,
       initialScopeID: () => initialID,
       definitions: () => catalog.definitions,
-      readItems(id) {
+      readItems(id, includePDF) {
         const gate = Promise.withResolvers<readonly LiteratureItem[]>();
-        reads.push({ id, ...gate });
+        reads.push({ id, includePDF, ...gate });
         return gate.promise;
       },
       observe(change) {
@@ -77,6 +82,17 @@ function open(initialID: string | undefined = collection.id) {
         return unobserve;
       },
       locate,
+      readViews: () => storage.raw,
+      writeViews(raw) {
+        storage.raw = raw;
+        viewsChanged?.();
+      },
+      observeViews(change) {
+        viewsChanged = change;
+        return () => {
+          viewsChanged = undefined;
+        };
+      },
     },
     'en',
     reportError,
@@ -88,6 +104,7 @@ function open(initialID: string | undefined = collection.id) {
     },
     send: dispatch,
     notify: () => changed?.(),
+    notifyViews: () => viewsChanged?.(),
     reads,
     updates,
     catalog,
@@ -261,5 +278,107 @@ describe('literature table read-only workbench', () => {
     await Promise.resolve();
     expect(table.locate.mock.calls).toEqual([[1], [2]]);
     expect(table.model).toMatchObject({ locating: false, locateFailed: false, scope: collection });
+  });
+});
+
+describe('literature filters and saved views', () => {
+  const threshold: LiteratureFilter = {
+    field: 'attribute:score',
+    kind: 'number',
+    operator: 'at-least',
+    value: '9007199254740993',
+  };
+  const missingPDF: LiteratureFilter = {
+    field: 'pdf',
+    kind: 'pdf',
+    operator: 'missing',
+    value: '',
+  };
+
+  it('saves the scope, columns, sort and intersected filters, then restores them after reopening', async () => {
+    const storage = { raw: '' };
+    const table = open(collection.id, storage);
+    const papers = [
+      { ...item(1, 'Research Score: 9007199254740992'), hasPDF: false },
+      { ...item(2, 'Research Score: 9007199254740993'), hasPDF: false },
+      { ...item(3, 'Research Score: 9007199254740994'), hasPDF: true },
+    ];
+    table.reads[0]!.resolve(papers);
+    await Promise.resolve();
+    expect(table.reads[0]!.includePDF).toBe(false);
+    table.send({ type: 'column', id: 'score' });
+    table.send({ type: 'sort', id: 'attribute:score' });
+    table.send({ type: 'sort', id: 'attribute:score' });
+    table.send({ type: 'filter-set', filter: threshold });
+    expect(table.model.rows.map(({ id }) => id)).toEqual([3, 2]);
+    table.send({ type: 'filter-set', filter: missingPDF });
+    expect(table.reads[1]!.includePDF).toBe(true);
+    table.reads[1]!.resolve(papers);
+    await Promise.resolve();
+    expect(table.model.rows.map(({ id }) => id)).toEqual([2]);
+    expect(table.model.scopeTotal).toBe(3);
+    table.send({ type: 'view-save', replace: false, name: 'Missing PDF' });
+    table.send({ type: 'filter-remove', index: 1 });
+    expect(table.model.viewDirty).toBe(true);
+    table.dispose();
+
+    const reopened = open(library.id, storage);
+    expect(reopened.model.viewNames).toEqual(['Missing PDF']);
+    reopened.send({ type: 'view-open', name: 'Missing PDF' });
+    reopened.reads[1]!.resolve(papers);
+    await Promise.resolve();
+    reopened.reads[0]!.resolve([item(99)]);
+    await Promise.resolve();
+    expect(reopened.model.scope?.id).toBe(collection.id);
+    expect(reopened.model.columns.map(({ id }) => id)).toEqual([
+      'title',
+      'year',
+      'attribute:score',
+    ]);
+    expect(reopened.model.sortDirection).toBe('descending');
+    expect(reopened.model.rows.map(({ id }) => id)).toEqual([2]);
+    expect(reopened.model.viewDirty).toBe(false);
+
+    reopened.catalog.definitions.length = 0;
+    reopened.notify();
+    await Promise.resolve();
+    reopened.reads[2]!.resolve(papers);
+    await Promise.resolve();
+    expect(reopened.model.filterUnavailable).toBe(true);
+    expect(reopened.model.layoutUnavailable).toBe(true);
+    expect(reopened.model.rows).toEqual([]);
+    reopened.send({ type: 'filter-remove', index: 0 });
+    reopened.reads[3]!.resolve(papers);
+    await Promise.resolve();
+    expect(reopened.model.rows.map(({ id }) => id)).toEqual([1, 2]);
+  });
+
+  it('does not overwrite a different window’s update and can recover by reloading or saving a copy', async () => {
+    const storage = { raw: '' };
+    const table = open(collection.id, storage);
+    table.reads[0]!.resolve([item(1)]);
+    await Promise.resolve();
+    table.send({ type: 'view-save', replace: false, name: 'Reading' });
+    const original = readLiteratureViews(storage.raw)[0]!;
+    storage.raw = writeLiteratureViews([{ ...original, sort: 'year' }]);
+    table.notifyViews();
+    table.send({ type: 'view-save', replace: true, name: 'Renamed' });
+    expect(table.model.viewMessage).toBe('conflict');
+    table.send({ type: 'view-delete' });
+    expect(table.model.viewMessage).toBe('conflict');
+    expect(readLiteratureViews(storage.raw)[0]?.sort).toBe('year');
+    table.send({ type: 'view-save', replace: false, name: ' reading ' });
+    expect(table.model.viewMessage).toBe('duplicate');
+    table.send({ type: 'view-save', replace: false, name: 'Copy' });
+    expect(readLiteratureViews(storage.raw).map(({ name }) => name)).toEqual(['Reading', 'Copy']);
+    table.send({ type: 'view-open', name: 'Reading' });
+    table.reads[1]!.resolve([item(1)]);
+    await Promise.resolve();
+    expect(table.model.sortColumn).toBe('year');
+    table.send({ type: 'view-save', replace: true, name: 'Renamed' });
+    table.send({ type: 'view-delete' });
+    expect(table.model.activeViewName).toBeNull();
+    expect(readLiteratureViews(storage.raw).map(({ name }) => name)).toEqual(['Copy']);
+    expect(table.model.rows.map(({ id }) => id)).toEqual([1]);
   });
 });
