@@ -60,7 +60,7 @@ Neo 面板跟随 Zotero 计算出的浅色或深色配色。快捷键草稿操�
 | `workspace` | 工作区 | 标签页操作、Show in Library、Reader 分屏与方向焦点，可独立使用。 |
 | `extensions` | 扩展管理面板 | 可选增强：管理 Zotero 附加组件的 Plugin Manager，提供固定官方 Translate 安装及所选插件更新。 |
 | `tab-enhancements` | 标签页增强 | 可选增强：Main 左／右垂直栏或上方横向标签，以及一级活动标签分组；依赖 `workspace`，默认关闭。分组流程见[标签页增强指南](MAIN_GUIDE.md#用标签页增强管理阅读分组)。 |
-| `item-attributes` | 条目自定义属性 | 可选增强：普通文献的文本／数字属性、原生列、Info 单条目编辑和 Main 批量操作；默认关闭。 |
+| `item-attributes` | 条目自定义属性 | 可选增强：普通文献的文本、数字、单选和多选属性、原生列及单条／批量编辑；默认关闭。 |
 
 | 运行状态 | 含义 |
 | --- | --- |

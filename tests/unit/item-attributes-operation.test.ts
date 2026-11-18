@@ -175,6 +175,31 @@ describe('explicit atomic item attribute edits', () => {
     expect(h.records[0]!.getField('extra')).toBe('Research Score: -0.25\r\nOther: keep');
   });
 
+  it('rejects unknown choices and replaces multi-select values only on explicit targets', async () => {
+    const h = harness([
+      'Research Score: ["old"]\r\nOther: keep',
+      'Research Score: ["review"]',
+      'Research Score: ["old"]',
+    ]);
+    const choices: ItemAttributeDefinition = {
+      ...definition,
+      type: 'multi-select',
+      options: [
+        { id: 'read', label: 'Read' },
+        { id: 'review', label: 'Review' },
+      ],
+    };
+    const targets = h.items.slice(0, 2);
+    await expect(setItemAttribute(targets, choices, '["old","review"]', h.request)).rejects.toThrow(
+      /current option IDs/,
+    );
+    expect(h.disk.get(1)!.get('extra')).toBe('Research Score: ["old"]\r\nOther: keep');
+    expect(await setItemAttribute(targets, choices, '["review","read"]', h.request)).toBe(2);
+    expect(h.disk.get(1)!.get('extra')).toBe('Research Score: ["read","review"]\r\nOther: keep');
+    expect(h.disk.get(2)!.get('extra')).toBe('Research Score: ["read","review"]');
+    expect(h.disk.get(3)!.get('extra')).toBe('Research Score: ["old"]');
+  });
+
   it('clears only the selected field and never saves unchanged targets', async () => {
     const h = harness(['Research Score: 2\r\nOther: keep', 'Other: alone']);
     expect(await setItemAttribute(h.items, definition, null, h.request)).toBe(1);

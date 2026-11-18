@@ -12,15 +12,23 @@ import type {
   ItemAttributesCommand,
   ItemAttributesModel,
 } from '../../src/item-attributes/react-model';
+import type { ItemAttributeDefinition } from '../../src/item-attributes/types';
 import type { NativeItemAttribute } from '../../src/toolkit/main/item-attributes-types';
 import type * as MainToolkit from '../../src/toolkit/main';
 import type { NativeReactViewOptions } from '../../src/ui/react/types';
 
-const boundary = vi.hoisted(() => ({ create: vi.fn(), classify: vi.fn(), mount: vi.fn() }));
+const boundary = vi.hoisted(() => ({
+  create: vi.fn(),
+  classify: vi.fn(),
+  mount: vi.fn(),
+  transaction: vi.fn(),
+}));
 vi.mock('../../src/toolkit/main', async (importOriginal) => ({
   ...(await importOriginal<typeof MainToolkit>()),
   createItemAttributeNativeHost: boundary.create,
   assertCustomExtraKey: boundary.classify,
+  executeCollectionTransaction: boundary.transaction,
+  captureItemExtraRecovery: () => ({ saved: vi.fn(), restore: vi.fn() }),
 }));
 vi.mock('../../src/platform/native-ui', () => ({ mountNativeReactView: boundary.mount }));
 import { ItemAttributesController } from '../../src/item-attributes/controller';
@@ -37,6 +45,8 @@ beforeEach(() => {
   boundary.create.mockReset();
   boundary.classify.mockReset();
   boundary.mount.mockReset();
+  boundary.transaction.mockReset();
+  boundary.transaction.mockImplementation(async (run: () => Promise<number>) => run());
   views.length = 0;
   vi.stubGlobal('Components', { utils: { isDeadWrapper: () => false } });
   vi.stubGlobal('Zotero', { initializationPromise: Promise.resolve() });
@@ -67,12 +77,12 @@ afterEach(() => {
   vi.restoreAllMocks();
 });
 
-function setup() {
+function setup(fields?: readonly ItemAttributeDefinition[]) {
   const observers = new Set<() => void>();
   const unobserve = vi.fn();
   let raw = JSON.stringify({
-    version: 1,
-    fields: [{ id: 'score', key: 'Research Score', label: 'Score', type: 'number' }],
+    version: fields ? 2 : 1,
+    fields: fields ?? [{ id: 'score', key: 'Research Score', label: 'Score', type: 'number' }],
   });
   const set = vi.fn((_key: string, value: string) => {
     raw = value;
@@ -502,4 +512,205 @@ it('protects staged batch actions and dirty values on mode switches without reta
     [2, '2'],
   ]);
   for (const item of items) expect(item.setField).not.toHaveBeenCalled();
+});
+
+it('keeps option IDs on rename, detects option-only drafts, and leaves stored values on removal', async () => {
+  const randomString = vi
+    .fn()
+    .mockReturnValueOnce('a'.repeat(20))
+    .mockReturnValueOnce('b'.repeat(20))
+    .mockReturnValueOnce('c'.repeat(20));
+  vi.stubGlobal('Zotero', { ...Zotero, Utilities: { randomString } });
+  const h = setup();
+  await h.start();
+  h.port.open(h.host);
+  const view = views[0]!;
+  const { dispatch } = view.options;
+  const model = () => view.update.mock.lastCall![0];
+
+  dispatch({ type: 'new-definition' });
+  dispatch({ type: 'draft-label', value: 'Stage' });
+  dispatch({ type: 'draft-type', value: 'single-select' });
+  dispatch({ type: 'draft-add-option' });
+  const planned = model().draft!.options[0]!.id;
+  dispatch({ type: 'draft-rename-option', id: planned, value: 'Planned' });
+  dispatch({ type: 'draft-add-option' });
+  const done = model().draft!.options[1]!.id;
+  dispatch({ type: 'draft-rename-option', id: done, value: 'Done' });
+  dispatch({ type: 'save-definition' });
+  const stage = model().definitions.find(({ label }) => label === 'Stage')!;
+  expect(stage.type).toBe('single-select');
+  expect(stage.options).toEqual([
+    { id: planned, label: 'Planned' },
+    { id: done, label: 'Done' },
+  ]);
+
+  const extra = `${stage.key}: ${JSON.stringify([planned])}`;
+  const item = {
+    isRegularItem: () => true,
+    getField: () => extra,
+    setField: vi.fn(),
+  } as unknown as Zotero.Item;
+  const readNative = () =>
+    h
+      .definitions()
+      .find(({ id }) => id === stage.id)!
+      .read(item);
+  expect(readNative()).toBe('Planned');
+
+  dispatch({ type: 'edit-definition', id: stage.id });
+  dispatch({ type: 'draft-rename-option', id: planned, value: 'To read' });
+  dispatch({ type: 'close' });
+  expect(model().discard).toBe('close');
+  dispatch({ type: 'keep-editing' });
+  dispatch({ type: 'draft-type', value: 'multi-select' });
+  expect(model().draft?.type).toBe('single-select');
+  dispatch({ type: 'draft-type', value: 'text' });
+  expect(model().draft?.type).toBe('single-select');
+  dispatch({ type: 'save-definition' });
+  expect(model().definitions.find(({ id }) => id === stage.id)?.options?.[0]).toEqual({
+    id: planned,
+    label: 'To read',
+  });
+  expect(readNative()).toBe('To read');
+
+  dispatch({ type: 'edit-definition', id: stage.id });
+  dispatch({ type: 'draft-remove-option', id: planned });
+  dispatch({ type: 'save-definition' });
+  expect(model().definitions.find(({ id }) => id === stage.id)?.options).toEqual([
+    { id: done, label: 'Done' },
+  ]);
+  expect(readNative()).toBe(`Contains unavailable options: [${planned}]`);
+  expect(item.setField).not.toHaveBeenCalled();
+  expect(randomString).toHaveBeenCalledTimes(3);
+
+  dispatch({ type: 'edit-definition', id: 'score' });
+  dispatch({ type: 'draft-type', value: 'single-select' });
+  expect(model().draft?.type).toBe('number');
+  dispatch({ type: 'draft-type', value: 'text' });
+  dispatch({ type: 'save-definition' });
+  expect(model().definitions.find(({ id }) => id === 'score')?.type).toBe('text');
+});
+
+const STAGE_OPTIONS = [
+  { id: 'queued', label: 'Queued' },
+  { id: 'read', label: 'Read' },
+];
+
+it('does not overwrite a newer option list with a stale definition draft', async () => {
+  const stage: ItemAttributeDefinition = {
+    id: 'stage',
+    key: 'Neo Stage',
+    label: 'Stage',
+    type: 'multi-select',
+    options: STAGE_OPTIONS,
+  };
+  const h = setup([stage]);
+  await h.start();
+  h.port.open(h.host);
+  const view = views[0]!;
+  const { dispatch } = view.options;
+  dispatch({ type: 'edit-definition', id: stage.id });
+  dispatch({ type: 'draft-rename-option', id: 'queued', value: 'Local rename' });
+
+  const remote = { ...stage, options: [{ id: 'read', label: 'Already read' }] };
+  h.set('itemAttributes.fields.v1', JSON.stringify({ version: 2, fields: [remote] }));
+  h.set.mockClear();
+  dispatch({ type: 'save-definition' });
+
+  const model = view.update.mock.lastCall![0];
+  expect(model.definitions).toEqual([remote]);
+  expect(model.draft?.options[0]?.label).toBe('Local rename');
+  expect(model.status).toMatch(/revision changed/);
+  expect(h.set).not.toHaveBeenCalled();
+});
+
+function writableItems(initial: readonly string[]): Zotero.Item[] {
+  const items = initial.map((value, index) => {
+    let extra = value;
+    return {
+      id: index + 1,
+      libraryID: 1,
+      isRegularItem: () => true,
+      isEditable: () => true,
+      hasChanged: () => false,
+      getField: (field: string) => (field === 'extra' ? extra : `Item ${index + 1}`),
+      setField: vi.fn((_field: string, next: string) => {
+        extra = next;
+        return true;
+      }),
+      save: vi.fn(async () => true),
+    } as unknown as Zotero.Item;
+  });
+  const library = { editable: true, libraryType: 'user' };
+  vi.stubGlobal('Zotero', {
+    ...Zotero,
+    Items: { get: (id: number) => items[id - 1] },
+    Libraries: { get: () => library },
+  });
+  return items;
+}
+
+it('can replace an unavailable single selection and writes only after saving', async () => {
+  const [item] = writableItems(['Neo Stage: ["removed"]']);
+  const h = setup([
+    {
+      id: 'stage',
+      key: 'Neo Stage',
+      label: 'Stage',
+      type: 'single-select',
+      options: STAGE_OPTIONS,
+    },
+  ]);
+  await h.start();
+  h.port.open({ ...h.host, mode: 'values', items: [item!] });
+  const view = views[0]!;
+  const { dispatch } = view.options;
+  const model = () => view.update.mock.lastCall![0];
+
+  dispatch({ type: 'set-value' });
+  expect(model().error).toBe(true);
+  dispatch({ type: 'select-choice', id: 'queued' });
+  expect(item!.setField).not.toHaveBeenCalled();
+  dispatch({ type: 'set-value' });
+  await vi.waitFor(() => expect(model().busy).toBe(false));
+  expect(model().error).toBe(false);
+  expect(item!.getField('extra')).toBe('Neo Stage: ["queued"]');
+});
+
+it('retains unavailable multi selections while toggling and confirms only an explicit batch repair', async () => {
+  const initial = 'Neo Stage: ["old","read"]';
+  const items = writableItems([initial, initial, initial]);
+  const h = setup([
+    {
+      id: 'stage',
+      key: 'Neo Stage',
+      label: 'Stage',
+      type: 'multi-select',
+      options: STAGE_OPTIONS,
+    },
+  ]);
+  await h.start();
+  h.port.open({ ...h.host, mode: 'values', items: items.slice(0, 2) });
+  const view = views[0]!;
+  const { dispatch } = view.options;
+  const model = () => view.update.mock.lastCall![0];
+
+  dispatch({ type: 'toggle-choice', id: 'queued' });
+  expect(model().input).toBe('["old","queued","read"]');
+  dispatch({ type: 'set-value' });
+  expect(model().error).toBe(true);
+  expect(model().review).toBeNull();
+
+  dispatch({ type: 'repair-choices' });
+  dispatch({ type: 'set-value' });
+  expect(model().review).toEqual({ value: '["queued","read"]' });
+  expect(boundary.transaction).not.toHaveBeenCalled();
+  expect(items.map((item) => item.getField('extra'))).toEqual([initial, initial, initial]);
+
+  dispatch({ type: 'confirm-values' });
+  await vi.waitFor(() => expect(model().busy).toBe(false));
+  const replacement = 'Neo Stage: ["queued","read"]';
+  expect(items.map((item) => item.getField('extra'))).toEqual([replacement, replacement, initial]);
+  expect(boundary.transaction).toHaveBeenCalledOnce();
 });

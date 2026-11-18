@@ -1,7 +1,9 @@
 import { CleanupFailure, type Cleanup } from '../core/cleanup';
 import type { MainWindow } from '../core/contracts';
 import type { PreferenceStore } from '../core/preference-store';
+import { neoCommandLanguage } from '../core/preferences';
 import { compositionOwnsKey } from '../input/composition';
+import type { KeyGuideLanguage } from '../input/key-guide-config';
 import { keyString } from '../input/keys';
 import { setItemAttribute } from '../operations/item-attributes';
 import { isDeadObject } from '../platform/cross-compartment';
@@ -15,14 +17,24 @@ import {
 import type { NativeReactView } from '../ui/react/types';
 import { PREPARATION_BACKDROP_STYLE, PREPARATION_PANEL_STYLE } from '../ui/react/shells/reader';
 import type { ItemAttributesPort, ItemAttributesPresentation } from './contracts';
-import { normalizeAttributeKey, normalizeAttributeValue, readAttributeValue } from './extra';
+import {
+  displayAttributeValue,
+  encodeAttributeChoices,
+  normalizeAttributeKey,
+  normalizeAttributeValue,
+  readAttributeChoices,
+  readAttributeValue,
+} from './extra';
 import type { ItemAttributesCommand, ItemAttributesModel } from './react-model';
 import { ItemAttributeStore } from './store';
-import type {
-  ItemAttributeDefinition,
-  ItemAttributeSchema,
-  ItemAttributeState,
-  ItemAttributeType,
+import {
+  isChoiceAttribute,
+  MAX_ITEM_ATTRIBUTE_OPTIONS,
+  type ItemAttributeDefinition,
+  type ItemAttributeOption,
+  type ItemAttributeSchema,
+  type ItemAttributeState,
+  type ItemAttributeType,
 } from './types';
 
 type AttributeDestination = NonNullable<ItemAttributesModel['discard']>;
@@ -40,6 +52,33 @@ function newAttributeIdentity(
     }
   }
   throw new Error('Could not generate a unique attribute identity');
+}
+
+function newOptionID(
+  options: readonly ItemAttributeOption[],
+  original: readonly ItemAttributeOption[] | undefined,
+): string {
+  for (let attempt = 0; attempt < 10; attempt++) {
+    const id = Zotero.Utilities.randomString(20).toLowerCase();
+    if (
+      !options.some((option) => option.id === id) &&
+      !original?.some((option) => option.id === id)
+    )
+      return id;
+  }
+  throw new Error('Could not generate a unique attribute option ID');
+}
+
+function sameOptions(
+  left: readonly ItemAttributeOption[],
+  right: readonly ItemAttributeOption[],
+): boolean {
+  return (
+    left.length === right.length &&
+    left.every(
+      (option, index) => option.id === right[index].id && option.label === right[index].label,
+    )
+  );
 }
 
 interface WindowLease {
@@ -78,6 +117,7 @@ interface AttributeView {
     key: string;
     label: string;
     type: ItemAttributeType;
+    options: readonly ItemAttributeOption[];
     revision: string;
     original: ItemAttributeDefinition | null;
   } | null;
@@ -92,6 +132,7 @@ interface AttributeView {
 export class ItemAttributesController implements ItemAttributesPort {
   readonly #store: ItemAttributeStore;
   readonly #debug: (message: string) => void;
+  readonly #language: () => KeyGuideLanguage;
   readonly #windows = new Map<MainWindow, WindowLease>();
   readonly #pendingDetaches = new Set<Cleanup>();
   #native: ItemAttributeNativeHost | null = null;
@@ -104,6 +145,7 @@ export class ItemAttributesController implements ItemAttributesPort {
 
   constructor(preferences: PreferenceStore, debug: (message: string) => void) {
     this.#store = new ItemAttributeStore(preferences, assertCustomExtraKey);
+    this.#language = () => neoCommandLanguage(preferences, Zotero.locale ?? '');
     this.#debug = debug;
   }
 
@@ -113,9 +155,11 @@ export class ItemAttributesController implements ItemAttributesPort {
     void Promise.resolve(Zotero.initializationPromise)
       .then(() => {
         if (this.#disposed) return;
-        this.#native = createItemAttributeNativeHost(pluginID, (error, window) => {
-          this.#report(error, window);
-        });
+        this.#native = createItemAttributeNativeHost(
+          pluginID,
+          (error, window) => this.#report(error, window),
+          this.#language,
+        );
         this.#unobserve = this.#store.observe(() => this.#refreshSchema());
         this.#refreshSchema();
         for (const [window, lease] of this.#windows) {
@@ -278,7 +322,16 @@ export class ItemAttributesController implements ItemAttributesPort {
           read: (item) => {
             if (!current() || !item.isRegularItem() || item.deleted) return '';
             const state = readAttributeValue(String(item.getField('extra') ?? ''), definition.key);
-            return state.ambiguous ? '' : (state.value ?? '');
+            if (state.ambiguous || state.value === null) return '';
+            if (!isChoiceAttribute(definition.type)) return state.value;
+            const display = displayAttributeValue(definition, state.value);
+            if (display.valid) return display.text;
+            const chinese = this.#language() === 'zh-CN';
+            return readAttributeChoices(definition, state.value) === null
+              ? chinese
+                ? '无法读取的选项值'
+                : 'Unreadable selection'
+              : (chinese ? '含不可用选项：' : 'Contains unavailable options: ') + display.text;
           },
           canEdit: (item) => current() && this.#writable(item),
           write: async (item, input, expectedExtra, isCurrent) => {
@@ -496,7 +549,13 @@ export class ItemAttributesController implements ItemAttributesPort {
         view.baselineRevision === this.#schema.revision &&
         this.#schema.definitions.some(({ id }) => id === view.selectedID),
       review: view.review,
-      draft: draft && { id: draft.id, key: draft.key, label: draft.label, type: draft.type },
+      draft: draft && {
+        id: draft.id,
+        key: draft.key,
+        label: draft.label,
+        type: draft.type,
+        options: draft.options,
+      },
       removing: view.removing?.definition ?? null,
       discard: view.discard?.destination ?? null,
     };
@@ -516,7 +575,9 @@ export class ItemAttributesController implements ItemAttributesPort {
       draft !== null &&
       (draft.label !== (draft.original?.label ?? '') ||
         draft.type !== (draft.original?.type ?? 'text') ||
-        draft.key !== (draft.original?.key ?? ''))
+        draft.key !== (draft.original?.key ?? '') ||
+        (isChoiceAttribute(draft.type) &&
+          !sameOptions(draft.options, draft.original?.options ?? [])))
     );
   }
 
@@ -567,6 +628,7 @@ export class ItemAttributesController implements ItemAttributesPort {
     if (command.type === 'keep-editing' || command.type === 'confirm-discard') return;
     const editingDefinition = view.draft !== null;
     const reviewingValues = view.review !== null;
+    let focusPart: string | undefined;
     try {
       view.error = false;
       view.status = '';
@@ -580,10 +642,53 @@ export class ItemAttributesController implements ItemAttributesPort {
         case 'refresh-values':
           this.#captureValues(view);
           break;
-        case 'input':
+        case 'input': {
+          const definition = schema?.definitions.find(({ id }) => id === view.selectedID);
+          if (view.mode !== 'values' || !definition || isChoiceAttribute(definition.type)) break;
           view.input = command.value;
           view.review = null;
           break;
+        }
+        case 'select-choice':
+        case 'toggle-choice':
+        case 'repair-choices': {
+          if (view.mode !== 'values' || !this.#model(view).canWrite) break;
+          const definition = schema!.definitions.find(({ id }) => id === view.selectedID)!;
+          if (!isChoiceAttribute(definition.type)) break;
+          const options = definition.options ?? [];
+          if (command.type === 'repair-choices') {
+            const ids = readAttributeChoices(definition, view.input || null) ?? [];
+            view.input =
+              encodeAttributeChoices(
+                ids.filter((id) => options.some((option) => option.id === id)),
+              ) ?? '';
+            focusPart = options.length ? 'value-input' : 'clear-value';
+          } else {
+            if (!options.some((option) => option.id === command.id)) break;
+            if (command.type === 'select-choice' && definition.type === 'single-select') {
+              view.input = encodeAttributeChoices([command.id])!;
+            } else if (command.type === 'toggle-choice' && definition.type === 'multi-select') {
+              const ids = readAttributeChoices(definition, view.input || null);
+              if (!ids) break;
+              if (ids.length >= MAX_ITEM_ATTRIBUTE_OPTIONS && !ids.includes(command.id))
+                throw new Error(
+                  this.#text(
+                    view,
+                    '请先移除不可用的选项，再添加更多选项。',
+                    'Remove unavailable choices before adding more selections.',
+                  ),
+                );
+              view.input =
+                encodeAttributeChoices(
+                  ids.includes(command.id)
+                    ? ids.filter((id) => id !== command.id)
+                    : [...ids, command.id],
+                ) ?? '';
+            } else break;
+          }
+          view.review = null;
+          break;
+        }
         case 'new-definition':
           if (schema) {
             view.draft = {
@@ -591,6 +696,7 @@ export class ItemAttributesController implements ItemAttributesPort {
               key: '',
               label: '',
               type: 'text',
+              options: [],
               revision: schema.revision,
               original: null,
             };
@@ -599,8 +705,14 @@ export class ItemAttributesController implements ItemAttributesPort {
           break;
         case 'edit-definition': {
           const definition = schema?.definitions.find(({ id }) => id === command.id);
-          if (definition && schema)
-            view.draft = { ...definition, revision: schema.revision, original: definition };
+          if (definition && schema) {
+            view.draft = {
+              ...definition,
+              options: definition.options ?? [],
+              revision: schema.revision,
+              original: definition,
+            };
+          }
           view.removing = null;
           break;
         }
@@ -610,9 +722,57 @@ export class ItemAttributesController implements ItemAttributesPort {
         case 'draft-key':
           if (view.draft && !view.draft.id) view.draft.key = command.value;
           break;
-        case 'draft-type':
-          if (view.draft) view.draft.type = command.value;
+        case 'draft-type': {
+          const draft = view.draft;
+          if (!draft) break;
+          const previous = draft.original?.type;
+          if (
+            previous &&
+            previous !== command.value &&
+            (isChoiceAttribute(previous) || isChoiceAttribute(command.value))
+          )
+            throw new Error(
+              this.#text(
+                view,
+                '现有单选或多选属性不能更改类型，也不能将现有属性转换为单选或多选。',
+                'Existing choice attributes cannot change type, and other attributes cannot be converted to a choice type.',
+              ),
+            );
+          draft.type = command.value;
           break;
+        }
+        case 'draft-add-option': {
+          const draft = view.draft;
+          if (
+            !draft ||
+            !isChoiceAttribute(draft.type) ||
+            draft.options.length >= MAX_ITEM_ATTRIBUTE_OPTIONS
+          )
+            break;
+          const id = newOptionID(draft.options, draft.original?.options);
+          draft.options = [...draft.options, { id, label: '' }];
+          focusPart = `definition-option-${id}`;
+          break;
+        }
+        case 'draft-rename-option': {
+          const draft = view.draft;
+          if (draft && isChoiceAttribute(draft.type)) {
+            draft.options = draft.options.map((option) =>
+              option.id === command.id ? { ...option, label: command.value } : option,
+            );
+          }
+          break;
+        }
+        case 'draft-remove-option': {
+          const draft = view.draft;
+          if (!draft || !isChoiceAttribute(draft.type)) break;
+          const index = draft.options.findIndex(({ id }) => id === command.id);
+          if (index < 0) break;
+          draft.options = draft.options.filter(({ id }) => id !== command.id);
+          const next = draft.options[index] ?? draft.options[index - 1];
+          focusPart = next ? `definition-option-${next.id}` : 'definition-add-option';
+          break;
+        }
         case 'cancel-definition':
           view.draft = null;
           break;
@@ -625,6 +785,12 @@ export class ItemAttributesController implements ItemAttributesPort {
             key: identity.key,
             label: draft.label,
             type: draft.type,
+            ...(isChoiceAttribute(draft.type) && {
+              options: draft.options.map(({ id, label }) => ({
+                id,
+                label: label.trim().normalize('NFC'),
+              })),
+            }),
           };
           this.#store.write(
             draft.original
@@ -636,8 +802,12 @@ export class ItemAttributesController implements ItemAttributesPort {
           this.#refreshSchema();
           view.status = this.#text(
             view,
-            '属性已保存。通过 Zotero 列表的列菜单显示该列，在条目的「信息」面板填写值。',
-            'Attribute saved. Show its column from the Zotero item-list column menu; enter values in the item’s Info pane.',
+            isChoiceAttribute(definition.type)
+              ? '属性已保存。通过 Zotero 列表的列菜单显示该列；右键单击条目，选择「编辑自定义属性…」来设置值。'
+              : '属性已保存。通过 Zotero 列表的列菜单显示该列，在条目的「信息」面板填写值。',
+            isChoiceAttribute(definition.type)
+              ? 'Attribute saved. Show its column from the Zotero item-list column menu; right-click an item and choose Edit Custom Attributes… to set its value.'
+              : 'Attribute saved. Show its column from the Zotero item-list column menu; enter values in the item’s Info pane.',
           );
           break;
         }
@@ -670,6 +840,7 @@ export class ItemAttributesController implements ItemAttributesPort {
           break;
         case 'set-value':
         case 'clear-value': {
+          if (view.mode !== 'values') break;
           if (!this.#model(view).canWrite)
             throw new Error(
               this.#text(
@@ -679,6 +850,14 @@ export class ItemAttributesController implements ItemAttributesPort {
               ),
             );
           const definition = schema!.definitions.find(({ id }) => id === view.selectedID)!;
+          if (command.type === 'set-value' && isChoiceAttribute(definition.type) && !view.input)
+            throw new Error(
+              this.#text(
+                view,
+                '请选择替换选项，或使用「清除值」。',
+                'Choose a replacement or use Clear value.',
+              ),
+            );
           const value = normalizeAttributeValue(
             definition,
             command.type === 'clear-value' ? null : view.input,
@@ -688,7 +867,7 @@ export class ItemAttributesController implements ItemAttributesPort {
           break;
         }
         case 'confirm-values': {
-          if (!view.review || !this.#model(view).canWrite) break;
+          if (view.mode !== 'values' || !view.review || !this.#model(view).canWrite) break;
           const definition = schema!.definitions.find(({ id }) => id === view.selectedID)!;
           this.#writeValues(view, definition, view.review.value);
           break;
@@ -703,6 +882,8 @@ export class ItemAttributesController implements ItemAttributesPort {
       view.react?.getElement(view.draft ? 'definition-label' : 'new-definition')?.focus();
     } else if (reviewingValues !== (view.review !== null)) {
       view.react?.getElement(view.review ? 'value-review' : 'value-input')?.focus();
+    } else if (focusPart) {
+      view.react?.getElement(focusPart)?.focus();
     }
   }
 

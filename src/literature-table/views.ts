@@ -1,11 +1,17 @@
+import type { ItemAttributeOption, ItemAttributeType } from '../item-attributes/types';
 import type { LiteratureScope } from './controller';
 import type { LiteratureColumnID, LiteratureSortDirection } from './model';
 
 export type LiteratureFilterFieldID = LiteratureColumnID | 'pdf';
-export type LiteratureFilterKind = 'text' | 'number' | 'pdf';
+export type LiteratureFilterKind = ItemAttributeType | 'pdf' | 'tags' | 'date';
 export type LiteratureFilterOperator =
   | 'contains'
   | 'equals'
+  | 'has-tag'
+  | 'has-choice'
+  | 'on'
+  | 'on-or-after'
+  | 'on-or-before'
   | 'at-least'
   | 'at-most'
   | 'has'
@@ -15,6 +21,7 @@ export interface LiteratureFilterField {
   readonly id: LiteratureFilterFieldID;
   readonly kind: LiteratureFilterKind;
   readonly label: string;
+  readonly options?: readonly ItemAttributeOption[];
 }
 
 export interface LiteratureFilter {

@@ -2,16 +2,24 @@ import { React } from '../runtime';
 import { createReactView } from '../view';
 import { Button, Status } from '../components';
 import type { ReactView } from '../types';
+import { displayAttributeValue, readAttributeChoices } from '../../../item-attributes/extra';
 import type {
   ItemAttributesCommand,
   ItemAttributesModel,
 } from '../../../item-attributes/react-model';
+import {
+  isChoiceAttribute,
+  MAX_ITEM_ATTRIBUTE_OPTIONS,
+  type ItemAttributeType,
+} from '../../../item-attributes/types';
 
 export const ITEM_ATTRIBUTES_CSS = `
 .neo-item-attributes .neo-attribute-toolbar { display:flex;gap:8px;align-items:center;flex-wrap:wrap;margin:12px 0; }
 .neo-item-attributes label { display:block;margin:10px 0; }
 .neo-item-attributes input,.neo-item-attributes select { color:inherit;background:var(--zotero-neo-surface);border:1px solid var(--zotero-neo-border);padding:6px;font:inherit;max-width:100%;box-sizing:border-box; }
 .neo-item-attributes input[type=text] { width:100%; }
+.neo-item-attributes .neo-attribute-option { display:flex;align-items:end;gap:8px;margin:10px 0; }
+.neo-item-attributes .neo-attribute-option label { flex:1;min-width:0;margin:0; }
 .neo-item-attributes fieldset { border:1px solid var(--zotero-neo-border);padding:12px;margin:12px 0;min-width:0; }
 .neo-item-attributes table { border-collapse:collapse;width:100%;table-layout:fixed; }
 .neo-item-attributes th,.neo-item-attributes td { padding:8px;border-bottom:1px solid var(--zotero-neo-border);text-align:start;vertical-align:top;overflow-wrap:anywhere;white-space:pre-wrap; }
@@ -31,6 +39,32 @@ export function mountItemAttributesView(
     (model) => {
       const text = (cn: string, en: string) => (model.chinese ? cn : en);
       const selected = model.definitions.find((definition) => definition.id === model.selectedID);
+      const choice = selected && isChoiceAttribute(selected.type) ? selected : null;
+      const choices = choice ? readAttributeChoices(choice, model.input || null) : null;
+      const options = choice?.options ?? [];
+      const hasUnknown = choices?.some((id) => !options.some((option) => option.id === id));
+      const canSave = model.canWrite && (!choice || (!!choices?.length && !hasUnknown));
+      const draft = model.draft;
+      const attributeTypes: Record<ItemAttributeType, string> = {
+        text: text('文本', 'Text'),
+        number: text('数字', 'Number'),
+        'single-select': text('单选', 'Single select'),
+        'multi-select': text('多选', 'Multi select'),
+      };
+      const renderValue = (value: string | null) => {
+        if (value === null) return text('未设置', 'Not set');
+        if (!choice) return value;
+        const display = displayAttributeValue(choice, value);
+        if (display.valid) return display.text || text('未设置', 'Not set');
+        if (readAttributeChoices(choice, value) === null)
+          return <strong>{text('无法读取的选项值', 'Unreadable selection')}</strong>;
+        return (
+          <>
+            <strong>{text('含不可用选项：', 'Contains unavailable options: ')}</strong>
+            {display.text}
+          </>
+        );
+      };
       const labelCounts = new Map<string, number>();
       for (const { label } of model.definitions) {
         labelCounts.set(label, (labelCounts.get(label) ?? 0) + 1);
@@ -110,11 +144,7 @@ export function mountItemAttributesView(
                                 </>
                               )}
                             </td>
-                            <td>
-                              {definition.type === 'number'
-                                ? text('数字', 'Number')
-                                : text('文本', 'Text')}
-                            </td>
+                            <td>{attributeTypes[definition.type]}</td>
                             <td>
                               <Button
                                 disabled={!model.available || model.busy}
@@ -140,7 +170,7 @@ export function mountItemAttributesView(
                   )}
                 </>
               )}
-              {model.draft && (
+              {draft && (
                 <form
                   onSubmit={(event) => {
                     event.preventDefault();
@@ -149,7 +179,7 @@ export function mountItemAttributesView(
                 >
                   <fieldset disabled={!model.available || model.busy}>
                     <legend>
-                      {model.draft.id
+                      {draft.id
                         ? text('编辑属性', 'Edit attribute')
                         : text('新建属性', 'New attribute')}
                     </legend>
@@ -159,7 +189,7 @@ export function mountItemAttributesView(
                         data-neo-ui-part="definition-label"
                         required
                         type="text"
-                        value={model.draft.label}
+                        value={draft.label}
                         onChange={(event) =>
                           dispatch({ type: 'draft-label', value: event.currentTarget.value })
                         }
@@ -169,19 +199,31 @@ export function mountItemAttributesView(
                       {text('类型', 'Type')}
                       <select
                         data-neo-ui-part="definition-type"
-                        value={model.draft.type}
+                        value={draft.type}
+                        disabled={!!draft.id && isChoiceAttribute(draft.type)}
                         onChange={(event) =>
                           dispatch({
                             type: 'draft-type',
-                            value: event.currentTarget.value === 'number' ? 'number' : 'text',
+                            value: event.currentTarget.value as ItemAttributeType,
                           })
                         }
                       >
-                        <option value="text">{text('文本', 'Text')}</option>
-                        <option value="number">{text('数字', 'Number')}</option>
+                        {Object.entries(attributeTypes).map(([type, label]) => (
+                          <option
+                            key={type}
+                            value={type}
+                            disabled={
+                              !!draft.id &&
+                              type !== draft.type &&
+                              isChoiceAttribute(type as ItemAttributeType)
+                            }
+                          >
+                            {label}
+                          </option>
+                        ))}
                       </select>
                     </label>
-                    {model.draft.id ? (
+                    {draft.id ? (
                       <>
                         <label>
                           {text('Extra 存储键（只读）', 'Extra storage key (read only)')}
@@ -189,14 +231,19 @@ export function mountItemAttributesView(
                             data-neo-ui-part="storage-key"
                             type="text"
                             readOnly
-                            value={model.draft.key}
+                            value={draft.key}
                           />
                         </label>
                         <p className="neo-muted">
-                          {text(
-                            '改名或更改类型不会改写已有值。',
-                            'Renaming or changing the type does not rewrite existing values.',
-                          )}
+                          {isChoiceAttribute(draft.type)
+                            ? text(
+                                '现有单选和多选属性不能更改类型。改名不会改写已有值。',
+                                'Existing choice attributes cannot change type. Renaming does not rewrite existing values.',
+                              )
+                            : text(
+                                '改名或在文本与数字之间更改类型不会改写已有值。',
+                                'Renaming or switching between text and number does not rewrite existing values.',
+                              )}
                         </p>
                       </>
                     ) : (
@@ -209,7 +256,7 @@ export function mountItemAttributesView(
                           <input
                             data-neo-ui-part="storage-key"
                             type="text"
-                            value={model.draft.key}
+                            value={draft.key}
                             onChange={(event) =>
                               dispatch({ type: 'draft-key', value: event.currentTarget.value })
                             }
@@ -222,6 +269,55 @@ export function mountItemAttributesView(
                           )}
                         </p>
                       </details>
+                    )}
+                    {isChoiceAttribute(draft.type) && (
+                      <fieldset>
+                        <legend>{text('选项', 'Options')}</legend>
+                        <p className="neo-muted">
+                          {text(
+                            '重命名选项不会改写已有值。删除选项也会保留已有值，但使用该选项的条目将显示不可用的选项，直到手动修复。',
+                            'Renaming an option does not rewrite existing values. Removing an option leaves stored values intact; items using it will show an unavailable choice until you edit them.',
+                          )}
+                        </p>
+                        {draft.options.map((option, index) => (
+                          <div className="neo-attribute-option" key={option.id}>
+                            <label>
+                              {text(`选项 ${index + 1} 的名称`, `Option ${index + 1} label`)}
+                              <input
+                                data-neo-ui-part={`definition-option-${option.id}`}
+                                type="text"
+                                required
+                                value={option.label}
+                                onChange={(event) =>
+                                  dispatch({
+                                    type: 'draft-rename-option',
+                                    id: option.id,
+                                    value: event.currentTarget.value,
+                                  })
+                                }
+                              />
+                            </label>
+                            <Button
+                              aria-label={text(
+                                `删除选项 ${index + 1}`,
+                                `Remove option ${index + 1}`,
+                              )}
+                              onClick={() =>
+                                dispatch({ type: 'draft-remove-option', id: option.id })
+                              }
+                            >
+                              {text('删除选项', 'Remove option')}
+                            </Button>
+                          </div>
+                        ))}
+                        <Button
+                          data-neo-ui-part="definition-add-option"
+                          disabled={draft.options.length >= MAX_ITEM_ATTRIBUTE_OPTIONS}
+                          onClick={() => dispatch({ type: 'draft-add-option' })}
+                        >
+                          {text('添加选项', 'Add option')}
+                        </Button>
+                      </fieldset>
                     )}
                     <Button data-neo-ui-part="save-definition" type="submit" primary>
                       {text('保存属性', 'Save attribute')}
@@ -242,10 +338,15 @@ export function mountItemAttributesView(
                     (<code>{model.removing.key}</code>)
                   </p>
                   <p>
-                    {text(
-                      '已有值会保留。用同一个存储键重建属性即可恢复显示。',
-                      'Existing values will be kept. Recreate the attribute with the same storage key to show them again.',
-                    )}
+                    {isChoiceAttribute(model.removing.type)
+                      ? text(
+                          '已有值会保留。要恢复原选项的显示名称，必须恢复相同的存储键和选项 ID。',
+                          'Existing values will be kept. Restoring their labels requires the original storage key and option IDs.',
+                        )
+                      : text(
+                          '已有值会保留。用同一个存储键重建属性即可恢复显示。',
+                          'Existing values will be kept. Recreate the attribute with the same storage key to show them again.',
+                        )}
                   </p>
                   <Button
                     disabled={!model.available || model.busy}
@@ -319,28 +420,95 @@ export function mountItemAttributesView(
                     dispatch({ type: 'set-value' });
                   }}
                 >
-                  <label>
-                    {text('新值（仅一行）', 'New value (one line)')}
-                    <input
-                      data-neo-ui-part="value-input"
-                      type="text"
-                      inputMode={selected?.type === 'number' ? 'decimal' : 'text'}
-                      value={model.input}
-                      placeholder={
-                        model.mixed ? text('混合值 — 输入替换值', 'Mixed — enter replacement') : ''
-                      }
-                      disabled={!model.canWrite}
-                      onChange={(event) =>
-                        dispatch({ type: 'input', value: event.currentTarget.value })
-                      }
-                    />
-                  </label>
-                  <p className="neo-muted">
-                    {text(
-                      '留空保存会清除此属性值。',
-                      'Saving a blank value clears this attribute.',
-                    )}
-                  </p>
+                  {choice?.type === 'single-select' ? (
+                    <label>
+                      {text('新选项', 'New choice')}
+                      <select
+                        data-neo-ui-part="value-input"
+                        value={choices && !hasUnknown ? (choices[0] ?? '') : ''}
+                        disabled={!model.canWrite || !options.length}
+                        onChange={(event) =>
+                          dispatch({ type: 'select-choice', id: event.currentTarget.value })
+                        }
+                      >
+                        <option value="" disabled>
+                          {text('选择一个选项', 'Choose an option')}
+                        </option>
+                        {options.map(({ id, label }) => (
+                          <option key={id} value={id}>
+                            {label}
+                          </option>
+                        ))}
+                      </select>
+                    </label>
+                  ) : choice?.type === 'multi-select' ? (
+                    <fieldset disabled={!model.canWrite || choices === null}>
+                      <legend>{text('新选项（可多选）', 'New choices (select any)')}</legend>
+                      {options.map(({ id, label }, index) => (
+                        <label key={id}>
+                          <input
+                            data-neo-ui-part={index === 0 ? 'value-input' : undefined}
+                            type="checkbox"
+                            checked={choices?.includes(id) ?? false}
+                            onChange={() => dispatch({ type: 'toggle-choice', id })}
+                          />{' '}
+                          {label}
+                        </label>
+                      ))}
+                    </fieldset>
+                  ) : (
+                    <>
+                      <label>
+                        {text('新值（仅一行）', 'New value (one line)')}
+                        <input
+                          data-neo-ui-part="value-input"
+                          type="text"
+                          inputMode={selected?.type === 'number' ? 'decimal' : 'text'}
+                          value={model.input}
+                          placeholder={
+                            model.mixed
+                              ? text('混合值 — 输入替换值', 'Mixed — enter replacement')
+                              : ''
+                          }
+                          disabled={!model.canWrite}
+                          onChange={(event) =>
+                            dispatch({ type: 'input', value: event.currentTarget.value })
+                          }
+                        />
+                      </label>
+                      <p className="neo-muted">
+                        {text(
+                          '留空保存会清除此属性值。',
+                          'Saving a blank value clears this attribute.',
+                        )}
+                      </p>
+                    </>
+                  )}
+                  {choice && !options.length && (
+                    <p>{text('请先为该属性添加选项。', 'Add options to this attribute first.')}</p>
+                  )}
+                  {choice && (choices === null || hasUnknown) && (
+                    <>
+                      <p>{renderValue(model.input)}</p>
+                      <Button
+                        disabled={!model.canWrite}
+                        onClick={() => dispatch({ type: 'repair-choices' })}
+                      >
+                        {choices === null
+                          ? text('在本次编辑中重置选项', 'Reset selection in this edit')
+                          : text(
+                              '从本次编辑中移除不可用的选项',
+                              'Remove unavailable choices from this edit',
+                            )}
+                      </Button>
+                      <p className="neo-muted">
+                        {text(
+                          '只有保存或清除时才会改写条目值。',
+                          'Items change only when you save or clear the value.',
+                        )}
+                      </p>
+                    </>
+                  )}
                   {selected?.type === 'number' && (
                     <p className="neo-muted">
                       {text(
@@ -349,12 +517,7 @@ export function mountItemAttributesView(
                       )}
                     </p>
                   )}
-                  <Button
-                    data-neo-ui-part="save-value"
-                    type="submit"
-                    primary
-                    disabled={!model.canWrite}
-                  >
+                  <Button data-neo-ui-part="save-value" type="submit" primary disabled={!canSave}>
                     {count > 1
                       ? text(`复核对 ${itemCount} 的修改`, `Review changes to ${itemCount}`)
                       : text(`保存到 ${itemCount}`, `Save to ${itemCount}`)}
@@ -389,9 +552,7 @@ export function mountItemAttributesView(
                               '冲突：Extra 中有重复或歧义行；请先手动修复。',
                               'Conflict: duplicate or ambiguous Extra lines; repair them manually first.',
                             )
-                          : target.value === null
-                            ? text('未设置', 'Not set')
-                            : target.value}
+                          : renderValue(target.value)}
                       </td>
                     </tr>
                   ))}
@@ -420,11 +581,7 @@ export function mountItemAttributesView(
                           'This attribute will be replaced on every item above with:',
                         )}
                   </p>
-                  {model.review.value !== null && (
-                    <p>
-                      <code>{model.review.value}</code>
-                    </p>
-                  )}
+                  {model.review.value !== null && <p>{renderValue(model.review.value)}</p>}
                   <Button
                     data-neo-ui-part="confirm-values"
                     primary

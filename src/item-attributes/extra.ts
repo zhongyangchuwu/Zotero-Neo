@@ -1,4 +1,11 @@
-import type { ItemAttributeDefinition, ItemAttributeState } from './types';
+import { isExactDecimal } from './decimal';
+import {
+  ITEM_ATTRIBUTE_OPTION_ID,
+  MAX_ITEM_ATTRIBUTE_OPTIONS,
+  isChoiceAttribute,
+  type ItemAttributeDefinition,
+  type ItemAttributeState,
+} from './types';
 
 const CONTROL = /[\p{Cc}\p{Cf}\u2028\u2029]/u;
 
@@ -71,12 +78,66 @@ function oneLineValue(input: string | null): string | null {
   return input.trim() || null;
 }
 
+const NO_CHOICES: readonly string[] = Object.freeze([]);
+
+/** Decode the stored IDs independently of current labels; missing options stay identifiable. */
+export function readAttributeChoices(
+  definition: ItemAttributeDefinition,
+  value: string | null,
+): readonly string[] | null {
+  if (!isChoiceAttribute(definition.type)) return null;
+  if (value === null) return NO_CHOICES;
+  let decoded: unknown;
+  try {
+    decoded = JSON.parse(value);
+  } catch {
+    return null;
+  }
+  const limit = definition.type === 'single-select' ? 1 : MAX_ITEM_ATTRIBUTE_OPTIONS;
+  if (
+    !Array.isArray(decoded) ||
+    decoded.length > limit ||
+    decoded.some((id) => typeof id !== 'string' || !ITEM_ATTRIBUTE_OPTION_ID.test(id)) ||
+    new Set(decoded).size !== decoded.length
+  )
+    return null;
+  return decoded as string[];
+}
+
+export function encodeAttributeChoices(ids: readonly string[]): string | null {
+  return ids.length ? JSON.stringify([...ids].sort()) : null;
+}
+
+export function displayAttributeValue(
+  definition: ItemAttributeDefinition,
+  value: string,
+): { text: string; valid: boolean } {
+  if (!isChoiceAttribute(definition.type))
+    return { text: value, valid: definition.type === 'text' || isExactDecimal(value) };
+  const ids = readAttributeChoices(definition, value);
+  if (ids === null) return { text: value, valid: false };
+  let valid = true;
+  const labels = ids.map((id) => {
+    const option = definition.options?.find((candidate) => candidate.id === id);
+    if (option) return option.label;
+    valid = false;
+    return `[${id}]`;
+  });
+  return { text: labels.join(' · '), valid };
+}
+
 export function normalizeAttributeValue(
   definition: ItemAttributeDefinition,
   input: string | null,
 ): string | null {
   normalizeAttributeKey(definition.key);
   const value = oneLineValue(input);
+  if (isChoiceAttribute(definition.type)) {
+    const ids = readAttributeChoices(definition, value);
+    if (!ids || ids.some((id) => !definition.options?.some((option) => option.id === id)))
+      throw new Error('Attribute selections must use current option IDs');
+    return encodeAttributeChoices(ids);
+  }
   if (definition.type !== 'text' && definition.type !== 'number')
     throw new Error('Unsupported attribute type');
   if (value === null) return null;

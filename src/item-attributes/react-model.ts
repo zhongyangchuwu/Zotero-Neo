@@ -1,4 +1,4 @@
-import type { ItemAttributeDefinition, ItemAttributeType } from './types';
+import type { ItemAttributeDefinition, ItemAttributeOption, ItemAttributeType } from './types';
 
 export interface ItemAttributesModel {
   readonly chinese: boolean;
@@ -24,6 +24,7 @@ export interface ItemAttributesModel {
     readonly key: string;
     readonly label: string;
     readonly type: ItemAttributeType;
+    readonly options: readonly ItemAttributeOption[];
   } | null;
   readonly removing: ItemAttributeDefinition | null;
   readonly discard: 'close' | ItemAttributesModel['mode'] | null;
@@ -38,6 +39,7 @@ export type ItemAttributesCommand =
         | 'new-definition'
         | 'cancel-definition'
         | 'save-definition'
+        | 'draft-add-option'
         | 'cancel-remove'
         | 'confirm-remove'
         | 'refresh-values'
@@ -46,7 +48,13 @@ export type ItemAttributesCommand =
         | 'cancel-review'
         | 'confirm-values';
     }
+  | { readonly type: 'repair-choices' }
   | { readonly type: 'mode'; readonly value: 'definitions' | 'values' }
   | { readonly type: 'select' | 'edit-definition' | 'remove-definition'; readonly id: string }
   | { readonly type: 'input' | 'draft-label' | 'draft-key'; readonly value: string }
-  | { readonly type: 'draft-type'; readonly value: ItemAttributeType };
+  | { readonly type: 'draft-type'; readonly value: ItemAttributeType }
+  | { readonly type: 'draft-rename-option'; readonly id: string; readonly value: string }
+  | {
+      readonly type: 'draft-remove-option' | 'select-choice' | 'toggle-choice';
+      readonly id: string;
+    };

@@ -12,6 +12,7 @@ type HookContext = { rowID: string; item: Zotero.Item; tabType: string; editable
 type TestRow = {
   rowID: string;
   label: { text: string };
+  editable: boolean;
   onGetData(context: HookContext): string;
   onItemChange(
     context: HookContext & {
@@ -80,7 +81,7 @@ function fixture(type: 'text' | 'number' = 'text') {
     canEdit: () => true,
     write,
   };
-  const host = createItemAttributeNativeHost('neo@test', onError);
+  const host = createItemAttributeNativeHost('neo@test', onError, () => 'en');
   hosts.push(host);
   host.replace([definition]);
   const item = (extra: string) =>
@@ -192,6 +193,31 @@ describe('native item attributes', () => {
     expect(h.removedRows).toHaveBeenCalledTimes(2);
     expect(first.listeners.size).toBe(0);
   });
+
+  it.each(['single-select', 'multi-select'] as const)(
+    'keeps native %s values readable and routes Info edits to the item menu',
+    (type) => {
+      const h = fixture();
+      h.host.replace([{ ...h.definition, type, read: () => 'Queued' }]);
+      const row = h.rows.at(-1)!;
+      const column = h.columns.at(-1)!;
+      const view = h.attach(h.item('["queued"]'));
+      const setEnabled = vi.fn();
+      const setEditable = vi.fn();
+
+      expect(column.dataProvider(view.target)).toBe('Queued');
+      expect(row.onGetData(view.context())).toBe(
+        'Queued — Right-click the item → Edit Custom Attributes…',
+      );
+      expect(row.editable).toBe(false);
+      row.onItemChange({ ...view.context(), setEnabled, setEditable });
+      expect(setEnabled).toHaveBeenCalledWith(true);
+      expect(setEditable).toHaveBeenCalledWith(false);
+      view.focus();
+      view.blur('Free text');
+      expect(h.write).not.toHaveBeenCalled();
+    },
+  );
 
   it('sorts exact decimals under ordinary and numeric collation and renders the original spelling', () => {
     const h = fixture('number');
