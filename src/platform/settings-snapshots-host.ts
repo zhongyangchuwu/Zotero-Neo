@@ -196,19 +196,32 @@ export function webDAVPasswordKey(): string {
   const username = readTransferPreference('extensions.zotero.sync.storage.username');
   return `webdav:password:${encodeURIComponent(username.kind === 'set' ? String(username.value) : '')}`;
 }
+function readPreferenceValue(key: string): boolean | number | string | undefined {
+  switch (Services.prefs.getPrefType(key)) {
+    case 128:
+      return Services.prefs.getBoolPref(key);
+    case 64:
+      return Services.prefs.getIntPref(key);
+    case 32:
+      return Services.prefs.getStringPref(key);
+  }
+}
 export function readTransferPreference(key: string): SettingState {
   if (!Services.prefs.prefHasUserValue(key)) return { kind: 'reset' };
-  const type = Services.prefs.getPrefType(key);
-  const value =
-    type === 128
-      ? Services.prefs.getBoolPref(key)
-      : type === 64
-        ? Services.prefs.getIntPref(key)
-        : Services.prefs.getStringPref(key);
+  const value = readPreferenceValue(key);
+  if (value === undefined)
+    throw new SettingsSnapshotError('native-unavailable', 'The preference type is unavailable');
   return { kind: 'set', value };
 }
-export function writeTransferPreference(key: string, state: SettingState, admit: () => void): void {
+/** A matching Gecko default is effective without a stored user override. */
+export function writeTransferPreference(
+  key: string,
+  state: SettingState,
+  admit: () => void,
+): 'exact' | 'default' {
   admit();
+  const storage = key.startsWith('extensions.zotero.sync.storage.');
+  const hadStorageOverride = storage && Services.prefs.prefHasUserValue(key);
   if (key.startsWith('extensions.zotero.'))
     prepareConsumerWrite(key.slice('extensions.zotero.'.length), state, true);
   if (state.kind === 'reset') {
@@ -220,10 +233,14 @@ export function writeTransferPreference(key: string, state: SettingState, admit:
     Services.prefs.setIntPref(key, state.value);
   } else if (typeof state.value === 'string') Services.prefs.setStringPref(key, state.value);
   else throw new SettingsSnapshotError('invalid-field', 'Invalid preference value');
-  if (!sameSettingState(readTransferPreference(key), state))
+  const settled = readTransferPreference(key);
+  const usesDefault =
+    state.kind === 'set' && settled.kind === 'reset' && readPreferenceValue(key) === state.value;
+  if (!usesDefault && !sameSettingState(settled, state))
     throw new SettingsSnapshotError('native-outcome', 'The selected preference did not persist');
-  if (key.startsWith('extensions.zotero.sync.storage.'))
+  if (storage && (!usesDefault || hadStorageOverride))
     Services.prefs.setBoolPref('extensions.zotero.sync.storage.verified', false);
+  return usesDefault ? 'default' : 'exact';
 }
 export function ownedAIEndpoint(): string {
   const state = readTransferPreference('extensions.zotero-neo.ai.configuration');

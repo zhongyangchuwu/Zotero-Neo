@@ -27,6 +27,11 @@ export function settingsSnapshotHostFixture() {
     [...source.keys()].filter((key) => key.startsWith(prefix));
   const value = (key: string): boolean | number | string | undefined =>
     user.has(key) ? user.get(key) : defaults.get(key);
+  function setUserPreference(key: string, setting: boolean | number | string): void {
+    mutations.push(key);
+    if (defaults.get(key) === setting) user.delete(key);
+    else user.set(key, setting);
+  }
   const prefs = {
     getChildList: (prefix: string) => [
       ...new Set([...childKeys(defaults, prefix), ...childKeys(user, prefix)]),
@@ -44,17 +49,10 @@ export function settingsSnapshotHostFixture() {
     getBoolPref: (key: string) => value(key),
     getIntPref: (key: string) => value(key),
     getStringPref: (key: string) => value(key),
-    setBoolPref: (key: string, setting: boolean) => {
-      mutations.push(key);
-      user.set(key, setting);
-    },
-    setIntPref: (key: string, setting: number) => {
-      mutations.push(key);
-      user.set(key, setting | 0);
-    },
+    setBoolPref: setUserPreference,
+    setIntPref: (key: string, setting: number) => setUserPreference(key, setting | 0),
     setStringPref: (key: string, setting: string) => {
-      mutations.push(key);
-      user.set(key, setting);
+      setUserPreference(key, setting);
       if (
         quickCopyObserving &&
         (key === 'extensions.zotero.export.quickCopy.setting' ||

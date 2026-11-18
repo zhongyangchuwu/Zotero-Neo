@@ -39,6 +39,7 @@ vi.mock('../../src/platform/settings-snapshot-templates', async () => {
         admit();
         state.writes.push(key);
         if (state.persistWrites) state.preferences.set(key, value);
+        return 'exact';
       },
       readFiles: async () => [...state.files].map(([name, text]) => ({ name, text })),
       writeFile: async (name: string, text: string, context: SettingsOperationContext) => {

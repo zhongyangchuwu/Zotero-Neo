@@ -36,7 +36,7 @@ export interface SettingsTemplateHost {
   preferenceType(key: string): 'boolean' | 'number' | 'string' | null;
   digest(text: string): string;
   readPreference(key: string): SettingState;
-  writePreference(key: string, state: SettingState, admit: () => void): void;
+  writePreference(key: string, state: SettingState, admit: () => void): 'exact' | 'default';
   readFiles(): Promise<readonly { readonly name: string; readonly text: string }[]>;
   writeFile(name: string, text: string, context: SettingsOperationContext): Promise<void>;
   observePlugins(invalidate: () => void): () => void;

@@ -1,10 +1,15 @@
 import { createHash } from 'node:crypto';
-import { describe, expect, it, vi } from 'vitest';
+import { afterEach, describe, expect, it, vi } from 'vitest';
 import { ReviewedPreferenceAdapter } from '../../src/settings-snapshots/adapters/preferences';
 import { discoverPluginTemplates } from '../../src/settings-snapshots/templates/scanner';
 import { SettingsSnapshotService, settingsChangeID } from '../../src/settings-snapshots/service';
 import type { SettingState, SettingsDocument } from '../../src/settings-snapshots/contracts';
 import type { SettingsTemplateHost } from '../../src/platform/settings-snapshot-templates';
+import {
+  readTransferPreference,
+  writeTransferPreference,
+} from '../../src/platform/settings-snapshots-host';
+import { settingsSnapshotHostFixture } from './settings-snapshots-host-fixture';
 
 const set = (value: boolean | number | string): SettingState => ({ kind: 'set', value });
 const reset: SettingState = { kind: 'reset' };
@@ -21,9 +26,10 @@ function fixture() {
     digest: (text) => createHash('sha256').update(text).digest('hex'),
     preferenceType: (key) => (key === mode ? 'string' : 'number'),
     readPreference: (key) => values.get(key) ?? reset,
-    writePreference: vi.fn((key, state, admit) => {
+    writePreference: vi.fn<SettingsTemplateHost['writePreference']>((key, state, admit) => {
       admit();
       values.set(key, state);
+      return 'exact';
     }),
     plugins: async () => [],
     readFiles: async () => [],
@@ -95,6 +101,8 @@ function fixture() {
   return { values, host, adapter, service, context, document, selected, template };
 }
 
+afterEach(() => vi.unstubAllGlobals());
+
 describe('locally reviewed preference control constraints', () => {
   it.each([
     [count, 0],
@@ -142,6 +150,23 @@ describe('locally reviewed preference control constraints', () => {
       expect(f.values.get(choice)).toEqual(set(2));
     },
   );
+
+  it('restores the effective default of a reviewed preference without stopping later writes', async () => {
+    const { defaults, user } = settingsSnapshotHostFixture();
+    defaults.set(count, 5);
+    defaults.set(mode, 'a');
+    const f = fixture();
+    f.host.readPreference = readTransferPreference;
+    f.host.writePreference = writeTransferPreference;
+    const plan = await f.service.plan(f.document({ [count]: set(5), [mode]: set('b') }), f.context);
+    const receipt = await f.service.apply(plan, f.selected(count, mode), f.context, async () => {});
+    expect(receipt.entries).toMatchObject([
+      { key: count, status: 'unchanged' },
+      { key: mode, status: 'applied' },
+    ]);
+    expect(user.has(count)).toBe(false);
+    expect(user.get(mode)).toBe('b');
+  });
 
   it('preserves resets for bounded numbers and enumerations, including invalid existing overrides', async () => {
     const f = fixture();
