@@ -120,6 +120,7 @@ export interface ReaderControllerApi extends ReaderSelectionApi {
 
 export interface MainWindowControllerApi extends ReaderMainOperations {
   openSettings(owner?: Window | null): boolean;
+  openItemAttributes(window: MainWindow, selectedItems?: readonly Zotero.Item[]): boolean;
   addWindow(window: MainWindow): void;
   removeWindow(window: MainWindow): void;
   shutdown(): void;

@@ -164,6 +164,8 @@ npm run dev:status
 
 AI 问答工具窗使用生产 URI `chrome://zotero-neo-ai-qa/content/ai-qa-window.xhtml`，不直接以 file/jar URI 加载。`src/platform/ai-qa-ui.ts` 在首次打开时惰性注册已打包的 `content/` 资源并持有 `destruct()` 句柄；`src/toolkit/reader/ai-qa-panel.ts` 负责精确 Reader 的工具窗，窗口类型为 `zotero-neo:ai-qa`。Addon/Toolkit 退出时先关闭所拥有的窗口，再释放共享注册。
 
+Neo 文献表格复用 `zotero-neo-ui` 的 chrome 注册，静态外壳为 `content/literature-table-window.xhtml`。一个主窗口最多持有一个表格窗口；关闭主窗口或卸载 Neo 时先退休读取与订阅，再释放 UI 注册。Toolkit 单独读取原生文库、分类和条目；表格不修改主窗口的过滤器和树布局。
+
 XPI 收录项目 `LICENSE`，以及 `licenses/fuzzysort-LICENSE`、`licenses/ai-sdk-NOTICE`、`licenses/ai-sdk-provenance.json`、`licenses/react-NOTICE`、`licenses/react-provenance.json`、`licenses/age-encryption-NOTICE` 和 `licenses/age-encryption-provenance.json`。AI SDK 闭包包含 Apache-2.0 与 MIT 组件，React 闭包使用 MIT；固定的 `age-encryption@0.3.1` 使用 BSD-3-Clause，其余闭包组件使用 MIT。版本、完整性和上游来源记录在各 vendor 目录；`NOTICE` 保留许可证文本。可执行依赖静态进入生成的 bundle，不在运行时安装或下载，也不以原始 vendor 包作为单独的 XPI 成员。`tools/check-package.mjs` 对成员清单和打包后的 notice/provenance 内容作精确校验。
 
 ### 配置迁移格式与加密边界

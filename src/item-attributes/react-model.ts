@@ -26,12 +26,15 @@ export interface ItemAttributesModel {
     readonly type: ItemAttributeType;
   } | null;
   readonly removing: ItemAttributeDefinition | null;
+  readonly discard: 'close' | ItemAttributesModel['mode'] | null;
 }
 
 export type ItemAttributesCommand =
   | {
       readonly type:
         | 'close'
+        | 'keep-editing'
+        | 'confirm-discard'
         | 'new-definition'
         | 'cancel-definition'
         | 'save-definition'

@@ -18,6 +18,7 @@ export type NativeReactSurface =
   | 'metadata-review'
   | 'settings-snapshots'
   | 'item-attributes'
+  | 'literature-table'
   | 'document-comparison'
   | 'annotation-comment'
   | 'selection-actions'

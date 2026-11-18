@@ -12,6 +12,7 @@ const expected = [
   'content/ai-runtime.js',
   'content/ai-qa-ui.js',
   'content/ai-qa-window.xhtml',
+  'content/literature-table-window.xhtml',
   'content/native-ui.js',
   'content/react-runtime.js',
   'content/settings-snapshots-crypto.js',

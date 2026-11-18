@@ -29,7 +29,7 @@ type ViewOptions = NativeReactViewOptions<ItemAttributesModel, ItemAttributesCom
 const views: {
   options: ViewOptions;
   dispose: Mock;
-  update: Mock;
+  update: Mock<(model: ItemAttributesModel) => void>;
 }[] = [];
 const controllers: ItemAttributesController[] = [];
 
@@ -41,7 +41,11 @@ beforeEach(() => {
   vi.stubGlobal('Components', { utils: { isDeadWrapper: () => false } });
   vi.stubGlobal('Zotero', { initializationPromise: Promise.resolve() });
   boundary.mount.mockImplementation((options: ViewOptions) => {
-    const view = { options, dispose: vi.fn(), update: vi.fn() };
+    const view = {
+      options,
+      dispose: vi.fn(),
+      update: vi.fn<(model: ItemAttributesModel) => void>(),
+    };
     views.push(view);
     return {
       ready: Promise.resolve(),
@@ -66,14 +70,17 @@ afterEach(() => {
 function setup() {
   const observers = new Set<() => void>();
   const unobserve = vi.fn();
-  const set = vi.fn();
+  let raw = JSON.stringify({
+    version: 1,
+    fields: [{ id: 'score', key: 'Research Score', label: 'Score', type: 'number' }],
+  });
+  const set = vi.fn((_key: string, value: string) => {
+    raw = value;
+    for (const observer of observers) observer();
+  });
   const preferences = {
     has: () => true,
-    get: () =>
-      JSON.stringify({
-        version: 1,
-        fields: [{ id: 'score', key: 'Research Score', label: 'Score', type: 'number' }],
-      }),
+    get: () => raw,
     set,
     clear: vi.fn(),
     observe: (_key: string, listener: () => void) => {
@@ -347,4 +354,152 @@ it('does not acquire native resources after disposal while initialization is pen
   expect(h.observers.size).toBe(0);
   expect(h.unobserve).toHaveBeenCalledOnce();
   expect(h.port.open(h.host)).toBeNull();
+});
+
+it('generates distinct stable keys for matching Chinese names and skips occupied normalized keys', async () => {
+  const reservedKey = `Neo Attribute ${'A'.repeat(20)}`;
+  const randomString = vi
+    .fn()
+    .mockReturnValueOnce('M'.repeat(20))
+    .mockReturnValueOnce('a'.repeat(20))
+    .mockReturnValueOnce('B'.repeat(20))
+    .mockReturnValueOnce('b'.repeat(20))
+    .mockReturnValueOnce('C'.repeat(20))
+    .mockReturnValueOnce('D'.repeat(20));
+  vi.stubGlobal('Zotero', { ...Zotero, Utilities: { randomString } });
+  const h = setup();
+  await h.start();
+  h.port.open(h.host);
+  const view = views[0]!;
+  const { dispatch } = view.options;
+  const create = (label: string, key?: string) => {
+    dispatch({ type: 'new-definition' });
+    dispatch({ type: 'draft-label', value: label });
+    if (key !== undefined) dispatch({ type: 'draft-key', value: key });
+    dispatch({ type: 'save-definition' });
+  };
+
+  create('Existing key', reservedKey);
+  create('阅读进度');
+  create('阅读进度');
+  const [first, second] = view.update.mock.lastCall![0].definitions.filter(
+    ({ label }) => label === '阅读进度',
+  );
+  expect(first!.key).toMatch(/^neo-attribute-[a-z0-9]+$/);
+  expect(second!.key).toMatch(/^neo-attribute-[a-z0-9]+$/);
+  expect(first!.key).not.toBe(second!.key);
+  expect(first!.key).not.toBe(`neo-attribute-${'a'.repeat(20)}`);
+  expect(view.update.mock.lastCall![0].definitions).toContainEqual(
+    expect.objectContaining({ label: 'Existing key', key: reservedKey }),
+  );
+
+  dispatch({ type: 'edit-definition', id: first!.id });
+  dispatch({ type: 'draft-label', value: '阅读阶段' });
+  dispatch({ type: 'draft-key', value: 'Attempted replacement' });
+  dispatch({ type: 'save-definition' });
+  expect(view.update.mock.lastCall![0].definitions).toContainEqual({
+    ...first,
+    label: '阅读阶段',
+  });
+
+  dispatch({ type: 'remove-definition', id: first!.id });
+  dispatch({ type: 'confirm-remove' });
+  create('恢复阅读阶段', first!.key);
+  const restored = view.update.mock.lastCall![0].definitions.find(
+    ({ label }) => label === '恢复阅读阶段',
+  )!;
+  const item = {
+    isRegularItem: () => true,
+    getField: () => `${first!.key}: 已读`,
+  } as unknown as Zotero.Item;
+  expect(
+    h
+      .definitions()
+      .find(({ id }) => id === restored.id)
+      ?.read(item),
+  ).toBe('已读');
+});
+
+it('keeps or discards a dirty definition on explicit close and Escape without saving', async () => {
+  const h = setup();
+  await h.start();
+  h.port.open(h.host);
+  const view = views[0]!;
+  const { dispatch, root } = view.options;
+  const model = () => view.update.mock.lastCall![0];
+  const escape = () =>
+    root.dispatchEvent(new KeyboardEvent('keydown', { key: 'Escape', bubbles: true }));
+
+  dispatch({ type: 'edit-definition', id: 'score' });
+  dispatch({ type: 'draft-label', value: 'Reading score' });
+  dispatch({ type: 'close' });
+  expect(model().discard).toBe('close');
+  expect(root.isConnected).toBe(true);
+  dispatch({ type: 'keep-editing' });
+  expect(model().discard).toBeNull();
+  expect(model().draft?.label).toBe('Reading score');
+
+  escape();
+  expect(model().discard).toBe('close');
+  escape();
+  expect(model().discard).toBeNull();
+  expect(model().draft?.label).toBe('Reading score');
+  escape();
+  dispatch({ type: 'confirm-discard' });
+  h.expectViewReleased();
+  expect(h.set).not.toHaveBeenCalled();
+});
+
+it('protects staged batch actions and dirty values on mode switches without retargeting', async () => {
+  const items = [1, 2, 3].map(
+    (id) =>
+      ({
+        id,
+        libraryID: 1,
+        isRegularItem: () => true,
+        isEditable: () => true,
+        getField: (field: string) => (field === 'extra' ? `Research Score: ${id}` : `Item ${id}`),
+        setField: vi.fn(),
+      }) as unknown as Zotero.Item,
+  );
+  vi.stubGlobal('Zotero', {
+    ...Zotero,
+    Items: { get: (id: number) => items.find((item) => item.id === id) },
+    Libraries: { get: () => ({ editable: true, libraryType: 'user' }) },
+  });
+  const h = setup();
+  await h.start();
+  const selection = items.slice(0, 2);
+  h.port.open({ ...h.host, mode: 'values', items: selection });
+  selection.splice(0, 2, items[2]!);
+  const view = views[0]!;
+  const { dispatch } = view.options;
+  const model = () => view.update.mock.lastCall![0];
+
+  dispatch({ type: 'clear-value' });
+  expect(model().review).toEqual({ value: null });
+  dispatch({ type: 'mode', value: 'definitions' });
+  expect(model().discard).toBe('definitions');
+  expect(model().mode).toBe('values');
+  dispatch({ type: 'keep-editing' });
+  expect(model().review).toEqual({ value: null });
+  expect(model().targets.map(({ id, value }) => [id, value])).toEqual([
+    [1, '1'],
+    [2, '2'],
+  ]);
+
+  dispatch({ type: 'input', value: '8' });
+  expect(model().review).toBeNull();
+  dispatch({ type: 'mode', value: 'definitions' });
+  expect(model().discard).toBe('definitions');
+  dispatch({ type: 'confirm-discard' });
+  expect(model().mode).toBe('definitions');
+  expect(model().discard).toBeNull();
+  dispatch({ type: 'mode', value: 'values' });
+  expect(model().input).toBe('');
+  expect(model().targets.map(({ id, value }) => [id, value])).toEqual([
+    [1, '1'],
+    [2, '2'],
+  ]);
+  for (const item of items) expect(item.setField).not.toHaveBeenCalled();
 });
