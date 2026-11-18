@@ -29,7 +29,7 @@
   },
   "captures": [
     {
-      "file": "screenshots/zotero/settings-current.png",
+      "file": "screenshots/baseline/settings.png",
       "kind": "zotero-historical",
       "surface": "settings",
       "width": 1424,
@@ -40,7 +40,7 @@
       "sha256": "4b310597d00bdbe850deeb6f570122a1bf490f79160dc88093cfd07fc6dc022d"
     },
     {
-      "file": "screenshots/zotero/picker-current.png",
+      "file": "screenshots/baseline/picker.png",
       "kind": "zotero-historical",
       "surface": "picker",
       "width": 1424,
@@ -51,7 +51,7 @@
       "sha256": "54644d3ded8eb58b42bba60f9a1db54e5b4e082451197115ac16c5d3551b90a5"
     },
     {
-      "file": "screenshots/zotero/references-current.png",
+      "file": "screenshots/baseline/references.png",
       "kind": "zotero-historical",
       "surface": "references",
       "width": 1424,
@@ -188,7 +188,7 @@
       "sha256": "86409760268b971d374ba31627d56a7e74b246e780d913701603884acba9b653"
     },
     {
-      "file": "native-settings.png",
+      "file": "screenshots/native/settings.png",
       "kind": "zotero-native-react",
       "surface": "settings",
       "width": 1707,
@@ -196,7 +196,7 @@
       "sha256": "5ad06f847b4b1a71099cdc48e02bae1759dc1fa3f642039de9d014e1e98cb385"
     },
     {
-      "file": "native-keybindings.png",
+      "file": "screenshots/native/keybindings.png",
       "kind": "zotero-native-react",
       "surface": "keybindings",
       "width": 1707,
@@ -204,7 +204,7 @@
       "sha256": "35af178df3423a11573bffec41d801cac6d4b2d3ca188d5fdbe500a296ad9fb7"
     },
     {
-      "file": "native-picker.png",
+      "file": "screenshots/native/picker.png",
       "kind": "zotero-native-react",
       "surface": "picker",
       "width": 1707,
@@ -212,7 +212,7 @@
       "sha256": "7cf4d1165e31bcefc5ffd4e6aa7350fd3b2c699995a849a404c7b9b4107864d8"
     },
     {
-      "file": "native-references.png",
+      "file": "screenshots/native/references.png",
       "kind": "zotero-native-react",
       "surface": "references-local",
       "width": 1707,

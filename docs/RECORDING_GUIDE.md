@@ -20,6 +20,8 @@
 
 ### 媒体命名
 
+录制后，按[文档媒体规范](DOCUMENTATION_AUTHORING.md#媒体组件)存放素材：文档截图和视频放在 `assets/docs/media/`，只用于开发评审的截图放在 `assets/ui-review/screenshots/`。
+
 每条素材的文件名同时标明画面显示的版本和场景，例如 `zotero-neo-v<实际版本>-S1-main-library-triage`；主视频用 `.webm`，兼容副本可从同一录屏导出 `.mp4`，海报用 `.poster.webp`，简体中文字幕用 `.zh-Hans.vtt`。海报取自成片画面，VTT 时间码按最终成片测量。
 
 ## S0 — 安装与第一次交互

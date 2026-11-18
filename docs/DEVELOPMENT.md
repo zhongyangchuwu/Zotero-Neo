@@ -152,9 +152,10 @@ npm run dev:status
 
 ## 品牌与资源
 
-`assets/branding/` 保存仓库 artwork，`assets/package/` 提供静态 XPI 骨架、运行时图标、偏好页和 AI 问答工具窗文档。偏好页定义在 `assets/package/content/preferences/pane.xhtml`，AI 问答工具窗定义在 `assets/package/content/ai-qa-window.xhtml`，偏好行为由 `src/preferences/index.ts` 生成。品牌原始图不复制进 XPI；包内路径保持 `icons/*` 与 `content/preferences/*`。
-
-`assets/ui-review/` 保存开发评审用 React 源码、功能截图、捕获来源和架构记录；不复制进 XPI，也不作为 VitePress 页面构建。其运行与截图索引由该目录的 `README.md` 维护。
+- `assets/branding/` 保存 README 和文档站使用的品牌原图。
+- `assets/package/` 是 XPI 的静态骨架，包含运行时图标、偏好页和 AI 问答工具窗文档；包内路径保持 `icons/*` 和 `content/*`。VitePress 不发布此目录。
+- `assets/docs/media/` 保存文档站的截图、视频和字幕，发布路径为 `/media/`。只有这里的媒体会作为站点公共文件发布。
+- `assets/ui-review/screenshots/` 保存实机评审截图、历史基线与设计稿；索引和采集记录见 `assets/ui-review/README.md`。它们不发布到文档站，也不进入 XPI。
 
 
 ### 静态 AI、React 与加密 bundle

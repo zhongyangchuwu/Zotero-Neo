@@ -62,7 +62,7 @@ UI 名称以 `src/i18n/locales/zh-CN.json` 为准，描述其他语言界面时�
 
 `FeatureMedia` 由 `.vitepress/theme/index.ts` 注册，展示真实截图或视频，并提供图注与文字说明。只有素材已存在时，才在用户页面发布该图例。
 
-媒体文件存放在 `public/media/`，`src` 使用 `/media/` 路径；组件自动添加文档站 base。媒体旁保留书面操作步骤，图片提供替代文本，有语音或有意义声音的视频提供字幕。录制流程和隐私要求见[录制指南](RECORDING_GUIDE.md)。
+要发布到文档站的截图、视频和字幕存放在 `assets/docs/media/`，`src` 使用 `/media/` 路径，组件会自动添加文档站 base。只用于开发评审的截图放在 `assets/ui-review/screenshots/`，不发布到文档站。媒体旁保留操作步骤；图片提供替代文本，有语音或有意义声音的视频提供字幕。录制和隐私要求见[录制指南](RECORDING_GUIDE.md)。
 
 | 属性 | 用途 |
 | --- | --- |
