@@ -48,10 +48,10 @@ export class SettingsTabs {
     return {
       id: 'tab-display',
       title: settingsText(language, 'Tab display'),
-      description: settingsText(
-        language,
-        'Display changes apply immediately when Tab Enhancements is active. The module request requires restarting Zotero.',
-      ),
+      description:
+        language === 'zh-CN'
+          ? '标签页增强启用后，显示设置立即生效。启用或停用功能需要重启 Zotero。'
+          : 'Display settings apply immediately while Tab Enhancements is active. Enabling or disabling it requires a Zotero restart.',
       fields: [
         {
           kind: 'choice',

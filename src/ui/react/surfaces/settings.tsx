@@ -128,7 +128,6 @@ function SettingsForm({
 }) {
   return (
     <div className="neo-settings-form">
-      <h2>{model.title}</h2>
       {model.description && <p className="neo-muted">{model.description}</p>}
       {model.groups.map((group) => (
         <section key={group.id} className="neo-settings-group">
@@ -170,6 +169,9 @@ export const SETTINGS_REACT_CSS = `
 .neo-settings-main { display:flex; flex-direction:column; min-height:0; min-width:0; }
 .neo-settings-header { display:flex; align-items:center; justify-content:space-between; gap:16px; padding:16px 20px; border-bottom:1px solid var(--zotero-neo-border); }
 .neo-settings-header h1 { margin:0; outline:none; }
+.neo-settings-header-title { min-width:0; }
+.neo-settings-header-title small { display:block; color:var(--zotero-neo-muted); }
+.neo-settings-header-actions { display:flex; flex-wrap:wrap; justify-content:flex-end; gap:8px; }
 .neo-settings-header button { display:flex; gap:9px; align-items:center; }
 .neo-settings-page { flex:1; min-height:0; min-width:0; overflow:auto; overscroll-behavior:contain; padding:20px; }
 .neo-settings-group { margin-bottom:20px; }
@@ -197,6 +199,12 @@ export function mountSettingsReactView(
     (model) => {
       const generation = model.generation;
       const page = model.page;
+      const heading =
+        page.kind === 'form'
+          ? page.model.title
+          : page.kind === 'reader'
+            ? page.model.labels.title
+            : model.sections.find((section) => section.id === model.section)?.label;
       return (
         <div className="neo-ui neo-settings">
           <nav className="neo-settings-navigation" aria-label={model.navigationLabel}>
@@ -211,25 +219,33 @@ export function mountSettingsReactView(
                 {section.label}
               </button>
             ))}
-            {model.snapshotsLabel && (
-              <Button onClick={() => dispatch({ type: 'openSettingsSnapshots', generation })}>
-                {model.snapshotsLabel}
-              </Button>
-            )}
           </nav>
           <div className="neo-settings-main">
             <header className="neo-settings-header">
-              <h1 data-neo-ui-part="heading" tabIndex={-1}>
-                {model.title}
-              </h1>
-              <Button
-                data-neo-ui-part="close"
-                aria-label={model.closeLabel}
-                onClick={() => dispatch({ type: 'close', generation })}
-              >
-                {model.closeLabel}
-                <Kbd>Esc</Kbd>
-              </Button>
+              <div className="neo-settings-header-title">
+                <small>{model.title}</small>
+                <h1 data-neo-ui-part="heading" tabIndex={-1}>
+                  {heading}
+                </h1>
+              </div>
+              <div className="neo-settings-header-actions">
+                <Button onClick={() => dispatch({ type: 'help', generation })}>
+                  {model.helpLabel}
+                </Button>
+                {model.snapshotsLabel && (
+                  <Button onClick={() => dispatch({ type: 'openSettingsSnapshots', generation })}>
+                    {model.snapshotsLabel}
+                  </Button>
+                )}
+                <Button
+                  data-neo-ui-part="close"
+                  aria-label={model.closeLabel}
+                  onClick={() => dispatch({ type: 'close', generation })}
+                >
+                  {model.closeLabel}
+                  <Kbd>Esc</Kbd>
+                </Button>
+              </div>
             </header>
             <main className="neo-settings-page" data-neo-ui-part="page">
               {page.kind === 'appearance' && (

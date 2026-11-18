@@ -254,7 +254,6 @@ export function KeybindingsPage({ model, dispatch }: KeybindingsPageProps) {
   };
   return (
     <div className="neo-settings-keybindings">
-      <h2>{text('Keybindings')}</h2>
       <h3>{text('Shortcut browser')}</h3>
       <div className="kb-toolbar">
         <input

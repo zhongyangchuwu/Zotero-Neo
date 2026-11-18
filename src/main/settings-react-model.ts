@@ -22,6 +22,7 @@ export interface SettingsReactModel {
   readonly title: string;
   readonly closeLabel: string;
   readonly navigationLabel: string;
+  readonly helpLabel: string;
   readonly snapshotsLabel?: string;
   readonly section: SettingsSection;
   readonly sections: readonly { readonly id: SettingsSection; readonly label: string }[];
@@ -29,6 +30,7 @@ export interface SettingsReactModel {
 }
 export type SettingsReactCommand = { readonly generation: number } & (
   | { readonly type: 'close' }
+  | { readonly type: 'help' }
   | { readonly type: 'openSettingsSnapshots' }
   | { readonly type: 'section'; readonly section: SettingsSection }
   | { readonly type: 'appearance'; readonly command: AppearancePageCommand }
