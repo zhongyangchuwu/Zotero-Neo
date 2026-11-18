@@ -227,22 +227,37 @@ it.each(['external-change', 'missing-attachment', 'read-only'])(
   },
 );
 
-it('uses one shared bounded scheduler, ignores createdAt-only churn, publishes changed settings once and stops with the last window', async () => {
+it('updates a changed snapshot after five minutes, preserving its timestamp on unchanged checks', async () => {
+  vi.setSystemTime(new Date('2026-01-01T00:00:00.000Z'));
   const { managed, value } = fixture();
-  await managed.create({ ...request, autoUpdate: true }, '', context());
+  const target = await managed.create({ ...request, autoUpdate: true }, '', context());
   const first = managed.start(context().window);
   const second = managed.start(context().window);
-  await vi.advanceTimersByTimeAsync(60_000);
+  await vi.advanceTimersByTimeAsync(300_000);
   expect(host.attachments.publish).not.toHaveBeenCalled();
+  expect((await managed.list(context()))[0]?.updatedAt).toBe(target.updatedAt);
+
   value(2);
-  await vi.advanceTimersByTimeAsync(60_000);
+  await vi.advanceTimersByTimeAsync(299_999);
+  expect(host.attachments.publish).not.toHaveBeenCalled();
+  await vi.advanceTimersByTimeAsync(1);
   expect(host.attachments.publish).toHaveBeenCalledTimes(1);
-  await vi.advanceTimersByTimeAsync(60_000);
+  const updatedAt = '2026-01-01T00:10:00.000Z';
+  const published = host.attachments.publish.mock.calls[0]!;
+  expect(published[0]).toEqual(source);
+  expect(JSON.parse(published[2])).toMatchObject({
+    createdAt: updatedAt,
+    sections: [{ entries: [{ key: 'flag', state: { kind: 'set', value: 2 } }] }],
+  });
+  expect((await managed.list(context()))[0]?.updatedAt).toBe(updatedAt);
+
+  await vi.advanceTimersByTimeAsync(300_000);
   expect(host.attachments.publish).toHaveBeenCalledTimes(1);
+  expect((await managed.list(context()))[0]?.updatedAt).toBe(updatedAt);
   first();
   second();
   value(3);
-  await vi.advanceTimersByTimeAsync(180_000);
+  await vi.advanceTimersByTimeAsync(900_000);
   expect(host.attachments.publish).toHaveBeenCalledTimes(1);
   managed.dispose();
 });
@@ -252,7 +267,7 @@ it('pauses automatic publication when the reviewed template changes and reports 
   const target = await managed.create({ ...request, autoUpdate: true }, '', context());
   Object.assign(template, { revision: 'review-2' });
   managed.start(context().window);
-  await vi.advanceTimersByTimeAsync(60_000);
+  await vi.advanceTimersByTimeAsync(300_000);
   expect((await managed.list(context()))[0]).toMatchObject({ id: target.id, status: 'paused' });
   expect(host.report).toHaveBeenCalled();
   expect(host.attachments.publish).not.toHaveBeenCalled();
@@ -316,10 +331,10 @@ it('follows native metadata and verified file relocation by item key, and preser
     source: movedSource,
   });
   managed.start(context().window);
-  await vi.advanceTimersByTimeAsync(60_000);
+  await vi.advanceTimersByTimeAsync(300_000);
   expect(host.attachments.publish).not.toHaveBeenCalled();
   value(2);
-  await vi.advanceTimersByTimeAsync(60_000);
+  await vi.advanceTimersByTimeAsync(300_000);
   expect(host.attachments.publish).toHaveBeenCalledWith(
     movedSource,
     expect.objectContaining({

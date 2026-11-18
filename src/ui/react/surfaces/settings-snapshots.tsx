@@ -619,7 +619,10 @@ export function mountSettingsSnapshotsView(
                         })
                       }
                     />
-                    {text('本机设置改变时更新附件', 'Update attachment when local settings change')}
+                    {text(
+                      '定期检查，发现变化时更新附件',
+                      'Check periodically and update the attachment if settings changed',
+                    )}
                   </label>
                 </div>
                 <p className="neo-muted">
@@ -739,12 +742,15 @@ export function mountSettingsSnapshotsView(
                         ? text('已暂停', 'Paused')
                         : text('出错', 'Error')}
                     {' · '}
-                    {new Date(target.updatedAt).toLocaleString(
-                      model.chinese ? 'zh-CN' : undefined,
-                    )}{' '}
-                    ·{' '}
+                    {text('上次写入：', 'Last written: ')}
+                    <time dateTime={target.updatedAt}>
+                      {new Date(target.updatedAt).toLocaleString(
+                        model.chinese ? 'zh-CN' : undefined,
+                      )}
+                    </time>
+                    {' · '}
                     {target.autoUpdate
-                      ? text('自动发布', 'Auto-publish')
+                      ? text('自动更新', 'Auto-update')
                       : text('仅手动', 'Manual only')}
                   </p>
                   {target.message && <p className="neo-muted">{target.message}</p>}

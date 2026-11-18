@@ -36,7 +36,7 @@ interface Binding {
 }
 const SYNC_NOTICE =
   'Stored locally; cross-device availability depends on Zotero data and attachment file sync.';
-const POLL_MS = 60_000;
+const POLL_MS = 5 * 60_000;
 function reject(code: string, message: string): never {
   throw new SettingsSnapshotError(code, message);
 }
