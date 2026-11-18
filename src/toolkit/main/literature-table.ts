@@ -8,6 +8,7 @@ import type {
   LiteratureScope,
   LiteratureTableHost,
 } from '../../literature-table/controller';
+import { LITERATURE_VIEWS_PREFERENCE } from '../../literature-table/views';
 import {
   activateMainWindow,
   mainLibrarySelection,
@@ -26,6 +27,27 @@ function literatureLibrary(id: number) {
     : null;
 }
 
+function libraryScopeID(library: NonNullable<ReturnType<typeof literatureLibrary>>): string {
+  return library.libraryType === 'user' ? 'user' : `group:${library.libraryTypeID}`;
+}
+
+/** Use Zotero's stored/linked PDF classification, never local file checks. */
+async function pdfParents(items: Zotero.Item[]): Promise<Set<number>> {
+  await Zotero.Items.loadDataTypes(items, ['childItems']);
+  const attachmentIDs: number[] = [];
+  for (const item of items) {
+    for (const id of item.getAttachments(false)) attachmentIDs.push(id);
+  }
+  const parents = new Set<number>();
+  if (attachmentIDs.length) {
+    for (const attachment of await Zotero.Items.getAsync(attachmentIDs)) {
+      if (!attachment.deleted && attachment.parentID && attachment.isPDFAttachment())
+        parents.add(attachment.parentID);
+    }
+  }
+  return parents;
+}
+
 function ordinary(item: Zotero.Item): boolean {
   return item.isRegularItem() && !item.deleted && !item.isFeedItem;
 }
@@ -35,7 +57,8 @@ function scopes(): LiteratureScope[] {
   for (const library of Zotero.Libraries.getAll()) {
     if (library.libraryType !== 'user' && library.libraryType !== 'group') continue;
     const name = Zotero.Libraries.getName(library.libraryID);
-    options.push({ id: `library:${library.libraryID}`, label: name });
+    const scopeID = libraryScopeID(library);
+    options.push({ id: scopeID, label: name });
     const collections = Zotero.Collections.getByLibrary(library.libraryID, true).filter(
       (collection) => !collection.deleted,
     );
@@ -49,7 +72,7 @@ function scopes(): LiteratureScope[] {
       )
         path.push(parent.name);
       options.push({
-        id: `collection:${collection.id}`,
+        id: `${scopeID}/${collection.key}`,
         label: `${name} / ${path.reverse().join(' / ')}`,
       });
     }
@@ -71,37 +94,47 @@ export function createLiteratureTableHost(
     initialScopeID: () => {
       const collection =
         mainScopeSelectedRows(window).length === 1 ? mainSelectedCollection(window) : undefined;
-      if (collection && !collection.deleted && literatureLibrary(collection.libraryID))
-        return `collection:${collection.id}`;
+      const collectionLibrary =
+        collection && !collection.deleted ? literatureLibrary(collection.libraryID) : null;
+      if (collection && collectionLibrary)
+        return `${libraryScopeID(collectionLibrary)}/${collection.key}`;
       const libraryID = (window as TableWindow).ZoteroPane?.getSelectedLibraryID();
-      return `library:${libraryID && literatureLibrary(libraryID) ? libraryID : Zotero.Libraries.userLibraryID}`;
+      const library = libraryID ? literatureLibrary(libraryID) : null;
+      return library ? libraryScopeID(library) : 'user';
     },
-    async readItems(scope): Promise<readonly LiteratureItem[]> {
-      const [kind, rawID] = scope.split(':');
-      const id = Number(rawID);
+    async readItems(scope, includePDF): Promise<readonly LiteratureItem[]> {
+      const [owner, key] = scope.split('/');
+      const group = owner?.startsWith('group:') ? Number(owner.slice(6)) : undefined;
+      const id =
+        owner === 'user'
+          ? Zotero.Libraries.userLibraryID
+          : group && Zotero.Groups.getLibraryIDFromGroupID(group);
+      if (!id || !literatureLibrary(id))
+        throw new Error('Literature library is no longer available');
       if (!isCurrent()) return [];
       let items: Zotero.Item[];
-      if (kind === 'collection') {
-        const collection = await Zotero.Collections.getAsync(id);
-        if (!collection || collection.deleted || !literatureLibrary(collection.libraryID))
+      if (key) {
+        const collection = await Zotero.Collections.getByLibraryAndKeyAsync(id, key);
+        if (!collection || collection.deleted)
           throw new Error('Literature collection is no longer available');
         if (!isCurrent()) return [];
         await collection.loadDataType('childItems');
         items = collection.getChildItems(false, false) || [];
       } else {
-        if (kind !== 'library' || !literatureLibrary(id))
-          throw new Error('Literature library is no longer available');
         items = await Zotero.Items.getAll(id, true, false);
       }
       if (!isCurrent()) return [];
       const candidates = items.filter(ordinary);
       await Zotero.Items.loadDataTypes(candidates, ['itemData']);
       if (!isCurrent()) return [];
+      const parents = includePDF && candidates.length ? await pdfParents(candidates) : null;
+      if (!isCurrent()) return [];
       return candidates.filter(ordinary).map((item) => ({
         id: item.id,
         title: item.getField('title', false, true),
         year: item.getField('date', false, true).match(/\b\d{4}\b/u)?.[0] ?? '',
         extra: attributesEnabled ? item.getField('extra') : '',
+        ...(includePDF ? { hasPDF: parents?.has(item.id) ?? false } : {}),
       }));
     },
     definitions() {
@@ -141,5 +174,9 @@ export function createLiteratureTableHost(
       activateMainWindow(window);
       return true;
     },
+    readViews: () => preferences.get(LITERATURE_VIEWS_PREFERENCE, ''),
+    writeViews: (raw) => preferences.set(LITERATURE_VIEWS_PREFERENCE, raw),
+    observeViews: (change) =>
+      preferences.observe?.(LITERATURE_VIEWS_PREFERENCE, change) ?? (() => {}),
   };
 }

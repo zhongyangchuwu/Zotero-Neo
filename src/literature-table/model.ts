@@ -2,6 +2,7 @@ import { exactDecimalSortKey, isExactDecimal } from '../item-attributes/decimal'
 import { readAttributeValue } from '../item-attributes/extra';
 import type { ItemAttributeDefinition } from '../item-attributes/types';
 import type { LiteratureItem, LiteratureScope } from './controller';
+import type { LiteratureFilter, LiteratureFilterField, LiteratureViewMessage } from './views';
 
 export type LiteratureLanguage = 'en' | 'zh-CN';
 export type LiteratureColumnID = 'title' | 'year' | `attribute:${string}`;
@@ -44,6 +45,16 @@ export interface LiteratureTableModel {
   readonly pageCount: number;
   readonly locating: boolean;
   readonly locateFailed: boolean;
+  readonly filterFields: readonly LiteratureFilterField[];
+  readonly filters: readonly LiteratureFilter[];
+  readonly filterUnavailable: boolean;
+  readonly layoutUnavailable: boolean;
+  readonly scopeTotal: number;
+  readonly viewNames: readonly string[];
+  readonly activeViewName: string | null;
+  readonly viewDirty: boolean;
+  readonly viewCanSave: boolean;
+  readonly viewMessage: LiteratureViewMessage | null;
 }
 
 export type LiteratureTableCommand =
@@ -52,7 +63,12 @@ export type LiteratureTableCommand =
   | { readonly type: 'sort'; readonly id: LiteratureColumnID }
   | { readonly type: 'page'; readonly delta: -1 | 1 }
   | { readonly type: 'retry' }
-  | { readonly type: 'locate'; readonly id: number };
+  | { readonly type: 'locate'; readonly id: number }
+  | { readonly type: 'filter-set'; readonly index?: number; readonly filter: LiteratureFilter }
+  | { readonly type: 'filter-remove'; readonly index: number }
+  | { readonly type: 'view-open'; readonly name: string | null }
+  | { readonly type: 'view-save'; readonly name: string; readonly replace: boolean }
+  | { readonly type: 'view-delete' };
 
 const MISSING: LiteratureCell = { state: 'missing' };
 const AMBIGUOUS: LiteratureCell = { state: 'ambiguous' };
