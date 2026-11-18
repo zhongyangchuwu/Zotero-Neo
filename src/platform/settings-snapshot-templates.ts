@@ -5,6 +5,7 @@ import {
   mainSettingsTemplatePreferenceType,
   mainSettingsTemplateDigest,
   observeMainSettingsTemplatePlugins,
+  scanMainSettingsBindings,
   type MainTemplatePlugin,
 } from '../toolkit/main';
 import { readTransferPreference, writeTransferPreference } from './settings-snapshots-host';
@@ -33,7 +34,9 @@ function target(name: string): nsIFile {
 }
 export interface SettingsTemplateHost {
   plugins(): Promise<readonly MainTemplatePlugin[]>;
+  scanBindings(pluginID: string, current: () => boolean): Promise<ReadonlySet<string>>;
   preferenceType(key: string): 'boolean' | 'number' | 'string' | null;
+  defaultPreferenceType(key: string): 'boolean' | 'number' | 'string' | null;
   digest(text: string): string;
   readPreference(key: string): SettingState;
   writePreference(key: string, state: SettingState, admit: () => void): 'exact' | 'default';
@@ -43,7 +46,9 @@ export interface SettingsTemplateHost {
 }
 export const settingsTemplateHost: SettingsTemplateHost = {
   plugins: mainSettingsTemplatePlugins,
+  scanBindings: scanMainSettingsBindings,
   preferenceType: mainSettingsTemplatePreferenceType,
+  defaultPreferenceType: (key) => mainSettingsTemplatePreferenceType(key, true),
   digest: mainSettingsTemplateDigest,
   readPreference: readTransferPreference,
   writePreference: writeTransferPreference,

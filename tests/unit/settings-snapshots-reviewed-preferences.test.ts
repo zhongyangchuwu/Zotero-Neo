@@ -25,6 +25,7 @@ function fixture() {
   const host: SettingsTemplateHost = {
     digest: (text) => createHash('sha256').update(text).digest('hex'),
     preferenceType: (key) => (key === mode ? 'string' : 'number'),
+    defaultPreferenceType: (key) => (key === mode ? 'string' : 'number'),
     readPreference: (key) => values.get(key) ?? reset,
     writePreference: vi.fn<SettingsTemplateHost['writePreference']>((key, state, admit) => {
       admit();
@@ -32,6 +33,7 @@ function fixture() {
       return 'exact';
     }),
     plugins: async () => [],
+    scanBindings: async () => new Set<string>(),
     readFiles: async () => [],
     writeFile: async () => {
       throw new Error('Not part of reviewed preference operations');

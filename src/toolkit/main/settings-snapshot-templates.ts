@@ -11,6 +11,89 @@ export interface MainTemplatePlugin {
   /** Exact app-owned defaults, independent of the supported snapshot fields; null fails closed. */
   readonly nativePreferenceKeys?: readonly string[] | null;
 }
+
+interface LoadedPane {
+  readonly pluginID?: string;
+  readonly src?: string;
+  readonly loaded?: boolean;
+  readonly container?: Element;
+}
+
+interface NativePreferences {
+  readonly panes: ReadonlyMap<string, LoadedPane>;
+  readonly _observerSymbols?: ReadonlyMap<Element, unknown>;
+  navigateToPane(id: string): Promise<void>;
+}
+
+const PREFERENCES_URI = 'chrome://zotero/content/preferences/preferences.xhtml';
+
+/** Open only the explicitly requested plugin's native panes. Return binding names, never values. */
+export async function scanMainSettingsBindings(
+  pluginID: string,
+  current: () => boolean,
+): Promise<ReadonlySet<string>> {
+  const bindings = new Set<string>();
+  const panes = Zotero.PreferencePanes.pluginPanes.flatMap(({ pluginID: owner, id, src }) =>
+    owner === pluginID && id && src ? [{ id, src }] : [],
+  );
+  if (!panes.length || panes.length > 16 || !current()) return bindings;
+  const internal = Zotero.Utilities.Internal as unknown as { openPreferences?(): Window };
+  const mediator = Services.wm as unknown as { getMostRecentWindow(type: string): Window | null };
+  const existing = mediator.getMostRecentWindow('zotero:pref');
+  const win = existing ?? internal.openPreferences?.();
+  if (!win) return bindings;
+  const native = () => {
+    if (win.closed || !current() || win.document.documentURI !== PREFERENCES_URI) return;
+    return (win as Window & { Zotero_Preferences?: NativePreferences }).Zotero_Preferences;
+  };
+  const deadline = Date.now() + 6000;
+  const controller = async (): Promise<NativePreferences | undefined> => {
+    while (!win.closed && current() && Date.now() < deadline) {
+      const host = native();
+      if (host && panes.every((pane) => host.panes.has(pane.id))) return host;
+      await Zotero.Promise.delay(25);
+    }
+  };
+  try {
+    const host = await controller();
+    if (!host?._observerSymbols) throw new Error('The native settings window is unavailable');
+    for (const pane of panes) {
+      if (native() !== host) throw new Error('The settings scan was interrupted');
+      const entry = host.panes.get(pane.id);
+      if (entry?.pluginID !== pluginID || entry.src !== pane.src)
+        throw new Error('The registered settings pane changed');
+      if (!entry.loaded) {
+        let result: 'loaded' | 'failed' | undefined;
+        void host.navigateToPane(pane.id).then(
+          () => {
+            result = 'loaded';
+          },
+          () => {
+            result = 'failed';
+          },
+        );
+        while (!result && native() === host && Date.now() < deadline) {
+          await Zotero.Promise.delay(25);
+        }
+        if (result !== 'loaded') throw new Error('The native settings pane did not load');
+      }
+      if (native() !== host || !entry.loaded || !entry.container?.isConnected)
+        throw new Error('The native settings pane was closed or replaced');
+      const controls = entry.container.querySelectorAll('[preference]');
+      if (controls.length > 2048) throw new Error('The native settings pane has too many bindings');
+      for (const node of controls) {
+        if (node?.nodeType !== 1) continue;
+        const control = node as Element;
+        const key = control.getAttribute('preference');
+        if (key && key.length <= 512 && host._observerSymbols.has(control)) bindings.add(key);
+      }
+      if (bindings.size > 2048) throw new Error('Too many native settings bindings');
+    }
+    return bindings;
+  } finally {
+    if (!existing && !win.closed) win.close();
+  }
+}
 const MAX_SOURCE = 512 * 1024;
 const MAX_PLUGINS = 256;
 interface TemplateDOMHost {
@@ -234,8 +317,10 @@ export async function mainSettingsTemplatePlugins(): Promise<readonly MainTempla
 }
 export function mainSettingsTemplatePreferenceType(
   key: string,
+  defaultOnly = false,
 ): 'boolean' | 'number' | 'string' | null {
-  const type = Services.prefs.getPrefType(key);
+  const prefs = defaultOnly ? Services.prefs.getDefaultBranch('') : Services.prefs;
+  const type = prefs.getPrefType(key);
   return type === Services.prefs.PREF_BOOL
     ? 'boolean'
     : type === Services.prefs.PREF_INT

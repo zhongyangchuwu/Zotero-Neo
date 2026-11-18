@@ -94,6 +94,7 @@ export {
   mainSettingsTemplatePreferenceType,
   mainSettingsTemplateDigest,
   observeMainSettingsTemplatePlugins,
+  scanMainSettingsBindings,
   type MainTemplatePlugin,
 } from './settings-snapshot-templates';
 export {

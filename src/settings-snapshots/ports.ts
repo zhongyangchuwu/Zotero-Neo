@@ -18,6 +18,8 @@ export interface SnapshotTemplateField {
   readonly requiresRestart: boolean;
   readonly supported: boolean;
   readonly reason?: string;
+  /** Short local declarations require confirmation from Zotero's loaded native binding. */
+  readonly requiresLiveBinding?: true;
   readonly source: string;
 }
 export interface SnapshotPluginTemplate {

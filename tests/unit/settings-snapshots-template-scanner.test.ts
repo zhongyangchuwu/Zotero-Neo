@@ -82,6 +82,51 @@ describe('inert bundled preference template discovery', () => {
     ]);
   });
 
+  it('requires corroborating short declarations in an unambiguous local namespace', () => {
+    const qualified = 'extensions.zotero.translators.formatter.enabled';
+    const unrelated = 'extensions.zotero.translators.foreign.enabled';
+    const script = 'extensions.zotero.translators.formatter.postscript';
+    const source = {
+      ...plugin('formatter@test'),
+      defaults: [{ source: 'prefs.js', text: 'pref("enabled", true);\npref("postscript", "");' }],
+      panes: [
+        {
+          source: 'preferences.xhtml',
+          text: `<checkbox preference="${qualified}"/><checkbox preference="${unrelated}"/><textbox preference="${script}"/>`,
+        },
+      ],
+    };
+    const checks = {
+      digest,
+      preferenceType: (key: string): 'string' | 'boolean' =>
+        key === script ? 'string' : 'boolean',
+      defaultPreferenceType: (key: string): 'string' | 'boolean' =>
+        key === script ? 'string' : 'boolean',
+    };
+    const discover = (sources: MainTemplatePlugin[], environment = checks) =>
+      discoverPluginTemplates(sources, environment)[0]!.fields;
+    const lookup = (fields: ReturnType<typeof discover>, key: string) =>
+      fields.find((field) => field.key === key)!;
+    const fields = discover([source]);
+    expect(lookup(fields, qualified)).toMatchObject({ supported: true, requiresLiveBinding: true });
+    expect(lookup(fields, unrelated).supported).toBe(false);
+    expect(lookup(fields, script).supported).toBe(false);
+    for (const sources of [
+      [source, plugin('formatter@another')],
+      [source, plugin('other@test', qualified)],
+      [{ ...source, nativePreferenceKeys: [qualified] }],
+    ]) {
+      expect(lookup(discover(sources), qualified).supported).toBe(false);
+    }
+    expect(
+      lookup(
+        discoverPluginTemplates([source], { ...checks, defaultPreferenceType: () => null })[0]!
+          .fields,
+        qualified,
+      ).supported,
+    ).toBe(false);
+  });
+
   it('rejects native targets and shared standard-prefix keys despite bundled plugin declarations', () => {
     const shared = 'extensions.zotero.ZoteroPDFTranslate.enableAuto';
     const templates = discoverPluginTemplates(

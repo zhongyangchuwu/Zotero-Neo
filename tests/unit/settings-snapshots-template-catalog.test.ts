@@ -14,6 +14,7 @@ const state = vi.hoisted(() => ({
   writes: [] as string[],
   persistWrites: true,
   invalidate: undefined as (() => void) | undefined,
+  liveKeys: new Set<string>(),
 }));
 vi.mock('../../src/toolkit/main', () => ({ assertCustomExtraKey: () => {} }));
 vi.mock('../../src/settings-snapshots/registry', () => ({
@@ -30,7 +31,9 @@ vi.mock('../../src/platform/settings-snapshot-templates', async () => {
       digest: (text: string) => createHash('sha256').update(text).digest('hex'),
       // node:crypto loads inside this hoisted mock because ordinary static bindings are not initialized yet.
       plugins: vi.fn(async () => state.plugins),
+      scanBindings: async () => new Set(state.liveKeys),
       preferenceType: (key: string) => (key.endsWith('.enabled') ? 'boolean' : 'string'),
+      defaultPreferenceType: (key: string) => (key.endsWith('.enabled') ? 'boolean' : null),
       readPreference: (key: string) => {
         state.reads++;
         return state.preferences.get(key) ?? { kind: 'reset' };
@@ -124,6 +127,7 @@ beforeEach(() => {
   state.reads = 0;
   state.persistWrites = true;
   state.invalidate = undefined;
+  state.liveKeys.clear();
 });
 
 describe('locally reviewed template catalog', () => {
@@ -137,6 +141,48 @@ describe('locally reviewed template catalog', () => {
     expect(draft.status).toBe('draft');
     expect(state.reads).toBe(0);
     expect(catalog.adapters).toHaveLength(2);
+    catalog.dispose();
+  });
+
+  it('requires a local native binding before review and revokes it when rescanning no longer finds it', async () => {
+    state.plugins[0] = {
+      ...plugin(),
+      defaults: [{ source: 'prefs.js', text: 'pref("enabled", true);' }],
+    };
+    let catalog = createSettingsTemplateCatalog(() => '1.0');
+    const find = (templates: Awaited<ReturnType<typeof catalog.list>>) =>
+      templates.find((template) => template.pluginID === 'sample@test')!;
+    const pending = find(await catalog.list(context()));
+    const selection = [{ key, secret: false }];
+    expect(pending.fields.find((field) => field.key === key)?.supported).toBe(false);
+    await expect(
+      catalog.review(pending.pluginID, pending.revision, selection, context()),
+    ).rejects.toThrow();
+    state.liveKeys.add(key);
+    const scanned = await catalog.scan(pending.pluginID, context());
+    await catalog.review(scanned.pluginID, scanned.revision, selection, context());
+    const exported = await catalog.exportTemplate(scanned.pluginID, context());
+    catalog.dispose();
+
+    state.preferences.set(key, set(false));
+    state.liveKeys.clear();
+    catalog = createSettingsTemplateCatalog(() => '1.0');
+    await catalog.list(context());
+    const adapter = catalog.adapters.find((entry) => entry.id === scanned.adapterID)!;
+    const captured = await adapter.capture({
+      ...context(),
+      includeSecrets: false,
+      includeLibrarySettings: false,
+    });
+    expect(captured.section.entries).toEqual([{ key, state: set(false) }]);
+
+    const changed = await catalog.scan(scanned.pluginID, context());
+    expect(changed.status).toBe('needs-review');
+    await expect(
+      adapter.capture({ ...context(), includeSecrets: false, includeLibrarySettings: false }),
+    ).rejects.toThrow();
+    await expect(catalog.importTemplate(exported, context())).rejects.toThrow();
+    expect(state.writes).toEqual([]);
     catalog.dispose();
   });
 
