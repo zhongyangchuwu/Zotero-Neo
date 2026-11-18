@@ -26,11 +26,11 @@ export function mountMetadataReviewView(
       const text = (cn: string, en: string) => (model.chinese ? cn : en);
       return (
         <div className="neo-metadata-review">
-          <h2>{text('论文信息检查与更新', 'Inspect and update paper metadata')}</h2>
+          <h2>{text('检查论文信息', 'Check paper details')}</h2>
           <p className="neo-muted">
             {text(
-              '只查询当前明确选择的范围。选择来源并开始检查；打开面板不联网、不改条目。',
-              'Only the captured items are inspected. Choose a source and start; opening this panel does not query the network or change items.',
+              '选择来源，检查打开时选定的条目。只有你确认更新后，才会修改文库条目。',
+              'Choose a source to check the items selected when this panel opened. Your library items change only when you apply an update.',
             )}
           </p>
           <div className="neo-metadata-toolbar">
@@ -69,19 +69,19 @@ export function mountMetadataReviewView(
               disabled={model.busy || !model.items.length}
               onClick={() => dispatch({ type: 'inspect' })}
             >
-              {text('检查当前条目', 'Inspect item')}
+              {text('检查当前条目', 'Check this item')}
             </Button>
             <Button
               disabled={model.busy || !model.items.length}
               onClick={() => dispatch({ type: 'inspect-all' })}
             >
-              {text('检查全部目标', 'Inspect all targets')}
+              {text('检查全部条目', 'Check all items')}
             </Button>
             <Button
               disabled={model.busy || !model.items.length}
               onClick={() => dispatch({ type: 'refresh' })}
             >
-              {text('刷新当前来源', 'Refresh item from source')}
+              {text('从来源重新查询', 'Query source again')}
             </Button>
             <Button disabled={!model.busy} onClick={() => dispatch({ type: 'stop' })}>
               {text('停止', 'Stop')}
@@ -91,7 +91,7 @@ export function mountMetadataReviewView(
             </Button>
           </div>
           <details>
-            <summary>{text('查询线索与可选 BibTeX', 'Query hints and optional BibTeX')}</summary>
+            <summary>{text('补充查询信息（BibTeX）', 'Add search details (BibTeX)')}</summary>
             <p>
               {text(
                 '使用条目已有标题、作者、年份、出版物和标识符；可补充 BibTeX 的书目字段。citekey 不会当作外部通用标识符。',
@@ -142,9 +142,9 @@ export function mountMetadataReviewView(
               <table className="neo-metadata-fields">
                 <thead>
                   <tr>
-                    <th>{text('采纳字段', 'Apply field')}</th>
-                    <th>{text('审阅原值', 'Reviewed original')}</th>
-                    <th>{text('来源建议', 'Source proposal')}</th>
+                    <th>{text('更新字段', 'Field to update')}</th>
+                    <th>{text('检查时的值', 'Value when checked')}</th>
+                    <th>{text('建议值', 'Suggested value')}</th>
                   </tr>
                 </thead>
                 <tbody>
@@ -189,24 +189,24 @@ export function mountMetadataReviewView(
               disabled={!model.canApply || model.busy}
               onClick={() => dispatch({ type: 'apply' })}
             >
-              {text('采纳选中字段', 'Apply selected fields')}
+              {text('更新所选字段', 'Update selected fields')}
             </Button>
             <Button
               disabled={!model.canSave || model.busy}
               onClick={() => dispatch({ type: 'save' })}
             >
-              {text('保存审阅成果与笔记', 'Save review artifact and note')}
+              {text('保存结果和笔记', 'Save results and note')}
             </Button>
           </div>
           <details>
             <summary>
-              {text('已有成果／外部建议', 'Saved results / external proposals')} (
+              {text('已保存的结果和外部建议', 'Saved results and external suggestions')} (
               {model.history.length})
             </summary>
             <p>
               {text(
-                '外部附件是不可信的建议，不会自动执行。载入后按当前条目重新计算差异，再由你采纳。',
-                'External attachments are untrusted proposals, never commands. Loading recomputes differences against the current item for your review.',
+                '打开结果或建议时，会与条目现有信息重新比较，不会自动更新字段。',
+                'Opening results or suggestions compares them with the current item. No fields are updated automatically.',
               )}
             </p>
             {model.history.map((entry) => (
