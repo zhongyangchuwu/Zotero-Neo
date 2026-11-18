@@ -3,6 +3,7 @@ import type { MainWindow } from '../core/contracts';
 import { neoCommandLanguage } from '../core/preferences';
 import type { PreferenceStore } from '../core/preference-store';
 import { mountLiteratureTable } from '../literature-table/controller';
+import { setItemAttribute } from '../operations/item-attributes';
 import { isDeadObject } from '../platform/cross-compartment';
 import { LITERATURE_WINDOW_URI, openLiteratureWindow } from '../platform/literature-window';
 import { createLiteratureTableHost } from '../toolkit/main';
@@ -39,7 +40,13 @@ export class LiteratureTableWindows {
       const entry = { window, scope };
       this.#windows.set(owner, entry);
       scope.add(unobserve);
-      const isCurrent = (): boolean => this.#windows.get(owner) === entry && !scope.disposed;
+      const isCurrent = (): boolean =>
+        this.#windows.get(owner) === entry &&
+        !scope.disposed &&
+        !isDeadObject(owner) &&
+        !owner.closed &&
+        !isDeadObject(window) &&
+        !window.closed;
       const mount = (): boolean => {
         if (!isCurrent() || window.document.documentURI !== LITERATURE_WINDOW_URI) return false;
         const document = window.document;
@@ -61,6 +68,12 @@ export class LiteratureTableWindows {
                 this.#preferences,
                 this.#attributesEnabled,
                 isCurrent,
+                async (item, definition, value, expected, current) => {
+                  await setItemAttribute([item], definition, value, {
+                    expected: new Map([[item.id, expected]]),
+                    isCurrent: current,
+                  });
+                },
               ),
               language,
               this.#report,

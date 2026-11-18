@@ -2,7 +2,11 @@ import { CleanupScope } from '../../core/cleanup';
 import type { MainWindow } from '../../core/contracts';
 import type { PreferenceStore } from '../../core/preference-store';
 import { parseItemAttributeDefinitions } from '../../item-attributes/store';
-import { ITEM_ATTRIBUTE_PREFERENCE } from '../../item-attributes/types';
+import {
+  ITEM_ATTRIBUTE_PREFERENCE,
+  type ItemAttributeDefinition,
+  type ItemAttributeState,
+} from '../../item-attributes/types';
 import type {
   LiteratureItem,
   LiteratureScope,
@@ -104,14 +108,20 @@ function dateValue(raw: string): LiteratureDateValue {
   return { text, key: !part && key === full ? key : null };
 }
 
-function literatureLibrary(id: number) {
+type LiteratureLibrary = Zotero.Library | Zotero.Group;
+
+function literatureLibrary(id: number): LiteratureLibrary | null {
   const library = Zotero.Libraries.get(id);
   return library && (library.libraryType === 'user' || library.libraryType === 'group')
     ? library
     : null;
 }
 
-function libraryScopeID(library: NonNullable<ReturnType<typeof literatureLibrary>>): string {
+function writableLibrary(library: LiteratureLibrary): boolean {
+  return library.editable === true && !library.archived;
+}
+
+function libraryScopeID(library: LiteratureLibrary): string {
   return library.libraryType === 'user' ? 'user' : `group:${library.libraryTypeID}`;
 }
 
@@ -170,10 +180,18 @@ export function createLiteratureTableHost(
   preferences: PreferenceStore,
   attributesEnabled: boolean,
   isCurrent: () => boolean,
+  writeAttribute: (
+    item: Zotero.Item,
+    definition: ItemAttributeDefinition,
+    value: string | null,
+    expected: ItemAttributeState,
+    isCurrent: () => boolean,
+  ) => Promise<void>,
 ): LiteratureTableHost {
   let definitionsRaw: string | undefined;
-  let definitions: ReturnType<typeof parseItemAttributeDefinitions> = [];
+  let definitions: readonly ItemAttributeDefinition[] = [];
   let bibliography: readonly LiteratureNativeField[] | undefined;
+  const editItems = new WeakMap<LiteratureItem, Zotero.Item>();
   return {
     scopes,
     nativeFields(language) {
@@ -206,8 +224,8 @@ export function createLiteratureTableHost(
         owner === 'user'
           ? Zotero.Libraries.userLibraryID
           : group && Zotero.Groups.getLibraryIDFromGroupID(group);
-      if (!id || !literatureLibrary(id))
-        throw new Error('Literature library is no longer available');
+      const library = id ? literatureLibrary(id) : null;
+      if (!id || !library) throw new Error('Literature library is no longer available');
       if (!isCurrent()) return [];
       let items: Zotero.Item[];
       if (key) {
@@ -224,7 +242,9 @@ export function createLiteratureTableHost(
       const candidates = items.filter(ordinary);
       const includeTags = nativeFields.has('native:tags');
       const includeCreators = nativeFields.has('native:creators');
-      const dataTypes: ('tags' | 'creators' | 'itemData')[] = ['itemData'];
+      const attributesWritable = attributesEnabled && writableLibrary(library);
+      const dataTypes: ('tags' | 'creators' | 'itemData' | 'collections')[] = ['itemData'];
+      if (attributesWritable && key) dataTypes.push('collections');
       if (includeTags) dataTypes.push('tags');
       if (includeCreators) dataTypes.push('creators');
       await Zotero.Items.loadDataTypes(candidates, dataTypes);
@@ -274,14 +294,18 @@ export function createLiteratureTableHost(
             if (value) native[id] = kind === 'date' ? dateValue(value) : value;
           }
         }
-        return {
+        const writable = attributesWritable && item.isEditable();
+        const projected: LiteratureItem = {
           id: item.id,
           title: item.getField('title', false, true),
           year: (publicationDate?.text ?? rawDate).match(/\b\d{4}\b/u)?.[0] ?? '',
           extra: attributesEnabled ? item.getField('extra') : '',
+          ...(writable ? { attributesWritable: true } : {}),
           ...(includePDF ? { hasPDF: parents?.has(item.id) ?? false } : {}),
           ...(native ? { native } : {}),
         };
+        if (writable) editItems.set(projected, item);
+        return projected;
       });
     },
     definitions() {
@@ -293,17 +317,56 @@ export function createLiteratureTableHost(
       }
       return definitions;
     },
+    prepareEdit(scopeID, projected) {
+      const item = editItems.get(projected);
+      if (!item || !isCurrent()) return undefined;
+      const library = literatureLibrary(item.libraryID);
+      const [owner, key] = scopeID.split('/');
+      if (!library || libraryScopeID(library) !== owner) return undefined;
+      const collection = key ? Zotero.Collections.getByLibraryAndKey(library.libraryID, key) : null;
+      if (key && !collection) return undefined;
+      // The native operation calls this again inside its transaction. A row
+      // need not still pass the table filters, but its native scope must hold.
+      const isWritable = () =>
+        isCurrent() &&
+        Zotero.Items.get(projected.id) === item &&
+        item.libraryID === library.libraryID &&
+        literatureLibrary(library.libraryID) === library &&
+        writableLibrary(library) &&
+        ordinary(item) &&
+        item.isEditable() &&
+        (!collection ||
+          (Zotero.Collections.get(collection.id) === collection &&
+            !collection.deleted &&
+            item.getCollections().includes(collection.id)));
+      if (!isWritable()) return undefined;
+      return {
+        isWritable,
+        readExtra: () => item.getField('extra'),
+        save: (definition, value, expected, current) =>
+          writeAttribute(item, definition, value, expected, current),
+      };
+    },
     observe(change) {
       const cleanup = new CleanupScope();
       try {
         const id = Zotero.Notifier.registerObserver(
-          { notify: change },
+          {
+            notify: (_event, type) =>
+              change(
+                type === 'item' || type === 'item-tag' || type === 'tag' ? 'items' : 'catalog',
+              ),
+          },
           ['item', 'item-tag', 'tag', 'collection', 'collection-item', 'group'],
           'neo-literature-table',
         );
         cleanup.add(() => Zotero.Notifier.unregisterObserver(id));
+        // Even removal and restoration before the next projection retires the old schema.
         const unobserve = attributesEnabled
-          ? preferences.observe?.(ITEM_ATTRIBUTE_PREFERENCE, change)
+          ? preferences.observe?.(ITEM_ATTRIBUTE_PREFERENCE, () => {
+              definitionsRaw = undefined;
+              change('catalog');
+            })
           : undefined;
         if (unobserve) cleanup.add(unobserve);
         return () => cleanup.dispose();

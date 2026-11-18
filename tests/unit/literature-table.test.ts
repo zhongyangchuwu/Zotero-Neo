@@ -2,7 +2,7 @@ import { afterEach, describe, expect, it, vi } from 'vitest';
 import type { Cleanup } from '../../src/core/cleanup';
 import type { MainWindow } from '../../src/core/contracts';
 import type { PreferenceStore } from '../../src/core/preference-store';
-import type { ItemAttributeDefinition } from '../../src/item-attributes/types';
+import type { ItemAttributeDefinition, ItemAttributeState } from '../../src/item-attributes/types';
 import {
   mountLiteratureTable,
   type LiteratureItem,
@@ -55,11 +55,20 @@ function open(initialID: string | undefined = collection.id, storage = { raw: ''
     { id: string } & LiteratureReadOptions & PromiseWithResolvers<readonly LiteratureItem[]>
   > = [];
   let dispatch!: (command: LiteratureTableCommand) => void;
-  let changed: (() => void) | undefined;
+  let changed: ((kind: 'items' | 'catalog') => void) | undefined;
   let viewsChanged: (() => void) | undefined;
   const disposeView = vi.fn();
   const reportError = vi.fn();
   const locate = vi.fn((_id: number) => Promise.resolve(true));
+  const save = vi.fn(
+    (
+      _definition: ItemAttributeDefinition,
+      _value: string | null,
+      _expected: ItemAttributeState,
+      _isCurrent: () => boolean,
+    ) => Promise.resolve(),
+  );
+  const liveEdit = { writable: true, extra: undefined as string | undefined };
   const unobserve = vi.fn(() => {
     changed = undefined;
   });
@@ -86,6 +95,13 @@ function open(initialID: string | undefined = collection.id, storage = { raw: ''
       initialScopeID: () => initialID,
       definitions: () => catalog.definitions,
       nativeFields: () => nativeFields,
+      prepareEdit(id, projected) {
+        return {
+          isWritable: () => liveEdit.writable && catalog.scopes.some((scope) => scope.id === id),
+          readExtra: () => liveEdit.extra ?? projected.extra,
+          save,
+        };
+      },
       readItems(id, options) {
         const gate = Promise.withResolvers<readonly LiteratureItem[]>();
         reads.push({ id, ...options, ...gate });
@@ -117,12 +133,14 @@ function open(initialID: string | undefined = collection.id, storage = { raw: ''
       return updates.at(-1)!;
     },
     send: dispatch,
-    notify: () => changed?.(),
+    notify: (kind: 'items' | 'catalog' = 'items') => changed?.(kind),
     notifyViews: () => viewsChanged?.(),
     reads,
     updates,
     catalog,
     locate,
+    save,
+    liveEdit,
     reportError,
     dispose,
     disposeView,
@@ -130,7 +148,7 @@ function open(initialID: string | undefined = collection.id, storage = { raw: ''
   };
 }
 
-describe('literature table read-only workbench', () => {
+describe('literature table workbench', () => {
   it('sorts numbers exactly, preserves spelling, and keeps unorderable cells last both ways', async () => {
     const table = open();
     table.reads[0]!.resolve([
@@ -164,8 +182,12 @@ describe('literature table read-only workbench', () => {
       { state: 'invalid', value: '0x10' },
       { state: 'missing' },
     ]);
-    table.send({ type: 'sort', id: 'attribute:score' });
+    table.send({ type: 'sort', id: 'attribute:score', direction: 'descending' });
     expect(table.model.rows.map(({ id }) => id)).toEqual([6, 5, 9, 2, 10, 4, 3, 8, 14, 16, 18]);
+    table.send({ type: 'sort', id: 'attribute:score', direction: 'descending' });
+    expect(table.model.sortDirection).toBe('descending');
+    table.send({ type: 'sort', id: 'attribute:score' });
+    expect(table.model.sortDirection).toBe('ascending');
     expect(table.locate).not.toHaveBeenCalled();
   });
 
@@ -295,6 +317,200 @@ describe('literature table read-only workbench', () => {
   });
 });
 
+describe('literature inline editing', () => {
+  const column = 'attribute:score';
+  const highScore: LiteratureFilter = {
+    field: column,
+    kind: 'number',
+    operator: 'at-least',
+    value: '8',
+  };
+
+  async function openScoredPaper() {
+    const table = open();
+    const paper = { ...item(1, 'Research Score: 9.00'), attributesWritable: true };
+    table.reads[0]!.resolve([paper]);
+    await Promise.resolve();
+    table.send({ type: 'column', id: 'score' });
+    table.send({ type: 'filter-set', filter: highScore });
+    table.send({ type: 'cell-open', id: 1, column });
+    return { table, paper };
+  }
+
+  it('waits for the writer and latest projection before confirming a filtered-out save', async () => {
+    const { table, paper } = await openScoredPaper();
+    const operation = Promise.withResolvers<void>();
+    table.save.mockReturnValue(operation.promise);
+    expect(table.model.edit).toEqual({
+      id: 1,
+      column,
+      label: 'Score',
+      definition: score,
+      value: '9.00',
+      status: 'idle',
+    });
+    expect(table.model.columns.at(-1)?.kind).toBe('number');
+    table.send({ type: 'cell-save', requestId: 1, value: '5.00' });
+    table.send({ type: 'cell-save', requestId: 1, value: '5.00' });
+    table.send({ type: 'cell-save', requestId: 2, value: '7' });
+    expect(table.save).toHaveBeenCalledExactlyOnceWith(
+      score,
+      '5.00',
+      { ambiguous: false, value: '9.00' },
+      expect.any(Function),
+    );
+    expect(table.model.edit).toMatchObject({ status: 'saving', requestId: 1, value: '9.00' });
+    expect(table.model.rows[0]?.cells.at(-1)).toMatchObject({ value: '9.00', editable: true });
+
+    table.notify();
+    await Promise.resolve();
+    expect(table.model.status).toBe('ready');
+    expect(table.model.rows[0]?.cells.at(-1)).toMatchObject({ value: '9.00' });
+    table.reads[1]!.resolve([paper]);
+    await Promise.resolve();
+    expect(table.model.edit?.status).toBe('saving');
+    operation.resolve();
+    await Promise.resolve();
+    await Promise.resolve();
+    expect(table.model.edit?.status).toBe('saving');
+    expect(table.model.status).toBe('ready');
+    expect(table.model.rows[0]?.cells.at(-1)).toMatchObject({ value: '9.00' });
+    const updated = { ...paper, extra: 'Research Score: 5.00' };
+    table.reads[2]!.resolve([updated]);
+    await Promise.resolve();
+    expect(table.model).toMatchObject({
+      rows: [],
+      scopeTotal: 1,
+      edit: { status: 'saved', requestId: 1 },
+    });
+
+    table.send({ type: 'filter-remove', index: 0 });
+    expect(table.model.edit?.status).toBe('saved');
+    expect(table.model.rows[0]?.cells.at(-1)).toMatchObject({ value: '5.00' });
+    table.send({ type: 'cell-cancel' });
+    expect(table.model.edit).toBeUndefined();
+    expect(table.model.rows[0]?.cells.at(-1)).toMatchObject({ value: '5.00' });
+  });
+
+  it('preserves a detached failed edit and its displayed baseline after an external change', async () => {
+    const { table, paper } = await openScoredPaper();
+    const operation = Promise.withResolvers<void>();
+    const conflict = new Error('native stale Extra');
+    table.save.mockReturnValue(operation.promise);
+    table.send({ type: 'cell-save', requestId: 3, value: '7' });
+    const changedExtra = 'Research Score: 2';
+    table.liveEdit.extra = changedExtra;
+    table.notify();
+    await Promise.resolve();
+    table.reads[1]!.resolve([{ ...paper, extra: changedExtra }]);
+    await Promise.resolve();
+    expect(table.model.rows).toEqual([]);
+
+    operation.reject(conflict);
+    await Promise.resolve();
+    expect(table.model.edit).toMatchObject({
+      id: 1,
+      column,
+      status: 'error',
+      requestId: 3,
+      value: '9.00',
+      message: expect.stringContaining('changed in Zotero'),
+    });
+    expect(table.reportError).toHaveBeenCalledWith(conflict);
+    table.send({ type: 'cell-save', requestId: 3, value: '7' });
+    expect(table.save).toHaveBeenCalledTimes(1);
+
+    table.save.mockRejectedValueOnce(conflict);
+    table.send({ type: 'cell-save', requestId: 4, value: null });
+    expect(table.save).toHaveBeenLastCalledWith(
+      score,
+      null,
+      { ambiguous: false, value: '9.00' },
+      expect.any(Function),
+    );
+    await Promise.resolve();
+    expect(table.model.edit).toMatchObject({ status: 'error', requestId: 4, value: '9.00' });
+    table.send({ type: 'cell-cancel' });
+    table.send({ type: 'filter-remove', index: 0 });
+    expect(table.model.rows[0]?.cells.at(-1)).toMatchObject({ value: '2' });
+  });
+
+  it('rejects opens on read-only or ambiguous cells and submits nothing under a stale definition', async () => {
+    const table = open();
+    table.reads[0]!.resolve([
+      item(1, 'Research Score: 9'),
+      { ...item(2, 'Research Score: 8\nresearch_score: 10'), attributesWritable: true },
+      { ...item(3), attributesWritable: true },
+    ]);
+    await Promise.resolve();
+    table.send({ type: 'column', id: 'score' });
+    table.send({ type: 'cell-open', id: 1, column });
+    table.send({ type: 'cell-open', id: 2, column });
+    table.send({ type: 'cell-open', id: 3, column: 'title' });
+    expect(table.model.edit).toBeUndefined();
+    table.send({ type: 'cell-open', id: 3, column });
+    expect(table.model.edit?.value).toBeNull();
+    table.catalog.definitions = [{ ...score, label: 'Revised score' }];
+    table.send({ type: 'cell-save', requestId: 1, value: '3' });
+    expect(table.save).not.toHaveBeenCalled();
+    expect(table.model.edit).toMatchObject({
+      id: 3,
+      column,
+      status: 'error',
+      requestId: 1,
+      value: null,
+    });
+    table.notify('catalog');
+    table.notify('items');
+    await Promise.resolve();
+    expect(table.model).toMatchObject({ status: 'loading', rows: [], edit: { status: 'error' } });
+    table.reads[1]!.resolve([]);
+    await Promise.resolve();
+    expect(table.model.columns.at(-1)?.label).toBe('Revised score');
+  });
+
+  it('keeps filter refresh separate from transactional admission and retires writes on scope switch', async () => {
+    const { table } = await openScoredPaper();
+    const operation = Promise.withResolvers<void>();
+    table.save.mockReturnValue(operation.promise);
+    table.send({ type: 'cell-save', requestId: 1, value: null });
+    const isCurrent = table.save.mock.calls[0]![3];
+    table.send({ type: 'filter-set', index: 0, filter: { ...highScore, value: '10' } });
+    expect(table.model.rows).toEqual([]);
+    expect(table.model.edit?.status).toBe('saving');
+    expect(isCurrent()).toBe(true);
+
+    table.send({ type: 'scope', id: library.id });
+    expect(isCurrent()).toBe(false);
+    expect(table.model.edit).toBeUndefined();
+    table.send({ type: 'scope', id: collection.id });
+    expect(isCurrent()).toBe(false);
+    operation.reject(new Error('retired transaction'));
+    await Promise.resolve();
+    expect(table.model.edit).toBeUndefined();
+  });
+
+  it('cannot resubmit an already committed save when only the refresh failed', async () => {
+    const { table } = await openScoredPaper();
+    table.send({ type: 'cell-save', requestId: 1, value: '10' });
+    await Promise.resolve();
+    await Promise.resolve();
+    table.reads[1]!.reject(new Error('projection unavailable'));
+    await Promise.resolve();
+    expect(table.model).toMatchObject({
+      status: 'error',
+      edit: { status: 'error', requestId: 1, message: expect.stringContaining('was saved') },
+    });
+    table.send({ type: 'cell-save', requestId: 2, value: '10' });
+    expect(table.save).toHaveBeenCalledTimes(1);
+    table.send({ type: 'retry' });
+    table.reads[2]!.resolve([item(1, 'Research Score: 10')]);
+    await Promise.resolve();
+    expect(table.model.edit).toMatchObject({ status: 'saved', requestId: 1 });
+    expect(table.model.rows[0]?.cells.at(-1)).toMatchObject({ value: '10' });
+  });
+});
+
 describe('literature filters and saved views', () => {
   const threshold: LiteratureFilter = {
     field: 'attribute:score',
@@ -334,7 +550,11 @@ describe('literature filters and saved views', () => {
     });
     expect(table.model.rows.map(({ id }) => id)).toEqual([1]);
     expect(table.model.columns.at(-1)?.label).toBe('Phase');
-    expect(table.model.rows[0]?.cells.at(-1)).toEqual({ state: 'value', value: 'Reading' });
+    expect(table.model.rows[0]?.cells.at(-1)).toEqual({
+      state: 'value',
+      value: 'Reading',
+      choices: [{ id: 'reading', label: 'Reading' }],
+    });
   });
 
   it('saves the scope, columns, sort and intersected filters, then restores them after reopening', async () => {
@@ -582,7 +802,9 @@ describe('native literature fields', () => {
       sdkItem(6, '2024-06-12 June 12, 2024', 'June 12, 2024'),
     ];
     const load = vi.fn(() => Promise.resolve());
-    const register = vi.fn(() => 'literature-observer');
+    const register = vi.fn(
+      (_observer: { notify: (event: string, type: string) => void }) => 'literature-observer',
+    );
     const unregister = vi.fn();
     const writes = vi.fn();
     vi.stubGlobal('Zotero', {
@@ -622,6 +844,7 @@ describe('native literature fields', () => {
       { set: writes } as unknown as PreferenceStore,
       false,
       () => true,
+      vi.fn(() => Promise.resolve()),
     );
     const catalog = host.nativeFields('en').map(({ id }) => id);
     expect(catalog).toEqual(
@@ -677,12 +900,83 @@ describe('native literature fields', () => {
     const modified = vi.fn();
     const dispose = host.observe(modified);
     expect(register).toHaveBeenCalledWith(
-      { notify: modified },
+      { notify: expect.any(Function) },
       expect.arrayContaining(['item', 'item-tag', 'tag']),
       'neo-literature-table',
     );
+    const observer = register.mock.calls[0]![0];
+    observer.notify('modify', 'item');
+    observer.notify('modify', 'collection');
+    expect(modified.mock.calls).toEqual([['items'], ['catalog']]);
     dispose();
     expect(unregister).toHaveBeenCalledWith('literature-observer');
     expect(writes).not.toHaveBeenCalled();
+  });
+
+  it('only admits the projected native identity while owner, library, and membership stay writable', async () => {
+    let ownerCurrent = true;
+    let memberships = [2];
+    const nativeLibrary = { libraryID: 1, libraryType: 'user', editable: true, archived: false };
+    const paper = {
+      id: 1,
+      libraryID: 1,
+      deleted: false,
+      isFeedItem: false,
+      isRegularItem: () => true,
+      isEditable: () => true,
+      getCollections: () => memberships,
+      getField: (name: string) => (name === 'extra' ? 'Research Score: 9' : ''),
+    };
+    let liveItem = paper;
+    const nativeCollection = {
+      id: 2,
+      deleted: false,
+      loadDataType: () => Promise.resolve(),
+      getChildItems: () => [paper],
+    };
+    vi.stubGlobal('Zotero', {
+      Libraries: { userLibraryID: 1, get: () => nativeLibrary },
+      Collections: {
+        get: () => nativeCollection,
+        getByLibraryAndKey: () => nativeCollection,
+        getByLibraryAndKeyAsync: () => Promise.resolve(nativeCollection),
+      },
+      Items: { get: () => liveItem, loadDataTypes: () => Promise.resolve() },
+    });
+    const write = vi.fn(() => Promise.resolve());
+    const host = createLiteratureTableHost(
+      {} as MainWindow,
+      {} as PreferenceStore,
+      true,
+      () => ownerCurrent,
+      write,
+    );
+    const scopeID = 'user/COLLECT1';
+    const options = { includePDF: false, nativeFields: new Set<never>() };
+    const [row] = await host.readItems(scopeID, options);
+    expect(row?.attributesWritable).toBe(true);
+    const target = host.prepareEdit(scopeID, row!)!;
+    const expected = { ambiguous: false, value: '9' };
+    await target.save(score, '8', expected, target.isWritable);
+    expect(write).toHaveBeenCalledExactlyOnceWith(paper, score, '8', expected, target.isWritable);
+
+    liveItem = { ...paper };
+    expect(target.isWritable()).toBe(false);
+    expect(host.prepareEdit(scopeID, row!)).toBeUndefined();
+    liveItem = paper;
+    memberships = [];
+    expect(target.isWritable()).toBe(false);
+    memberships = [2];
+    nativeCollection.deleted = true;
+    expect(target.isWritable()).toBe(false);
+    nativeCollection.deleted = false;
+    nativeLibrary.editable = false;
+    expect(target.isWritable()).toBe(false);
+    const [readOnlyRow] = await host.readItems(scopeID, options);
+    expect(readOnlyRow?.attributesWritable).toBeUndefined();
+    expect(host.prepareEdit(scopeID, readOnlyRow!)).toBeUndefined();
+    nativeLibrary.editable = true;
+    ownerCurrent = false;
+    expect(target.isWritable()).toBe(false);
   });
 });

@@ -28,9 +28,9 @@ var __toESM = (mod, isNodeMode, target) => (target = mod != null ? __create(__ge
   mod
 ));
 
-// ../../../../../tmp/neo-runtime-vendor-yn5S2u/node_modules/react/cjs/react.production.js
+// node_modules/react/cjs/react.production.js
 var require_react_production = __commonJS({
-  "../../../../../tmp/neo-runtime-vendor-yn5S2u/node_modules/react/cjs/react.production.js"(exports) {
+  "node_modules/react/cjs/react.production.js"(exports) {
     "use strict";
     var REACT_ELEMENT_TYPE = /* @__PURE__ */ Symbol.for("react.transitional.element");
     var REACT_PORTAL_TYPE = /* @__PURE__ */ Symbol.for("react.portal");
@@ -480,9 +480,9 @@ var require_react_production = __commonJS({
   }
 });
 
-// ../../../../../tmp/neo-runtime-vendor-yn5S2u/node_modules/react/index.js
+// node_modules/react/index.js
 var require_react = __commonJS({
-  "../../../../../tmp/neo-runtime-vendor-yn5S2u/node_modules/react/index.js"(exports, module) {
+  "node_modules/react/index.js"(exports, module) {
     "use strict";
     if (true) {
       module.exports = require_react_production();
@@ -492,9 +492,234 @@ var require_react = __commonJS({
   }
 });
 
-// ../../../../../tmp/neo-runtime-vendor-yn5S2u/node_modules/scheduler/cjs/scheduler.production.js
+// node_modules/react-dom/cjs/react-dom.production.js
+var require_react_dom_production = __commonJS({
+  "node_modules/react-dom/cjs/react-dom.production.js"(exports) {
+    "use strict";
+    var React2 = require_react();
+    function formatProdErrorMessage(code) {
+      var url = "https://react.dev/errors/" + code;
+      if (1 < arguments.length) {
+        url += "?args[]=" + encodeURIComponent(arguments[1]);
+        for (var i = 2; i < arguments.length; i++)
+          url += "&args[]=" + encodeURIComponent(arguments[i]);
+      }
+      return "Minified React error #" + code + "; visit " + url + " for the full message or use the non-minified dev environment for full errors and additional helpful warnings.";
+    }
+    function noop() {
+    }
+    var Internals = {
+      d: {
+        f: noop,
+        r: function() {
+          throw Error(formatProdErrorMessage(522));
+        },
+        D: noop,
+        C: noop,
+        L: noop,
+        m: noop,
+        X: noop,
+        S: noop,
+        M: noop
+      },
+      p: 0,
+      findDOMNode: null
+    };
+    var REACT_PORTAL_TYPE = /* @__PURE__ */ Symbol.for("react.portal");
+    var REACT_RECOVERABLE_TYPE = /* @__PURE__ */ Symbol.for("react.recoverable");
+    var REACT_OPTIMISTIC_KEY = /* @__PURE__ */ Symbol.for("react.optimistic_key");
+    function createPortal$1(children, containerInfo, implementation) {
+      var key = 3 < arguments.length && void 0 !== arguments[3] ? arguments[3] : null;
+      return {
+        $$typeof: REACT_PORTAL_TYPE,
+        key: null == key ? null : key === REACT_OPTIMISTIC_KEY ? REACT_OPTIMISTIC_KEY : "" + key,
+        children,
+        containerInfo,
+        implementation
+      };
+    }
+    var ReactSharedInternals = React2.__CLIENT_INTERNALS_DO_NOT_USE_OR_WARN_USERS_THEY_CANNOT_UPGRADE;
+    function getCrossOriginStringAs(as, input) {
+      if ("font" === as) return "";
+      if ("string" === typeof input)
+        return "use-credentials" === input ? input : "";
+    }
+    exports.__DOM_INTERNALS_DO_NOT_USE_OR_WARN_USERS_THEY_CANNOT_UPGRADE = Internals;
+    exports.browser = function(reason) {
+      return { $$typeof: REACT_RECOVERABLE_TYPE, _reason: reason };
+    };
+    exports.createPortal = function(children, container) {
+      var key = 2 < arguments.length && void 0 !== arguments[2] ? arguments[2] : null;
+      if (!container || 1 !== container.nodeType && 9 !== container.nodeType && 11 !== container.nodeType)
+        throw Error(formatProdErrorMessage(299));
+      return createPortal$1(children, container, null, key);
+    };
+    exports.flushSync = function(fn) {
+      var previousTransition = ReactSharedInternals.T, previousUpdatePriority = Internals.p;
+      try {
+        if (ReactSharedInternals.T = null, Internals.p = 2, fn) return fn();
+      } finally {
+        ReactSharedInternals.T = previousTransition, Internals.p = previousUpdatePriority, Internals.d.f();
+      }
+    };
+    exports.preconnect = function(href, options) {
+      "string" === typeof href && (options ? (options = options.crossOrigin, options = "string" === typeof options ? "use-credentials" === options ? options : "" : void 0) : options = null, Internals.d.C(href, options));
+    };
+    exports.prefetchDNS = function(href) {
+      "string" === typeof href && Internals.d.D(href);
+    };
+    exports.preinit = function(href, options) {
+      if ("string" === typeof href && options && "string" === typeof options.as) {
+        var as = options.as, crossOrigin = getCrossOriginStringAs(as, options.crossOrigin), integrity = "string" === typeof options.integrity ? options.integrity : void 0, fetchPriority = "string" === typeof options.fetchPriority ? options.fetchPriority : void 0;
+        "style" === as ? Internals.d.S(
+          href,
+          "string" === typeof options.precedence ? options.precedence : void 0,
+          {
+            crossOrigin,
+            integrity,
+            fetchPriority
+          }
+        ) : "script" === as && Internals.d.X(href, {
+          crossOrigin,
+          integrity,
+          fetchPriority,
+          nonce: "string" === typeof options.nonce ? options.nonce : void 0
+        });
+      }
+    };
+    exports.preinitModule = function(href, options) {
+      if ("string" === typeof href)
+        if ("object" === typeof options && null !== options) {
+          if (null == options.as || "script" === options.as) {
+            var crossOrigin = getCrossOriginStringAs(
+              options.as,
+              options.crossOrigin
+            );
+            Internals.d.M(href, {
+              crossOrigin,
+              integrity: "string" === typeof options.integrity ? options.integrity : void 0,
+              nonce: "string" === typeof options.nonce ? options.nonce : void 0,
+              fetchPriority: "string" === typeof options.fetchPriority ? options.fetchPriority : void 0
+            });
+          }
+        } else null == options && Internals.d.M(href);
+    };
+    exports.preload = function(href, options) {
+      if ("string" === typeof href && "object" === typeof options && null !== options && "string" === typeof options.as) {
+        var as = options.as, crossOrigin = getCrossOriginStringAs(as, options.crossOrigin);
+        Internals.d.L(href, as, {
+          crossOrigin,
+          integrity: "string" === typeof options.integrity ? options.integrity : void 0,
+          nonce: "string" === typeof options.nonce ? options.nonce : void 0,
+          type: "string" === typeof options.type ? options.type : void 0,
+          fetchPriority: "string" === typeof options.fetchPriority ? options.fetchPriority : void 0,
+          referrerPolicy: "string" === typeof options.referrerPolicy ? options.referrerPolicy : void 0,
+          imageSrcSet: "string" === typeof options.imageSrcSet ? options.imageSrcSet : void 0,
+          imageSizes: "string" === typeof options.imageSizes ? options.imageSizes : void 0,
+          media: "string" === typeof options.media ? options.media : void 0
+        });
+      }
+    };
+    exports.preloadModule = function(href, options) {
+      if ("string" === typeof href)
+        if (options) {
+          var crossOrigin = getCrossOriginStringAs(options.as, options.crossOrigin);
+          Internals.d.m(href, {
+            as: "string" === typeof options.as && "script" !== options.as ? options.as : void 0,
+            crossOrigin,
+            integrity: "string" === typeof options.integrity ? options.integrity : void 0,
+            nonce: "string" === typeof options.nonce ? options.nonce : void 0,
+            fetchPriority: "string" === typeof options.fetchPriority ? options.fetchPriority : void 0
+          });
+        } else Internals.d.m(href);
+    };
+    exports.requestFormReset = function(form) {
+      Internals.d.r(form);
+    };
+    exports.unstable_batchedUpdates = function(fn, a) {
+      return fn(a);
+    };
+    exports.useFormState = function(action, initialState, permalink) {
+      return ReactSharedInternals.H.useFormState(action, initialState, permalink);
+    };
+    exports.useFormStatus = function() {
+      return ReactSharedInternals.H.useHostTransitionStatus();
+    };
+    exports.version = "19.3.1";
+  }
+});
+
+// node_modules/react-dom/index.js
+var require_react_dom = __commonJS({
+  "node_modules/react-dom/index.js"(exports, module) {
+    "use strict";
+    function checkDCE() {
+      if (typeof __REACT_DEVTOOLS_GLOBAL_HOOK__ === "undefined" || typeof __REACT_DEVTOOLS_GLOBAL_HOOK__.checkDCE !== "function") {
+        return;
+      }
+      if (false) {
+        throw new Error("^_^");
+      }
+      try {
+        __REACT_DEVTOOLS_GLOBAL_HOOK__.checkDCE(checkDCE);
+      } catch (err) {
+        console.error(err);
+      }
+    }
+    if (true) {
+      checkDCE();
+      module.exports = require_react_dom_production();
+    } else {
+      module.exports = null;
+    }
+  }
+});
+
+// node_modules/react/cjs/react-jsx-runtime.production.js
+var require_react_jsx_runtime_production = __commonJS({
+  "node_modules/react/cjs/react-jsx-runtime.production.js"(exports) {
+    "use strict";
+    var REACT_ELEMENT_TYPE = /* @__PURE__ */ Symbol.for("react.transitional.element");
+    var REACT_FRAGMENT_TYPE = /* @__PURE__ */ Symbol.for("react.fragment");
+    function jsxProd(type, config, maybeKey) {
+      var key = null;
+      void 0 !== maybeKey && (key = "" + maybeKey);
+      void 0 !== config.key && (key = "" + config.key);
+      if ("key" in config) {
+        maybeKey = {};
+        for (var propName in config)
+          "key" !== propName && (maybeKey[propName] = config[propName]);
+      } else maybeKey = config;
+      config = maybeKey.ref;
+      return {
+        $$typeof: REACT_ELEMENT_TYPE,
+        type,
+        key,
+        ref: void 0 !== config ? config : null,
+        props: maybeKey
+      };
+    }
+    exports.Fragment = REACT_FRAGMENT_TYPE;
+    exports.jsx = jsxProd;
+    exports.jsxs = jsxProd;
+  }
+});
+
+// node_modules/react/jsx-runtime.js
+var require_jsx_runtime = __commonJS({
+  "node_modules/react/jsx-runtime.js"(exports, module) {
+    "use strict";
+    if (true) {
+      module.exports = require_react_jsx_runtime_production();
+    } else {
+      module.exports = null;
+    }
+  }
+});
+
+// node_modules/scheduler/cjs/scheduler.production.js
 var require_scheduler_production = __commonJS({
-  "../../../../../tmp/neo-runtime-vendor-yn5S2u/node_modules/scheduler/cjs/scheduler.production.js"(exports) {
+  "node_modules/scheduler/cjs/scheduler.production.js"(exports) {
     "use strict";
     function push(heap, node) {
       var index = heap.length;
@@ -765,9 +990,9 @@ var require_scheduler_production = __commonJS({
   }
 });
 
-// ../../../../../tmp/neo-runtime-vendor-yn5S2u/node_modules/scheduler/index.js
+// node_modules/scheduler/index.js
 var require_scheduler = __commonJS({
-  "../../../../../tmp/neo-runtime-vendor-yn5S2u/node_modules/scheduler/index.js"(exports, module) {
+  "node_modules/scheduler/index.js"(exports, module) {
     "use strict";
     if (true) {
       module.exports = require_scheduler_production();
@@ -777,196 +1002,13 @@ var require_scheduler = __commonJS({
   }
 });
 
-// ../../../../../tmp/neo-runtime-vendor-yn5S2u/node_modules/react-dom/cjs/react-dom.production.js
-var require_react_dom_production = __commonJS({
-  "../../../../../tmp/neo-runtime-vendor-yn5S2u/node_modules/react-dom/cjs/react-dom.production.js"(exports) {
-    "use strict";
-    var React2 = require_react();
-    function formatProdErrorMessage(code) {
-      var url = "https://react.dev/errors/" + code;
-      if (1 < arguments.length) {
-        url += "?args[]=" + encodeURIComponent(arguments[1]);
-        for (var i = 2; i < arguments.length; i++)
-          url += "&args[]=" + encodeURIComponent(arguments[i]);
-      }
-      return "Minified React error #" + code + "; visit " + url + " for the full message or use the non-minified dev environment for full errors and additional helpful warnings.";
-    }
-    function noop() {
-    }
-    var Internals = {
-      d: {
-        f: noop,
-        r: function() {
-          throw Error(formatProdErrorMessage(522));
-        },
-        D: noop,
-        C: noop,
-        L: noop,
-        m: noop,
-        X: noop,
-        S: noop,
-        M: noop
-      },
-      p: 0,
-      findDOMNode: null
-    };
-    var REACT_PORTAL_TYPE = /* @__PURE__ */ Symbol.for("react.portal");
-    var REACT_RECOVERABLE_TYPE = /* @__PURE__ */ Symbol.for("react.recoverable");
-    var REACT_OPTIMISTIC_KEY = /* @__PURE__ */ Symbol.for("react.optimistic_key");
-    function createPortal$1(children, containerInfo, implementation) {
-      var key = 3 < arguments.length && void 0 !== arguments[3] ? arguments[3] : null;
-      return {
-        $$typeof: REACT_PORTAL_TYPE,
-        key: null == key ? null : key === REACT_OPTIMISTIC_KEY ? REACT_OPTIMISTIC_KEY : "" + key,
-        children,
-        containerInfo,
-        implementation
-      };
-    }
-    var ReactSharedInternals = React2.__CLIENT_INTERNALS_DO_NOT_USE_OR_WARN_USERS_THEY_CANNOT_UPGRADE;
-    function getCrossOriginStringAs(as, input) {
-      if ("font" === as) return "";
-      if ("string" === typeof input)
-        return "use-credentials" === input ? input : "";
-    }
-    exports.__DOM_INTERNALS_DO_NOT_USE_OR_WARN_USERS_THEY_CANNOT_UPGRADE = Internals;
-    exports.browser = function(reason) {
-      return { $$typeof: REACT_RECOVERABLE_TYPE, _reason: reason };
-    };
-    exports.createPortal = function(children, container) {
-      var key = 2 < arguments.length && void 0 !== arguments[2] ? arguments[2] : null;
-      if (!container || 1 !== container.nodeType && 9 !== container.nodeType && 11 !== container.nodeType)
-        throw Error(formatProdErrorMessage(299));
-      return createPortal$1(children, container, null, key);
-    };
-    exports.flushSync = function(fn) {
-      var previousTransition = ReactSharedInternals.T, previousUpdatePriority = Internals.p;
-      try {
-        if (ReactSharedInternals.T = null, Internals.p = 2, fn) return fn();
-      } finally {
-        ReactSharedInternals.T = previousTransition, Internals.p = previousUpdatePriority, Internals.d.f();
-      }
-    };
-    exports.preconnect = function(href, options) {
-      "string" === typeof href && (options ? (options = options.crossOrigin, options = "string" === typeof options ? "use-credentials" === options ? options : "" : void 0) : options = null, Internals.d.C(href, options));
-    };
-    exports.prefetchDNS = function(href) {
-      "string" === typeof href && Internals.d.D(href);
-    };
-    exports.preinit = function(href, options) {
-      if ("string" === typeof href && options && "string" === typeof options.as) {
-        var as = options.as, crossOrigin = getCrossOriginStringAs(as, options.crossOrigin), integrity = "string" === typeof options.integrity ? options.integrity : void 0, fetchPriority = "string" === typeof options.fetchPriority ? options.fetchPriority : void 0;
-        "style" === as ? Internals.d.S(
-          href,
-          "string" === typeof options.precedence ? options.precedence : void 0,
-          {
-            crossOrigin,
-            integrity,
-            fetchPriority
-          }
-        ) : "script" === as && Internals.d.X(href, {
-          crossOrigin,
-          integrity,
-          fetchPriority,
-          nonce: "string" === typeof options.nonce ? options.nonce : void 0
-        });
-      }
-    };
-    exports.preinitModule = function(href, options) {
-      if ("string" === typeof href)
-        if ("object" === typeof options && null !== options) {
-          if (null == options.as || "script" === options.as) {
-            var crossOrigin = getCrossOriginStringAs(
-              options.as,
-              options.crossOrigin
-            );
-            Internals.d.M(href, {
-              crossOrigin,
-              integrity: "string" === typeof options.integrity ? options.integrity : void 0,
-              nonce: "string" === typeof options.nonce ? options.nonce : void 0,
-              fetchPriority: "string" === typeof options.fetchPriority ? options.fetchPriority : void 0
-            });
-          }
-        } else null == options && Internals.d.M(href);
-    };
-    exports.preload = function(href, options) {
-      if ("string" === typeof href && "object" === typeof options && null !== options && "string" === typeof options.as) {
-        var as = options.as, crossOrigin = getCrossOriginStringAs(as, options.crossOrigin);
-        Internals.d.L(href, as, {
-          crossOrigin,
-          integrity: "string" === typeof options.integrity ? options.integrity : void 0,
-          nonce: "string" === typeof options.nonce ? options.nonce : void 0,
-          type: "string" === typeof options.type ? options.type : void 0,
-          fetchPriority: "string" === typeof options.fetchPriority ? options.fetchPriority : void 0,
-          referrerPolicy: "string" === typeof options.referrerPolicy ? options.referrerPolicy : void 0,
-          imageSrcSet: "string" === typeof options.imageSrcSet ? options.imageSrcSet : void 0,
-          imageSizes: "string" === typeof options.imageSizes ? options.imageSizes : void 0,
-          media: "string" === typeof options.media ? options.media : void 0
-        });
-      }
-    };
-    exports.preloadModule = function(href, options) {
-      if ("string" === typeof href)
-        if (options) {
-          var crossOrigin = getCrossOriginStringAs(options.as, options.crossOrigin);
-          Internals.d.m(href, {
-            as: "string" === typeof options.as && "script" !== options.as ? options.as : void 0,
-            crossOrigin,
-            integrity: "string" === typeof options.integrity ? options.integrity : void 0,
-            nonce: "string" === typeof options.nonce ? options.nonce : void 0,
-            fetchPriority: "string" === typeof options.fetchPriority ? options.fetchPriority : void 0
-          });
-        } else Internals.d.m(href);
-    };
-    exports.requestFormReset = function(form) {
-      Internals.d.r(form);
-    };
-    exports.unstable_batchedUpdates = function(fn, a) {
-      return fn(a);
-    };
-    exports.useFormState = function(action, initialState, permalink) {
-      return ReactSharedInternals.H.useFormState(action, initialState, permalink);
-    };
-    exports.useFormStatus = function() {
-      return ReactSharedInternals.H.useHostTransitionStatus();
-    };
-    exports.version = "19.3.1";
-  }
-});
-
-// ../../../../../tmp/neo-runtime-vendor-yn5S2u/node_modules/react-dom/index.js
-var require_react_dom = __commonJS({
-  "../../../../../tmp/neo-runtime-vendor-yn5S2u/node_modules/react-dom/index.js"(exports, module) {
-    "use strict";
-    function checkDCE() {
-      if (typeof __REACT_DEVTOOLS_GLOBAL_HOOK__ === "undefined" || typeof __REACT_DEVTOOLS_GLOBAL_HOOK__.checkDCE !== "function") {
-        return;
-      }
-      if (false) {
-        throw new Error("^_^");
-      }
-      try {
-        __REACT_DEVTOOLS_GLOBAL_HOOK__.checkDCE(checkDCE);
-      } catch (err) {
-        console.error(err);
-      }
-    }
-    if (true) {
-      checkDCE();
-      module.exports = require_react_dom_production();
-    } else {
-      module.exports = null;
-    }
-  }
-});
-
-// ../../../../../tmp/neo-runtime-vendor-yn5S2u/node_modules/react-dom/cjs/react-dom-client.production.js
+// node_modules/react-dom/cjs/react-dom-client.production.js
 var require_react_dom_client_production = __commonJS({
-  "../../../../../tmp/neo-runtime-vendor-yn5S2u/node_modules/react-dom/cjs/react-dom-client.production.js"(exports) {
+  "node_modules/react-dom/cjs/react-dom-client.production.js"(exports) {
     "use strict";
     var Scheduler = require_scheduler();
     var React2 = require_react();
-    var ReactDOM = require_react_dom();
+    var ReactDOM2 = require_react_dom();
     function formatProdErrorMessage(code) {
       var url = "https://react.dev/errors/" + code;
       if (1 < arguments.length) {
@@ -1257,7 +1299,7 @@ var require_react_dom_client_production = __commonJS({
     }
     var isArrayImpl = Array.isArray;
     var ReactSharedInternals = React2.__CLIENT_INTERNALS_DO_NOT_USE_OR_WARN_USERS_THEY_CANNOT_UPGRADE;
-    var ReactDOMSharedInternals = ReactDOM.__DOM_INTERNALS_DO_NOT_USE_OR_WARN_USERS_THEY_CANNOT_UPGRADE;
+    var ReactDOMSharedInternals = ReactDOM2.__DOM_INTERNALS_DO_NOT_USE_OR_WARN_USERS_THEY_CANNOT_UPGRADE;
     var sharedNotPendingObject = {
       pending: false,
       data: null,
@@ -14504,9 +14546,9 @@ var require_react_dom_client_production = __commonJS({
   }
 });
 
-// ../../../../../tmp/neo-runtime-vendor-yn5S2u/node_modules/react-dom/client.js
+// node_modules/react-dom/client.js
 var require_client = __commonJS({
-  "../../../../../tmp/neo-runtime-vendor-yn5S2u/node_modules/react-dom/client.js"(exports, module) {
+  "node_modules/react-dom/client.js"(exports, module) {
     "use strict";
     function checkDCE() {
       if (typeof __REACT_DEVTOOLS_GLOBAL_HOOK__ === "undefined" || typeof __REACT_DEVTOOLS_GLOBAL_HOOK__.checkDCE !== "function") {
@@ -14530,14 +14572,18 @@ var require_client = __commonJS({
   }
 });
 
-// ../../../../../tmp/neo-runtime-vendor-yn5S2u/react.mjs
+// react.mjs
 var React = __toESM(require_react(), 1);
+var ReactDOM = __toESM(require_react_dom(), 1);
+var JSXRuntime = __toESM(require_jsx_runtime(), 1);
 var import_client = __toESM(require_client(), 1);
 var import_react_dom = __toESM(require_react_dom(), 1);
 var export_createRoot = import_client.createRoot;
 var export_flushSync = import_react_dom.flushSync;
 export {
+  JSXRuntime,
   React,
+  ReactDOM,
   export_createRoot as createRoot,
   export_flushSync as flushSync
 };

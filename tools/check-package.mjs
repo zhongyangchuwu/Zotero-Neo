@@ -13,6 +13,7 @@ const expected = [
   'content/ai-qa-ui.js',
   'content/ai-qa-window.xhtml',
   'content/literature-table-window.xhtml',
+  'content/literature-ui.js',
   'content/native-ui.js',
   'content/react-runtime.js',
   'content/settings-snapshots-crypto.js',
@@ -33,6 +34,8 @@ const expected = [
   'licenses/react-provenance.json',
   'licenses/age-encryption-NOTICE',
   'licenses/age-encryption-provenance.json',
+  'licenses/base-ui-NOTICE',
+  'licenses/base-ui-provenance.json',
   'locale/en-US/zotero-neo-ai-qa.ftl',
   'locale/zh-CN/zotero-neo-ai-qa.ftl',
   'manifest.json',
@@ -63,6 +66,8 @@ for (const [member, source] of [
     'licenses/age-encryption-provenance.json',
     resolve(root, 'vendor/age-encryption/provenance.json'),
   ],
+  ['licenses/base-ui-NOTICE', resolve(root, 'vendor/base-ui/NOTICE')],
+  ['licenses/base-ui-provenance.json', resolve(root, 'vendor/base-ui/provenance.json')],
 ]) {
   if (!readZipMember(archive, member).equals(readFileSync(source))) {
     throw new Error(`Packaged license notice differs from authoritative source: ${member}`);
@@ -81,6 +86,7 @@ for (const script of [
   'content/ai-runtime.js',
   'content/ai-qa-ui.js',
   'content/native-ui.js',
+  'content/literature-ui.js',
   'content/react-runtime.js',
   'content/settings-snapshots-crypto.js',
 ]) {
