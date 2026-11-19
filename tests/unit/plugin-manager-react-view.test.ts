@@ -33,6 +33,7 @@ const model: ExtensionsReactModel = {
   listStatus: 'normal',
   loading: false,
   canCancel: false,
+  canOpenExtras: true,
   shortcuts: 'Shortcuts',
   footer: 'j/k move',
 };
@@ -60,6 +61,22 @@ describe('Plugin Manager React presentation', () => {
       ) as HTMLButtonElement
     ).click();
     expect(dispatch).toHaveBeenCalledWith({ type: 'link', kind: 'readme' });
+    view.dispose();
+  });
+  it('offers the Extras shortcut even with no installed plugins, but not during an operation', () => {
+    const root = document.createElement('div');
+    const dispatch = vi.fn();
+    const empty = { ...model, plugins: [], count: '0/0', listMessage: 'No installed plugins' };
+    const view = mountExtensionsReactView(root, empty, dispatch);
+    const extras = Array.from(
+      root.querySelectorAll('button'),
+      (button) => button as HTMLButtonElement,
+    ).find((button) => button.textContent === 'Extras')!;
+    extras.click();
+    expect(dispatch).toHaveBeenCalledExactlyOnceWith({ type: 'extras' });
+    view.update({ ...empty, canOpenExtras: false });
+    extras.click();
+    expect(dispatch).toHaveBeenCalledTimes(1);
     view.dispose();
   });
   it('does not replace an in-progress filter input during a model refresh', () => {

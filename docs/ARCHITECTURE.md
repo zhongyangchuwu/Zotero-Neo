@@ -121,7 +121,7 @@ Reader Surface 保留输入/IME/count/前缀、模式、CurrentTarget、精确�
 
 选区动作面板使用静态 React 视图呈现候选和结果；选择来源、快捷键、异步动作及关闭策略继续由选择模块管理。
 
-`registry.ts` 保存应用级、无 DOM 的外部动作定义；单个 Reader 模块退出不清空它。选择模块退休后，公共选择 API 返回 `null`、不执行旧回调。批注动作由组合根具名注入；手动翻译由独立的 Neo Translate Adapter 通过[公共插件接口](MODULE_DESIGN.md#对其他-zotero-插件的公共接口)注册。选择模块不写 Note 或批注。从选择发起的 Find 通过 Toolkit 捕获精确 pane 和本次原生 Find 状态，不覆盖新的查询或关闭重开后的界面。
+`registry.ts` 保存应用级、无 DOM 的动作定义；单个 Reader 模块退出不清空它。选择模块退休后，公共选择 API 返回 `null`、不执行旧回调。批注动作由组合根具名注入；手动翻译由 Neo 的选区翻译 Extra 管理，独立于自动译文保存模块。[公共插件接口](MODULE_DESIGN.md#对其他-zotero-插件的公共接口)继续供外部消费者使用。选择模块不写 Note 或批注。从选择发起的 Find 通过 Toolkit 捕获精确 pane 和本次原生 Find 状态，不覆盖新的查询或关闭重开后的界面。
 
 `src/modules/reader-excerpts/` 独立拥有图表／公式候选、裁图预览、复制与显式保存，不属于 Select 的构造或退出流程。Reader Surface 固定 `SourceNoteTarget`，共享 `source-note` Operation 保留来源哈希、嵌图及保存语义。`src/modules/chapter-notes/` 独立拥有章节整理、筛选、预览和生成身份；Main 的 `notes` 只负责 Note 候选、打开及编辑。已接纳保存可以完成，过期界面不能恢复焦点或重画替换界面。
 

@@ -90,7 +90,6 @@ describe('Plugin Manager host adapter', () => {
       id: plugin.id,
       name: plugin.name,
       version: plugin.version,
-      installed: true,
       enabled: true,
       canEnable: true,
       canDisable: true,
@@ -101,15 +100,10 @@ describe('Plugin Manager host adapter', () => {
       gitLogURL: 'https://github.com/example/example-plugin/commits',
       preferencePaneID: 'example-root',
     });
-    expect(plugins.filter((entry) => entry.id === 'zoteropdftranslate@euclpts.com')).toHaveLength(
-      1,
-    );
-    expect(plugins.find((entry) => entry.id === 'zoteropdftranslate@euclpts.com')).toMatchObject({
-      installed: false,
-    });
+    expect(plugins.map(({ id }) => id)).toEqual([plugin.id]);
   });
 
-  it('does not duplicate the curated entry when Translate is installed', async () => {
+  it('lists Translate normally when it is installed', async () => {
     installHost([
       {
         id: 'zoteropdftranslate@euclpts.com',
@@ -122,7 +116,7 @@ describe('Plugin Manager host adapter', () => {
       (entry) => entry.id === 'zoteropdftranslate@euclpts.com',
     );
     expect(matches).toHaveLength(1);
-    expect(matches[0]).toMatchObject({ installed: true, enabled: false });
+    expect(matches[0]).toMatchObject({ enabled: false });
   });
 
   it('derives GitHub repository documentation links conservatively', () => {

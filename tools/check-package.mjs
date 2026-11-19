@@ -105,26 +105,3 @@ for (const script of [
 }
 
 console.log(`[package] OK — ${members.length} deterministic POSIX-path members`);
-
-const adapterArchive = resolve(root, 'build/zotero-neo-translate.xpi');
-const adapterMembers = listZipMembers(adapterArchive).sort();
-if (adapterMembers.join(',') !== 'LICENSE,bootstrap.js,manifest.json') {
-  throw new Error(`Unexpected Translate Adapter XPI members: ${adapterMembers.join(', ')}`);
-}
-const adapterManifest = JSON.parse(readZipMember(adapterArchive, 'manifest.json').toString('utf8'));
-const adapterId = 'zotero-neo-translate@zotero-neo';
-const adapterFeedPath = 'adapters/translate/updates.json';
-const adapterFeedUrl = `https://raw.githubusercontent.com/zhongyangchuwu/Zotero-Neo/main/${adapterFeedPath}`;
-const adapterFeed = JSON.parse(readFileSync(resolve(root, adapterFeedPath), 'utf8'));
-if (
-  adapterManifest.applications?.zotero?.id !== adapterId ||
-  adapterManifest.browser_specific_settings?.gecko?.id !== adapterId ||
-  adapterManifest.applications?.zotero?.update_url !== adapterFeedUrl ||
-  adapterManifest.browser_specific_settings?.gecko?.update_url !== adapterFeedUrl ||
-  !Array.isArray(adapterFeed.addons?.[adapterId]?.updates)
-) {
-  throw new Error('Packaged Translate Adapter has an invalid extension ID or update feed');
-}
-console.log(
-  `[package] OK — Translate Adapter is a separate XPI (${adapterMembers.length} members)`,
-);

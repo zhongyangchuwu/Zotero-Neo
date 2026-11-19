@@ -15,5 +15,5 @@
     "tsBuildInfoFile": "./build/cache/tsconfig.tsbuildinfo",
     "resolveJsonModule": true
   },
-  "include": ["src/**/*.ts", "src/**/*.tsx", "adapters/**/*.ts"]
+  "include": ["src/**/*.ts", "src/**/*.tsx"]
 }

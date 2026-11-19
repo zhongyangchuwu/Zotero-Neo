@@ -21,7 +21,6 @@ import type {
 } from './settings-form-model';
 import { settingsScopeText, settingsText, type SettingsLanguage } from './settings-i18n';
 import { SettingsTabs } from './settings-tabs';
-import { SettingsTranslation } from './settings-translation';
 
 type ModuleFlags = Record<OptionalModuleId, boolean>;
 const MODULE_DESCRIPTIONS: Record<OptionalModuleId, { en: string; 'zh-CN': string }> = {
@@ -34,8 +33,9 @@ const MODULE_DESCRIPTIONS: Record<OptionalModuleId, { en: string; 'zh-CN': strin
     'zh-CN': '在 Neo 中管理 Zotero 插件。',
   },
   translation: {
-    en: 'Translate selected text in the reader with Translate for Zotero.',
-    'zh-CN': '使用 Translate for Zotero 翻译阅读器中选中的文字。',
+    en: 'Save automatic translations and filter them in the Reader sidebar. Install Translate for Zotero from Extras, then enable automatic translation in its own settings.',
+    'zh-CN':
+      '保存自动译文并在阅读器侧栏筛选。请从 Extras 安装 Translate for Zotero，再在上游设置中启用自动翻译。',
   },
   'ai-qa': {
     en: 'Ask questions about a document and inspect the supporting evidence.',
@@ -66,7 +66,6 @@ export class SettingsModules {
   readonly #draft: ModuleFlags;
   readonly #cleanups = new CleanupScope();
   readonly #tabs: SettingsTabs;
-  readonly #translation: SettingsTranslation;
   #status = '';
   #disposed = false;
 
@@ -87,8 +86,6 @@ export class SettingsModules {
     this.#draft = { ...requested };
     this.#tabs = new SettingsTabs(preferences, language, () => this.#notify());
     this.#cleanups.add(() => this.#tabs.dispose());
-    this.#translation = new SettingsTranslation(window, language, () => this.#notify());
-    this.#cleanups.add(() => this.#translation.dispose());
     try {
       for (const { id } of OPTIONAL_MODULES) {
         const cleanup = preferences.observe?.(modulePreferenceKey(id), () =>
@@ -122,9 +119,7 @@ export class SettingsModules {
             id: 'modules.save',
             label: language === 'zh-CN' ? '保存更改' : 'Save changes',
             primary: true,
-            disabled:
-              this.#translation.busy ||
-              OPTIONAL_MODULES.every(({ id }) => this.#draft[id] === this.#saved[id]),
+            disabled: OPTIONAL_MODULES.every(({ id }) => this.#draft[id] === this.#saved[id]),
           },
           {
             kind: 'action',
@@ -134,7 +129,6 @@ export class SettingsModules {
               language === 'zh-CN'
                 ? '只重置本页的功能开关，立即保存。'
                 : 'Resets only the feature switches on this page and saves immediately.',
-            disabled: this.#translation.busy,
           },
         ],
       },
@@ -163,13 +157,11 @@ export class SettingsModules {
                 ? `启用${descriptor.names[language]}`
                 : `Enable ${descriptor.names[language]}`,
             value: this.#draft[descriptor.id],
-            disabled: this.#translation.busy,
             note: summary,
           },
         ],
       });
       if (descriptor.id === 'tab-enhancements') groups.push(this.#tabs.group());
-      if (descriptor.id === 'translation') groups.push(this.#translation.group());
     }
     const status = this.#status || this.#tabs.status;
     return {
@@ -184,32 +176,20 @@ export class SettingsModules {
     if (command.type === 'value') {
       const descriptor = OPTIONAL_MODULES.find(({ id }) => command.id === `modules.request.${id}`);
       if (descriptor) {
-        if (this.#translation.busy || typeof command.value !== 'boolean') return;
+        if (typeof command.value !== 'boolean') return;
         this.#draft[descriptor.id] = command.value;
         this.#status = '';
         this.#notify();
         return;
       }
     } else if (command.id === 'modules.save') {
-      this.#save();
+      this.#commitRequests();
       return;
     } else if (command.id === 'modules.restore') {
       this.#restoreDefaults();
       return;
     }
-    this.#translation.dispatch(command);
     this.#tabs.dispatch(command);
-  }
-
-  #save(): void {
-    if (this.#disposed || this.#translation.busy) return;
-    if (this.#draft.translation && !this.#saved.translation) {
-      void this.#translation.prepare().then((prepared) => {
-        if (prepared && !this.#disposed) this.#commitRequests();
-      });
-      return;
-    }
-    this.#commitRequests();
   }
 
   #commitRequests(): void {
@@ -231,7 +211,6 @@ export class SettingsModules {
   }
 
   #restoreDefaults(): void {
-    if (this.#translation.busy) return;
     for (const { id } of OPTIONAL_MODULES) this.#draft[id] = OPTIONAL_MODULE_DEFAULTS[id];
     try {
       for (const { id } of OPTIONAL_MODULES) {

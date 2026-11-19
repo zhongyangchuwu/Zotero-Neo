@@ -58,15 +58,15 @@
 
 ## 翻译或 citekey 复制不可用
 
-Reader Select 没有手动“翻译”时，检查 [Zotero Neo Translate Adapter 和 Translate for Zotero](SELECTION_GUIDE.md#手动翻译选区)是否都已启用、上游 API 是否已就绪，再重新打开选区菜单。`<Space>yy` 需要 **Better BibTeX**，并且目标有可用的 citekey；任一目标或 citekey 无法解析时，Neo 拒绝复制并保留剪贴板。
+Reader Select 没有手动“翻译”时，检查[选区翻译 Extra 和 Translate for Zotero](SELECTION_GUIDE.md#手动翻译选区)是否已启用、上游公开 API 是否已就绪，再重新打开选区菜单。`<Space>yy` 需要 **Better BibTeX**，并且目标有可用的 citekey；任一目标或 citekey 无法解析时，Neo 拒绝复制并保留剪贴板。
 
-Reader Select 和 citekey 是核心能力，翻译增强则可独立关闭。缺少外部集成不会因为给动作绑定一个按键就自动补上。
+Reader Select 和 citekey 是核心能力，手动翻译 Extra 与自动译文的翻译增强模块可独立关闭。缺少外部集成不会因为给动作绑定一个按键就自动补上。
 
 自动译文的保存只支持 Translate for Zotero 2.4.8 的就绪运行时；等待弹窗译文完成后再保存，切换选区或视图后不要使用旧弹窗。若 PDF 已被外部修改，重新打开阅读器再选。关闭翻译增强不会停用插件或删除已保存的原生便签；详见[保存自动翻译的译文](SELECTION_GUIDE.md#保存自动翻译的译文)和[翻译依赖状态](SETTINGS_GUIDE.md#准备翻译增强)。
 
 ## 扩展管理面板里不能安装插件
 
-`<Space>pp` 的安装入口只适用于列表中尚未安装的 Translate for Zotero 条目；选中后按 `i` 下载并确认安装。已安装插件使用 `u` 检查其原生更新，`r` 仅重新读取列表。任意来源安装、远端插件发现和移除仍使用 Zotero 原生插件管理；Neo 不能在自己的面板中停用自身。完整操作见[插件管理](SETTINGS_GUIDE.md#查看已安装的插件)。如果 `<Space>pp` 入口不见了，检查 `extensions`（扩展管理面板）这一可选增强的已应用状态；翻译依赖也可直接在模块设置中准备，不要求开启 Plugin Manager。
+按 `<Space>pp` 后用 `i` 或 Extras 按钮打开设置，在**选区翻译**中查看依赖状态并安装或启用 Translate for Zotero；也可直接打开 Neo 设置的 Extras 页面，不要求开启 Plugin Manager。已安装插件使用 `u` 检查其原生更新，`r` 仅重新读取列表。任意来源安装、远端插件发现和移除仍使用 Zotero 原生插件管理；Neo 不能在自己的面板中停用自身。完整操作见[插件管理](SETTINGS_GUIDE.md#查看已安装的插件)。如果 `<Space>pp` 入口不见了，检查 `extensions`（扩展管理面板）这一可选增强的已应用状态。
 
 ## 第一次标题或图表导航较慢
 

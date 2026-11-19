@@ -1,4 +1,8 @@
 import { afterEach, describe, expect, it, vi } from 'vitest';
+import type { MainWindow } from '../../src/core/contracts';
+import { ZoteroPreferenceStore } from '../../src/core/preference-store';
+import { SettingsExtras } from '../../src/main/settings-extras';
+import { TRANSLATION_EXTRA_PREFERENCE } from '../../src/modules/translation/selection-action';
 import { hasTranslateForZoteroConfiguration } from '../../src/platform/translate-for-zotero-settings-v248';
 import {
   prepareTranslationDependency,
@@ -19,7 +23,7 @@ function host(initial: { version: string; enabled: boolean } | null = null) {
   let current = true;
   const preferences = new Map<string, unknown>();
   const writes = vi.fn((key: string, value: unknown) => preferences.set(key, value));
-  const runtime = { api: { getVersion: () => '2.4.8' }, data: { translate: { queue: [] } } };
+  const runtime = { api: { translate: vi.fn() } };
   const addon = {
     id: TRANSLATE_PLUGIN_ID,
     name: 'Translate',
@@ -28,10 +32,13 @@ function host(initial: { version: string; enabled: boolean } | null = null) {
     isCompatible: true,
     appDisabled: false,
     isActive: initial?.enabled ?? true,
-    permissions: 1,
+    permissions: 3,
     pendingOperations: 0,
     enable: vi.fn(async () => {
       addon.isActive = true;
+    }),
+    disable: vi.fn(async () => {
+      addon.isActive = false;
     }),
   };
   let installed = !!initial;
@@ -72,17 +79,21 @@ function host(initial: { version: string; enabled: boolean } | null = null) {
   };
   vi.stubGlobal('ChromeUtils', { importESModule: () => ({ AddonManager: manager }) });
   vi.stubGlobal('Services', {
-    prefs: { prefHasUserValue: (key: string) => preferences.has(key) },
+    prefs: {
+      getPrefType: (key: string) => (preferences.has(key) ? 128 : 0),
+      getBoolPref: (key: string) => preferences.get(key),
+      setBoolPref: writes,
+      prefHasUserValue: (key: string) => preferences.has(key),
+      addObserver() {},
+      removeObserver() {},
+    },
   });
   vi.stubGlobal('Zotero', { Prefs: { set: writes }, PreferencePanes: {}, PDFTranslate: runtime });
-  const confirmInstall = vi.fn(() => true);
   const confirmEnable = vi.fn(() => true);
   let cancel: (() => void) | null = null;
   const options = {
-    language: 'zh-CN' as const,
     isCurrent: () => current,
     confirmDownload: vi.fn(() => true),
-    confirmInstall,
     confirmEnable,
     progress: vi.fn(),
     registerCancel: (value: (() => void) | null) => {
@@ -96,7 +107,6 @@ function host(initial: { version: string; enabled: boolean } | null = null) {
     writes,
     preferences,
     options,
-    confirmInstall,
     confirmEnable,
     retire: () => {
       current = false;
@@ -123,10 +133,8 @@ describe('translation dependency preparation', () => {
     expect(h.native.install).not.toHaveBeenCalled();
   });
 
-  it('initializes an unset target even when provider startup writes its default language', async () => {
+  it('validates and installs the pinned official package without changing upstream preferences', async () => {
     const h = host();
-    h.native.beforeStart = () =>
-      h.preferences.set('extensions.zotero.ZoteroPDFTranslate.targetLanguage', 'en-US');
     const { pending } = await startDownload(h);
     expect(h.manager.getInstallForURL).toHaveBeenCalledWith(TRANSLATE_PLUGIN_INSTALL_URL, {
       hash: TRANSLATE_PLUGIN_HASH,
@@ -136,15 +144,9 @@ describe('translation dependency preparation', () => {
       installed: true,
       version: '2.4.8',
       saveSupported: true,
-      runtimeReady: true,
+      selectionReady: true,
     });
-    expect(h.confirmInstall).toHaveBeenCalledWith({
-      name: 'Translate',
-      version: '2.4.8',
-      source: TRANSLATE_PLUGIN_INSTALL_URL,
-    });
-    expect(h.preferences.get('extensions.zotero.ZoteroPDFTranslate.enableAuto')).toBe(true);
-    expect(h.preferences.get('extensions.zotero.ZoteroPDFTranslate.targetLanguage')).toBe('zh-CN');
+    expect(h.writes).not.toHaveBeenCalled();
   });
 
   it('preserves retained opt-out and target language when reinstalling an absent provider', async () => {
@@ -158,18 +160,6 @@ describe('translation dependency preparation', () => {
     expect(h.preferences.get('extensions.zotero.ZoteroPDFTranslate.targetLanguage')).toBe('fr-FR');
   });
 
-  it('initializes an unset target without reactivating retained automatic-translation opt-out', async () => {
-    const h = host();
-    h.preferences.set('extensions.zotero.ZoteroPDFTranslate.enableAuto', false);
-    h.native.beforeStart = () =>
-      h.preferences.set('extensions.zotero.ZoteroPDFTranslate.targetLanguage', 'en-US');
-    const { pending } = await startDownload(h);
-    h.native.download();
-    await pending;
-    expect(h.preferences.get('extensions.zotero.ZoteroPDFTranslate.enableAuto')).toBe(false);
-    expect(h.preferences.get('extensions.zotero.ZoteroPDFTranslate.targetLanguage')).toBe('zh-CN');
-  });
-
   it('does not write settings for an existing provider and requires consent to enable it', async () => {
     const h = host({ version: '2.4.8', enabled: false });
     h.confirmEnable.mockReturnValueOnce(false);
@@ -177,30 +167,30 @@ describe('translation dependency preparation', () => {
     expect(h.addon.enable).not.toHaveBeenCalled();
     await expect(prepareTranslationDependency(h.options)).resolves.toMatchObject({
       enabled: true,
-      runtimeReady: true,
+      selectionReady: true,
     });
     expect(h.confirmEnable).toHaveBeenCalledWith('Translate', '2.4.8');
     expect(h.writes).not.toHaveBeenCalled();
     expect(h.manager.getInstallForURL).not.toHaveBeenCalled();
   });
 
-  it('does not replace an unsupported existing version or report its save capability', async () => {
+  it('reuses other installed versions when the public API is ready, without allowing automatic saving', async () => {
     const h = host({ version: '2.5.0', enabled: true });
     await expect(prepareTranslationDependency(h.options)).resolves.toMatchObject({
       installed: true,
       saveSupported: false,
-      runtimeReady: false,
+      selectionReady: true,
     });
     expect(h.manager.getInstallForURL).not.toHaveBeenCalled();
     expect(h.writes).not.toHaveBeenCalled();
   });
 
-  it('never claims a native installation is ready without the supported runtime', async () => {
+  it('does not report selection translation ready without the public API', async () => {
     host({ version: '2.4.8', enabled: true });
     vi.stubGlobal('Zotero', { PreferencePanes: {} });
     await expect(readTranslationDependency()).resolves.toMatchObject({
       saveSupported: true,
-      runtimeReady: false,
+      selectionReady: false,
     });
   });
 
@@ -211,31 +201,21 @@ describe('translation dependency preparation', () => {
       installed: true,
       saveSupported: true,
       pendingRestart: true,
-      runtimeReady: false,
+      selectionReady: false,
     });
   });
 
-  it('initializes an English target only on successful new installation', async () => {
-    const h = host();
-    const pending = prepareTranslationDependency({ ...h.options, language: 'en' });
-    await vi.waitFor(() => expect(h.native.install).toHaveBeenCalled());
-    h.native.download();
-    await pending;
-    expect(h.preferences.get('extensions.zotero.ZoteroPDFTranslate.targetLanguage')).toBe('en-US');
-  });
-
-  it('rejects a manifest that is incompatible with the host before consent', async () => {
+  it('rejects an incompatible downloaded manifest before installation', async () => {
     const h = host();
     h.addon.isCompatible = false;
     const { pending } = await startDownload(h);
     h.native.download();
     await expect(pending).rejects.toThrow('identity or compatibility');
-    expect(h.confirmInstall).not.toHaveBeenCalled();
     expect(h.native.executed).toBe(false);
     expect(h.writes).not.toHaveBeenCalled();
   });
 
-  it('rejects wrong version or source before asking for consent', async () => {
+  it('rejects an unexpected version or source before installation', async () => {
     for (const invalid of ['version', 'source'] as const) {
       const h = host();
       if (invalid === 'version') h.addon.version = '2.5.0';
@@ -243,34 +223,26 @@ describe('translation dependency preparation', () => {
       const { pending } = await startDownload(h);
       h.native.download();
       await expect(pending).rejects.toThrow('version or source');
-      expect(h.confirmInstall).not.toHaveBeenCalled();
       expect(h.native.executed).toBe(false);
       expect(h.writes).not.toHaveBeenCalled();
     }
   });
 
-  it('cancels a download or declined consent without initializing', async () => {
+  it('allows the download to be cancelled without activating the plugin', async () => {
     const cancelled = host();
     const first = await startDownload(cancelled);
     cancelled.cancel();
     await expect(first.pending).resolves.toBeNull();
+    expect(cancelled.native.executed).toBe(false);
     expect(cancelled.writes).not.toHaveBeenCalled();
-    const declined = host();
-    declined.confirmInstall.mockReturnValue(false);
-    const second = await startDownload(declined);
-    declined.native.download();
-    await expect(second.pending).resolves.toBeNull();
-    expect(declined.native.executed).toBe(false);
-    expect(declined.writes).not.toHaveBeenCalled();
   });
 
-  it('vetoes retired pre-consent UI but lets an admitted install finish without stale writes', async () => {
+  it('vetoes a download when the initiating settings page is retired before admission', async () => {
     const early = host();
     const first = await startDownload(early);
     early.retire();
     early.native.download();
     await expect(first.pending).resolves.toBeNull();
-    expect(early.confirmInstall).not.toHaveBeenCalled();
     expect(early.native.executed).toBe(false);
     const admitted = host();
     const second = await startDownload(admitted);
@@ -286,6 +258,95 @@ describe('translation dependency preparation', () => {
     h.addon.enable.mockRejectedValueOnce(new Error('enable failed'));
     await expect(prepareTranslationDependency(h.options)).rejects.toThrow('enable failed');
     expect(h.writes).not.toHaveBeenCalled();
+  });
+});
+
+describe('Selection translation Extra', () => {
+  const fullKey = `extensions.zotero-neo.${TRANSLATION_EXTRA_PREFERENCE}`;
+  const toggle = (page: SettingsExtras, value: boolean) =>
+    page.dispatch({ type: 'value', id: 'translation.extra.enabled', value });
+  const button = (page: SettingsExtras, id: string) =>
+    page.dispatch({ type: 'action', id: `translation.${id}` });
+  async function open(confirm = vi.fn(() => true)) {
+    const page = new SettingsExtras(
+      { confirm } as unknown as MainWindow,
+      new ZoteroPreferenceStore(),
+      'en',
+      () => {},
+    );
+    await vi.waitFor(() =>
+      expect(
+        page.model().groups[1]?.fields.find(({ id }) => id === 'translation.check'),
+      ).toMatchObject({
+        disabled: false,
+      }),
+    );
+    return { page, confirm };
+  }
+
+  it('requests consent once and only enables the Extra after the verified install succeeds', async () => {
+    const h = host();
+    h.preferences.set('extensions.zotero.ZoteroPDFTranslate.enableAuto', false);
+    const { page, confirm } = await open();
+    try {
+      toggle(page, true);
+      await vi.waitFor(() => expect(h.native.install).toHaveBeenCalledOnce());
+      expect(h.preferences.has(fullKey)).toBe(false);
+      expect(confirm).toHaveBeenCalledOnce();
+      expect(confirm).toHaveBeenCalledWith(expect.stringContaining(TRANSLATE_PLUGIN_INSTALL_URL));
+      h.native.download();
+      await vi.waitFor(() => expect(h.preferences.get(fullKey)).toBe(true));
+      expect(confirm).toHaveBeenCalledOnce();
+      expect(h.writes.mock.calls).toEqual([[fullKey, true]]);
+
+      toggle(page, false);
+      expect(h.preferences.get(fullKey)).toBe(false);
+      expect(h.addon.isActive).toBe(true);
+      expect(h.addon.disable).not.toHaveBeenCalled();
+    } finally {
+      page.dispose();
+    }
+  });
+
+  it('does not persist the Extra on decline, and installs only the provider on a separate request', async () => {
+    const h = host();
+    const { page, confirm } = await open(vi.fn(() => false));
+    try {
+      toggle(page, true);
+      await vi.waitFor(() => expect(page.model().status?.text).toMatch(/cancelled/i));
+      expect(h.manager.getInstallForURL).not.toHaveBeenCalled();
+      expect(h.preferences.has(fullKey)).toBe(false);
+
+      confirm.mockReturnValue(true);
+      button(page, 'prepare');
+      await vi.waitFor(() => expect(h.native.install).toHaveBeenCalledOnce());
+      h.native.download();
+      await vi.waitFor(() => expect(page.model().groups[1]?.description).toMatch(/ready for/i));
+      expect(h.preferences.has(fullKey)).toBe(false);
+    } finally {
+      page.dispose();
+    }
+  });
+
+  it('reuses the installed provider and leaves a requested Extra waiting after explicit provider disable', async () => {
+    const h = host({ version: '2.5.0', enabled: true });
+    const { page, confirm } = await open();
+    try {
+      toggle(page, true);
+      await vi.waitFor(() => expect(h.preferences.get(fullKey)).toBe(true));
+      expect(h.manager.getInstallForURL).not.toHaveBeenCalled();
+      expect(confirm).not.toHaveBeenCalled();
+
+      button(page, 'disableProvider');
+      await vi.waitFor(() =>
+        expect(page.model().groups[1]?.description).toMatch(/disabled in zotero/i),
+      );
+      expect(h.preferences.get(fullKey)).toBe(true);
+      expect(page.model().groups[0]?.fields[0]?.note).toMatch(/API is ready/);
+      expect(confirm).toHaveBeenCalledOnce();
+    } finally {
+      page.dispose();
+    }
   });
 });
 

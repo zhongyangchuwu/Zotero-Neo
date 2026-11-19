@@ -1,5 +1,4 @@
-import { captureTranslateForZotero248Initialization } from '../../platform/translate-for-zotero-settings-v248';
-import { translateForZotero248 } from '../../platform/translate-for-zotero-v248';
+import { translateForZoteroApi } from '../../platform/translate-for-zotero';
 import { installMainPlugin, mainInstalledPlugins, setMainPluginEnabled } from '../../toolkit/main';
 import {
   TRANSLATE_PLUGIN_ID,
@@ -12,9 +11,12 @@ export interface TranslationDependencySnapshot {
   readonly installed: boolean;
   readonly version: string | null;
   readonly enabled: boolean;
+  readonly canEnable: boolean;
+  readonly canDisable: boolean;
+  readonly hasSettings: boolean;
   readonly pendingRestart: boolean;
   readonly saveSupported: boolean;
-  readonly runtimeReady: boolean;
+  readonly selectionReady: boolean;
 }
 
 export async function readTranslationDependency(): Promise<TranslationDependencySnapshot> {
@@ -24,22 +26,18 @@ export async function readTranslationDependency(): Promise<TranslationDependency
     installed: !!plugin,
     version: plugin?.version || null,
     enabled: plugin?.enabled ?? false,
+    canEnable: plugin?.canEnable ?? false,
+    canDisable: plugin?.canDisable ?? false,
+    hasSettings: !!plugin?.preferencePaneID,
     pendingRestart: plugin?.pendingRestart ?? false,
     saveSupported,
-    runtimeReady: !!(
-      saveSupported &&
-      plugin?.enabled &&
-      !plugin.pendingRestart &&
-      translateForZotero248()
-    ),
+    selectionReady: !!(plugin?.enabled && !plugin.pendingRestart && translateForZoteroApi()),
   };
 }
 
 export async function prepareTranslationDependency(options: {
-  readonly language: 'en' | 'zh-CN';
   readonly isCurrent: () => boolean;
   readonly confirmDownload: () => boolean;
-  readonly confirmInstall: (details: { name: string; version: string; source: string }) => boolean;
   readonly confirmEnable: (name: string, version: string) => boolean;
   readonly progress: (current: number, total: number) => void;
   readonly registerCancel: (cancel: (() => void) | null) => void;
@@ -50,7 +48,6 @@ export async function prepareTranslationDependency(options: {
 
   if (!plugin) {
     if (!options.confirmDownload() || !options.isCurrent()) return null;
-    const initialize = captureTranslateForZotero248Initialization(options.language);
     const result = await installMainPlugin(TRANSLATE_PLUGIN_INSTALL_URL, {
       id: TRANSLATE_PLUGIN_ID,
       hash: TRANSLATE_PLUGIN_HASH,
@@ -61,7 +58,7 @@ export async function prepareTranslationDependency(options: {
           details.source !== TRANSLATE_PLUGIN_INSTALL_URL
         )
           throw new Error('Downloaded translation provider version or source validation failed');
-        return options.confirmInstall(details);
+        return true;
       },
       progress: (current, total) => {
         if (options.isCurrent()) options.progress(current, total);
@@ -72,15 +69,15 @@ export async function prepareTranslationDependency(options: {
       },
     });
     if (!result || !options.isCurrent()) return null;
-    initialize();
     const snapshot = await readTranslationDependency();
     if (!options.isCurrent()) return null;
     return result.pendingRestart
-      ? { ...snapshot, pendingRestart: true, runtimeReady: false }
+      ? { ...snapshot, pendingRestart: true, selectionReady: false }
       : snapshot;
   }
 
-  if (!plugin.enabled) {
+  if (!plugin.pendingRestart && !plugin.enabled) {
+    if (!plugin.canEnable) throw new Error('Zotero does not allow this plugin to be enabled');
     if (!options.confirmEnable(plugin.name, plugin.version)) return null;
     if (!options.isCurrent()) return null;
     await setMainPluginEnabled(TRANSLATE_PLUGIN_ID, true);

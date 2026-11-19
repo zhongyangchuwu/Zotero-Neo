@@ -48,14 +48,6 @@ jobs:
           if-no-files-found: error
           compression-level: 0
           retention-days: 14
-      - name: Upload Neo Translate Adapter XPI
-        uses: actions/upload-artifact@cf430e030ddbb5b0abf93d22962f4752f3646cd9 # v7; https://api.github.com/repos/actions/upload-artifact/git/ref/tags/v7
-        with:
-          name: zotero-neo-translate
-          path: build/zotero-neo-translate.xpi
-          if-no-files-found: error
-          compression-level: 0
-          retention-days: 14
 
   release:
     name: Publish GitHub Release

@@ -22,6 +22,7 @@ import { createMainWindowController } from './main/controller';
 import { createReaderController } from './reader/controller';
 import { moduleStartupFlags } from './platform/module-startup';
 import { migrateTranslationModulePreference } from './modules/translation/preferences';
+import { SELECTION_TRANSLATION_ACTION_ID } from './modules/translation/selection-action';
 import { AIQAController } from './ai-qa/controller';
 import { isSourceNoteIdentity, migrateLegacySourceNoteIdentities } from './platform/note-relations';
 import { ManagedTagsUI, registerLiteratureMenus } from './toolkit/main';
@@ -193,8 +194,13 @@ export class ZoteroNeoAddon implements ZoteroNeoController {
       openSettings: (owner) => this.#main.openSettings(owner),
       reader: {
         getSelection: () => this.#reader.getSelection(),
-        registerSelectionAction: (action: ReaderSelectionActionDefinition) =>
-          this.#reader.registerSelectionAction(action),
+        registerSelectionAction: (action: ReaderSelectionActionDefinition) => {
+          // Older companion XPIs may still try to register the action now owned by Neo.
+          if (action.id.trim() === SELECTION_TRANSLATION_ACTION_ID) {
+            throw new Error(`Selection action ID is reserved: ${SELECTION_TRANSLATION_ACTION_ID}`);
+          }
+          return this.#reader.registerSelectionAction(action);
+        },
       },
     };
   }
