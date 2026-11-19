@@ -1,7 +1,7 @@
 import { React } from '../runtime';
 import type { KeyboardEvent } from 'react';
 import { KEY_GUIDE_NUMBER_SPECS, normalizeKeyGuideNumber } from '../../../core/preferences';
-import type { BindingEditorIssue } from '../../../input/binding-editor';
+import { compositionOwnsKey } from '../../../input/composition';
 import type { ShortcutCatalogEntry } from '../../../input/shortcut-catalog';
 import type {
   KeybindingsPageCommand,
@@ -13,23 +13,36 @@ interface KeybindingsPageProps {
   readonly dispatch: (command: KeybindingsPageCommand) => void;
 }
 
-const ISSUE_MESSAGES: Record<BindingEditorIssue['kind'], string> = {
-  empty: 'Enter a key sequence and action.',
-  malformed: 'Invalid mode, key sequence, or action.',
-  incompatible: 'Action is not supported in this mode.',
-  duplicate: 'Duplicate mode and key sequence.',
-  prefix: 'Strict prefix of another sequence.',
-  native: 'Native key is reserved by Zotero or text editing.',
-};
+type ShortcutEdit = NonNullable<KeybindingsPageModel['edit']>;
 
 export function KeybindingsPage({ model, dispatch }: KeybindingsPageProps) {
   const [query, setQuery] = React.useState('');
   const [context, setContext] = React.useState('all');
   const [group, setGroup] = React.useState('all');
   const [availability, setAvailability] = React.useState('all');
-  const focusRecorder = React.useCallback((node: HTMLDivElement | null) => {
+  const searchInput = React.useRef<HTMLInputElement>(null);
+  const editorInput = React.useRef<HTMLElement | null>(null);
+  const returnFocus = React.useRef<{ trigger: HTMLElement; summary: HTMLElement | null } | null>(
+    null,
+  );
+  const composing = React.useRef(false);
+  const hintId = React.useId();
+  const focusInput = React.useCallback((node: HTMLElement | null) => {
+    editorInput.current = node;
+    composing.current = false;
     node?.focus();
   }, []);
+  React.useLayoutEffect(() => {
+    if (model.edit || !returnFocus.current) return;
+    const { trigger, summary } = returnFocus.current;
+    returnFocus.current = null;
+    const doc = searchInput.current?.ownerDocument;
+    const active = doc?.activeElement;
+    if (active && active !== doc?.body && active !== doc?.documentElement) return;
+    if (trigger.isConnected) trigger.focus();
+    else if (summary?.isConnected) summary.focus();
+    else searchInput.current?.focus();
+  }, [model.edit]);
   const text = (key: string) => model.labels[key] ?? key;
   const contextName = (value: string) =>
     model.contexts.find((item) => item.value === value)?.label ?? value;
@@ -41,9 +54,7 @@ export function KeybindingsPage({ model, dispatch }: KeybindingsPageProps) {
   const records = model.catalog.filter((entry) => {
     if (context !== 'all' && entry.context !== context) return false;
     if (group !== 'all' && entry.group !== group) return false;
-    const bound = model.rows.some(
-      (row) => row.mode === entry.context && row.action === entry.action && !!row.key,
-    );
+    const bound = entry.keys.length > 0;
     return (
       (availability === 'all' || (availability === 'bound') === bound) &&
       matches([
@@ -64,61 +75,120 @@ export function KeybindingsPage({ model, dispatch }: KeybindingsPageProps) {
       (context === 'all' || entry.context === context) &&
       matches([entry.key, entry.label, entry.context, contextName(entry.context)]),
   );
-  const orphanRows = model.rows.filter(
-    (row) =>
-      !model.catalog.some((entry) => entry.context === row.mode && entry.action === row.action),
-  );
-  const issues = (rowId: number) => {
-    const errors = model.errors.filter((issue) => issue.rowId === rowId);
-    const warnings = model.warnings.filter((issue) => issue.rowId === rowId);
-    return errors.length || warnings.length ? (
-      <ul className={errors.length ? 'kb-error' : 'kb-warning'}>
-        {[...errors, ...warnings].map((issue, index) => (
-          <li key={`${issue.kind}-${index}`}>{text(ISSUE_MESSAGES[issue.kind])}</li>
-        ))}
-      </ul>
-    ) : null;
-  };
-  const recorderKeyDown = (event: KeyboardEvent<HTMLDivElement>) => {
-    const nativeEvent = event.nativeEvent;
-    if (
-      event.key === 'Tab' ||
-      nativeEvent.isComposing ||
-      event.key === 'Process' ||
-      nativeEvent.keyCode === 229
-    )
-      return;
-    if (event.key === 'Escape') {
+  const renderEdit = (edit: ShortcutEdit) => {
+    const recording = edit.mode === 'recording';
+    const hint = text(
+      recording
+        ? 'Type the shortcut. Backspace removes a key; Enter saves; Esc cancels.'
+        : 'Type a key sequence such as <Space>ff. Enter saves; Esc cancels.',
+    );
+    const keyDown = (event: KeyboardEvent<HTMLDivElement>) => {
+      if (compositionOwnsKey(event.nativeEvent, composing.current)) return;
+      const plain = !event.ctrlKey && !event.altKey && !event.metaKey && !event.shiftKey;
+      const key = event.key;
+      let command: KeybindingsPageCommand;
+      if (key === 'Escape' && plain) command = { type: 'cancel-edit' };
+      else if (
+        event.target !== editorInput.current ||
+        (key === 'Tab' && !event.ctrlKey && !event.altKey && !event.metaKey)
+      )
+        return;
+      else if (key === 'Enter' && plain) command = { type: 'save-edit' };
+      else if (recording && key === 'Backspace' && plain) command = { type: 'pop-key' };
+      else if (recording)
+        command = {
+          type: 'record-key',
+          event: {
+            key,
+            ctrlKey: event.ctrlKey,
+            altKey: event.altKey,
+            metaKey: event.metaKey,
+            shiftKey: event.shiftKey,
+          },
+        };
+      else return;
       event.preventDefault();
       event.stopPropagation();
-      nativeEvent.stopImmediatePropagation();
-      dispatch({ type: 'cancel-recording' });
-      return;
-    }
-    if (['Control', 'Alt', 'Meta', 'Shift', 'CapsLock', 'Dead', 'Unidentified'].includes(event.key))
-      return;
-    event.preventDefault();
-    event.stopPropagation();
-    nativeEvent.stopImmediatePropagation();
-    dispatch({
-      type: 'record-key',
-      event: {
-        key: event.key,
-        ctrlKey: event.ctrlKey,
-        metaKey: event.metaKey,
-        altKey: event.altKey,
-        shiftKey: event.shiftKey,
-      },
-    });
+      if (!event.repeat || command.type === 'pop-key') dispatch(command);
+    };
+    const overwrite = edit.exact;
+    return (
+      <div
+        className="kb-recorder"
+        data-neo-ui-key-scope="recorder"
+        onKeyDown={keyDown}
+        onCompositionStart={() => {
+          composing.current = true;
+        }}
+        onCompositionEnd={() => {
+          composing.current = false;
+        }}
+      >
+        <p id={hintId}>{hint}</p>
+        {recording ? (
+          <div
+            ref={focusInput}
+            className="kb-recorder-target"
+            tabIndex={0}
+            role="group"
+            aria-describedby={hintId}
+          >
+            <code>{edit.sequence || '—'}</code>
+          </div>
+        ) : (
+          <input
+            ref={focusInput}
+            className="kb-recorder-target"
+            type="text"
+            aria-label={text('Edit expression')}
+            aria-describedby={hintId}
+            aria-invalid={!!edit.error}
+            value={edit.sequence}
+            spellCheck={false}
+            onChange={(event) => dispatch({ type: 'expression', value: event.currentTarget.value })}
+          />
+        )}
+        <div role="status">
+          {edit.error && <p className="kb-error">{edit.error}</p>}
+          {edit.warning && <p className="kb-warning">{edit.warning}</p>}
+        </div>
+        <div className="kb-row">
+          <button type="button" onClick={() => dispatch({ type: 'toggle-expression' })}>
+            {text(recording ? 'Edit expression' : 'Record keys')}
+          </button>
+          {overwrite ? (
+            <button type="button" onClick={() => dispatch({ type: 'save-edit', overwrite })}>
+              {text('Overwrite existing shortcut')}
+            </button>
+          ) : (
+            <button
+              type="button"
+              disabled={!edit.canSave}
+              onClick={() => dispatch({ type: 'save-edit' })}
+            >
+              {text('Save shortcut')}
+            </button>
+          )}
+          <button type="button" onClick={() => dispatch({ type: 'cancel-edit' })}>
+            {text('Cancel')}
+          </button>
+        </div>
+      </div>
+    );
   };
   const renderEntry = (entry: ShortcutCatalogEntry) => {
-    const rows = model.rows.filter(
-      (row) => row.mode === entry.context && row.action === entry.action,
-    );
-    const recording =
-      model.recording?.context === entry.context && model.recording.action === entry.action
-        ? model.recording
-        : null;
+    const { context, action } = entry;
+    const edit =
+      model.edit?.context === context && model.edit.action === action ? model.edit : null;
+    const notice =
+      model.notice?.context === context && model.notice.action === action ? model.notice : null;
+    const startEdit = (trigger: HTMLElement, previous: string | null) => {
+      returnFocus.current = {
+        trigger,
+        summary: trigger.closest('.kb-action')?.querySelector('summary') ?? null,
+      };
+      dispatch({ type: 'record', context, action, previous });
+    };
     return (
       <details
         key={`${entry.context}:${entry.action}`}
@@ -131,17 +201,7 @@ export function KeybindingsPage({ model, dispatch }: KeybindingsPageProps) {
         </summary>
         <section className="kb-detail">
           <h5>{contextName(entry.context)}</h5>
-          <p>
-            <strong>{text('Current shortcuts')}: </strong>
-            {rows.length
-              ? rows.map((row, index) => (
-                  <React.Fragment key={row.id}>
-                    {index ? ', ' : ''}
-                    <kbd>{row.key || '—'}</kbd>
-                  </React.Fragment>
-                ))
-              : text('No shortcut is assigned in this context.')}
-          </p>
+          {!entry.keys.length && <p>{text('No shortcut is assigned in this context.')}</p>}
           <p>
             <strong>{text('Default shortcuts')}: </strong>
             {entry.defaultKeys.length
@@ -163,90 +223,50 @@ export function KeybindingsPage({ model, dispatch }: KeybindingsPageProps) {
                   : 'Unbound',
             )}
           </p>
-          {rows.map((row) => (
-            <div className="kb-row" key={row.id}>
-              <kbd>{row.key || '—'}</kbd>
-              <button
-                type="button"
-                aria-label={`${text('Record keys')}: ${entry.label} (${contextName(entry.context)}) ${row.key}`}
-                onClick={() =>
-                  dispatch({
-                    type: 'record',
-                    context: entry.context,
-                    action: entry.action,
-                    rowId: row.id,
-                  })
-                }
-              >
-                {text('Record keys')}
-              </button>
-              <button type="button" onClick={() => dispatch({ type: 'delete-row', rowId: row.id })}>
-                {text('Delete binding')}
-              </button>
-              {issues(row.id)}
+          {!!entry.keys.length && (
+            <p>
+              <strong>{text('Current shortcuts')}</strong>
+            </p>
+          )}
+          {entry.keys.map((key) => (
+            <div key={key}>
+              <div className="kb-row">
+                <button
+                  type="button"
+                  aria-label={`${text('Record keys')}: ${entry.label} (${contextName(context)}) ${key}`}
+                  onClick={(event) => startEdit(event.currentTarget, key)}
+                >
+                  <kbd>{key}</kbd>
+                </button>
+                <button
+                  type="button"
+                  onClick={() => dispatch({ type: 'delete-row', context, action, previous: key })}
+                >
+                  {text('Delete binding')}
+                </button>
+              </div>
+              {edit?.previous === key && renderEdit(edit)}
             </div>
           ))}
           <div className="kb-row">
-            <button
-              type="button"
-              onClick={() =>
-                dispatch({
-                  type: 'record',
-                  context: entry.context,
-                  action: entry.action,
-                  rowId: null,
-                })
-              }
-            >
+            <button type="button" onClick={(event) => startEdit(event.currentTarget, null)}>
               {text('Add shortcut')}
             </button>
-            <button
-              type="button"
-              onClick={() =>
-                dispatch({ type: 'unbind', context: entry.context, action: entry.action })
-              }
-            >
+            <button type="button" onClick={() => dispatch({ type: 'unbind', context, action })}>
               {text('Unbind this action')}
             </button>
             <button
               type="button"
-              onClick={() =>
-                dispatch({ type: 'reset-action', context: entry.context, action: entry.action })
-              }
+              onClick={() => dispatch({ type: 'reset-action', context, action })}
             >
               {text('Reset this action')}
             </button>
           </div>
-          {recording && (
-            <div className="kb-recorder">
-              <p>{text('Recording keys — press keys in order, then choose Done')}</p>
-              <div
-                ref={focusRecorder}
-                className="kb-recorder-target"
-                data-neo-ui-key-scope="recorder"
-                tabIndex={0}
-                role="group"
-                aria-label={text('Recording keys — press keys in order, then choose Done')}
-                onKeyDownCapture={recorderKeyDown}
-              >
-                <code>{recording.sequence || '—'}</code>
-              </div>
-              <p role="status">
-                {recording.sequence ? text('Shortcut recorded; choose Done to keep it.') : ''}
-              </p>
-              <div className="kb-row">
-                <button
-                  type="button"
-                  disabled={!recording.sequence}
-                  onClick={() => dispatch({ type: 'finish-recording' })}
-                >
-                  {text('Done')}
-                </button>
-                <button type="button" onClick={() => dispatch({ type: 'cancel-recording' })}>
-                  {text('Cancel')}
-                </button>
-              </div>
-            </div>
+          {edit?.previous === null && renderEdit(edit)}
+          {notice && (
+            <p role="status" className="kb-error">
+              {notice.text}
+            </p>
           )}
         </section>
       </details>
@@ -257,12 +277,13 @@ export function KeybindingsPage({ model, dispatch }: KeybindingsPageProps) {
       <h3>{text('Shortcut browser')}</h3>
       <div className="kb-toolbar">
         <input
+          ref={searchInput}
           type="search"
           aria-label={text('Search shortcuts')}
           placeholder={text('Search actions, IDs, keys, and contexts')}
           value={query}
           onChange={(event) => {
-            if (model.recording) dispatch({ type: 'cancel-recording' });
+            if (model.edit) dispatch({ type: 'cancel-edit' });
             setQuery(event.currentTarget.value);
           }}
         />
@@ -270,7 +291,7 @@ export function KeybindingsPage({ model, dispatch }: KeybindingsPageProps) {
           aria-label={text('All contexts')}
           value={context}
           onChange={(event) => {
-            if (model.recording) dispatch({ type: 'cancel-recording' });
+            if (model.edit) dispatch({ type: 'cancel-edit' });
             setContext(event.currentTarget.value);
           }}
         >
@@ -285,7 +306,7 @@ export function KeybindingsPage({ model, dispatch }: KeybindingsPageProps) {
           aria-label={text('All groups')}
           value={group}
           onChange={(event) => {
-            if (model.recording) dispatch({ type: 'cancel-recording' });
+            if (model.edit) dispatch({ type: 'cancel-edit' });
             setGroup(event.currentTarget.value);
           }}
         >
@@ -300,7 +321,7 @@ export function KeybindingsPage({ model, dispatch }: KeybindingsPageProps) {
           aria-label={text('Show bound and unbound')}
           value={availability}
           onChange={(event) => {
-            if (model.recording) dispatch({ type: 'cancel-recording' });
+            if (model.edit) dispatch({ type: 'cancel-edit' });
             setAvailability(event.currentTarget.value);
           }}
         >
@@ -312,31 +333,6 @@ export function KeybindingsPage({ model, dispatch }: KeybindingsPageProps) {
       <p role="status">
         {text('Search results')}: {records.length + native.length}
       </p>
-      <div className="kb-footer">
-        <span role="status" className={model.errors.length ? 'kb-error' : 'kb-warning'}>
-          {model.errors.length
-            ? text('Fix invalid rows before applying.')
-            : model.warnings.length
-              ? text('Prefix conflicts detected; Apply is allowed.')
-              : model.dirty
-                ? text('Unsaved changes')
-                : ''}
-        </span>
-        <button
-          type="button"
-          disabled={!model.canApply}
-          onClick={() => dispatch({ type: 'apply' })}
-        >
-          {text('Apply bindings')}
-        </button>
-        <span role="status">
-          {model.saveOutcome === 'saved'
-            ? text('Saved.')
-            : model.saveOutcome === 'save-failed'
-              ? text('Could not save bindings.')
-              : model.status}
-        </span>
-      </div>
       <div className="kb-scroll" tabIndex={0} role="region" aria-label={text('Search results')}>
         {model.groups.map((item) => {
           const entries = records
@@ -356,21 +352,20 @@ export function KeybindingsPage({ model, dispatch }: KeybindingsPageProps) {
           ) : null;
         })}
         {!records.length && !native.length && <p>{text('No matching actions.')}</p>}
-        {!!orphanRows.length && (
+        {!!model.unavailable.length && (
           <section className="kb-invalid">
-            <h4>{text('Fix invalid rows before applying.')}</h4>
-            {orphanRows.map((row) => (
-              <div className="kb-row" key={row.id}>
-                <code>
-                  {row.mode}:{row.key} → {row.action}
-                </code>
-                {issues(row.id)}
-                <button
-                  type="button"
-                  onClick={() => dispatch({ type: 'delete-row', rowId: row.id })}
-                >
+            <h4>{text('Unavailable shortcuts')}</h4>
+            {model.unavailable.map((row) => (
+              <div className="kb-row" key={`${row.context}:${row.previous}`}>
+                <code>{row.previous}</code> — {contextName(row.context)}: {row.action}
+                <button type="button" onClick={() => dispatch({ type: 'delete-row', ...row })}>
                   {text('Delete binding')}
                 </button>
+                {model.notice?.context === row.context && model.notice.action === row.action && (
+                  <p role="status" className="kb-error">
+                    {model.notice.text}
+                  </p>
+                )}
               </div>
             ))}
           </section>
@@ -437,9 +432,8 @@ export function KeybindingsPage({ model, dispatch }: KeybindingsPageProps) {
 export const KEYBINDINGS_REACT_CSS = `
 .neo-settings-keybindings { overflow:auto; padding:16px 20px; }
 .neo-settings-keybindings h2 { margin:0 0 .55em; font-size:1.55em; }
-.neo-settings-keybindings .kb-toolbar, .neo-settings-keybindings .kb-row, .neo-settings-keybindings .kb-footer { display:flex; align-items:center; flex-wrap:wrap; gap:.55em; }
+.neo-settings-keybindings .kb-toolbar, .neo-settings-keybindings .kb-row { display:flex; align-items:center; flex-wrap:wrap; gap:.55em; }
 .neo-settings-keybindings .kb-toolbar input { width:min(32em, 100%); }
-.neo-settings-keybindings .kb-footer { position:sticky; top:0; z-index:1; justify-content:flex-end; padding:.65em 0; background:var(--zotero-neo-surface); border-bottom:1px solid var(--zotero-neo-border); }
 .neo-settings-keybindings .kb-scroll { max-height:55vh; overflow:auto; scrollbar-gutter:stable; }
 .neo-settings-keybindings .kb-action, .neo-settings-keybindings .kb-invalid, .neo-settings-keybindings .kb-recorder { margin:.25em 0; padding:.45em .6em; border:1px solid var(--zotero-neo-border); border-radius:5px; }
 .neo-settings-keybindings summary { cursor:pointer; }
@@ -447,7 +441,7 @@ export const KEYBINDINGS_REACT_CSS = `
 .neo-settings-keybindings .kb-detail { padding:.55em 0; border-top:1px solid var(--zotero-neo-border); }
 .neo-settings-keybindings .kb-detail h5, .neo-settings-keybindings .kb-detail p { margin:.2em 0; }
 .neo-settings-keybindings .kb-row { margin:.35em 0; }
-.neo-settings-keybindings .kb-recorder-target { min-height:2.3em; padding:.35em .55em; border:1px solid var(--zotero-neo-border); }
+.neo-settings-keybindings .kb-recorder-target { box-sizing:border-box; min-height:2.3em; width:100%; padding:.35em .55em; border:1px solid var(--zotero-neo-border); }
 .neo-settings-keybindings .kb-error { color:var(--zotero-neo-error); }
 .neo-settings-keybindings .kb-warning { color:var(--zotero-neo-warning); }
 .neo-settings-keybindings .kb-guide { margin:1em 0 1.5em; }

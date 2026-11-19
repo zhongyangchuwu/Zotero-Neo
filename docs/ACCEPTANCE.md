@@ -68,7 +68,7 @@ Get-FileHash zotero-neo.xpi -Algorithm SHA256
 
 在独立更新验收 profile 中先完成 U1，并使用当前设置界面建立以下对照：
 
-1. 在 Reader Normal 为 `scrollDown` 添加大小写敏感的 `Q`，并显式取消默认 `j`。应用绑定，核实 `Q` 可执行、`j` 不再触发 Neo 滚动；保存实际 `extensions.zotero-neo.bindings` 值。
+1. 在 Reader Normal 为 `scrollDown` 添加大小写敏感的 `Q`，并显式取消默认 `j`。确认后核实 `Q` 可执行、`j` 不再触发 Neo 滚动；保存实际 `extensions.zotero-neo.bindings` 值。
 2. 修改一项普通行为偏好，例如关闭 Vim 风格笔记编辑，并记录其实际值；不要重置其他偏好或修改 binding schema 来制造更新结果。
 3. 关闭 Reader，使用 Zotero 原生插件管理器安装本轮记录的 `main` XPI，按现场提示重启。验证重复安装当前包，或更新到另一个明确记录的 `main` 构建；两者须分别说明，不把重装称为跨版本迁移。
 4. 核实提交对应的包身份、源码 schema、自定义 `Q`、`j` 的明确取消和普通行为偏好均正确；已有测试笔记、标签和分类不丢失。
@@ -128,17 +128,17 @@ Get-FileHash zotero-neo.xpi -Algorithm SHA256
 ### U6：Settings 录键和浏览器输入
 
 1. 在 Settings 搜索字段中使用真实 IME，搜索文本是提交后的内容，不把预编辑字符重建为快捷键。
-2. 选择有效的动作和按键上下文，进入 **Record** 状态并发起输入法组合；Process/229 和候选确认键不能变成误记录的 Neo 命令或提前 Apply。
-3. 组合结束后录入一个真实可用序列。Enter/Escape 是被记录的按键，不是隐含的 Done/Cancel。使用界面明确的 Done 或 Cancel，检查焦点返回编辑目标。
-4. 验证编辑未 Apply 时实际旧绑定仍生效；明确 Apply 后才改变。取消／失败不能把待应用的草稿当作已保存。
+2. 选择有效的动作和按键上下文，聚焦绑定标签按 `Enter` 或点击标签进入录制，并发起输入法组合；Process/229 和候选确认键不能变成误记录的 Neo 命令或提前保存。
+3. 组合结束后依次录入可用序列，验证 `Backspace` 删除最后一键，普通 `Enter` 确认后立即生效；另验证 `Esc` 取消并保留旧绑定。用行内表达式编辑输入字面的 `<Enter>`、`<Esc>` 和 `<BS>`，核对原生保留规则。
+4. 验证完全重复的绑定显示冲突动作，可在当前行覆盖或继续编辑；前缀冲突显示警告但允许保存。取消或保存失败不能改变原绑定。
 
-这一场景验证 Recorder 让出 IME 并保持显式完成边界；Recorder 不是汉字编辑器，无需在其中录入汉字字符串。
+这一场景验证录键让出 IME 并支持键盘完成；录键不是汉字编辑器，无需在其中录入汉字字符串。
 
 ### U7：Outline 与剪贴板
 
 - 聚焦真正的 native Outline，使用原生箭头、Tab/Shift-Tab、Enter/Return；目标仍按 Zotero 的原生行为激活。不要把 default-unbound 的 `uiConfirm` 或另一面板的 Enter 当作 Outline 默认。
 - 在 Picker 查询、评论或 Note Insert 中，用自己的测试文字验证原生复制／粘贴，包括平台支持的 `<C-Insert>` / `<S-Insert>`。一次复制后在另一个安全原生字段粘贴核对内容；不以脚本直接读取／写入 clipboard 代替人体操作。
-- 在 Settings binding draft 中尝试把这些 native 保留键藏到一个多键序列的后续 token，确认冲突会阻止 Apply；不要因此禁用原生功能。
+- 在 Settings 的绑定编辑中尝试把这些 native 保留键藏到一个多键序列的后续 token，确认无法保存；不要因此禁用原生功能。
 
 **通过标准**：每个指定目标的实际 focus、IME 阶段、候选确认和原生结果可见。这组人工 PASS 须通过实际操作取得；脚本发送 composition/keyCode229、可信 Gecko 事件或调用生产 API 不能替代。
 
@@ -160,8 +160,9 @@ Get-FileHash zotero-neo.xpi -Algorithm SHA256
 
 ### U9：变更与可选集成
 
-- 模块边界：在一次性 profile 中，将核心模块的 `extensions.zotero-neo.modules.<id>.enabled` 旧值设为 `false`，并请求关闭六项可选增强。新配置中 `reader-hints`、`extensions`、`references` 默认开启，`translation`、`ai-qa`、`tab-enhancements` 默认关闭。保存请求后，Neo 热重载或重开 PDF 不得切换已应用状态；完全退出并重启后应用，核心 Main、Reader、Note 与 Workspace 仍可用。
-- 确认默认关闭的 `ai-qa` 不注册选择动作或 `<Space>aa`，不挂载界面 runtime、不读取凭据或发起请求；手动启用并完全重启后才提供入口。保存关闭请求后，热重载保持当前状态；真正重启后撤除入口，已存配置和成果保留。恢复默认恢复六项规范值，并显式写入 `translation=false`，不改变核心旧值、快捷键、行为偏好或 Zotero 数据。
+- 在模块页切换可选功能，切页再返回，确认开关已立即保存；与运行状态不同时只显示**部分更改将在重启 Zotero 后生效**，改回运行状态后提示消失。AI 问答和翻译增强位于默认折叠的**实验性与可选扩展**；页面不显示核心模块展板或重启按钮。
+- 模块边界：在一次性 profile 中，将核心模块的 `extensions.zotero-neo.modules.<id>.enabled` 旧值设为 `false`，并关闭七项可选增强。新配置中 `reader-hints`、`extensions`、`references` 默认开启，`translation`、`ai-qa`、`tab-enhancements`、`item-attributes` 默认关闭。切换开关后，Neo 热重载或重开 PDF 不得切换已应用状态；完全退出并重启后应用，核心 Main、Reader、Note 与 Workspace 仍可用。
+- 确认默认关闭的 `ai-qa` 不注册选择动作或 `<Space>aa`，不挂载界面 runtime、不读取凭据或发起请求；手动启用并完全重启后才提供入口。关闭开关后，热重载保持当前状态；真正重启后撤除入口，已存配置和成果保留。恢复默认恢复七项规范值，并显式写入 `translation=false`，不改变核心旧值、快捷键、行为偏好或 Zotero 数据。
 - 翻译首次迁移：模块键缺失时，已有 provider 或用户配置保留既有使用；明确 `false` 不被覆盖。`extensions` 关闭时仍能从 Extras 准备依赖，不必启用手动 Extra。确认后新安装固定官方 2.4.8，校验身份、版本和 SHA-256；取消不下载，保留既有上游偏好，不静默替换其他版本。检查依赖启用、上游设置及经确认的原生更新。
 - 手动翻译：在一次性 profile 保持 Neo 的 `translation` 模块关闭，核对选区翻译 Extra 默认关闭且即时启停、上游缺失及公开 API 就绪状态；内置下划线和批注评论始终可用。明确执行才通过上游 API 翻译。热重载 Neo 后只显示一个翻译动作；中途关闭 Extra 不得显示迟到结果，也不得停用或卸载上游。旧实验性适配器可卸载，其状态不自动迁移；`<Space>pp` 的 `i` 或按钮只打开 Extras。
 - 用真实 provider 自动翻译公开测试文字，修订弹窗内容后保存；确认无需再次请求、只生成原生蓝色便签，重复保存同一结果不重复创建。覆盖次分屏、Reading Mode、相同原文复用与 popup／视图替换，保存位置必须来自当前 popup。重开 Reader 检查持久化及全部／批注／译文筛选；已有人工批注和原生颜色筛选不受破坏。

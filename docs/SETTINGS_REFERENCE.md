@@ -1,6 +1,6 @@
 # 设置参考
 
-操作步骤见[设置指南](SETTINGS_GUIDE.md)。普通偏好通常立即保存；快捷键点击**应用绑定**后生效，模块开关需要在**模块**页点击**保存更改**，再完全重启 Zotero。
+操作步骤见[设置指南](SETTINGS_GUIDE.md)。普通偏好通常立即保存；快捷键确认后立即保存，模块开关立即保存，但与当前运行状态不同时需完全重启 Zotero 才生效。
 
 | 控件 | 默认值 | 作用 |
 | --- | --- | --- |
@@ -27,14 +27,14 @@
 | 语言 | 跟随 Zotero | 本地化设置与命令标签，也可固定为 English 或中文。 |
 | 层级分隔符 | `/` | 在标签选择器中显示层级；留空按完整标签名匹配。 |
 
-Neo 面板跟随 Zotero 计算出的浅色或深色配色。快捷键草稿操作见[修改快捷键](SETTINGS_GUIDE.md#修改一个快捷键)。
+Neo 面板跟随 Zotero 计算出的浅色或深色配色。快捷键操作见[修改快捷键](SETTINGS_GUIDE.md#修改一个快捷键)。
 
 上表是新配置的默认值。升级已有配置时，Neo 保留鼠标选择与 Vim 笔记编辑的原有行为，包括旧默认值和手动选择。
 
 ## 模块
 
 当前目录共 23 个模块：16 个固定启用的核心模块和 7 个可选增强；完整目录见[模块所有权表](MODULE_DESIGN.md#模块目录与所有权)。可选 ID 为 `reader-hints`、`extensions`、`translation`、`ai-qa`、`references`、`tab-enhancements` 和 `item-attributes`。
-模块请求使用 `extensions.zotero-neo.modules.<id>.enabled`。`reader-hints`、`extensions` 和 `references` 默认 `true`；其他四项默认 `false`。`ai-qa` 依赖固定启用的 `reader-selection`。启用 `ai-qa` 需要单独保存请求；旧版 `reader-ai` 的偏好保留原义。核心功能始终启用，旧 `extensions.zotero-neo.modules.<core>.enabled=false` 值按兼容数据保留。
+模块请求使用 `extensions.zotero-neo.modules.<id>.enabled`。`reader-hints`、`extensions` 和 `references` 默认 `true`；其他四项默认 `false`。`ai-qa` 依赖固定启用的 `reader-selection`。旧版 `reader-ai` 的偏好保留原义。核心功能始终启用，旧 `extensions.zotero-neo.modules.<core>.enabled=false` 值按兼容数据保留。
 
 | 模块 ID | 名称 | 功能与依赖 |
 | --- | --- | --- |
@@ -62,16 +62,9 @@ Neo 面板跟随 Zotero 计算出的浅色或深色配色。快捷键草稿操�
 | `tab-enhancements` | 标签页增强 | 可选增强：Main 左／右垂直栏或上方横向标签，以及一级活动标签分组；依赖 `workspace`，默认关闭。分组流程见[标签页增强指南](MAIN_GUIDE.md#用标签页增强管理阅读分组)。 |
 | `item-attributes` | 条目自定义属性 | 可选增强：普通文献的文本、数字、单选和多选属性、原生列及单条／批量编辑；默认关闭。 |
 
-| 运行状态 | 含义 |
-| --- | --- |
-| 已启用（Enabled） | 当前宿主中的模块激活成功。 |
-| 已停用（Disabled） | 可选增强已应用关闭请求，其实例和交互贡献随之释放。 |
-| 已阻止（Blocked） | 当前启用图或宿主缺少必需依赖；可根据界面列出的依赖调整请求。 |
-| 失败（Failed） | 当前宿主实例激活失败，入口已退休并尝试清理资源；界面显示原因，日志保留原错误。新宿主实例或重启 Zotero 后可再次激活。 |
-| 等待主机（Pending host） | 等待支持的宿主出现，例如打开 Reader。 |
-| 等待重启（Pending restart） | 已保存请求与已应用值不同；当前功能继续使用已应用值。 |
+模块开关更改后立即保存；**AI 问答（实验）**和**翻译增强**位于默认折叠的**实验性与可选扩展**中。保存值与当前运行状态不同时，设置页显示**部分更改将在重启 Zotero 后生效**。完全退出并重启 Zotero 后才应用更改；热重载继续使用本次启动快照，缺失的可选模块标记按关闭处理。
 
-开关显示编辑中的值。未保存、等待重启或加载失败时，面板会显示相应提示。**恢复模块默认值**将 `reader-hints`、`extensions`、`references` 设为开启，其余四项设为关闭，并显式保留 `translation=false`。保存或恢复后，完全重启 Zotero 才会应用；热重载继续使用本次启动快照，缺失的可选模块标记按关闭处理。核心模块和其他设置保持原样。
+**恢复功能默认值**立即将 `reader-hints`、`extensions`、`references` 设为开启，其余四项设为关闭，并显式保留 `translation=false`。其他设置保持原样。
 
 行为偏好控制模块内的具体操作：`noteEditor.enabled=false` 保留笔记查找，关闭 Vim 编辑；`annotationCommentEditor.enabled=false` 保留 Select 的添加批注评论和原生评论；`marks.persist=false` 使用会话内 marks；`mode.visual.enabled` 等键各按原义生效。核心 `worksets` 始终启用，Main Visual 由其专属偏好控制。关闭可选增强后，绑定、marks、主题、行为偏好和原生数据继续保留。
 
@@ -79,7 +72,7 @@ Neo 面板跟随 Zotero 计算出的浅色或深色配色。快捷键草稿操�
 
 ## Extras
 
-`extras.translation.enabled` 默认关闭，切换立即生效，不受「恢复模块默认值」影响。它只控制 Neo 的手动选区动作；Translate for Zotero 必须已启用且公开 API 已就绪。仅更改此偏好不会下载或停用上游插件。安装、更新及自动译文保存的设置见[翻译指南](SETTINGS_GUIDE.md#准备翻译增强)。
+`extras.translation.enabled` 默认关闭，切换立即生效，不受「恢复功能默认值」影响。它只控制 Neo 的手动选区动作；Translate for Zotero 必须已启用且公开 API 已就绪。仅更改此偏好不会下载或停用上游插件。安装、更新及自动译文保存的设置见[翻译指南](SETTINGS_GUIDE.md#准备翻译增强)。
 
 ## 条目自定义属性
 

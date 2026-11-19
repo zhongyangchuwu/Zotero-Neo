@@ -1,8 +1,4 @@
-import type {
-  BindingEditorIssue,
-  BindingEditorRow,
-  BindingSaveOutcome,
-} from '../input/binding-editor';
+import type { BindingEditTarget } from '../input/binding-editor';
 import type { BindingContext } from '../input/bindings';
 import type { ActionId } from '../input/actions';
 import type {
@@ -18,20 +14,22 @@ export interface KeybindingsPageModel {
   readonly groups: readonly { value: ActionGroup; label: string }[];
   readonly catalog: readonly ShortcutCatalogEntry[];
   readonly native: readonly NativeShortcutEntry[];
-  readonly rows: readonly BindingEditorRow[];
-  readonly errors: readonly BindingEditorIssue[];
-  readonly warnings: readonly BindingEditorIssue[];
-  readonly dirty: boolean;
-  readonly canApply: boolean;
-  readonly saveOutcome: BindingSaveOutcome;
-  readonly recording: {
+  readonly unavailable: readonly (BindingEditTarget & { readonly previous: string })[];
+  readonly edit:
+    | (BindingEditTarget & {
+        readonly mode: 'recording' | 'expression';
+        readonly sequence: string;
+        readonly error: string;
+        readonly warning: string;
+        readonly exact: ActionId | undefined;
+        readonly canSave: boolean;
+      })
+    | null;
+  readonly notice: {
     readonly context: BindingContext;
     readonly action: ActionId;
-    readonly rowId: number | null;
-    readonly tokens: readonly string[];
-    readonly sequence: string;
+    readonly text: string;
   } | null;
-  readonly status: string;
   readonly guide: {
     readonly enabled: boolean;
     readonly delayMs: number;
@@ -41,20 +39,17 @@ export interface KeybindingsPageModel {
 }
 
 export type KeybindingsPageCommand =
-  | {
-      readonly type: 'record';
-      readonly context: BindingContext;
-      readonly action: ActionId;
-      readonly rowId: number | null;
-    }
+  | ({ readonly type: 'record' } & BindingEditTarget)
   | { readonly type: 'record-key'; readonly event: KeyEventLike }
-  | { readonly type: 'finish-recording' | 'cancel-recording' | 'apply' }
+  | { readonly type: 'pop-key' | 'toggle-expression' | 'cancel-edit' }
+  | { readonly type: 'expression'; readonly value: string }
+  | { readonly type: 'save-edit'; readonly overwrite?: ActionId }
   | {
       readonly type: 'unbind' | 'reset-action';
       readonly context: BindingContext;
       readonly action: ActionId;
     }
-  | { readonly type: 'delete-row'; readonly rowId: number }
+  | ({ readonly type: 'delete-row'; readonly previous: string } & BindingEditTarget)
   | { readonly type: 'guide-enabled'; readonly value: boolean }
   | {
       readonly type: 'guide-number';
