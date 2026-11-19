@@ -75,7 +75,6 @@ export type AIQATaskPhase =
   | 'idle'
   | 'preparing'
   | 'requesting'
-  | 'saving'
   | 'complete'
   | 'failed'
   | 'cancelled';
@@ -86,7 +85,6 @@ export interface AIQATaskState {
   readonly phase: AIQATaskPhase;
   readonly kind: AIQATaskKind | null;
   readonly error: AIQAErrorCode | null;
-  readonly resultID: string | null;
 }
 
 /** Image order is explicit and linked to an existing evidence identity, never model coordinates. */

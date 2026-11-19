@@ -5,6 +5,7 @@ import type { ItemTargetSet } from './item-target';
 import type { Logger } from './logging';
 import type { PreferenceStore } from './preference-store';
 import type { BuiltinModuleRuntime } from './module-runtime';
+import type { Cleanup } from './cleanup';
 import type { NavigationPort } from '../navigation/types';
 import type { AIQAController } from '../ai-qa/controller';
 import type { ScholarlyMetadataService } from '../scholarly/contracts';
@@ -124,6 +125,7 @@ export interface ReaderControllerApi extends ReaderSelectionApi {
 export interface MainWindowControllerApi extends ReaderMainOperations {
   openSettings(owner?: Window | null): boolean;
   openItemAttributes(window: MainWindow, selectedItems?: readonly Zotero.Item[]): boolean;
+  openMetadataReview(window: MainWindow, items: readonly Zotero.Item[]): Cleanup | null;
   addWindow(window: MainWindow): void;
   removeWindow(window: MainWindow): void;
   shutdown(): void;

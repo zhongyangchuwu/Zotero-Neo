@@ -5,6 +5,7 @@ import type { PreferenceStore } from '../../src/core/preference-store';
 import type { ReaderSelectionContext } from '../../src/core/contracts';
 import type { AIQAPanelCallbacks, AIQAPanelLease, ReaderRuntime } from '../../src/toolkit/reader';
 import type { AIQASourceCapture } from '../../src/ai-qa/evidence';
+import type { AIQAReaderViewAccess } from '../../src/ai-qa/reader-port';
 import type * as EvidenceModule from '../../src/ai-qa/evidence';
 import type { AIQACommand, AIQAViewModel } from '../../src/ai-qa/view-contracts';
 import type { ReaderDocumentSnapshot } from '../../src/reader/document-cache';
@@ -17,6 +18,7 @@ const host = vi.hoisted(() => ({
   render: vi.fn(),
   current: vi.fn<() => Promise<boolean>>(),
   open: vi.fn<() => boolean>(),
+  access: null as AIQAReaderViewAccess | null,
   model: null as AIQAViewModel | null,
   dispatch: null as ((command: AIQACommand) => void) | null,
   contents: null as string | null,
@@ -158,6 +160,7 @@ beforeEach(() => {
   host.dispatch = null;
   host.contents = null;
   host.nativeDocument = null;
+  host.access = null;
   controller = new AIQAController({
     pluginID: 'fixture',
     rootURI: 'file:///fixture/',
@@ -167,7 +170,7 @@ beforeEach(() => {
   controller.register({
     reader,
     captureSelection: () => selection('initial'),
-    captureView: () => null,
+    captureView: () => host.access,
     language: () => 'en',
     themeRoot: () => () => {},
     showStatus() {},
@@ -184,11 +187,11 @@ describe('Reader AI invocation ownership', () => {
     expect(host.contents).toBeNull();
     host.open.mockReturnValue(true);
     await controller.explain(reader, selection('retry selection'));
-    expect(
-      JSON.parse(host.contents!).records.map((record: { evidence: { text: string }[] }) =>
-        record.evidence.map((entry) => entry.text),
-      ),
-    ).toEqual([['retry selection']]);
+    expect(host.model?.records[0]?.record.evidence.map((entry) => entry.text)).toEqual([
+      'retry selection',
+    ]);
+    expect(host.model?.records[0]?.temporary).toMatchObject({ saving: false, saveError: null });
+    expect(host.contents).toBeNull();
   });
 
   it('does not retarget an accepted selection while source loading is pending', async () => {
@@ -202,7 +205,8 @@ describe('Reader AI invocation ownership', () => {
       evidence: { text: string }[];
     };
     expect(prompt.evidence.map((entry) => entry.text)).toEqual(['original selection']);
-    expect(JSON.parse(host.contents!).records[0].evidence[0].text).toBe('original selection');
+    expect(host.model?.records[0]?.record.evidence[0].text).toBe('original selection');
+    expect(host.contents).toBeNull();
   });
 
   it('keeps a successful successor visible after a cancelled old request rejects late', async () => {
@@ -226,35 +230,49 @@ describe('Reader AI invocation ownership', () => {
 
   it('does not publish or rasterize an older preview after a newer validation completes', async () => {
     await controller.explain(reader, selection('first source', 0));
+    const firstRecord = host.model!.records[0].record;
+    host.dispatch!({
+      type: 'save-history',
+      resultID: firstRecord.id,
+      revision: firstRecord.revision,
+    });
+    await vi.waitFor(() => {
+      expect(host.model?.records[0]?.record.id).toBe(firstRecord.id);
+      expect(host.model?.records[0]?.temporary).toBeUndefined();
+    });
     await controller.explain(reader, selection('second source', 1));
-    const records = JSON.parse(host.contents!).records as { id: string }[];
-    await vi.waitFor(() =>
-      expect(host.model?.records.map((value) => value.record.id)).toEqual(
-        records.map((record) => record.id),
-      ),
-    );
+    const secondRecord = host.model!.records[0].record;
+    expect(secondRecord.id).not.toBe(firstRecord.id);
+    expect(host.model?.records.map(({ record }) => record.id)).toEqual([
+      secondRecord.id,
+      firstRecord.id,
+    ]);
     const first = Promise.withResolvers<boolean>(),
       second = Promise.withResolvers<boolean>();
     host.current
       .mockImplementationOnce(() => first.promise)
       .mockImplementationOnce(() => second.promise);
-    host.dispatch!({ type: 'preview', resultID: records[0].id, evidenceID: 'selection' });
-    host.dispatch!({ type: 'preview', resultID: records[1].id, evidenceID: 'selection' });
+    host.dispatch!({ type: 'preview', resultID: firstRecord.id, evidenceID: 'selection' });
+    host.dispatch!({ type: 'preview', resultID: secondRecord.id, evidenceID: 'selection' });
     second.resolve(true);
-    await vi.waitFor(() => expect(host.model?.preview?.id).toBe(`${records[1].id}/selection`));
+    await vi.waitFor(() => expect(host.model?.preview?.id).toBe(`${secondRecord.id}/selection`));
     first.resolve(true);
     await drain();
-    expect(host.model?.preview?.id).toBe(`${records[1].id}/selection`);
+    expect(host.model?.preview?.id).toBe(`${secondRecord.id}/selection`);
     expect(host.render).toHaveBeenCalledTimes(1);
     expect(host.render.mock.calls[0][1].pageIndex).toBe(1);
   });
 
   it('closes a pending validation before it can rasterize or publish a preview', async () => {
+    const jump = vi.fn(() => true);
+    host.access = {
+      window: {} as AIQAReaderViewAccess['window'],
+      pageIndex: 0,
+      isCurrent: () => true,
+      jump,
+    };
     await controller.explain(reader, selection('source'));
-    const record = JSON.parse(host.contents!).records[0] as { id: string };
-    await vi.waitFor(() =>
-      expect(host.model?.records.some((value) => value.record.id === record.id)).toBe(true),
-    );
+    const record = host.model!.records[0].record;
     const pending = Promise.withResolvers<boolean>();
     host.current.mockImplementationOnce(() => pending.promise);
     host.dispatch!({ type: 'preview', resultID: record.id, evidenceID: 'selection' });
@@ -262,14 +280,24 @@ describe('Reader AI invocation ownership', () => {
     pending.resolve(true);
     await drain();
     expect(host.model).toBeNull();
+    const otherJump = vi.fn(() => true);
+    host.access = { ...host.access, jump: otherJump };
     controller.open(reader);
     await vi.waitFor(() =>
       expect(host.model?.records.some((value) => value.record.id === record.id)).toBe(true),
     );
     expect(host.render).not.toHaveBeenCalled();
     expect(host.model?.preview).toBeNull();
+    host.dispatch!({ type: 'preview', resultID: record.id, evidenceID: 'selection' });
+    await vi.waitFor(() => expect(host.model?.preview?.id).toBe(`${record.id}/selection`));
+    host.dispatch!({ type: 'jump', resultID: record.id, evidenceID: 'selection' });
+    await vi.waitFor(() =>
+      expect(jump).toHaveBeenCalledWith({ pageIndex: 0, rects: [[0, 0, 10, 10]] }),
+    );
+    expect(otherJump).not.toHaveBeenCalled();
+    expect(host.contents).toBeNull();
   });
-  it('keeps a native-only chapter choice instead of silently requesting the first chapter', async () => {
+  it('prepares a native guide with no cache or readable history and keeps the chosen chapter', async () => {
     const region = (
       id: string,
       kind: DocumentRegion['kind'],
@@ -313,10 +341,21 @@ describe('Reader AI invocation ownership', () => {
       ...result,
       output: { paragraphs: [{ text: 'Native chapter result', evidenceIDs: [] }], guide: [] },
     });
+    host.contents = '{unreadable history';
     controller.open(reader);
     await vi.waitFor(() => expect(host.model?.source?.itemID).toBe(1));
     host.dispatch!({ type: 'guide' });
-    await vi.waitFor(() => expect(host.model?.records).toHaveLength(1));
+    await vi.waitFor(() => expect(host.model?.historyUnavailable).toBe(true));
+    await vi.waitFor(() => expect(host.model?.records[0]?.record.kind).toBe('guide'));
+    const firstGuide = host.model!.records[0].record;
+    expect(host.model?.records[0]?.temporary).toMatchObject({ saving: false, saveError: null });
+    host.dispatch!({
+      type: 'save-history',
+      resultID: firstGuide.id,
+      revision: firstGuide.revision,
+    });
+    await vi.waitFor(() => expect(host.model?.records[0]?.temporary?.saveError).toBeTruthy());
+    expect(host.model?.records[0]?.record.id).toBe(firstGuide.id);
     host.dispatch!({ type: 'select-section', id: 'second-heading' });
     await vi.waitFor(() => expect(host.model?.selectedSectionID).toBe('second-heading'));
     host.dispatch!({ type: 'guide' });
@@ -326,6 +365,9 @@ describe('Reader AI invocation ownership', () => {
     };
     expect(prompt.evidence.map((entry) => entry.text)).toContain('Second chapter source');
     expect(prompt.evidence.map((entry) => entry.text)).not.toContain('First chapter source');
+    await vi.waitFor(() => expect(host.model?.records[0]?.record.id).not.toBe(firstGuide.id));
+    expect(host.model?.records).toHaveLength(1);
+    expect(host.contents).toBe('{unreadable history');
   });
 });
 

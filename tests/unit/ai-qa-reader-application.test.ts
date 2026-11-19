@@ -7,7 +7,7 @@ import type { ReaderRuntime } from '../../src/toolkit/reader';
 import type { AIQASourceCapture } from '../../src/ai-qa/evidence';
 import type * as EvidenceModule from '../../src/ai-qa/evidence';
 import { AIQAReaderApplication } from '../../src/ai-qa/reader-application';
-import { createAIQARepository } from '../../src/ai-qa/repository';
+import { createAIQARepository, type AIQAStorage } from '../../src/ai-qa/repository';
 import { createAIQATasks } from '../../src/ai-qa/tasks';
 
 const host = vi.hoisted(() => ({
@@ -51,14 +51,13 @@ function fixture(current: () => Promise<boolean>) {
     );
   adoption.save.mockReset().mockResolvedValue({ itemID: 12, key: 'NOTE', reused: false });
   let contents: string | null = null;
-  const repository = createAIQARepository({
-    read: async () => contents,
-    write: async (_source, value, isCurrent) => {
-      if (!(await isCurrent())) return false;
-      contents = value;
-      return true;
-    },
+  const read = vi.fn(async () => contents);
+  const write = vi.fn<AIQAStorage['write']>(async (_source, value, isCurrent) => {
+    if (!(await isCurrent())) return false;
+    contents = value;
+    return true;
   });
+  const repository = createAIQARepository({ read, write });
   const generation = Promise.withResolvers<AIGenerationResult>();
   const service: AIService = {
     configuration: () => ({
@@ -76,7 +75,6 @@ function fixture(current: () => Promise<boolean>) {
   };
   const tasks = createAIQATasks({
     client: service,
-    repository,
     createAbortController: () => new AbortController(),
   });
   const disposeTasks = vi.spyOn(tasks, 'dispose');
@@ -121,6 +119,8 @@ function fixture(current: () => Promise<boolean>) {
     app,
     tasks,
     repository,
+    read,
+    write,
     service,
     generation,
     port,
@@ -131,28 +131,35 @@ function fixture(current: () => Promise<boolean>) {
 }
 
 describe('headless Reader application lifetime', () => {
-  it('persists an admitted request after reader release and reloads it in a new session', async () => {
+  it('retires a temporary answer on Reader release, without sharing it with another Reader', async () => {
     const f = fixture(async () => true);
     const release = f.app.register(f.port);
     f.app.capture(reader);
     const running = f.app.explain(reader);
     await vi.waitFor(() => expect(f.service.generate).toHaveBeenCalledOnce());
-    release();
-    expect(f.app.snapshot(reader)).toBeNull();
+    const otherReader = { itemID: 1 } as ReaderRuntime;
+    f.app.register({ ...f.port, reader: otherReader });
+    f.app.load(otherReader);
     f.generation.resolve(result);
     await running;
-    expect((await f.repository.list(source))[0].evidence[0].text).toBe('Selected text');
+    expect(f.app.snapshot(reader)?.temporary?.record.evidence[0].text).toBe('Selected text');
+    expect(f.app.snapshot(otherReader)?.temporary).toBeNull();
+    expect(f.write).not.toHaveBeenCalled();
+    release();
+    expect(f.app.snapshot(reader)).toBeNull();
     f.app.register(f.port);
     f.app.capture(reader);
     f.app.load(reader);
-    await vi.waitFor(() => expect(f.app.snapshot(reader)?.records).toHaveLength(1));
+    await vi.waitFor(() => expect(f.app.snapshot(reader)?.loading).toBe(false));
+    expect(f.app.snapshot(reader)?.temporary).toBeNull();
+    expect(f.app.snapshot(reader)?.records).toEqual([]);
     f.app.dispose();
     expect(f.disposeTasks).not.toHaveBeenCalled();
     expect(f.service.dispose).not.toHaveBeenCalled();
     f.tasks.dispose();
   });
 
-  it('allows preparation already accepted to finish after reader release', async () => {
+  it('lets admitted preparation finish after release but never publishes its result', async () => {
     const current = Promise.withResolvers<boolean>();
     const f = fixture(() => current.promise);
     const release = f.app.register(f.port);
@@ -164,13 +171,8 @@ describe('headless Reader application lifetime', () => {
     await vi.waitFor(() => expect(f.service.generate).toHaveBeenCalledOnce());
     f.generation.resolve(result);
     await running;
-    expect(
-      (await f.repository.list(source)).map((record) => ({
-        kind: record.kind,
-        text: record.evidence[0].text,
-        output: record.output.paragraphs[0].text,
-      })),
-    ).toEqual([{ kind: 'explain', text: 'Selected text', output: 'Response' }]);
+    expect(f.write).not.toHaveBeenCalled();
+    expect(await f.repository.list(source)).toEqual([]);
     f.app.dispose();
     f.tasks.dispose();
   });
@@ -234,6 +236,159 @@ describe('headless Reader application lifetime', () => {
   );
 });
 
+describe('explicit AI history saving', () => {
+  it('keeps the exact answer while history loads and coalesces simultaneous saves on retry', async () => {
+    const f = fixture(async () => true);
+    const pendingHistory = Promise.withResolvers<null>();
+    f.read.mockReturnValueOnce(pendingHistory.promise);
+    const release = f.app.register(f.port);
+    f.app.capture(reader);
+    f.generation.resolve(result);
+    await f.app.explain(reader);
+    const draft = f.app.snapshot(reader)!.temporary!.record;
+    const save = { type: 'save-history', resultID: draft.id, revision: draft.revision } as const;
+    expect(f.app.snapshot(reader)?.historyLoading).toBe(true);
+    expect(f.write).not.toHaveBeenCalled();
+    await f.app.dispatch(reader, save);
+    expect(f.app.snapshot(reader)?.temporary).toMatchObject({
+      record: draft,
+      saveError: 'history-loading',
+    });
+    pendingHistory.resolve(null);
+    await vi.waitFor(() => expect(f.app.snapshot(reader)?.historyLoading).toBe(false));
+
+    await Promise.all([f.app.dispatch(reader, save), f.app.dispatch(reader, save)]);
+    await f.app.dispatch(reader, save);
+    expect(f.write).toHaveBeenCalledOnce();
+    expect(f.app.snapshot(reader)?.temporary).toBeNull();
+    expect(f.app.snapshot(reader)?.notice).toBe('historySaved');
+    expect(await f.repository.list(source)).toEqual([draft]);
+    release();
+
+    f.app.register(f.port);
+    f.app.load(reader);
+    await vi.waitFor(() => expect(f.app.snapshot(reader)?.records).toEqual([draft]));
+    expect(f.app.snapshot(reader)?.temporary).toBeNull();
+    expect(f.write).toHaveBeenCalledOnce();
+    f.app.dispose();
+    f.tasks.dispose();
+  });
+
+  it('retains the previous answer on generation and write failure, then saves it on retry', async () => {
+    const f = fixture(async () => true);
+    f.app.register(f.port);
+    f.app.capture(reader);
+    f.generation.resolve(result);
+    await f.app.explain(reader);
+    const draft = f.app.snapshot(reader)!.temporary!.record;
+    const save = { type: 'save-history', resultID: draft.id, revision: draft.revision } as const;
+    vi.mocked(f.service.generate).mockRejectedValueOnce(new Error('offline'));
+    await f.app.dispatch(reader, { type: 'ask', question: 'Replacement answer?' });
+    expect(f.app.snapshot(reader)?.temporary?.record).toEqual(draft);
+    expect(f.write).not.toHaveBeenCalled();
+
+    f.write.mockRejectedValueOnce(new Error('could not publish'));
+    await f.app.dispatch(reader, save);
+    expect(f.app.snapshot(reader)?.temporary).toMatchObject({
+      record: draft,
+      saving: false,
+      saveError: 'storage',
+    });
+    expect(await f.repository.list(source)).toEqual([]);
+    await f.app.dispatch(reader, save);
+    expect(f.app.snapshot(reader)?.temporary).toBeNull();
+    expect(await f.repository.list(source)).toEqual([draft]);
+    expect(f.write).toHaveBeenCalledTimes(2);
+    f.app.dispose();
+    f.tasks.dispose();
+  });
+
+  it('reconciles a published result when its first save failed while refreshing history', async () => {
+    const f = fixture(async () => true);
+    f.app.register(f.port);
+    f.app.capture(reader);
+    f.generation.resolve(result);
+    await f.app.explain(reader);
+    const draft = f.app.snapshot(reader)!.temporary!.record;
+    const save = { type: 'save-history', resultID: draft.id, revision: draft.revision } as const;
+    const persist = f.write.getMockImplementation()!;
+    f.write.mockImplementationOnce(async (...args) => {
+      await persist(...args);
+      throw new Error('post-publication refresh failed');
+    });
+    await f.app.dispatch(reader, save);
+    expect(f.app.snapshot(reader)?.temporary?.saveError).toBe('storage');
+    await f.app.dispatch(reader, save);
+    expect(f.app.snapshot(reader)?.temporary).toBeNull();
+    expect(f.app.snapshot(reader)?.records).toEqual([draft]);
+    expect(f.write).toHaveBeenCalledOnce();
+    f.app.dispose();
+    f.tasks.dispose();
+  });
+
+  it('saves only the dispatched record when another answer replaces it during the write', async () => {
+    const f = fixture(async () => true);
+    f.app.register(f.port);
+    f.app.capture(reader);
+    f.generation.resolve(result);
+    await f.app.explain(reader);
+    const first = f.app.snapshot(reader)!.temporary!.record;
+    const staged = Promise.withResolvers<void>();
+    const persist = f.write.getMockImplementation()!;
+    f.write.mockImplementationOnce(async (...args) => {
+      await staged.promise;
+      return persist(...args);
+    });
+    const saving = f.app.dispatch(reader, {
+      type: 'save-history',
+      resultID: first.id,
+      revision: first.revision,
+    });
+    await vi.waitFor(() => expect(f.write).toHaveBeenCalledOnce());
+    await f.app.dispatch(reader, { type: 'ask', question: 'New answer?' });
+    const next = f.app.snapshot(reader)!.temporary!.record;
+    expect(next.id).not.toBe(first.id);
+    staged.resolve();
+    await saving;
+    expect(f.app.snapshot(reader)?.temporary?.record).toEqual(next);
+    expect(await f.repository.list(source)).toEqual([first]);
+    f.app.dispose();
+    f.tasks.dispose();
+  });
+
+  it('does not commit a staged history save after its PDF source changes', async () => {
+    let current = true;
+    const f = fixture(async () => current);
+    f.app.register(f.port);
+    f.app.capture(reader);
+    f.generation.resolve(result);
+    await f.app.explain(reader);
+    const draft = f.app.snapshot(reader)!.temporary!.record;
+    const staged = Promise.withResolvers<void>();
+    const persist = f.write.getMockImplementation()!;
+    f.write.mockImplementationOnce(async (...args) => {
+      await staged.promise;
+      return persist(...args);
+    });
+    const saving = f.app.dispatch(reader, {
+      type: 'save-history',
+      resultID: draft.id,
+      revision: draft.revision,
+    });
+    await vi.waitFor(() => expect(f.write).toHaveBeenCalledOnce());
+    current = false;
+    staged.resolve();
+    await saving;
+    expect(f.app.snapshot(reader)?.temporary).toMatchObject({
+      record: draft,
+      saveError: 'stale-source',
+    });
+    expect(await f.repository.list(source)).toEqual([]);
+    f.app.dispose();
+    f.tasks.dispose();
+  });
+});
+
 it('opens only a revalidated note and reports a deleted note instead of opening it', async () => {
   const f = fixture(async () => true);
   f.app.register(f.port);
@@ -242,14 +397,14 @@ it('opens only a revalidated note and reports a deleted note instead of opening 
   await vi.waitFor(() => expect(f.service.generate).toHaveBeenCalledOnce());
   f.generation.resolve(result);
   await running;
-  await vi.waitFor(() => expect(f.app.snapshot(reader)?.records).toHaveLength(1));
-  const record = f.app.snapshot(reader)!.records[0]!;
+  const record = f.app.snapshot(reader)!.temporary!.record;
   await f.app.dispatch(reader, {
     type: 'save-note',
     resultID: record.id,
     revision: record.revision,
   });
   expect(f.app.snapshot(reader)?.notice).toBe('adoptedCreated');
+  expect(f.write).not.toHaveBeenCalled();
   expect(f.app.snapshot(reader)?.adoptions[record.id]).toEqual({
     itemID: 12,
     key: 'NOTE',
@@ -282,8 +437,7 @@ it('publishes a completed save after a newer preview without replacing its notic
   await vi.waitFor(() => expect(f.service.generate).toHaveBeenCalledOnce());
   f.generation.resolve(result);
   await running;
-  await vi.waitFor(() => expect(f.app.snapshot(reader)?.records).toHaveLength(1));
-  const record = f.app.snapshot(reader)!.records[0]!;
+  const record = f.app.snapshot(reader)!.temporary!.record;
   const saved = Promise.withResolvers<{ itemID: number; key: string; reused: boolean }>();
   adoption.save.mockReturnValueOnce(saved.promise);
   const saving = f.app.dispatch(reader, {
@@ -315,8 +469,11 @@ it('keeps a new result and a concurrent save when its earlier adoption lookup fi
   await vi.waitFor(() => expect(f.service.generate).toHaveBeenCalledOnce());
   f.generation.resolve(result);
   await first;
-  await vi.waitFor(() => expect(f.app.snapshot(reader)?.records).toHaveLength(1));
-  const record = f.app.snapshot(reader)!.records[0]!;
+  const record = f.app.snapshot(reader)!.temporary!.record;
+  await f.app.dispatch(reader, { type: 'save-history', resultID: record.id, revision: 1 });
+  await f.app.explain(reader);
+  const next = f.app.snapshot(reader)!.temporary!.record;
+  await f.app.dispatch(reader, { type: 'save-history', resultID: next.id, revision: 1 });
   const lookup = Promise.withResolvers<Record<string, null>>();
   let lookupIDs: string[] = [];
   adoption.find.mockImplementation(async (records: { id: string }[]) => {
@@ -326,7 +483,7 @@ it('keeps a new result and a concurrent save when its earlier adoption lookup fi
     }
     return Object.fromEntries(records.map((entry) => [entry.id, null]));
   });
-  await f.app.explain(reader);
+  f.app.load(reader);
   await vi.waitFor(() => expect(lookupIDs).toHaveLength(2));
   await f.app.dispatch(reader, {
     type: 'save-note',
@@ -336,68 +493,80 @@ it('keeps a new result and a concurrent save when its earlier adoption lookup fi
   const receipt = { itemID: 12, key: 'NOTE', reused: false };
   expect(f.app.snapshot(reader)?.adoptions[record.id]).toEqual(receipt);
   lookup.resolve(Object.fromEntries(lookupIDs.map((id) => [id, null])));
-  await vi.waitFor(() => expect(f.app.snapshot(reader)?.records).toHaveLength(2));
+  await vi.waitFor(() => expect(f.app.snapshot(reader)?.historyLoading).toBe(false));
+  expect(f.app.snapshot(reader)?.records).toHaveLength(2);
   expect(f.app.snapshot(reader)?.adoptions[record.id]).toEqual(receipt);
   expect(f.app.snapshot(reader)?.adoptions[lookupIDs.find((id) => id !== record.id)!]).toBeNull();
   f.app.dispose();
   f.tasks.dispose();
 });
 
-it('does not republish retired context after the final asynchronous source check', async () => {
-  const finalCheck = Promise.withResolvers<boolean>();
-  const checking = Promise.withResolvers<void>();
-  let holdSourceCheck = false;
-  const f = fixture(async () => {
-    if (!holdSourceCheck) return true;
-    checking.resolve();
-    return finalCheck.promise;
-  });
-  const parsed: ParsedDocument = {
-    schemaVersion: 1,
-    sourceFingerprint: source.fingerprint,
-    backend: 'local-rules',
-    modelRevision: null,
-    durationMs: 0,
-    pages: [{ pageIndex: 0, viewBox: [0, 0, 600, 800], rotation: 0 }],
-    regions: [
-      {
-        id: 'heading',
-        kind: 'heading',
-        flow: 'body',
-        pageIndex: 0,
-        rect: [20, 700, 300, 720],
-        text: 'Retired profile chapter',
-        format: 'text',
-        anchorPrecision: 'region',
-      },
-      {
-        id: 'paragraph',
-        kind: 'text',
-        flow: 'body',
-        pageIndex: 0,
-        rect: [20, 600, 300, 680],
-        text: 'Context from the previous local rule profile.',
-        format: 'text',
-        anchorPrecision: 'region',
-      },
-    ],
-  };
-  f.app.register(f.port);
-  f.app.load(reader);
-  await vi.waitFor(() => expect(host.cache).toHaveBeenCalledOnce());
-  await vi.waitFor(() => expect(f.app.snapshot(reader)?.loading).toBe(false));
-  host.prepared.mockImplementationOnce(async () => {
-    holdSourceCheck = true;
-    return { parsed, origin: 'local', textRegions: parsed.regions, isCurrent: async () => true };
-  });
-  const running = f.app.dispatch(reader, { type: 'guide' });
-  await checking.promise;
-  f.preferences.set(LOCAL_RULES_KEY, '{');
-  finalCheck.resolve(true);
-  await running;
-  expect(f.app.snapshot(reader)?.sections).toEqual([]);
-  expect(f.app.snapshot(reader)?.selectedSectionID).toBeNull();
-  expect(f.service.generate).not.toHaveBeenCalled();
-  f.app.dispose();
-  f.tasks.dispose();
-});
+it.each(['preparing', 'requesting'] as const)(
+  'does not apply retired chapter context while %s',
+  async (phase) => {
+    const finalCheck = Promise.withResolvers<boolean>();
+    const checking = Promise.withResolvers<void>();
+    let holdSourceCheck = false;
+    const f = fixture(async () => {
+      if (!holdSourceCheck) return true;
+      checking.resolve();
+      return finalCheck.promise;
+    });
+    const parsed: ParsedDocument = {
+      schemaVersion: 1,
+      sourceFingerprint: source.fingerprint,
+      backend: 'local-rules',
+      modelRevision: null,
+      durationMs: 0,
+      pages: [{ pageIndex: 0, viewBox: [0, 0, 600, 800], rotation: 0 }],
+      regions: [
+        {
+          id: 'heading',
+          kind: 'heading',
+          flow: 'body',
+          pageIndex: 0,
+          rect: [20, 700, 300, 720],
+          text: 'Retired profile chapter',
+          format: 'text',
+          anchorPrecision: 'region',
+        },
+        {
+          id: 'paragraph',
+          kind: 'text',
+          flow: 'body',
+          pageIndex: 0,
+          rect: [20, 600, 300, 680],
+          text: 'Context from the previous local rule profile.',
+          format: 'text',
+          anchorPrecision: 'region',
+        },
+      ],
+    };
+    f.app.register(f.port);
+    f.app.load(reader);
+    await vi.waitFor(() => expect(host.cache).toHaveBeenCalledOnce());
+    await vi.waitFor(() => expect(f.app.snapshot(reader)?.loading).toBe(false));
+    host.prepared.mockImplementationOnce(async () => {
+      holdSourceCheck = phase === 'preparing';
+      return { parsed, origin: 'local', textRegions: parsed.regions, isCurrent: async () => true };
+    });
+    const running = f.app.dispatch(reader, { type: 'guide' });
+    if (phase === 'preparing') await checking.promise;
+    else await vi.waitFor(() => expect(f.service.generate).toHaveBeenCalledOnce());
+    f.preferences.set(LOCAL_RULES_KEY, '{');
+    if (phase === 'preparing') finalCheck.resolve(true);
+    else
+      f.generation.resolve({
+        ...result,
+        output: { paragraphs: [{ text: 'Stale chapter answer', evidenceIDs: [] }], guide: [] },
+      });
+    await running;
+    expect(f.app.snapshot(reader)?.sections).toEqual([]);
+    expect(f.app.snapshot(reader)?.selectedSectionID).toBeNull();
+    expect(f.app.snapshot(reader)?.temporary).toBeNull();
+    expect(f.service.generate).toHaveBeenCalledTimes(phase === 'preparing' ? 0 : 1);
+    expect(f.write).not.toHaveBeenCalled();
+    f.app.dispose();
+    f.tasks.dispose();
+  },
+);

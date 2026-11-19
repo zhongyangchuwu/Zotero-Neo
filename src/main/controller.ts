@@ -358,14 +358,7 @@ export class MainWindowController implements MainWindowControllerApi {
             if (worksets?.isVisual) worksets?.cancel();
             this.resetMainInput(window, session);
           },
-          reviewMetadata: (items) =>
-            this.#dependencies.metadataReview?.open({
-              window,
-              items,
-              language: () => this.keyGuideLanguage(),
-              themeRoot: (root) => session.theme.add(root),
-              isCurrent: () => this.#sessions.get(window) === session && !session.cleanup.disposed,
-            }) ?? null,
+          reviewMetadata: (items) => this.openMetadataReview(window, items),
           choose: (kind, options) => {
             if (session.picker.open) return null;
             const previous = session.picker.generation;
@@ -760,6 +753,7 @@ export class MainWindowController implements MainWindowControllerApi {
       this.#dependencies.logger.diagnostic(`main window detached sessions=${this.#sessions.size}`),
     );
     if (modules) failure.run(() => modules.scope.dispose());
+    failure.run(() => this.#dependencies.metadataReview?.closeOwner(window));
     failure.run(() => decoration?.dispose());
     failure.run(() => session.dispose());
     failure.rethrow();
@@ -816,6 +810,21 @@ export class MainWindowController implements MainWindowControllerApi {
     return selectedItems
       ? module.edit(presentation, this.bindingMode(window))
       : module.manage(presentation);
+  }
+
+  /** Menu entries supply Zotero's own selection; keyboard actions resolve their own targets. */
+  openMetadataReview(window: MainWindow, items: readonly Zotero.Item[]): Cleanup | null {
+    const session = this.#sessions.get(window);
+    if (!session || session.cleanup.disposed) return null;
+    return (
+      this.#dependencies.metadataReview?.open({
+        window,
+        items,
+        language: () => this.keyGuideLanguage(),
+        themeRoot: (root) => session.theme.add(root),
+        isCurrent: () => this.#sessions.get(window) === session && !session.cleanup.disposed,
+      }) ?? null
+    );
   }
 
   private resetMainInput(window: MainWindow, session: MainWindowSession): void {

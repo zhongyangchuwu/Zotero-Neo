@@ -6,6 +6,9 @@ export interface MetadataReviewModel {
   readonly items: readonly { readonly title: string; readonly status: string }[];
   readonly itemIndex: number;
   readonly busy: boolean;
+  readonly querying: boolean;
+  readonly fillCount: number;
+  readonly batchStatus: string;
   readonly status: string;
   readonly error: boolean;
   readonly candidates: readonly string[];
@@ -18,15 +21,28 @@ export interface MetadataReviewModel {
     readonly selected: boolean;
   }[];
   readonly history: readonly { readonly id: string; readonly title: string }[];
+  readonly historyStatus: string;
+  readonly historyError: boolean;
   readonly canApply: boolean;
   readonly canSave: boolean;
   readonly canEdit: boolean;
   readonly bibtex: string;
 }
 export type MetadataReviewCommand =
-  | { readonly type: 'close' | 'inspect' | 'inspect-all' | 'refresh' | 'stop' | 'apply' | 'save' }
+  | {
+      readonly type:
+        | 'close'
+        | 'inspect'
+        | 'inspect-all'
+        | 'refresh'
+        | 'stop'
+        | 'apply'
+        | 'fill'
+        | 'save';
+    }
   | { readonly type: 'source'; readonly value: string }
   | { readonly type: 'item' | 'candidate'; readonly index: number }
   | { readonly type: 'field'; readonly field: MetadataField; readonly checked: boolean }
   | { readonly type: 'bibtex'; readonly value: string }
+  | { readonly type: 'load-history'; readonly index: number }
   | { readonly type: 'history'; readonly id: string };

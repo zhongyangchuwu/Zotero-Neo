@@ -52,12 +52,12 @@ afterEach(() => {
   vi.restoreAllMocks();
 });
 
-it('retries an imported receipt with the same revision instead of creating a false branch or applying fields twice', async () => {
-  const fields: Record<string, string> = { title: 'Original title' };
+function paperItem(id: number, title: string) {
+  const fields: Record<string, string> = { title, DOI: `10.1234/item-${id}` };
   const save = vi.fn(async () => {});
   const item = {
-    id: 1,
-    key: 'ABCD2345',
+    id,
+    key: `ITEM${id}`,
     libraryID: 1,
     itemTypeID: 2,
     deleted: false,
@@ -70,6 +70,91 @@ it('retries an imported receipt with the same revision instead of creating a fal
     setCreators: () => {},
     save,
   } as unknown as Zotero.Item;
+  return { item, fields, save };
+}
+
+it('fills matched items in one action without touching records, existing fields, or unchecked candidates', async () => {
+  const a = paperItem(1, 'First paper');
+  const b = paperItem(2, 'Second paper');
+  const ambiguous = paperItem(3, 'A shared title');
+  delete ambiguous.fields.DOI;
+  const changed = paperItem(4, 'Edited while checking');
+  const items = [a.item, b.item, ambiguous.item, changed.item];
+  vi.stubGlobal('Components', { utils: { isDeadWrapper: () => false } });
+  vi.stubGlobal('Zotero', {
+    Libraries: { get: () => ({ editable: true }) },
+    Items: { getAsync: async (id: number) => items.find((item) => item.id === id) },
+    ItemFields: { getID: (name: string) => name, isValidForType: () => true },
+    DB: { executeTransaction: async (run: () => Promise<unknown>) => run() },
+  });
+  const list = vi.fn(async () => ({
+    artifacts: [],
+    complete: false,
+    availability: 'local-only' as const,
+    issues: [],
+  }));
+  const publish = vi.fn(async () => {
+    throw new Error('Archive is unavailable');
+  });
+  const metadata: ScholarlyMetadataService = {
+    sources: [{ id: 'crossref', label: 'Crossref', capabilities: ['lookup', 'search'] }],
+    lookup: async (query) => {
+      const paper: ScholarlyPaper = {
+        source: 'crossref',
+        sourceID: query.doi ?? 'candidate',
+        title: `${query.text} (provider)`,
+        authors: [],
+        year: null,
+        venue: null,
+        abstract: null,
+        doi: query.doi ?? null,
+        arxivID: null,
+        url: null,
+        pdfURL: null,
+        referenceCount: null,
+        citationCount: null,
+        retrievedAt: '2026-01-01T00:00:00Z',
+        bibliography: { volume: '12' },
+        citekey: 'provider-key',
+      };
+      return query.doi ? { kind: 'found', paper } : { kind: 'candidates', papers: [paper] };
+    },
+    clearCache: async () => {},
+    dispose: () => {},
+  };
+  controller = new MetadataReviewController(metadata, { list, publish }, () => {});
+  controller.open({
+    window,
+    items,
+    language: () => 'en',
+    themeRoot: () => () => {},
+    isCurrent: () => true,
+  });
+  const view = host.view!;
+  view.dispatch({ type: 'inspect-all' });
+  await vi.waitFor(() => {
+    expect(view.model.busy).toBe(false);
+    expect(view.model.fillCount).toBe(3);
+  });
+  expect(list).not.toHaveBeenCalled();
+  changed.fields.volume = 'Manually filled';
+  view.dispatch({ type: 'fill' });
+  await vi.waitFor(() => expect(view.model.busy).toBe(false));
+  expect(a.fields).toEqual({ title: 'First paper', DOI: '10.1234/item-1', volume: '12' });
+  expect(b.fields).toEqual({ title: 'Second paper', DOI: '10.1234/item-2', volume: '12' });
+  expect(ambiguous.fields).toEqual({ title: 'A shared title' });
+  expect(changed.fields.volume).toBe('Manually filled');
+  expect(changed.save).not.toHaveBeenCalled();
+  expect(view.model.items[3]?.status).toContain('changed after inspection');
+  expect(list).not.toHaveBeenCalled();
+  expect(publish).not.toHaveBeenCalled();
+  view.dispatch({ type: 'load-history', index: 0 });
+  await vi.waitFor(() => expect(view.model.historyError).toBe(true));
+  expect(view.model.error).toBe(false);
+});
+
+it('retries an imported receipt with the same revision instead of creating a false branch or applying fields twice', async () => {
+  const { item, fields, save } = paperItem(1, 'Original title');
   let revision = 0;
   vi.stubGlobal('Components', { utils: { isDeadWrapper: () => false } });
   vi.stubGlobal('Zotero', {
@@ -154,16 +239,27 @@ it('retries an imported receipt with the same revision instead of creating a fal
   await vi.waitFor(() =>
     expect(view.model.fields.some((field) => field.field === 'volume')).toBe(true),
   );
+  view.dispatch({ type: 'save' });
+  await vi.waitFor(() => expect(view.model.busy).toBe(false));
+  expect(artifacts).toHaveLength(1);
+  expect(artifacts[0]?.payload).toMatchObject({ stage: 'proposal' });
+  expect(fields.volume).toBeUndefined();
+  expect(save).not.toHaveBeenCalled();
   view.dispatch({ type: 'apply' });
-  await vi.waitFor(() => {
-    expect(view.model.busy).toBe(false);
-    expect(view.model.error).toBe(true);
-  });
+  await vi.waitFor(() => expect(view.model.busy).toBe(false));
+  expect(view.model.error).toBe(false);
+  expect(artifacts).toHaveLength(1);
   expect(fields.volume).toBe('12');
   expect(view.model.canApply).toBe(false);
   view.dispatch({ type: 'save' });
+  await vi.waitFor(() => {
+    expect(view.model.busy).toBe(false);
+    expect(view.model.historyError).toBe(true);
+  });
+  expect(artifacts).toHaveLength(2);
+  view.dispatch({ type: 'save' });
   await vi.waitFor(() => expect(view.model.busy).toBe(false));
-  expect(view.model.error).toBe(false);
+  expect(view.model.historyError).toBe(false);
   expect(save).toHaveBeenCalledTimes(1);
   expect(artifacts).toHaveLength(2);
   const heads = artifactHeads(artifacts, artifacts[0]!.recordID);

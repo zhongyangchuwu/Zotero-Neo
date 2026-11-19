@@ -11,6 +11,7 @@ export type AIQAReaderCommand =
   | { readonly type: 'cancel' }
   | { readonly type: 'preview'; readonly resultID: string; readonly evidenceID: string }
   | { readonly type: 'jump'; readonly resultID: string; readonly evidenceID: string }
+  | { readonly type: 'save-history'; readonly resultID: string; readonly revision: number }
   | { readonly type: 'save-note'; readonly resultID: string; readonly revision: number }
   | { readonly type: 'open-note'; readonly resultID: string; readonly revision: number }
   | {
@@ -23,6 +24,7 @@ export type AIQAReaderCommand =
 
 export type AIQAReaderNotice =
   | 'saved'
+  | 'historySaved'
   | 'cancelled'
   | 'evidenceUnavailable'
   | 'adoptedCreated'
@@ -47,6 +49,13 @@ export interface AIQAReaderSnapshot {
   readonly limitedContext: boolean;
   readonly task: AIQATaskState;
   readonly records: readonly AIQARecord[];
+  readonly temporary: {
+    readonly record: AIQARecord;
+    readonly saving: boolean;
+    readonly saveError: AIQAErrorCode | 'history-loading' | null;
+  } | null;
+  readonly historyUnavailable: boolean;
+  readonly historyLoading: boolean;
   readonly adoptions: Readonly<Record<string, SourceNoteReceipt | 'unavailable' | null>>;
   readonly preview: AIQASourcePreview | null;
   readonly error: AIQAErrorCode | null;

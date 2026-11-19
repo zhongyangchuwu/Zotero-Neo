@@ -234,7 +234,7 @@ Main Normal 命令取决于焦点所在位置：分类树、条目列表、Quick
 | `findNext` / `findPrevious` | `n` / `N` | 条目列表获得焦点时，按已提交的内部查找查询向前/后重复搜索一次；忽略计数。没有查询、未命中或游标未改变时，位置不变。游标改变时可添加历史记录。 |
 | `mainQuickSearch` / `mainAdvancedSearch` | `<Space>fq` / `<Space>fa` | 聚焦原生 Quick Search 或打开 Advanced Search；`fa` 可将现有 Quick Search 文字转换过去。这些操作改变 Main 视图范围，不改变 Reader 页码位置。 |
 | `mainAddByIdentifier` | `<Space>ai` | 为一个可写文库及其当前所选分类打开原生标识符录入；不使用条目目标或 Neo 选择集。跨文库或只读范围不可用；忽略计数。见[通过标识符添加条目](MAIN_GUIDE.md#用-doi、arxiv-id-等添加论文)。
-| `inspectMetadata` / `inspectCollectionMetadata` | **未绑定** | Main Normal 命令面板：打开**检查论文信息**，范围分别是当前条目目标或当前普通分类的直接条目；不自动联网或写入。操作见[检查和更新论文信息](MAIN_GUIDE.md#检查和更新论文信息)。 |
+| `inspectMetadata` / `inspectCollectionMetadata` | **未绑定** | Main Normal 命令面板：检查与补全当前条目目标或当前普通分类的直接条目。打开时不联网或写入；条目右键也可检查 Zotero 当前选中的文献。见[检查和更新论文信息](MAIN_GUIDE.md#检查和更新论文信息)。 |
 | `manageItemAttributes` | `<Space>pa` | Main Normal：管理普通文献的自定义属性与选项；仅在 `item-attributes` 启用并重启后可用。 |
 | `editItemAttributes` | `<Space>ia` | Main Normal／Select：固定当前有效文献目标，设置或清除所选属性，多条目写入前再次确认。操作和 Extra 风险见[自定义属性指南](MAIN_GUIDE.md#给文献添加自定义属性)。 |
 | `findAllItems` / `findCollectionItems` / `findNotes` | `<Space>ff` / `<Space>fc` / `<Space>fn` | 打开共享的条目/笔记选择器。确认结果时可添加历史位置；浏览或取消不会添加。 |

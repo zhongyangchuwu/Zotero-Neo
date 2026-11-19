@@ -4,7 +4,7 @@ import { h } from 'vue';
 import type { Theme } from 'vitepress';
 import DefaultTheme from 'vitepress/theme';
 import FeatureMedia from './FeatureMedia.vue';
-import bannerUrl from '../../assets/branding/zotero-neo-banner.png';
+import iconUrl from '../../assets/package/icons/icon-256x256.png';
 
 export default {
   extends: DefaultTheme,
@@ -15,8 +15,8 @@ export default {
     h(DefaultTheme.Layout, null, {
       'home-hero-image': () =>
         h('img', {
-          src: bannerUrl,
-          alt: 'Zotero Neo — Neovim-inspired keyboard layer for Zotero',
+          src: iconUrl,
+          alt: 'Zotero Neo',
           class: 'VPImage image-src',
         }),
     }),

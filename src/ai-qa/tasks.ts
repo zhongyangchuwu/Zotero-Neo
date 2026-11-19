@@ -1,19 +1,12 @@
 import type { AIClient } from '../ai/contracts';
 import { aiErrorCode } from '../ai/errors';
-import type {
-  AIQARecord,
-  AIQARepository,
-  AIQATaskInput,
-  AIQATaskState,
-  AIQATasks,
-} from './contracts';
+import type { AIQARecord, AIQATaskInput, AIQATaskState, AIQATasks } from './contracts';
 import { AIQAError } from './errors';
 import { parseAIQAOutput } from './output';
 import { aiQAPrompt } from './prompts';
 
 export function createAIQATasks(options: {
   client: AIClient;
-  repository: AIQARepository;
   createAbortController: () => AbortController;
 }): AIQATasks {
   const states = new Map<number, AIQATaskState>();
@@ -35,7 +28,6 @@ export function createAIQATasks(options: {
     phase: 'idle',
     kind: null,
     error: null,
-    resultID: null,
   });
   return {
     state: (itemID) => states.get(itemID) ?? idle(itemID),
@@ -76,13 +68,9 @@ export function createAIQATasks(options: {
       const id = `${Date.now().toString(36)}-${Math.random().toString(36).slice(2)}-${Math.random().toString(36).slice(2)}`;
       const job = { controller, id };
       active.set(itemID, job);
-      const setPhase = (
-        phase: AIQATaskState['phase'],
-        error: AIQATaskState['error'] = null,
-        resultID: string | null = null,
-      ) => {
+      const setPhase = (phase: AIQATaskState['phase'], error: AIQATaskState['error'] = null) => {
         if (disposed || active.get(itemID) !== job) return;
-        states.set(itemID, { itemID, taskID: id, kind: input.kind, phase, error, resultID });
+        states.set(itemID, { itemID, taskID: id, kind: input.kind, phase, error });
         notify();
       };
       const current = async () => {
@@ -120,10 +108,8 @@ export function createAIQATasks(options: {
           updatedAt: now,
           userText: null,
         };
-        setPhase('saving');
-        const saved = await options.repository.add(record, current);
-        setPhase('complete', null, saved.id);
-        return saved;
+        setPhase('complete');
+        return record;
       } catch (error) {
         const code =
           controller.signal.aborted || disposed

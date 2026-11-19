@@ -58,7 +58,7 @@ Neo 面板跟随 Zotero 计算出的浅色或深色配色。快捷键草稿操�
 | `ai-qa` | AI 问答（实验） | 可选增强：解释当前 Reader 选区，就选区或有限章节证据提问，并准备章节图文导引；图像输入可选关联图表裁图，数据范围限定为当前任务证据。依赖 `reader-selection`，默认关闭。 |
 | `notes` | 笔记 | 笔记查找、打开及可选 Vim 编辑。 |
 | `workspace` | 工作区 | 标签页操作、Show in Library、Reader 分屏与方向焦点，可独立使用。 |
-| `extensions` | 扩展管理面板 | 可选增强：管理 Zotero 附加组件的 Plugin Manager，提供固定官方 Translate 安装及所选插件更新。 |
+| `extensions` | 扩展管理面板 | 可选增强：查看和管理已安装的 Zotero 插件，更新由 Zotero 处理。安装受支持的 Translate for Zotero 使用 [Extras](SETTINGS_GUIDE.md#准备翻译增强)。 |
 | `tab-enhancements` | 标签页增强 | 可选增强：Main 左／右垂直栏或上方横向标签，以及一级活动标签分组；依赖 `workspace`，默认关闭。分组流程见[标签页增强指南](MAIN_GUIDE.md#用标签页增强管理阅读分组)。 |
 | `item-attributes` | 条目自定义属性 | 可选增强：普通文献的文本、数字、单选和多选属性、原生列及单条／批量编辑；默认关闭。 |
 

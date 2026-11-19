@@ -7,7 +7,12 @@ interface LiteratureMenuActions {
   language(): KeyGuideLanguage;
   manageAttributes?: (window: MainWindow) => void;
   editAttributes?: (window: MainWindow, items: readonly Zotero.Item[]) => void;
+  reviewMetadata(window: MainWindow, items: readonly Zotero.Item[]): void;
   openTable(window: MainWindow): void;
+}
+
+function canCheckMetadata(item: Zotero.Item): boolean {
+  return item.isRegularItem() && !item.deleted && !item.isFeedItem;
 }
 
 /** Register once per add-on lifetime; each menu event belongs to its own main window. */
@@ -60,6 +65,21 @@ export function registerLiteratureMenus(pluginID: string, actions: LiteratureMen
         toolsItem('管理自定义属性…', 'Manage Custom Attributes…', actions.manageAttributes),
       );
     register('neo-literature-tools', 'main/menubar/tools', tools);
+    register('neo-check-metadata', 'main/library/item', [
+      {
+        menuType: 'menuitem',
+        onShowing: (_event, context) => {
+          label(context.menuElem, '检查论文信息…', 'Check Paper Details…');
+          context.setEnabled(!!owner(context.menuElem) && !!context.items?.some(canCheckMetadata));
+        },
+        onCommand: (_event, context) => {
+          const window = owner(context.menuElem);
+          if (!window) return;
+          const items = context.items?.filter(canCheckMetadata);
+          if (items?.length) actions.reviewMetadata(window, items);
+        },
+      },
+    ]);
     if (actions.editAttributes) {
       register('neo-edit-attributes', 'main/library/item', [
         {

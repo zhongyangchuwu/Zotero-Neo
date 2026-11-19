@@ -34,6 +34,12 @@ interface Binding {
   readonly semantic: string | null;
   readonly template: string;
 }
+interface SnapshotScheduler {
+  readonly window: Window;
+  readonly controller: AbortController;
+  timer: number | null;
+  running: boolean;
+}
 const SYNC_NOTICE =
   'Stored locally; cross-device availability depends on Zotero data and attachment file sync.';
 const POLL_MS = 5 * 60_000;
@@ -150,6 +156,10 @@ function loadBindings(value: unknown): Binding[] {
   }));
 }
 
+function shouldAutoUpdate({ target }: Binding): boolean {
+  return target.status === 'ready' && target.autoUpdate;
+}
+
 /** One application-owned scheduler; attachments are carriers, never automatic restore inputs. */
 export function createManagedSettingsSnapshots(
   service: SettingsSnapshotService,
@@ -161,9 +171,8 @@ export function createManagedSettingsSnapshots(
   let bindings: Binding[] | null = null;
   let disposed = false;
   let queue: Promise<unknown> = Promise.resolve();
-  let timer: { window: Window; id: number } | null = null;
-  let scheduler: AbortController | null = null;
-  let schedulerGeneration = 0;
+  let startup: AbortController | null = null;
+  let scheduler: SnapshotScheduler | null = null;
   let backgroundFailure: SettingsSnapshotError | null = null;
 
   function fence<T extends SettingsOperationContext>(context: T): T {
@@ -173,15 +182,19 @@ export function createManagedSettingsSnapshots(
     assertSettingsCurrent(context);
     await initializeManagedSnapshots();
     assertSettingsCurrent(context);
-    if (bindings === null) bindings = loadBindings(readManagedSnapshotBindings());
+    if (bindings === null) {
+      bindings = loadBindings(readManagedSnapshotBindings());
+      if (backgroundFailure?.code === 'scheduler-initialization') backgroundFailure = null;
+      reconcileScheduler();
+    }
   }
   function serialized<T>(
     context: SettingsOperationContext,
     operation: () => Promise<T>,
   ): Promise<T> {
     const result = queue.then(async () => {
+      if (bindings === null) await initialize(context);
       assertSettingsCurrent(context);
-      await initialize(context);
       return operation();
     });
     queue = result.catch(() => undefined);
@@ -190,6 +203,7 @@ export function createManagedSettingsSnapshots(
   function save(next: Binding[]): void {
     writeManagedSnapshotBindings(next);
     bindings = next;
+    reconcileScheduler();
   }
   function replace(binding: Binding): void {
     save(
@@ -323,58 +337,84 @@ export function createManagedSettingsSnapshots(
     }
   }
   function stopScheduler(): void {
-    schedulerGeneration++;
-    scheduler?.abort();
+    const previous = scheduler;
     scheduler = null;
-    if (timer) timer.window.clearTimeout(timer.id);
-    timer = null;
+    if (!previous) return;
+    if (previous.timer !== null) previous.window.clearTimeout(previous.timer);
+    previous.controller.abort();
   }
-  function schedule(): void {
-    if (disposed || !windows.size || timer || !scheduler) return;
-    const window = windows.values().next().value as Window;
-    const controller = scheduler;
-    const generation = schedulerGeneration;
-    timer = {
+  function reconcileScheduler(): void {
+    const window = windows.values().next().value;
+    if (!window) {
+      const previous = startup;
+      startup = null;
+      previous?.abort();
+    }
+    if (scheduler && scheduler.window !== window) stopScheduler();
+    if (!window || !bindings?.some(shouldAutoUpdate)) {
+      // A running batch has no timer and still needs to report the outcome of its last write.
+      if (!scheduler?.running) stopScheduler();
+      return;
+    }
+    if (scheduler) return;
+    const current: SnapshotScheduler = {
       window,
-      id: window.setTimeout(() => {
-        timer = null;
-        const context = fence({
-          window,
-          signal: controller.signal,
-          isCurrent: () => generation === schedulerGeneration && windows.size > 0,
-        });
-        void serialized(context, async () => {
-          const targets = [...(bindings ?? [])].filter(
-            (binding) => binding.target.status === 'ready' && binding.target.autoUpdate,
-          );
-          for (const binding of targets) {
-            assertSettingsCurrent(context);
-            try {
-              await publish(binding, '', context, true);
-            } catch (error) {
-              if (controller.signal.aborted || !context.isCurrent()) return;
-              reportManagedSnapshotFailure();
-              if (!(error instanceof SettingsSnapshotError) || error.code === 'binding-storage')
-                backgroundFailure = new SettingsSnapshotError(
-                  'scheduler-failed',
-                  'Snapshot auto-update failed and local status could not be confirmed; inspect the attachment and profile binding storage.',
-                );
-            }
-          }
-        })
-          .catch(() => {
-            if (!context.isCurrent() || controller.signal.aborted) return;
-            backgroundFailure = new SettingsSnapshotError(
-              'scheduler-failed',
-              'Snapshot auto-update could not initialize. No attachment was automatically restored.',
-            );
-            reportManagedSnapshotFailure();
-          })
-          .finally(() => {
-            if (generation === schedulerGeneration) schedule();
-          });
-      }, POLL_MS),
+      controller: new (window as Window & typeof globalThis).AbortController(),
+      timer: null,
+      running: false,
     };
+    scheduler = current;
+    schedule(current);
+  }
+  async function updateEligibleBindings(context: SettingsCryptoContext): Promise<void> {
+    for (const binding of bindings ?? []) {
+      if (!shouldAutoUpdate(binding)) continue;
+      assertSettingsCurrent(context);
+      try {
+        await publish(binding, '', context, true);
+      } catch (error) {
+        if (context.signal.aborted || !context.isCurrent()) return;
+        reportManagedSnapshotFailure();
+        if (!(error instanceof SettingsSnapshotError) || error.code === 'binding-storage')
+          backgroundFailure = new SettingsSnapshotError(
+            'scheduler-failed',
+            'Snapshot auto-update failed and local status could not be confirmed; inspect the attachment and profile binding storage.',
+          );
+      }
+    }
+  }
+  function schedule(current: SnapshotScheduler): void {
+    const { window, controller } = current;
+    current.timer = window.setTimeout(() => {
+      if (scheduler !== current) return;
+      current.timer = null;
+      const context = fence({
+        window,
+        signal: controller.signal,
+        isCurrent: () => scheduler === current,
+      });
+      void serialized(context, async () => {
+        current.running = true;
+        try {
+          await updateEligibleBindings(context);
+        } finally {
+          current.running = false;
+        }
+      })
+        .catch(() => {
+          if (!context.isCurrent() || controller.signal.aborted) return;
+          backgroundFailure = new SettingsSnapshotError(
+            'scheduler-failed',
+            'Snapshot auto-update failed. No attachment was automatically restored.',
+          );
+          reportManagedSnapshotFailure();
+        })
+        .finally(() => {
+          if (scheduler !== current) return;
+          if (bindings?.some(shouldAutoUpdate)) schedule(current);
+          else stopScheduler();
+        });
+    }, POLL_MS);
   }
 
   return {
@@ -382,38 +422,30 @@ export function createManagedSettingsSnapshots(
       if (disposed) return () => undefined;
       const lease = {};
       windows.set(lease, window);
-      if (!scheduler) {
-        scheduler = new (window as Window & typeof globalThis).AbortController();
-        const controller = scheduler;
-        const generation = schedulerGeneration;
+      reconcileScheduler();
+      if (bindings === null && !startup) {
+        // Loading profile policy does not belong to any one window.
+        const controller = new (window as Window & typeof globalThis).AbortController();
+        startup = controller;
         const context = fence({
           signal: controller.signal,
-          isCurrent: () => generation === schedulerGeneration && windows.size > 0,
+          isCurrent: () => startup === controller,
         });
-        void serialized(context, async () => {
-          await catalog.list(context);
-          assertSettingsCurrent(context);
-        })
-          .then(() => {
-            if (context.isCurrent() && !controller.signal.aborted) schedule();
-          })
+        void initialize(context)
           .catch(() => {
-            if (!context.isCurrent() || controller.signal.aborted) return;
+            if (!context.isCurrent() || bindings !== null) return;
             backgroundFailure = new SettingsSnapshotError(
               'scheduler-initialization',
               'Snapshot auto-update initialization failed. Open Settings Snapshots to inspect local state.',
             );
             reportManagedSnapshotFailure();
+          })
+          .finally(() => {
+            if (startup === controller) startup = null;
           });
       }
       return () => {
-        windows.delete(lease);
-        if (!windows.size) stopScheduler();
-        else if (timer?.window === window) {
-          timer.window.clearTimeout(timer.id);
-          timer = null;
-          schedule();
-        }
+        if (windows.delete(lease)) reconcileScheduler();
       };
     },
     list(context) {
@@ -586,8 +618,8 @@ export function createManagedSettingsSnapshots(
     },
     dispose() {
       disposed = true;
-      stopScheduler();
       windows.clear();
+      reconcileScheduler();
     },
   };
 }

@@ -26,11 +26,11 @@ export function mountMetadataReviewView(
       const text = (cn: string, en: string) => (model.chinese ? cn : en);
       return (
         <div className="neo-metadata-review">
-          <h2>{text('检查论文信息', 'Check paper details')}</h2>
+          <h2>{text('补全论文信息', 'Complete paper details')}</h2>
           <p className="neo-muted">
             {text(
-              '选择来源，检查打开时选定的条目。只有你确认更新后，才会修改文库条目。',
-              'Choose a source to check the items selected when this panel opened. Your library items change only when you apply an update.',
+              '检查打开时选定的论文。可以一次补全匹配条目的空字段，不会覆盖已有值或改动引用键。',
+              'Check the papers selected when this panel opened, then fill missing fields in matched items without overwriting existing values or changing citation keys.',
             )}
           </p>
           <div className="neo-metadata-toolbar">
@@ -66,32 +66,47 @@ export function mountMetadataReviewView(
               </select>
             </label>
             <Button
+              primary
               disabled={model.busy || !model.items.length}
-              onClick={() => dispatch({ type: 'inspect' })}
+              onClick={() => dispatch({ type: model.items.length > 1 ? 'inspect-all' : 'inspect' })}
             >
-              {text('检查当前条目', 'Check this item')}
+              {model.items.length > 1
+                ? text(`检查 ${model.items.length} 篇论文`, `Check ${model.items.length} papers`)
+                : text('检查论文信息', 'Check paper details')}
             </Button>
-            <Button
-              disabled={model.busy || !model.items.length}
-              onClick={() => dispatch({ type: 'inspect-all' })}
-            >
-              {text('检查全部条目', 'Check all items')}
-            </Button>
-            <Button
-              disabled={model.busy || !model.items.length}
-              onClick={() => dispatch({ type: 'refresh' })}
-            >
-              {text('从来源重新查询', 'Query source again')}
-            </Button>
-            <Button disabled={!model.busy} onClick={() => dispatch({ type: 'stop' })}>
-              {text('停止', 'Stop')}
-            </Button>
+            {model.querying && (
+              <Button onClick={() => dispatch({ type: 'stop' })}>{text('停止', 'Stop')}</Button>
+            )}
             <Button data-neo-ui-part="close" onClick={() => dispatch({ type: 'close' })}>
               {text('关闭', 'Close')}
             </Button>
           </div>
+          {model.fillCount > 0 && (
+            <p>
+              <Button primary disabled={model.busy} onClick={() => dispatch({ type: 'fill' })}>
+                {text(
+                  `补全 ${model.fillCount} 篇论文的空字段`,
+                  `Fill missing fields in ${model.fillCount} ${model.fillCount === 1 ? 'paper' : 'papers'}`,
+                )}
+              </Button>
+            </p>
+          )}
+          {model.batchStatus && <Status>{model.batchStatus}</Status>}
           <details>
-            <summary>{text('补充查询信息（BibTeX）', 'Add search details (BibTeX)')}</summary>
+            <summary>{text('查询选项与 BibTeX', 'Query options and BibTeX')}</summary>
+            <div className="neo-metadata-toolbar">
+              {model.items.length > 1 && (
+                <Button disabled={model.busy} onClick={() => dispatch({ type: 'inspect' })}>
+                  {text('只检查当前条目', 'Check only this item')}
+                </Button>
+              )}
+              <Button
+                disabled={model.busy || !model.items.length}
+                onClick={() => dispatch({ type: 'refresh' })}
+              >
+                {text('从来源重新查询', 'Query source again')}
+              </Button>
+            </div>
             <p>
               {text(
                 '使用条目已有标题、作者、年份、出版物和标识符；可补充 BibTeX 的书目字段。citekey 不会当作外部通用标识符。',
@@ -138,7 +153,8 @@ export function mountMetadataReviewView(
             </p>
           )}
           {!!model.fields.length && (
-            <>
+            <details key={model.itemIndex}>
+              <summary>{text('查看差异或选择字段', 'See changes or choose fields')}</summary>
               <table className="neo-metadata-fields">
                 <thead>
                   <tr>
@@ -181,28 +197,33 @@ export function mountMetadataReviewView(
                   ))}
                 </tbody>
               </table>
-            </>
+              <Button
+                disabled={!model.canApply || model.busy}
+                onClick={() => dispatch({ type: 'apply' })}
+              >
+                {text('更新当前条目勾选的字段', 'Update selected fields in this item')}
+              </Button>
+            </details>
           )}
-          <div className="neo-metadata-toolbar">
-            <Button
-              primary
-              disabled={!model.canApply || model.busy}
-              onClick={() => dispatch({ type: 'apply' })}
-            >
-              {text('更新所选字段', 'Update selected fields')}
-            </Button>
+          <details
+            key={`history:${model.itemIndex}`}
+            onToggle={(event) => {
+              if (event.currentTarget.open)
+                dispatch({ type: 'load-history', index: model.itemIndex });
+            }}
+          >
+            <summary>
+              {text('记录与外部建议（可选）', 'Saved results and external suggestions (optional)')}
+            </summary>
             <Button
               disabled={!model.canSave || model.busy}
               onClick={() => dispatch({ type: 'save' })}
             >
-              {text('保存结果和笔记', 'Save results and note')}
+              {text('保存当前结果和笔记', 'Save this result and note')}
             </Button>
-          </div>
-          <details>
-            <summary>
-              {text('已保存的结果和外部建议', 'Saved results and external suggestions')} (
-              {model.history.length})
-            </summary>
+            {model.historyStatus && (
+              <Status error={model.historyError}>{model.historyStatus}</Status>
+            )}
             <p>
               {text(
                 '打开结果或建议时，会与条目现有信息重新比较，不会自动更新字段。',

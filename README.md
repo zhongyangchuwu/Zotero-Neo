@@ -1,10 +1,8 @@
-![Zotero Neo — 受 Neovim 启发的 Zotero 键盘交互层](assets/branding/zotero-neo-banner.png)
-
 # Zotero Neo
 
-Zotero Neo 是一个受 Vim/Neovim 启发的 Zotero 插件。它给文献列表、PDF 阅读器和笔记编辑器增加键盘操作，不需要另建文献库。
+Zotero Neo 是一组按需使用的 Zotero 增强工具。你可以只用其中一项，比如定位论文的引用、在表格里筛选文献，或按词句选中 PDF 文字。文献仍在原有 Zotero 文库中。
 
-比如，你可以在文献列表中按 `j` / `k` 移动，按 `s` 把论文加入待整理的选择集；打开 PDF 后用 `v` 选中文字，再复制或添加批注。它还支持按标题、图表跳转、分屏阅读，以及查找和编辑 Zotero 笔记。
+Neo 提供受 Vim 启发的键盘操作。带有 Zotero 工具栏或菜单入口的工具，也可以直接用鼠标打开。
 
 ## 安装
 
@@ -14,12 +12,14 @@ Zotero Neo 是一个受 Vim/Neovim 启发的 Zotero 插件。它给文献列表�
 
 ## 主要功能
 
+- [定位论文引用](docs/READER_GUIDE.md#查找和核对参考文献)：找出正文中的引用位置，或查看文库里有没有本地副本。
+- [用表格筛选文献](docs/MAIN_GUIDE.md#用独立表格整理文献)：按书目字段、标签或自定义属性筛选、排序和保存视图。
 - [PDF 阅读与导航](docs/READER_GUIDE.md)：滚动、搜索、标题与图表跳转、分屏和阅读位置标记。
 - [选择文字与批注](docs/SELECTION_GUIDE.md)：输入词句定位选区，调整范围，复制、划线和编辑评论。
 - [文献库与批量整理](docs/MAIN_GUIDE.md)：查找论文、建立临时选择集、整理标签和分类。
 - [笔记](docs/NOTE_GUIDE.md)：查找已有笔记，按需使用 Vim 风格编辑。
 
-[更多功能](docs/FEATURES.md)包括引用增强和 AI 问答（实验）；[设置快照](docs/SETTINGS_GUIDE.md#导出和恢复配置)用于导出和恢复配置。[手动翻译选区](docs/SELECTION_GUIDE.md#手动翻译选区)由 Neo 的 **Extras → 选区翻译**提供，默认关闭，翻译服务由 Translate for Zotero 提供。
+[更多工具](docs/FEATURES.md)还包括[补全论文信息](docs/MAIN_GUIDE.md#检查和更新论文信息)、[设置快照](docs/SETTINGS_GUIDE.md#导出和恢复配置)和 AI 问答（实验）。[手动翻译选区](docs/SELECTION_GUIDE.md#手动翻译选区)由 Neo 的 **Extras → 选区翻译**接入 Translate for Zotero，默认关闭。
 
 ## 参考与开发
 
