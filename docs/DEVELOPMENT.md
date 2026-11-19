@@ -30,7 +30,7 @@ Windows 可使用：
 powershell -ExecutionPolicy Bypass -File tools\build.ps1
 ```
 
-构建同时产出 `zotero-neo.xpi` 和独立的 `build/zotero-neo-translate.xpi`。CI 分别上传两个构建产物；适配器使用独立扩展 ID，不进入 Neo 主包或正式更新清单。
+构建同时产出 `zotero-neo.xpi` 和独立的 `build/zotero-neo-translate.xpi`。CI 分别上传两个构建产物；适配器不进入 Neo 主包，使用独立扩展 ID 和更新清单。目前该清单不发布自动更新，适配器从文件安装和更新。
 
 ### 发布小版本
 
