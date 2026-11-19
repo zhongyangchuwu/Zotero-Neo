@@ -69,6 +69,9 @@ export interface ReaderSelectionActionDefinition {
   ) => void | ReaderSelectionActionOutcome | Promise<void | ReaderSelectionActionOutcome>;
 }
 
+/** Observer topic fired after Zotero.Neo.reader becomes available or is removed. */
+export const NEO_READER_API_CHANGED = 'zotero-neo-reader-api-changed';
+
 export interface ReaderSelectionApi {
   getSelection(): ReaderSelectionContext | null;
   registerSelectionAction(action: ReaderSelectionActionDefinition): () => void;

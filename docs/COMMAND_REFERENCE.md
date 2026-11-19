@@ -198,7 +198,7 @@ Reader Normal 的计数规则因操作而异：滚动步进、半屏/整屏移�
 | `exitMode` | `v`、`<Esc>` | 取消 Reader Select 并返回 Normal。 |
 | `underlineSelection` | **未绑定** | 如果内置操作可用，可通过选区操作执行受支持的 Select 操作；默认没有快捷键。 |
 
-Flash 接受当前视图中的可见文字，包括 Unicode 和输入法输入。部分单词匹配会扩展到完整词元，短语扩展到首末完整词元，标点可独立选取；同一词元范围只显示一个提示。选择显示的提示，或按 Enter 选择最近的匹配项；去重后的目标超过 48 个时，继续输入以缩小查询。按 Escape 取消 Flash 并保留当前选区。选区操作提供“为选区添加下划线”和“添加批注评论”；仅在翻译增强已启用且上游 API 可用时显示“翻译”。详见[输入与输入法](INPUT_METHODS.md#reader-flash)和[选择与批注指南](SELECTION_GUIDE.md#从一段文字开始)。
+Flash 接受当前视图中的可见文字，包括 Unicode 和输入法输入。部分单词匹配会扩展到完整词元，短语扩展到首末完整词元，标点可独立选取；同一词元范围只显示一个提示。选择显示的提示，或按 Enter 选择最近的匹配项；去重后的目标超过 48 个时，继续输入以缩小查询。按 Escape 取消 Flash 并保留当前选区。详见[输入与输入法](INPUT_METHODS.md#reader-flash)和[选择与批注指南](SELECTION_GUIDE.md#从一段文字开始)。
 Reader Select 忽略计数：每次移动或选择操作都只执行一次。评论编辑器的控件和保存行为见[批注评论编辑器](#批注评论编辑器)。
 
 ## 主窗口
@@ -334,7 +334,7 @@ Reader Normal 中按 `<Space>ro`、`<Space>rm`、`<Space>ra` 和 `<Space>rt` 可
 
 ### 选区操作、Plugin Manager、设置与 Neo 选择集面板
 
-在 Reader Select 中按 `a` / Enter 打开选区操作。用方向键或 `j` / `k` 移动，按 `Home` / `g` 选择首项，按 `End` / `G` 选择末项，按 `1` 至 `9` 或 Enter 执行操作。按 Escape 关闭面板并保留选区。可使用“为选区添加下划线”和“添加批注评论”；翻译增强已启用且 Translate for Zotero API 可用时还会显示“翻译”。自动结果旁的保存入口见[保存自动译文](SELECTION_GUIDE.md#保存自动翻译的译文)。按 `y` 可复制结果。
+在 Reader Select 中按 `a` / Enter 打开选区操作。用方向键或 `j` / `k` 移动，按 `Home` / `g` 选择首项，按 `End` / `G` 选择末项，按 `1` 至 `9` 或 Enter 执行操作。按 Escape 关闭面板并保留选区。内置操作有“为选区添加下划线”和“添加批注评论”；外部适配器可添加[手动翻译](SELECTION_GUIDE.md#手动翻译选区)。按 `y` 可复制译文。
 
 按 `<Space>pp` 打开常驻 Plugin Manager。在 `plugins-list` 中，默认用 `j` / Down、`k` / Up 移动，`gg` / Home 和 `G` / End 跳到首项／末项，`Ctrl+d` / `Ctrl+u` 翻页，`/` 筛选，Escape / `q` 关闭。`r` 重新读取列表，不检查更新；`i` 经确认安装所选的未安装 Translate 条目；`u` 经确认检查所选已安装插件的更新，再确认安装。Zotero 允许时，`e` / `d` 启用或停用；`p` 打开已注册设置，`o` 打开主页，`R` 打开关联 GitHub README，`L` 打开提交历史。`plugins-input` 中 Escape 返回结果。生命周期能力由 Zotero AddonManager 决定；Neo 不能在自己的面板中停用自身。
 

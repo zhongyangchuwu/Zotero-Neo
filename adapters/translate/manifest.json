@@ -1,0 +1,19 @@
+{
+  "manifest_version": 2,
+  "name": "Zotero Neo Translate Adapter",
+  "version": "0.1.0",
+  "description": "Adds a Translate for Zotero action to Zotero Neo's Reader selection menu.",
+  "homepage_url": "https://github.com/zhongyangchuwu/Zotero-Neo",
+  "browser_specific_settings": {
+    "gecko": {
+      "id": "zotero-neo-translate@zotero-neo"
+    }
+  },
+  "applications": {
+    "zotero": {
+      "id": "zotero-neo-translate@zotero-neo",
+      "strict_min_version": "10.0",
+      "strict_max_version": "10.0.*"
+    }
+  }
+}

@@ -1,6 +1,4 @@
 import { afterEach, describe, expect, it, vi } from 'vitest';
-import { ModuleHost } from '../../src/core/module-host';
-import { createReaderTranslationModule } from '../../src/modules/translation';
 import {
   captureTranslateForZotero248,
   readerSelectionPopupSource,
@@ -9,33 +7,6 @@ import {
 import type { ReaderRuntime } from '../../src/toolkit/reader';
 
 afterEach(() => vi.unstubAllGlobals());
-
-describe('public translation action', () => {
-  it('rejects provider failures and retires a result when the originating view closes', async () => {
-    const translate = vi.fn().mockResolvedValueOnce({ status: 'fail', result: 'Provider error' });
-    vi.stubGlobal('Zotero', { PDFTranslate: { api: { translate } } });
-    let current = true;
-    const host = new ModuleHost({ debug: () => {}, diagnostic: () => {} }, () => true);
-    const module = createReaderTranslationModule(host, {
-      reader: {},
-      isViewCurrent: () => current,
-      language: () => 'en',
-      pluginID: () => 'neo@example.org',
-      debug: () => {},
-    });
-    const action = module.selectionActions({} as Window, 'en')[0]!;
-    const selection = { text: 'Source', itemID: 1, pageLabel: null, position: null };
-    await expect(action.run(selection)).rejects.toThrow('Provider error');
-    expect(translate).toHaveBeenCalledWith('Source', { pluginID: 'neo@example.org', itemID: 1 });
-    const pending = Promise.withResolvers<{ status: string; result: string }>();
-    translate.mockReturnValueOnce(pending.promise);
-    const result = action.run(selection);
-    current = false;
-    pending.resolve({ status: 'success', result: 'Translated' });
-    await expect(result).resolves.toEqual({ retired: true });
-    host.dispose();
-  });
-});
 
 function popupHarness() {
   const textarea = Object.assign(new EventTarget(), {

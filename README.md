@@ -14,12 +14,12 @@ Zotero Neo 是一个受 Vim/Neovim 启发的 Zotero 插件。它给文献列表�
 
 ## 主要功能
 
-- [PDF 阅读、导航与 AI 问答（实验）](docs/READER_GUIDE.md)：滚动、搜索、标题与图表跳转、分屏和阅读位置标记；阅读器还可在本机定位参考文献和文中已识别的引用位置，显式查询时查看原始学术元数据，不调用 AI；可对当前 Reader 选区或有限章节证据提问、解释并准备导引，预览后确认来源，再明确采纳为 Zotero 笔记。当前不检索批注、笔记或其他论文。
+- [PDF 阅读与导航](docs/READER_GUIDE.md)：滚动、搜索、标题与图表跳转、分屏和阅读位置标记。
 - [选择文字与批注](docs/SELECTION_GUIDE.md)：输入词句定位选区，调整范围，复制、划线和编辑评论。
 - [文献库与批量整理](docs/MAIN_GUIDE.md)：查找论文、建立临时选择集、整理标签和分类。
 - [笔记](docs/NOTE_GUIDE.md)：查找已有笔记，按需使用 Vim 风格编辑。
-- [设置快照](docs/SETTINGS_GUIDE.md#导出和恢复配置)：按插件审核、保存和恢复设置，支持 JSON／age 文件或明确选择的 Zotero 附件；确认恢复前可按需导出当前配置。
-- [更多功能](docs/FEATURES.md)和[使用指南](docs/USER_GUIDE.md)：按实际任务查找操作。
+
+[更多功能](docs/FEATURES.md)包括引用增强和 AI 问答（实验）；[设置快照](docs/SETTINGS_GUIDE.md#导出和恢复配置)用于导出和恢复配置。选区的手动翻译由单独安装的 [Neo Translate Adapter](docs/SELECTION_GUIDE.md#手动翻译选区) 接入，翻译服务由 Translate for Zotero 提供。
 
 ## 参考与开发
 

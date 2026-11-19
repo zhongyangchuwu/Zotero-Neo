@@ -58,7 +58,7 @@
 
 ## 翻译或 citekey 复制不可用
 
-Reader Select 的手动“翻译”属于可选的 `translation` 模块：模块需已在重启后应用，且 Translate for Zotero 的公开翻译 API 可用。首次准备与模块状态见[设置指南](SETTINGS_GUIDE.md#准备翻译增强)。`<Space>yy` 需要 **Better BibTeX**，并且目标有可用的 citekey；任一目标或 citekey 无法解析时，Neo 拒绝复制并保留剪贴板。
+Reader Select 没有手动“翻译”时，检查 [Zotero Neo Translate Adapter 和 Translate for Zotero](SELECTION_GUIDE.md#手动翻译选区)是否都已启用、上游 API 是否已就绪，再重新打开选区菜单。`<Space>yy` 需要 **Better BibTeX**，并且目标有可用的 citekey；任一目标或 citekey 无法解析时，Neo 拒绝复制并保留剪贴板。
 
 Reader Select 和 citekey 是核心能力，翻译增强则可独立关闭。缺少外部集成不会因为给动作绑定一个按键就自动补上。
 

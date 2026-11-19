@@ -498,7 +498,7 @@
   "translation.setup.checking": "Checking the translation dependency…",
   "translation.setup.missing": "Translate for Zotero is not installed. First enablement can download the supported official version with your confirmation.",
   "translation.setup.disabled": "The plugin is installed but disabled. Enabling it requires your confirmation.",
-  "translation.setup.unsupported": "This installed version does not support Neo translation saving. Existing plugin configuration is preserved; the public translation action remains available when its API is present.",
+  "translation.setup.unsupported": "This installed version does not support Neo translation saving. Existing plugin configuration is preserved.",
   "translation.setup.starting": "The plugin is enabled but its runtime is not ready. Check again after startup.",
   "translation.setup.ready": "The plugin runtime is available and its version supports translation saving.",
   "translation.setup.pendingRestart": "Restart Zotero to finish the pending plugin installation or update.",

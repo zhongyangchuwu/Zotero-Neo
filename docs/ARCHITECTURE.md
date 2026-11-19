@@ -26,7 +26,7 @@ Zotero Neo 在 Zotero 之上增加交互能力，不维护另一套文档、选�
 
 `src/input/actions.ts` 是唯一的 `ActionId` 目录。功能能力模块定义可执行动作；controller 分发已解析的语义动作，不模拟键盘事件。Settings、Key Guide、快捷键提示和按键匹配都由同一动作目录、处理方能力与已解析绑定生成。
 
-`src/modules/index.ts` 定义精确上下文/动作归属与依赖，`src/core/module-runtime.ts` 按已应用图和实际宿主实例过滤能力，再交给按键匹配、count/前缀、Guide 和 Palette。核心分区固定启用；只有 `reader-hints`、`extensions`、`references`、`translation`、`ai-qa` 与 `tab-enhancements` 可按已应用请求关闭。`translation` 和 `ai-qa` 依赖核心 `reader-selection`，`references` 无 AI 或选择模块依赖，`tab-enhancements` 依赖核心 `workspace`。不可用贡献的元数据及用户绑定保留；不能按全局 ActionId 删除其他上下文的同名贡献，例如 Library 的 Main Select Trash。独立 Reader 的标识符动作使用实际 Main opener，其余跨窗口委托继续使用各自真实接收方，不借用任意健康 Main。
+`src/modules/index.ts` 定义精确上下文/动作归属与依赖，`src/core/module-runtime.ts` 按已应用图和实际宿主实例过滤能力，再交给按键匹配、count/前缀、Guide 和 Palette。核心分区固定启用；[设置参考](SETTINGS_REFERENCE.md#模块)列出可独立关闭的增强。`ai-qa` 依赖核心 `reader-selection`，`references` 无 AI 或选择模块依赖，`tab-enhancements` 依赖核心 `workspace`。不可用贡献的元数据及用户绑定保留；不能按全局 ActionId 删除其他上下文的同名贡献，例如 Library 的 Main Select Trash。独立 Reader 的标识符动作使用实际 Main opener，其余跨窗口委托继续使用各自真实接收方，不借用任意健康 Main。
 
 条目目标由发起操作的 Surface 解析。`src/core/item-target.ts` 定义共享结果形状；`src/platform/zotero-items.ts` 负责 Zotero 查找、归一化与身份去重。`src/main/main-item-target.ts` 在 Main 中优先解析 Selection，再解析 CurrentTarget；`src/reader/item-target.ts` 解析当前 Reader 条目；`src/main/note-item-target.ts` 解析当前 Note。Reader 和 Note 不借用 Main Selection。
 
@@ -85,7 +85,7 @@ Plugin Manager 的列表和详情由静态打包的 React 视图呈现；搜索�
 
 面板关闭先退休交互，再分别释放局部绑定、输入监听、主题与 DOM；某项释放失败仍尝试其余资源，并保留原始错误。异步原生操作完成后同时核对模块作用域与本次界面身份，不更新退休界面或恢复其焦点。安装取消遵守 AddonManager 状态，已完成安装不伪装成可撤销；原生接缝仍在 Toolkit，目录、确认及反馈归功能负责方。该模块不管理 Neo 内部模块，不提供通用商店或卸载。
 
-`src/modules/translation/` 按 ReaderSession 拥有手动选择动作、自动译文保存和侧栏角色，不新增 Reader mode。Toolkit 将原生 popup 的 annotation 对象绑定到精确视图、Document 与加载 PDF；2.4.8 适配器读取当前 popup 对应的已完成任务和可编辑结果。上游可复用同一附件、同一原文的任务；Neo 保存当前显示内容，不声称请求最初来自当前分屏。保存 Operation 重新校验完整 PDF 来源后创建原生便签，服务与凭据仍由上游管理。
+`src/modules/translation/` 按 ReaderSession 拥有自动译文保存和侧栏角色。Toolkit 将原生 popup 的 annotation 对象绑定到精确视图、Document 与加载 PDF；2.4.8 宿主桥读取当前 popup 对应的已完成任务和可编辑结果。上游可复用同一附件、同一原文的任务；Neo 保存当前显示内容，不声称请求最初来自当前分屏。保存 Operation 重新校验完整 PDF 来源后创建原生便签，服务与凭据仍由上游管理。
 
 `src/modules/collections/` 拥有分类成员操作、查找、连续添加条目、分类结构操作、候选展示及每个窗口的重命名草稿。Main/Reader 传入各自的目标解析器和显示标签，确认时重验证来源、库与目标签名；模块不持有整个 Main session、共享 Picker 或 MainNavigation。Main 保留现有九个分类命令，Reader 保留 Add/Remove，Note 不新增命令。
 
@@ -121,7 +121,7 @@ Reader Surface 保留输入/IME/count/前缀、模式、CurrentTarget、精确�
 
 选区动作面板使用静态 React 视图呈现候选和结果；选择来源、快捷键、异步动作及关闭策略继续由选择模块管理。
 
-`registry.ts` 保存应用级、无 DOM 的外部动作定义；单个 Reader 模块退出不清空它。公共选择 API 门面和类型不变，选择模块退休后返回 `null`、不执行旧回调。批注相关选择动作由组合根具名注入；可选 PDFTranslate 接口保持原义，选择模块不写 Note 或批注。从选择发起的 Find 通过 Toolkit 捕获精确 pane 和本次原生 Find 状态，不覆盖新的查询或关闭重开后的界面。
+`registry.ts` 保存应用级、无 DOM 的外部动作定义；单个 Reader 模块退出不清空它。选择模块退休后，公共选择 API 返回 `null`、不执行旧回调。批注动作由组合根具名注入；手动翻译由独立的 Neo Translate Adapter 通过[公共插件接口](MODULE_DESIGN.md#对其他-zotero-插件的公共接口)注册。选择模块不写 Note 或批注。从选择发起的 Find 通过 Toolkit 捕获精确 pane 和本次原生 Find 状态，不覆盖新的查询或关闭重开后的界面。
 
 `src/modules/reader-excerpts/` 独立拥有图表／公式候选、裁图预览、复制与显式保存，不属于 Select 的构造或退出流程。Reader Surface 固定 `SourceNoteTarget`，共享 `source-note` Operation 保留来源哈希、嵌图及保存语义。`src/modules/chapter-notes/` 独立拥有章节整理、筛选、预览和生成身份；Main 的 `notes` 只负责 Note 候选、打开及编辑。已接纳保存可以完成，过期界面不能恢复焦点或重画替换界面。
 

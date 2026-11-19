@@ -498,7 +498,7 @@
   "translation.setup.checking": "正在检查翻译依赖…",
   "translation.setup.missing": "尚未安装 Translate for Zotero。首次启用时，可经确认下载官方兼容版本。",
   "translation.setup.disabled": "插件已安装但已停用，需要确认后启用。",
-  "translation.setup.unsupported": "当前安装版本不支持 Neo 译文保存。已有插件配置保留；公开翻译 API 可用时，仍提供手动翻译动作。",
+  "translation.setup.unsupported": "当前安装版本不支持 Neo 译文保存。已有插件配置保留。",
   "translation.setup.starting": "插件已启用，运行时尚未就绪；启动完成后可重新检查。",
   "translation.setup.ready": "插件运行时已就绪，当前版本支持译文保存。",
   "translation.setup.pendingRestart": "插件安装或更新尚待重启 Zotero 完成。",
