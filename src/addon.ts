@@ -7,6 +7,7 @@ import type {
   ReaderSelectionActionDefinition,
   ReaderSelectionApi,
 } from './core/contracts';
+import { NEO_READER_API_CHANGED } from './core/contracts';
 import { CleanupFailure } from './core/cleanup';
 import { ZoteroLogger } from './core/logging';
 import { ZoteroPreferenceStore } from './core/preference-store';
@@ -223,7 +224,11 @@ export class ZoteroNeoAddon implements ZoteroNeoController {
       }
     }
     this.#reader.start(context.id);
-    (Zotero as ZoteroWithNeo).Neo = this.api;
+    const host = Zotero as ZoteroWithNeo;
+    if (host.Neo !== this.api) {
+      host.Neo = this.api;
+      Services.obs.notifyObservers(Services.obs, NEO_READER_API_CHANGED);
+    }
     const migration = await migrateLegacySourceNoteIdentities();
     if (this.#context !== context) return;
     if (migration.migrated || migration.readOnly) {
@@ -239,7 +244,10 @@ export class ZoteroNeoAddon implements ZoteroNeoController {
 
   shutdown(): void {
     const host = Zotero as ZoteroWithNeo;
-    if (host.Neo === this.api) delete host.Neo;
+    if (host.Neo === this.api) {
+      delete host.Neo;
+      Services.obs.notifyObservers(Services.obs, NEO_READER_API_CHANGED);
+    }
     this.#context = null;
     const failure = new CleanupFailure();
     failure.run(() => this.#managedTags.dispose());

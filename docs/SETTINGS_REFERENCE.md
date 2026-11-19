@@ -34,7 +34,7 @@ Neo 面板跟随 Zotero 计算出的浅色或深色配色。快捷键草稿操�
 ## 模块
 
 当前目录共 23 个模块：16 个固定启用的核心模块和 7 个可选增强；完整目录见[模块所有权表](MODULE_DESIGN.md#模块目录与所有权)。可选 ID 为 `reader-hints`、`extensions`、`translation`、`ai-qa`、`references`、`tab-enhancements` 和 `item-attributes`。
-模块请求使用 `extensions.zotero-neo.modules.<id>.enabled`。`reader-hints`、`extensions` 和 `references` 默认 `true`；其他四项默认 `false`。`translation` 与 `ai-qa` 依赖固定启用的 `reader-selection`。启用 `ai-qa` 需要单独保存请求；旧版 `reader-ai` 的偏好保留原义。核心功能始终启用，旧 `extensions.zotero-neo.modules.<core>.enabled=false` 值按兼容数据保留。
+模块请求使用 `extensions.zotero-neo.modules.<id>.enabled`。`reader-hints`、`extensions` 和 `references` 默认 `true`；其他四项默认 `false`。`ai-qa` 依赖固定启用的 `reader-selection`。启用 `ai-qa` 需要单独保存请求；旧版 `reader-ai` 的偏好保留原义。核心功能始终启用，旧 `extensions.zotero-neo.modules.<core>.enabled=false` 值按兼容数据保留。
 
 | 模块 ID | 名称 | 功能与依赖 |
 | --- | --- | --- |
@@ -47,7 +47,7 @@ Neo 面板跟随 Zotero 计算出的浅色或深色配色。快捷键草稿操�
 | `reader-figures` | 图表浏览 | 图表筛选、原图预览和确认定位；依赖 `reader-navigation` 提供既有来源与导航。 |
 | `document-comparison` | 文档解析对照 | 本地规则／原生 SDT／云端解析对照、缓存和显式解析；上传由云端解析按钮发起。 |
 | `reader-selection` | 阅读选区 | Select、范围动作、Flash、复制/搜索所选文本和所选文本操作面板。 |
-| `translation` | 翻译增强 | 可选增强：手动翻译、自动译文弹窗保存与侧栏译文角色；依赖 `reader-selection`，新配置默认关闭。准备流程见[设置指南](SETTINGS_GUIDE.md#准备翻译增强)。 |
+| `translation` | 翻译增强 | 可选增强：自动译文弹窗保存与侧栏译文筛选，新配置默认关闭。准备流程见[设置指南](SETTINGS_GUIDE.md#准备翻译增强)；它不控制手动翻译动作。 |
 | `reader-annotations` | 阅读批注 | 批注创建、删除、改色、过滤、复制和评论编辑。 |
 | `reader-excerpts` | 对象摘录 | 图表／公式的预览、复制及显式保存为来源笔记。 |
 | `chapter-notes` | 章节笔记整理 | 来源内容的章节归属、筛选、预览与显式生成笔记。 |

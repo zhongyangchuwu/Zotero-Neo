@@ -170,7 +170,6 @@ interface SessionSelectionBridge {
   ) => readonly ReaderSelectionActionDefinition[];
   readonly noteOwner: (session: ReaderSession) => void;
   readonly clearOwner: (session: ReaderSession) => void;
-  readonly pluginID: () => string | null;
 }
 
 interface SessionDependencies {
@@ -468,7 +467,6 @@ export class ReaderController implements ReaderControllerApi {
             registered: (context, isCurrent) => this.registeredSelectionActions(context, isCurrent),
             noteOwner: (owner) => this.noteSelectionOwner(owner),
             clearOwner: (owner) => this.clearSelectionOwner(owner),
-            pluginID: () => this.pluginID,
           },
         }));
         this.#sessions.set(instanceID, session);
@@ -952,7 +950,6 @@ export class ReaderSession {
           registeredActions: (context, isCurrent) =>
             this.#dependencies.selection?.registered(context, isCurrent) ?? [],
           contributedActions: (window, language) => [
-            ...(this.#translation?.selectionActions(window, language) ?? []),
             ...(this.#annotations?.selectionActions(window, language) ?? []),
             ...(this.#ai?.selectionActions() ?? []),
           ],
@@ -963,9 +960,7 @@ export class ReaderSession {
       this.#translation = this.#modules.activate('translation', () =>
         createReaderTranslationModule(this.#modules.host, {
           reader: dependencies.reader,
-          isViewCurrent: (window) => this.readerViewCurrent(window),
           language: () => this.keyGuideLanguage(),
-          pluginID: () => this.#dependencies.selection?.pluginID() ?? null,
           debug: (message) => dependencies.controller.dependencies.logger.debug(message),
         }),
       );

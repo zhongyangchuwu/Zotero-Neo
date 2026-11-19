@@ -120,3 +120,21 @@ for (const [entry, output] of [
 
 zipDirectory(buildRoot, outputXpi);
 console.log(`Built ${outputXpi}`);
+
+const translateRoot = resolve(root, 'build/translate-adapter');
+const translateXpi = resolve(root, 'build/zotero-neo-translate.xpi');
+mkdirSync(translateRoot, { recursive: true });
+cpSync(resolve(root, 'adapters/translate/manifest.json'), resolve(translateRoot, 'manifest.json'));
+cpSync(resolve(root, 'LICENSE'), resolve(translateRoot, 'LICENSE'));
+await build({
+  ...common,
+  entryPoints: [resolve(root, 'adapters/translate/bootstrap.ts')],
+  outfile: resolve(translateRoot, 'bootstrap.js'),
+  bundle: true,
+  format: 'iife',
+  globalName: 'NeoTranslateAdapter',
+  footer: { js: 'var { startup, shutdown } = NeoTranslateAdapter;' },
+  platform: 'browser',
+});
+zipDirectory(translateRoot, translateXpi);
+console.log(`Built ${translateXpi}`);

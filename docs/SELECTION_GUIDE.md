@@ -122,9 +122,16 @@ Flash 只查找当前视图中可见的文字。匹配目标超过 48 个时，�
 - 按 `zy`、`zr`、`zg`、`zb` 或 `zp`，添加黄色、红色、绿色、蓝色或紫色高亮。
 - 按 `a` 或 `Enter` 打开选区操作。选择**为选区添加下划线**（Underline）可加下划线；选择**添加批注评论**（Add note）会创建 PDF 批注并打开评论编辑器。
 
+## 手动翻译选区
+
+1. 在 Zotero 中安装并启用当前版本的 Neo、[Translate for Zotero](https://github.com/windingwind/zotero-pdf-translate/releases) 和 **Zotero Neo Translate Adapter**。单独的 `zotero-neo-translate.xpi` 可从对应的 [GitHub Actions 构建](https://github.com/zhongyangchuwu/Zotero-Neo/actions/workflows/build.yml)下载，也可用 `npm ci`、`npm run build` 在源码目录构建，文件位于 `build/`。用 Zotero 原生插件管理器从文件安装。
+2. 在 PDF 选中文字，按 `a` 或 `Enter` 打开选区操作。上游翻译 API 就绪时，选择**翻译**（Translate）才会发送当前选区；结果可用 `y` 复制。服务、目标语言和密钥仍由 Translate for Zotero 管理。
+
+从原来内置的选区动作升级时，只需另装适配器，不用迁移配置或已保存的译文。该动作不依赖 Neo 的**翻译增强**开关；停用适配器后重新打开选区菜单，翻译入口消失，复制和原生批注不受影响。
+
 ## 保存自动翻译的译文
 
-按[设置指南](SETTINGS_GUIDE.md#准备翻译增强)准备并启用翻译增强，即可使用译文保存入口；Plugin Manager 可独立使用。翻译服务、目标语言和密钥由 Translate for Zotero 管理。自动结果保存适配 Translate for Zotero 2.4.8 的就绪运行时，请先确认版本和运行状态；其他版本保持现状，其公开 API 可用时仍可手动翻译。
+按[设置指南](SETTINGS_GUIDE.md#准备翻译增强)准备并启用翻译增强，即可使用译文保存入口；无需安装手动翻译适配器。自动结果保存只支持 Translate for Zotero 2.4.8 的就绪运行时。
 
 1. 像往常一样在 PDF 或 Reading Mode 中选中文字，等待自动译文完成。
 2. 如需修订，直接修改弹窗译文。点击“保存译文”，把当前显示的完整内容保存下来；这一操作复用已有翻译结果。

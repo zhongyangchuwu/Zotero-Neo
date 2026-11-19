@@ -5,7 +5,7 @@
 
 ## 范围与取舍
 
-采用单 XPI、静态内置模块、统一版本和发布周期。模块划分内部功能所有权及生命周期；用户可选择是否启用七项可选增强，核心模块固定启用。模块化沿用现有发布方式，独立插件平台不在范围内。
+Neo 核心负责用户如何操作 Zotero：模式、按键、目标选择、跳转历史与原生能力的键盘入口。即使没有 Neo 也能独立使用的服务和业务流程可以由其他插件提供，适配器只连接实际需要的能力。Neo 自身仍采用静态内置模块和单 XPI；不加载外部模块，也不提供通用插件平台。
 
 安装 Actions & Tags 时，Neo 命令面板可以将动作和明确目标交给它执行；未安装或接口不可用时，Neo 仍可独立运行。该集成不引入硬依赖或脚本执行机制。
 
@@ -32,7 +32,7 @@
 - `src/modules/reader-navigation/`：按 ReaderSession 拥有导航动作、平滑滚动、marks、按需结构分析及原生侧栏增强；Normal 和四个侧栏上下文登记真实贡献。Surface 继续拥有精确视图、输入与唯一历史策略；分屏/焦点直接使用共享 Toolkit。已接纳 marks 保存继续完成，过期交互保留新状态；退出排空旧 RAF 与完成回调，让新视图继续运行。
 - `src/modules/reader-selection/`：按 ReaderSession 拥有 Select/DOM 范围与 motions、Flash、复制/搜索和选择动作面板；外部注册定义保持应用级寿命。交互绑定原 ReaderView/Document，作用域与原生 Find 状态共同保护后继界面，防止旧输入或延迟查询覆盖它。Surface 保留模式、输入、精确视图、共享滚动和历史；Note/批注写入仍由具名贡献负责。
 - `src/modules/reader-annotations/`：按 ReaderSession 拥有批注创建、删除、改色、过滤、复制及精确视图的评论编辑器，并向 Select 注入下划线和 Add note。Surface 保留 CurrentTarget、NativeInput 与 `i` / `zb` 的混合仲裁；已接纳保存继续完成，旧交互不恢复状态、选择或焦点。
-- `src/modules/translation/`：按 ReaderSession 拥有手动 `pdf-translate.translate` 选择动作、自动译文保存与侧栏角色；硬依赖核心 `reader-selection`。上游负责翻译服务与凭据，Toolkit 封装精确 popup 来源、2.4.8 私有结果读取和原生侧栏接缝；保存 Operation 只接收已捕获并重新验证的明确来源。
+- `src/modules/translation/`：按 ReaderSession 拥有自动译文保存与侧栏角色。Toolkit 封装精确 popup 来源、2.4.8 私有结果读取和原生侧栏接缝；保存 Operation 只接收已捕获并重新验证的明确来源。手动 `pdf-translate.translate` 由独立的 `adapters/translate/` 注册，只调用两个插件的公开 API，不依赖此模块。
 - `reader-chapters`、`reader-figures`、`document-comparison`、`reader-excerpts` 与 `chapter-notes` 分别通过自己的 `index.ts` 接入 ReaderSession，登记原有动作并拥有界面和释放；来源失效订阅随实际消费者归属。Reader Surface 直接组合这些能力。
 - `document-preparation` 提供应用级 controller 与 Main/Reader 的局部入口。模块作用域只保留本次界面的精确释放句柄，共享队列的停止和销毁权留在应用级。
 - `settings-snapshots` 在 Main 提供设置快照入口；应用服务统一编排 Zotero／Neo 内置模板与本机审核插件模板、单插件／合并文件、差异预览和逐项回执。恢复前可复用导出保留当前设置，但恢复本身不保存文件。托管层按明确选择的可见附件发布单插件配置；JSON 可自动发布，age 禁止自动更新，均不自动恢复远端设置。窗口模块只持有本次展示和轮询窗口租约；语义文件与原生边界见[开发指南](DEVELOPMENT.md#配置迁移格式与加密边界)。
@@ -40,7 +40,7 @@
 - `src/modules/workspace/`：MainWindow 拥有三个 Surface 的标签页候选、切换、循环、关闭及 Reader/Note 的 Show in Library；ReaderSession 拥有分屏切换与方向焦点。共享历史、原生标签页重扫、精确视图发现、NativeInput 及 Main/Note 通用面板焦点仍在基座；方向焦点实际成功才消费按键。
 - `src/modules/tab-enhancements/`：按 MainWindow 拥有左／右侧栏或上方横向模式的标签页增强界面、标题展示与分组交互；默认位置为左侧。上方栏由 Neo 绘制，保留 Zotero 原生工具栏，并逐项适配原生标签操作。应用共享的 `TabGroupManager` 管理打开视图的分组，依赖核心 `workspace` 激活原生标签页并复用共享历史。分组不按 Zotero 分类自动生成；Main 创建／追加动作确认后打开 PDF 并分组成功视图，Reader／Note 不提供导入。成员以原生 `viewID` 区分，关闭时移除，空组保留；关闭和排序只作用于发起窗口，跨窗口激活委托给所属宿主。Toolkit 负责原生清单同步和布局接缝，不重挂 Reader/PDF 内容或 Note editor。
 
-`src/modules/index.ts` 提供静态描述与依赖校验，`src/core/module-runtime.ts` 组合实际宿主实例、失败状态和结构能力过滤。核心模块固定启用，旧核心偏好 `extensions.zotero-neo.modules.<core>.enabled=false` 被忽略；七项模块偏好控制可选增强。`translation` 与 `ai-qa` 硬依赖 `reader-selection`，`references` 没有 AI 模块依赖，`tab-enhancements` 依赖核心 `workspace`，`item-attributes` 不依赖其他可选增强。
+`src/modules/index.ts` 提供静态描述与依赖校验，`src/core/module-runtime.ts` 组合实际宿主实例、失败状态和结构能力过滤。核心模块固定启用，旧核心偏好 `extensions.zotero-neo.modules.<core>.enabled=false` 被忽略；七项模块偏好控制可选增强。`ai-qa` 依赖 `reader-selection`，`tab-enhancements` 依赖核心 `workspace`；`references` 不依赖 AI 问答，`item-attributes` 不依赖其他可选增强。
 
 保存的可选模块请求需真正重启 Zotero 后才应用；Neo 重载沿用本进程已应用快照。旧启动快照缺少某个可选字段时，该进程将对应已应用值视为关闭；规范默认值见[设置参考](SETTINGS_REFERENCE.md#模块)。Settings 在已保存请求与当前已应用值不同时显示待重启状态。现有绑定、行为偏好与公共插件接口保持原义。
 
@@ -74,8 +74,8 @@ AT 菜单分发先对整批目标执行一次，再逐项执行；Neo 委托 AT 
 | `reader-chapters` | 章节范围选择、字面查找、结果预览与原文定位。 | `src/modules/reader-chapters/` | 按 ReaderSession 接入，查询绑定精确 ReaderView；复用共享文档快照与导航端口，不改写原生 Find。 |
 | `reader-figures` | 图表候选筛选、整组或独立主体选择、原图预览与确认定位。 | `src/modules/reader-figures/` | 按 ReaderSession 接入，硬依赖 `reader-navigation`；只借用既有 caption 来源与定位端口，不复制目标引擎或历史。 |
 | `document-comparison` | 本地无模型／原生 SDT／云端解析对照、显式解析、缓存及区域定位界面。 | `src/modules/document-comparison/` | 按 ReaderSession 接入；默认本地规则，复用共享区域契约和缓存。本地模式打开只准备来源与读取缓存，SDT 需单独读取，云端上传仍需明确操作。 |
-| `reader-selection` | Reader Select、DOM 范围与 motions、Flash、复制/搜索所选文本、Selection Actions 展示及现有公共选择接口的领域实现。 | `src/modules/reader-selection/` | 已按 ReaderSession 接入；范围和界面绑定精确 ReaderView/Document，外部定义由应用级注册表保留。翻译与批注贡献具名注入，复制/搜索不依赖导航或批注模块。 |
-| `translation` | 可选翻译增强：手动选择动作、当前自动译文保存与侧栏角色，不新增 Reader mode。 | `src/modules/translation/`、`src/operations/save-translation.ts`、Toolkit 的翻译宿主能力 | 按 ReaderSession / 精确 ReaderView 接入，硬依赖 `reader-selection`；保存当前显示结果及用户修订，服务与凭据归上游。首次依赖准备见[设置指南](SETTINGS_GUIDE.md#准备翻译增强)。 |
+| `reader-selection` | Reader Select、DOM 范围与 motions、Flash、复制/搜索所选文本、Selection Actions 展示及公共选择接口。 | `src/modules/reader-selection/` | 按 ReaderSession 接入；范围和界面绑定精确 ReaderView/Document。批注动作由宿主注入，外部动作由应用级注册表保留；复制和搜索不依赖导航或批注模块。 |
+| `translation` | 可选翻译增强：保存当前自动译文和筛选侧栏译文。 | `src/modules/translation/`、`src/operations/save-translation.ts`、Toolkit 的翻译宿主能力 | 按 ReaderSession 和精确 ReaderView 接入；服务与凭据归上游。首次依赖准备见[设置指南](SETTINGS_GUIDE.md#准备翻译增强)。 |
 | `reader-annotations` | 原生批注创建、删除、改色、颜色过滤、选中批注评论编辑；向 Select 提供高亮、下划线、Add note 等动作。 | `src/modules/reader-annotations/`、`src/operations/delete-annotation.ts` | 已按 ReaderSession 接入，评论交互绑定精确 ReaderView / Document；Select 贡献具名注入，原生批注操作本身不依赖选择模块。CurrentTarget 与 NativeInput 始终由 Surface 提供。 |
 | `reader-excerpts` | 图表／公式摘录、原图预览、复制及显式保存为来源笔记。 | `src/modules/reader-excerpts/`、`src/operations/source-note.ts` | 按 ReaderSession 接入，交互绑定精确 ReaderView；不持有 Select 状态。Surface 固定来源目标，已接纳写入与界面寿命分离。 |
 | `chapter-notes` | 来源内容的章节归属、筛选、预览及显式生成笔记；保留内容去重和生成身份。 | `src/modules/chapter-notes/` | 按 ReaderSession 接入，复用来源读取与保存 Operation；不由 Main 的 `notes` 模块创建或转发。 |
@@ -191,7 +191,7 @@ Neo 标签页增强界面默认以 `{title}` 显示标题，模板支持 `{title
 
 现有注册约束保留：空 ID/label 或无效 `run` 被拒绝；重复 ID 保留现有动作；disposer 只移除自己的注册，保护后来同 ID 的另一条注册。可用性判定失败只隔离该条动作，其他选择动作继续可用。内部重组保留现有调用参数，无需新增必填 pluginID、版本握手或其他参数。
 
-外部插件应在 Neo 存在时获取当前公共入口，并在 Neo 重启后重新获取；Neo 退出时清理该实例的注册。接口提供受约束的数据与调用约定，既不是安全沙箱，也不授予外部插件内部模块的所有权。当前没有通用第三方模块加载 SDK，内部组合根属于内部实现。
+需要支持任意启动顺序或 Neo 热重载的适配器，可在启动时订阅 `Services.obs` 的 `zotero-neo-reader-api-changed`，并立即读取一次 `Zotero.Neo?.reader`。Neo 发布或移除 API 后同步通知；收到通知时重新读取，实例变化才释放旧注册并注册到新实例。适配器退出时注销观察者、释放注册；已打开菜单和未完成请求也要核对原注册仍然有效。`adapters/translate/bootstrap.ts` 使用这条路径。它不是安全沙箱，也不授予内部模块所有权。
 
 ### 与 Zotero 接口的结合
 

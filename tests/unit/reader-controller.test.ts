@@ -51,7 +51,7 @@ vi.mock('../../src/platform/native-ui', async (importOriginal) => {
     mountNativeReactView: (options: {
       surface: string;
       root: HTMLElement;
-      model: { comment?: string; text?: string };
+      model: { comment?: string; text?: string; actions?: readonly string[] };
     }) => {
       if (options.surface === 'reader-status') {
         options.root.textContent = options.model.text ?? '';
@@ -83,12 +83,19 @@ vi.mock('../../src/platform/native-ui', async (importOriginal) => {
         input.value = options.model.comment ?? '';
         options.root.appendChild(input);
       }
+      const update = (model: {
+        stage?: string;
+        actions?: readonly string[];
+        resultText?: string;
+      }) => {
+        if (options.surface !== 'selection-actions') return;
+        options.root.textContent =
+          model.stage === 'result' ? (model.resultText ?? '') : (model.actions?.join('\n') ?? '');
+      };
+      update(options.model);
       return {
         ready: Promise.resolve(),
-        update: (model: { stage?: string; resultText?: string }) => {
-          if (options.surface === 'selection-actions')
-            options.root.textContent = model.stage === 'result' ? (model.resultText ?? '') : '';
-        },
+        update,
         getElement: (part: string) => (part === 'input' ? input : null),
         dispose: () => {},
       };
@@ -2584,36 +2591,23 @@ describe('Reader Selection Actions capture', () => {
     };
   }
 
-  it.each([false, true])('executes manual translation only when enabled: %s', async (enabled) => {
-    const fixture = nativeSelectionController(enabled);
-    const translate = vi.fn(async () => ({ result: ' translated text ' }));
-    Reflect.set(Zotero, 'PDFTranslate', { api: { translate } });
-    const other = vi.fn(() => ({ body: 'ordinary action' }));
-    fixture.controller.registerSelectionAction({ id: 'ordinary', label: 'Ordinary', run: other });
-    try {
-      fixture.press('a');
-      await settleReaderMicrotasks();
-      if (!enabled) fixture.press('G');
-      fixture.press('Enter');
-      await settleReaderMicrotasks();
-      if (enabled) {
-        expect(translate).toHaveBeenCalledWith('alpha', {
-          pluginID: 'zotero-neo@zotero-neo',
-          itemID: fixture.created.reader.itemID,
-        });
-        expect(other).not.toHaveBeenCalled();
-        const overlay = fixture.created.bodyChildren.find(
+  it.each([false, true])(
+    'keeps the built-in selection menu independent of the automatic translation module: %s',
+    (enabled) => {
+      const fixture = nativeSelectionController(enabled);
+      Reflect.set(Zotero, 'PDFTranslate', { api: { translate: vi.fn() } });
+      try {
+        fixture.press('a');
+        const menu = fixture.created.bodyChildren.find(
           (node) => node.dataset.zoteroNeoSelectionActions === '1',
         );
-        expect(overlay?.textContent).toBe('translated text');
-      } else {
-        expect(translate).not.toHaveBeenCalled();
-        expect(other).toHaveBeenCalledOnce();
+        expect(menu?.textContent).toContain('Underline');
+        expect(menu?.textContent).not.toMatch(/Translate|翻译/);
+      } finally {
+        fixture.dispose();
       }
-    } finally {
-      fixture.dispose();
-    }
-  });
+    },
+  );
 
   it.each(['Document', 'ReaderView'] as const)(
     'keeps a fresh pending palette when the periodic scan follows same-Window %s replacement',

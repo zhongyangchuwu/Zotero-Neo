@@ -30,6 +30,8 @@ Windows 可使用：
 powershell -ExecutionPolicy Bypass -File tools\build.ps1
 ```
 
+构建同时产出 `zotero-neo.xpi` 和独立的 `build/zotero-neo-translate.xpi`。CI 分别上传两个构建产物；适配器不进入 Neo 主包，使用独立扩展 ID 和更新清单。目前该清单不发布自动更新，适配器从文件安装和更新。
+
 ### 发布小版本
 
 稳定版按完整、可验收的用户改进发布；修复用补丁版本，新增能力或改变交互契约时提升次版本。每周保留一个发布窗口，有已验收内容才发布；严重回归及时修复，不把每个合并提交自动推给用户。正式版本号不得重复使用，也不得覆盖已公布的 XPI。
@@ -289,7 +291,7 @@ node tools/replay-local-rules.mjs \
 
 `src/core/module-host.ts` 提供按 MainWindow 或 ReaderSession 隔离的模块宿主及独立模块作用域。同步激活失败会释放部分资源并保留原错误；动作贡献按 `(BindingContext, ActionId)` 唯一登记，返回有类型的调用入口。退出先使全部回调失效，再完成其余释放，即使某次清理失败也不会中断其他模块。
 
-`src/modules/index.ts` 是静态内置清单，启动校验 ID、依赖图和精确上下文贡献。完整能力目录见[模块所有权表](MODULE_DESIGN.md#模块目录与所有权)；16 个核心模块固定启用，7 个可选增强为 `reader-hints`、`extensions`、`translation`、`references`、`ai-qa`、`tab-enhancements` 与 `item-attributes`。`translation` 与 `ai-qa` 依赖核心 `reader-selection`，`references` 不依赖 AI 问答，`tab-enhancements` 依赖核心 `workspace`。
+`src/modules/index.ts` 是静态内置清单，启动校验 ID、依赖图和精确上下文贡献。完整能力目录见[模块所有权表](MODULE_DESIGN.md#模块目录与所有权)；16 个核心模块固定启用，7 个可选增强为 `reader-hints`、`extensions`、`translation`、`references`、`ai-qa`、`tab-enhancements` 与 `item-attributes`。`ai-qa` 依赖核心 `reader-selection`，`references` 不依赖 AI 问答，`tab-enhancements` 依赖核心 `workspace`。
 
 MainWindow 组合标签、扩展、分类、工作集、Library、Notes、Workspace、文档准备与配置迁移入口；启用时，标签页增强会在 Zotero 初始化完成后按该窗口的有效 session 延迟激活。ReaderSession 直接组合导航、章节查找、图表浏览、解析对照、选择、批注、对象摘录、章节笔记、文档准备、hints、引用增强、可选翻译与 AI 问答、独立 Library citekey 贡献及 Workspace 分屏/焦点。各模块仅接收具名端口；Operations 与 Toolkit 保持各自负责方。
 
