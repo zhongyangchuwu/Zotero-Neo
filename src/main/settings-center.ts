@@ -13,6 +13,7 @@ import { SETTINGS_BACKDROP_STYLE, SETTINGS_PANEL_STYLE } from '../ui/react/shell
 import type { NativeReactView } from '../ui/react/types';
 import type { InteractionAppearanceManager } from './interaction-appearance';
 import { SettingsAdvanced } from './settings-advanced';
+import { SettingsExtras } from './settings-extras';
 import { SettingsAppearance, type SettingsAppearanceState } from './settings-appearance';
 import { SettingsInteraction } from './settings-interaction';
 import { settingsLanguage, settingsText, type SettingsLanguage } from './settings-i18n';
@@ -33,6 +34,7 @@ const SECTIONS: readonly SettingsSection[] = [
   'Reader',
   'Keybindings',
   'Modules',
+  'Extras',
   'Advanced',
 ];
 type ActivePage =
@@ -41,6 +43,7 @@ type ActivePage =
   | { readonly section: 'Reader'; readonly controller: SettingsReader }
   | { readonly section: 'Keybindings'; readonly controller: SettingsKeybindings }
   | { readonly section: 'Modules'; readonly controller: SettingsModules }
+  | { readonly section: 'Extras'; readonly controller: SettingsExtras }
   | { readonly section: 'Advanced'; readonly controller: SettingsAdvanced };
 
 /** One Main-window-owned React Settings workspace; page policies remain headless controllers. */
@@ -102,10 +105,11 @@ export class SettingsCenter {
     );
   }
 
-  openWorkspace(openSettingsSnapshots?: () => void): void {
+  openWorkspace(openSettingsSnapshots?: () => void, section?: SettingsSection): void {
     this.#openSettingsSnapshots = openSettingsSnapshots;
+    if (section) this.#section = section;
     if (this.#panel) {
-      this.#publish();
+      this.#render();
       (this.#view?.getElement('heading') ?? this.#panel).focus();
       return;
     }
@@ -353,6 +357,12 @@ export class SettingsCenter {
               language,
               changed,
             ),
+          };
+          break;
+        case 'Extras':
+          this.#activePage = {
+            section: 'Extras',
+            controller: new SettingsExtras(this.#window, this.#preferences, language, changed),
           };
           break;
         case 'Advanced':

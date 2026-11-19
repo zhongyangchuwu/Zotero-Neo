@@ -30,7 +30,7 @@ Windows 可使用：
 powershell -ExecutionPolicy Bypass -File tools\build.ps1
 ```
 
-构建同时产出 `zotero-neo.xpi` 和独立的 `build/zotero-neo-translate.xpi`。CI 分别上传两个构建产物；适配器不进入 Neo 主包，使用独立扩展 ID 和更新清单。目前该清单不发布自动更新，适配器从文件安装和更新。
+构建产出单个 `zotero-neo.xpi`，CI 上传该主包。选区翻译 Extra 已包含在 Neo 中，不再构建或发布独立的实验性翻译适配器 XPI。
 
 ### 发布小版本
 
@@ -309,7 +309,7 @@ MainWindow 组合标签、扩展、分类、工作集、Library、Notes、Worksp
 
 #### 翻译与安装手动核对
 
-在隔离 profile 中使用真实 Translate for Zotero 2.4.8，覆盖首次准备的确认／取消、已有用户偏好保留及完整重启。确认自动译文完成后保存用户修订内容，原生便签位于发起选区；主／次分屏、Reading Mode、相同原文的任务复用、替换 popup、关闭视图及外部修改 PDF 均不得写错来源。重开 Reader 后核对原生持久化、侧栏角色与原有颜色筛选。安装／更新路径还需核对下载前确认、校验失败、取消和重启提示；未实际执行的路径不记录通过。
+在隔离 profile 中使用真实 Translate for Zotero 2.4.8，覆盖 Extras 首次准备的确认／取消、校验失败、已有用户偏好保留及原生更新确认。检查手动 Extra 默认关闭、即时启停，以及不启用 Extra 即可准备自动保存依赖；再保存 `translation` 模块请求并完全重启。确认自动译文完成后保存用户修订内容，原生便签位于发起选区；主／次分屏、Reading Mode、相同原文的任务复用、替换 popup、关闭视图及外部修改 PDF 均不得写错来源。重开 Reader 后核对原生持久化、侧栏角色与原有颜色筛选；未实际执行的路径不记录通过。
 
 #### 标签页增强手动核对
 

@@ -1,128 +1,175 @@
 import { afterEach, expect, it, vi } from 'vitest';
-import { shutdown, startup } from '../../adapters/translate/bootstrap';
-import { NEO_READER_API_CHANGED } from '../../src/core/contracts';
-import type { ReaderSelectionApi } from '../../src/core/contracts';
-import { ReaderSelectionActionRegistry } from '../../src/modules/reader-selection/registry';
+import { ZoteroNeoAddon } from '../../src/addon';
+import { ZoteroPreferenceStore } from '../../src/core/preference-store';
+import {
+  SELECTION_TRANSLATION_ACTION_ID,
+  TRANSLATION_EXTRA_PREFERENCE,
+  SelectionTranslation,
+} from '../../src/modules/translation/selection-action';
+import { translateForZoteroApi } from '../../src/platform/translate-for-zotero';
 
-const ADAPTER_ID = 'zotero-neo-translate@zotero-neo';
+const NEO_ID = 'zotero-neo@zotero-neo';
 const selection = { text: 'A selected sentence', itemID: 42, pageLabel: '1', position: null };
 
-function neo() {
-  const registry = new ReaderSelectionActionRegistry();
-  return {
-    reader: {
-      getSelection: () => selection,
-      registerSelectionAction: registry.register.bind(registry),
-    },
-    actions: () => registry.available(selection, () => true),
-  };
-}
-
 function host() {
-  const events = new EventTarget();
+  const values = new Map<string, boolean>();
+  const observers = new Map<string, { observe(): void }>();
   vi.stubGlobal('Services', {
-    obs: {
-      addObserver: (callback: EventListener, topic: string) =>
-        events.addEventListener(topic, callback),
-      removeObserver: (callback: EventListener, topic: string) =>
-        events.removeEventListener(topic, callback),
+    prefs: {
+      getPrefType: (key: string) => (values.has(key) ? 128 : 0),
+      getBoolPref: (key: string) => values.get(key),
+      setBoolPref(key: string, value: boolean) {
+        if (values.get(key) === value) return;
+        values.set(key, value);
+        observers.get(key)?.observe();
+      },
+      addObserver: (key: string, observer: { observe(): void }) => observers.set(key, observer),
+      removeObserver: (key: string) => observers.delete(key),
     },
   });
-  const translate = vi.fn<() => Promise<{ status?: string; result: string }>>();
-  const zotero: {
-    locale: string;
-    Neo?: { reader: ReaderSelectionApi };
-    PDFTranslate?: { api: { translate: typeof translate } };
-    debug: (message: string) => void;
-  } = { locale: 'zh-CN', debug: vi.fn() };
+  const zotero: { PDFTranslate?: { api: object } } = {};
   vi.stubGlobal('Zotero', zotero);
-  return {
-    setNeo(value?: { reader: ReaderSelectionApi }) {
-      zotero.Neo = value;
-      events.dispatchEvent(new Event(NEO_READER_API_CHANGED));
-    },
-    setProvider(enabled: boolean) {
-      zotero.PDFTranslate = enabled ? { api: { translate } } : undefined;
-    },
-    translate,
-  };
+  const preferences = new ZoteroPreferenceStore();
+  return { zotero, preferences };
 }
 
-afterEach(() => {
-  shutdown();
-  vi.unstubAllGlobals();
+afterEach(() => vi.unstubAllGlobals());
+
+it('uses the callable public provider API without requiring private data or a pinned version', async () => {
+  const { zotero, preferences } = host();
+  const translation = new SelectionTranslation(preferences, NEO_ID);
+  try {
+    expect(translateForZoteroApi()).toBeNull();
+    preferences.set(TRANSLATION_EXTRA_PREFERENCE, true);
+    expect(translation.action('zh-CN')).toBeNull();
+    zotero.PDFTranslate = { api: { translate: 'not callable' } };
+    expect(translateForZoteroApi()).toBeNull();
+    expect(translation.action('zh-CN')).toBeNull();
+
+    const translate = vi.fn(async () => ({ status: 'success', result: '  已翻译。  ' }));
+    const api = { translate };
+    zotero.PDFTranslate = { api };
+    expect(translateForZoteroApi()).toBe(api);
+    const action = translation.action('zh-CN');
+    expect(action).toMatchObject({ id: 'pdf-translate.translate', label: '翻译' });
+    expect(translate).not.toHaveBeenCalled();
+    await expect(action!.run({ ...selection, itemID: null })).resolves.toEqual({
+      title: '翻译结果',
+      body: '已翻译。',
+    });
+    expect(translate).toHaveBeenCalledExactlyOnceWith(selection.text, { pluginID: NEO_ID });
+    expect(translate.mock.contexts[0]).toBe(api);
+  } finally {
+    translation.dispose();
+  }
 });
 
-it('uses the provider only on explicit selection and reconnects across Neo instances', async () => {
-  const runtime = host();
-  startup({ id: ADAPTER_ID });
-  const first = neo();
-  runtime.setNeo(first);
-  expect(first.actions()).toEqual([]);
-
-  runtime.setProvider(true);
-  const [action] = first.actions();
-  expect(action?.label).toBe('翻译');
-  expect(runtime.translate).not.toHaveBeenCalled();
-  runtime.translate.mockResolvedValueOnce({ status: 'success', result: '  已翻译。  ' });
-  await expect(action!.run(selection)).resolves.toEqual({ title: '翻译结果', body: '已翻译。' });
-  expect(runtime.translate).toHaveBeenCalledWith(selection.text, {
-    pluginID: ADAPTER_ID,
-    itemID: 42,
-  });
-
-  runtime.setNeo();
-  expect(first.actions()).toEqual([]);
-  const second = neo();
-  runtime.setNeo(second);
-  runtime.setNeo(second);
-  expect(second.actions().map(({ id }) => id)).toEqual(['pdf-translate.translate']);
-  await expect(action!.run(selection)).resolves.toEqual({ retired: true });
-  expect(runtime.translate).toHaveBeenCalledTimes(1);
+it('preserves provider failures that belong to the current action', async () => {
+  const { zotero, preferences } = host();
+  const translate = vi.fn<() => Promise<{ result: string; status?: string }>>();
+  zotero.PDFTranslate = { api: { translate } };
+  preferences.set(TRANSLATION_EXTRA_PREFERENCE, true);
+  const translation = new SelectionTranslation(preferences, NEO_ID);
+  try {
+    const action = translation.action('en')!;
+    translate.mockResolvedValueOnce({ status: 'fail', result: 'Provider error' });
+    await expect(action.run(selection)).rejects.toThrow('Provider error');
+    const failure = new Error('Provider unavailable');
+    translate.mockRejectedValueOnce(failure);
+    await expect(action.run(selection)).rejects.toBe(failure);
+    translate.mockResolvedValueOnce({ status: 'success', result: ' ' });
+    await expect(action.run(selection)).rejects.toThrow('empty translation result');
+  } finally {
+    translation.dispose();
+  }
 });
 
-it('retires a pending result and stale menu callbacks when the adapter is disabled', async () => {
-  const runtime = host();
-  const core = neo();
-  runtime.setNeo(core);
-  runtime.setProvider(true);
-  startup({ id: ADAPTER_ID });
-  const [action] = core.actions();
-  runtime.translate.mockResolvedValueOnce({ status: 'fail', result: 'Provider error' });
-  await expect(action!.run(selection)).rejects.toThrow('Provider error');
-
+it('retires failed pending work across disable and re-enable with the same provider', async () => {
+  const { zotero, preferences } = host();
   const pending = Promise.withResolvers<{ result: string }>();
-  runtime.translate.mockReturnValueOnce(pending.promise);
-  const result = action!.run(selection);
-  shutdown();
-  expect(core.actions()).toEqual([]);
-  await expect(action!.run(selection)).resolves.toEqual({ retired: true });
-  pending.reject(new Error('late provider failure'));
-  await expect(result).resolves.toEqual({ retired: true });
-  expect(runtime.translate).toHaveBeenCalledTimes(2);
-
-  const replacement = neo();
-  runtime.setNeo(replacement);
-  expect(replacement.actions()).toEqual([]);
+  const translate = vi.fn(() => pending.promise);
+  zotero.PDFTranslate = { api: { translate } };
+  const translation = new SelectionTranslation(preferences, NEO_ID);
+  try {
+    expect(translation.action('en')).toBeNull();
+    preferences.set(TRANSLATION_EXTRA_PREFERENCE, true);
+    const action = translation.action('en')!;
+    const result = action.run(selection);
+    preferences.set(TRANSLATION_EXTRA_PREFERENCE, false);
+    expect(translation.action('en')).toBeNull();
+    preferences.set(TRANSLATION_EXTRA_PREFERENCE, true);
+    pending.reject(new Error('late provider failure'));
+    await expect(result).resolves.toEqual({ retired: true });
+    await expect(action.run(selection)).resolves.toEqual({ retired: true });
+    expect(translate).toHaveBeenCalledOnce();
+  } finally {
+    translation.dispose();
+  }
 });
 
-it('hides the action and retires work when the translation provider is unloaded', async () => {
-  const runtime = host();
-  const core = neo();
-  runtime.setNeo(core);
-  runtime.setProvider(true);
-  startup({ id: ADAPTER_ID });
-  const [action] = core.actions();
-  const pending = Promise.withResolvers<{ result: string }>();
-  runtime.translate.mockReturnValueOnce(pending.promise);
-  const result = action!.run({ ...selection, itemID: null });
-  expect(runtime.translate).toHaveBeenCalledWith(selection.text, { pluginID: ADAPTER_ID });
+it.each(['API object', 'translate method'] as const)(
+  'retires menu callbacks and pending success when the provider replaces its %s',
+  async (replacement) => {
+    const { zotero, preferences } = host();
+    const pending = Promise.withResolvers<{ result: string }>();
+    const first = vi.fn(() => pending.promise);
+    const second = vi.fn(async () => ({ result: 'current translation' }));
+    const api = { translate: first };
+    zotero.PDFTranslate = { api };
+    preferences.set(TRANSLATION_EXTRA_PREFERENCE, true);
+    const translation = new SelectionTranslation(preferences, NEO_ID);
+    try {
+      const old = translation.action('en')!;
+      const result = old.run(selection);
+      if (replacement === 'API object') {
+        delete zotero.PDFTranslate;
+        expect(translation.action('en')).toBeNull();
+        zotero.PDFTranslate = { api: { translate: second } };
+      } else {
+        api.translate = second;
+      }
 
-  runtime.setProvider(false);
-  expect(core.actions()).toEqual([]);
-  await expect(action!.run(selection)).resolves.toEqual({ retired: true });
-  runtime.setProvider(true);
-  pending.resolve({ result: 'stale translation' });
-  await expect(result).resolves.toEqual({ retired: true });
-  expect(runtime.translate).toHaveBeenCalledTimes(1);
+      await expect(old.run(selection)).resolves.toEqual({ retired: true });
+      expect(second).not.toHaveBeenCalled();
+      pending.resolve({ result: 'stale translation' });
+      await expect(result).resolves.toEqual({ retired: true });
+      expect(first).toHaveBeenCalledOnce();
+      const current = translation.action('en')!;
+      await expect(current.run(selection)).resolves.toEqual({
+        title: 'Translation Result',
+        body: 'current translation',
+      });
+      translation.dispose();
+      await expect(current.run(selection)).resolves.toEqual({ retired: true });
+      expect(second).toHaveBeenCalledOnce();
+    } finally {
+      translation.dispose();
+    }
+  },
+);
+
+it('reserves only the old companion action ID at the public Reader facade', () => {
+  const { preferences } = host();
+  const { reader } = new ZoteroNeoAddon(preferences).api;
+  const run = vi.fn();
+  expect(() =>
+    reader.registerSelectionAction({
+      id: SELECTION_TRANSLATION_ACTION_ID,
+      label: 'Translate',
+      run,
+    }),
+  ).toThrow('Selection action ID is reserved');
+  expect(() =>
+    reader.registerSelectionAction({
+      id: ` ${SELECTION_TRANSLATION_ACTION_ID} `,
+      label: 'Translate',
+      run,
+    }),
+  ).toThrow('Selection action ID is reserved');
+
+  const action = { id: `${SELECTION_TRANSLATION_ACTION_ID}.other`, label: 'Other', run };
+  const release = reader.registerSelectionAction(action);
+  release();
+  expect(() => reader.registerSelectionAction(action)()).not.toThrow();
+  expect(reader.getSelection()).toBeNull();
 });

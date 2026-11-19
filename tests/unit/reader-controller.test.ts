@@ -14,6 +14,7 @@ import { createTagModule } from '../../src/modules/tags';
 import { createCollectionsModule } from '../../src/modules/collections';
 import { createExtensionsModule } from '../../src/modules/extensions';
 import { createWorkspaceModule } from '../../src/modules/workspace';
+import { TRANSLATION_EXTRA_PREFERENCE } from '../../src/modules/translation/selection-action';
 import { NavigationCoordinator } from '../../src/navigation/coordinator';
 import { NavigationHistoryState } from '../../src/navigation/history';
 import type { NavigationIntent, NavigationPort } from '../../src/navigation/types';
@@ -143,15 +144,27 @@ afterEach(() => {
 
 function readerPreferences(initial: Readonly<Record<string, boolean | number | string>> = {}) {
   const values = new Map<string, boolean | number | string>(Object.entries(initial));
+  const listeners = new Map<string, Set<() => void>>();
   return {
     has: (key: string) => values.has(key),
     get: <T extends boolean | number | string>(key: string, fallback: T): T =>
       (values.get(key) ?? fallback) as T,
     set: (key: string, value: boolean | number | string) => {
       values.set(key, value);
+      for (const listener of listeners.get(key) ?? []) listener();
     },
     clear: (key: string) => {
-      values.delete(key);
+      if (values.delete(key)) {
+        for (const listener of listeners.get(key) ?? []) listener();
+      }
+    },
+    observe: (key: string, listener: () => void) => {
+      const group = listeners.get(key) ?? new Set<() => void>();
+      listeners.set(key, group);
+      group.add(listener);
+      return () => {
+        group.delete(listener);
+      };
     },
   };
 }
@@ -997,6 +1010,7 @@ function createHistorySession(
       logger,
       bindings: () => bindings,
       themeRoot: () => () => {},
+      openExtras: () => {},
     }),
   );
   mainScope.activate('workspace', () =>
@@ -2576,11 +2590,14 @@ describe('Reader Selection Actions capture', () => {
     controller.rescan(created.ownerWindow);
     service.dispatch('renderTextSelectionPopup', {
       reader: created.reader,
-      params: { annotation: { text: 'alpha' }, onAddAnnotation: () => {} },
+      params: { annotation: { text: 'previous popup text' }, onAddAnnotation: () => {} },
     });
     return {
       created,
       controller,
+      preferences: dependencies.preferences,
+      menu: () =>
+        created.bodyChildren.find((node) => node.dataset.zoteroNeoSelectionActions === '1'),
       replaceDocument: () =>
         Reflect.set(created.pdfWindow, 'document', { ...created.pdfWindow.document }),
       press: (key: string) => controller.forwardKey(readerKey(key).event, created.ownerWindow),
@@ -2592,22 +2609,68 @@ describe('Reader Selection Actions capture', () => {
   }
 
   it.each([false, true])(
-    'keeps the built-in selection menu independent of the automatic translation module: %s',
-    (enabled) => {
+    'offers manual translation only when the Extra is enabled (automatic module: %s)',
+    async (enabled) => {
       const fixture = nativeSelectionController(enabled);
-      Reflect.set(Zotero, 'PDFTranslate', { api: { translate: vi.fn() } });
+      const translate = vi.fn(async () => ({ status: 'success', result: '  translated text  ' }));
+      Reflect.set(Zotero, 'PDFTranslate', { api: { translate } });
       try {
         fixture.press('a');
-        const menu = fixture.created.bodyChildren.find(
-          (node) => node.dataset.zoteroNeoSelectionActions === '1',
-        );
-        expect(menu?.textContent).toContain('Underline');
-        expect(menu?.textContent).not.toMatch(/Translate|翻译/);
+        expect(fixture.menu()?.textContent).toContain('Underline');
+        expect(fixture.menu()?.textContent).not.toContain('Translate');
+        fixture.press('Escape');
+
+        fixture.preferences.set(TRANSLATION_EXTRA_PREFERENCE, true);
+        fixture.press('a');
+        expect(fixture.menu()?.textContent).toContain('Translate');
+        expect(translate).not.toHaveBeenCalled();
+        await settleReaderMicrotasks();
+        for (const key of ['G', 'Enter']) fixture.press(key);
+        expect(translate).toHaveBeenCalledExactlyOnceWith('alpha', {
+          pluginID: 'zotero-neo@zotero-neo',
+          itemID: 41,
+        });
+        await settleReaderMicrotasks();
+        expect(fixture.menu()?.textContent).toBe('translated text');
+        expect(fixture.preferences.get('modules.translation.enabled', false)).toBe(enabled);
       } finally {
         fixture.dispose();
       }
     },
   );
+
+  it('retires open menu callbacks and pending results across a live Extra toggle', async () => {
+    const fixture = nativeSelectionController();
+    const pending = Promise.withResolvers<{ result: string }>();
+    const translate = vi.fn(() => pending.promise);
+    Reflect.set(Zotero, 'PDFTranslate', { api: { translate } });
+    try {
+      fixture.preferences.set(TRANSLATION_EXTRA_PREFERENCE, true);
+      fixture.press('a');
+      expect(fixture.menu()?.textContent).toContain('Translate');
+      await settleReaderMicrotasks();
+      fixture.preferences.set(TRANSLATION_EXTRA_PREFERENCE, false);
+      fixture.preferences.set(TRANSLATION_EXTRA_PREFERENCE, true);
+      for (const key of ['G', 'Enter']) fixture.press(key);
+      await settleReaderMicrotasks();
+      expect(translate).not.toHaveBeenCalled();
+      expect(fixture.menu()).toBeUndefined();
+
+      fixture.press('a');
+      await settleReaderMicrotasks();
+      for (const key of ['G', 'Enter']) fixture.press(key);
+      expect(translate).toHaveBeenCalledOnce();
+      fixture.preferences.set(TRANSLATION_EXTRA_PREFERENCE, false);
+      fixture.preferences.set(TRANSLATION_EXTRA_PREFERENCE, true);
+      pending.resolve({ result: 'obsolete translation' });
+      await settleReaderMicrotasks();
+      expect(fixture.menu()).toBeUndefined();
+      fixture.press('a');
+      expect(fixture.menu()?.textContent).toContain('Translate');
+    } finally {
+      fixture.dispose();
+    }
+  });
 
   it.each(['Document', 'ReaderView'] as const)(
     'keeps a fresh pending palette when the periodic scan follows same-Window %s replacement',

@@ -57,6 +57,13 @@ function ExtensionsView({
           spellCheck={false}
           defaultValue={model.query}
         />
+        <button
+          type="button"
+          disabled={!model.canOpenExtras}
+          onClick={() => dispatch({ type: 'extras' })}
+        >
+          Extras
+        </button>
       </header>
       <div className="neo-extensions-content">
         <div
@@ -116,11 +123,7 @@ function ExtensionsView({
                   border: `1px solid ${plugin.enabled ? THEME_VARS.success : THEME_VARS.border}`,
                 }}
               >
-                {plugin.installed === false
-                  ? 'Not installed'
-                  : plugin.enabled
-                    ? 'Enabled'
-                    : 'Disabled'}
+                {plugin.enabled ? 'Enabled' : 'Disabled'}
               </div>
               <div style={{ display: 'grid', gridTemplateColumns: '90px 1fr', gap: '8px 14px' }}>
                 {[

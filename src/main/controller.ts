@@ -252,6 +252,7 @@ export class MainWindowController implements MainWindowControllerApi {
           logger: this.#dependencies.logger,
           bindings: () => this.bindings(),
           themeRoot: (root) => session.theme.add(root),
+          openExtras: () => this.openSettings(window, 'Extras'),
         }),
       );
       if (this.#sessions.get(window) !== session || session.cleanup.disposed) return;
@@ -772,7 +773,7 @@ export class MainWindowController implements MainWindowControllerApi {
     failure.rethrow();
   }
 
-  openSettings(owner?: Window | null): boolean {
+  openSettings(owner?: Window | null, section?: 'Extras'): boolean {
     const session = owner ? this.#sessions.get(owner as MainWindow) : undefined;
     const resolved =
       session ?? (this.#sessions.size === 1 ? this.#sessions.values().next().value : undefined);
@@ -789,6 +790,7 @@ export class MainWindowController implements MainWindowControllerApi {
         this.#modules.get(resolved)?.settingsSnapshots
           ? () => this.executeMain('openSettingsSnapshots', window, resolved, 1)
           : undefined,
+        section,
       );
       return true;
     } catch (error) {

@@ -13,6 +13,7 @@ export interface ExtensionsModuleHost {
   readonly logger: Logger;
   readonly bindings: () => BindingMap;
   readonly themeRoot: (root: HTMLElement) => Cleanup;
+  readonly openExtras: () => void;
 }
 
 export interface ExtensionsModule {

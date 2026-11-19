@@ -9,15 +9,3 @@ export function hasTranslateForZoteroConfiguration(): boolean {
     return false;
   }
 }
-
-/** Capture retained user keys before provider startup writes defaults; apply only after a new install. */
-export function captureTranslateForZotero248Initialization(language: 'en' | 'zh-CN'): () => void {
-  const auto = `${PREFIX}.enableAuto`;
-  const target = `${PREFIX}.targetLanguage`;
-  const initializeAuto = !Services.prefs.prefHasUserValue(auto);
-  const initializeTarget = !Services.prefs.prefHasUserValue(target);
-  return () => {
-    if (initializeAuto) Zotero.Prefs.set(auto, true, true);
-    if (initializeTarget) Zotero.Prefs.set(target, language === 'zh-CN' ? 'zh-CN' : 'en-US', true);
-  };
-}

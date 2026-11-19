@@ -77,6 +77,10 @@ Neo 面板跟随 Zotero 计算出的浅色或深色配色。快捷键草稿操�
 
 设置、共享焦点、Picker 与后退／前进属于核心交互。关闭七项可选增强后，仍可通过 Zotero 原生偏好页的 Open Neo Settings 或 `Zotero.Neo.openSettings` 打开设置。步骤见[模块设置指南](SETTINGS_GUIDE.md#开关可选功能)。
 
+## Extras
+
+`extras.translation.enabled` 默认关闭，切换立即生效，不受「恢复模块默认值」影响。它只控制 Neo 的手动选区动作；Translate for Zotero 必须已启用且公开 API 已就绪。仅更改此偏好不会下载或停用上游插件。安装、更新及自动译文保存的设置见[翻译指南](SETTINGS_GUIDE.md#准备翻译增强)。
+
 ## 条目自定义属性
 
 定义保存在本机偏好 `extensions.zotero-neo.itemAttributes.fields.v1`，内容为 `{version:1,fields:[{id,key,label,type}]}`；初始没有定义，类型为 `text` 或 `number`。`id` 保持列身份，`key` 创建后不可变，`label` 可修改。属性值位于普通文献的 Extra，不在这份配置中。配置迁移可搬运定义，Zotero Sync 不同步定义；删除定义或停用模块均不删除条目值。操作和引用风险见[主窗口指南](MAIN_GUIDE.md#给文献添加自定义属性)。

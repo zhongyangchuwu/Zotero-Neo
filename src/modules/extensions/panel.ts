@@ -19,16 +19,13 @@ import type { ExtensionsReactCommand, ExtensionsReactModel } from './react-model
 import { PLUGINS_INPUT_ACTIONS, PLUGINS_LIST_ACTIONS } from './capabilities';
 import { CENTERED_MONOSPACE_OVERLAY_STYLE } from '../../ui/react/shells/main';
 import { fuzzyMatchScore } from '../../ui/fuzzy';
-import { installMainPlugin, updateMainPlugin } from '../../toolkit/main';
-import { TRANSLATE_PLUGIN_HASH, TRANSLATE_SUPPORTED_VERSION } from '../translation/dependency';
+import { updateMainPlugin, type MainPluginInstallOptions } from '../../toolkit/main';
 import {
   installedPlugins,
   openPluginInfoURL,
   openPluginPreferences,
   setPluginEnabled,
   ZOTERO_NEO_PLUGIN_ID,
-  TRANSLATE_PLUGIN_ID,
-  TRANSLATE_PLUGIN_URL,
   type InstalledPlugin,
 } from './host';
 import type { PluginManagerRuntime } from './runtime';
@@ -42,6 +39,7 @@ export interface PluginManagerPanelHost {
   readonly bindings: () => BindingMap;
   readonly themeRoot: (root: HTMLElement) => Cleanup;
   readonly isCurrent: () => boolean;
+  readonly openExtras: () => void;
 }
 
 export function filterInstalledPlugins(
@@ -367,10 +365,10 @@ export class PluginManagerPanel {
         void this.refresh();
         break;
       case 'pluginsInstall':
-        void this.installOrUpdate(false);
+        if (!state.busy) this.#host.openExtras();
         break;
       case 'pluginsUpdate':
-        void this.installOrUpdate(true);
+        void this.updateSelectedPlugin();
         break;
       case 'pluginsEnable':
         void this.setEnabled(true);
@@ -447,11 +445,10 @@ export class PluginManagerPanel {
     }
   }
 
-  private async installOrUpdate(update: boolean): Promise<void> {
+  private async updateSelectedPlugin(): Promise<void> {
     const state = this.#host.state;
     const plugin = state.filtered[state.selected];
     if (!this.#host.isCurrent() || !state.open || !plugin || state.busy || state.loading) return;
-    if (update ? plugin.installed === false : plugin.installed !== false) return;
     const overlay = state.overlay;
     const document = overlay?.ownerDocument;
     const current = (): boolean =>
@@ -462,29 +459,20 @@ export class PluginManagerPanel {
       this.#host.window.document === document;
     if (
       !this.#host.window.confirm(
-        update
-          ? `Check for updates for ${plugin.name}? This contacts the plugin's update service.`
-          : `Download Translate for Zotero ${TRANSLATE_SUPPORTED_VERSION} from ${TRANSLATE_PLUGIN_URL}?`,
+        `Check for updates for ${plugin.name}? This contacts the plugin's update service.`,
       )
     )
       return;
     if (!current()) return;
     state.busy = true;
-    state.notice = update ? `Checking updates for ${plugin.name}…` : `Downloading ${plugin.name}…`;
+    state.notice = `Checking updates for ${plugin.name}…`;
     this.render();
     try {
-      const options = {
+      const options: MainPluginInstallOptions = {
         id: plugin.id,
-        hash: update ? undefined : TRANSLATE_PLUGIN_HASH,
         confirm: (details: { name: string; version: string; source: string }): boolean => {
           if (!current()) return false;
-          if (
-            !update &&
-            (details.version !== TRANSLATE_SUPPORTED_VERSION ||
-              details.source !== TRANSLATE_PLUGIN_URL)
-          )
-            throw new Error('Downloaded translation provider version or source validation failed');
-          if (update && !details.source.startsWith('https://'))
+          if (!details.source.startsWith('https://'))
             throw new Error('Plugin update source must use HTTPS');
           const accepted = this.#host.window.confirm(
             `Install ${details.name} ${details.version}?\n\nPlugin ID: ${plugin.id}\nSource: ${details.source}\n\nPlugins can access your Zotero data and computer. Only install plugins you trust.`,
@@ -509,9 +497,7 @@ export class PluginManagerPanel {
           this.render();
         },
       };
-      const result = update
-        ? await updateMainPlugin(options)
-        : await installMainPlugin(TRANSLATE_PLUGIN_URL, options);
+      const result = await updateMainPlugin(options);
       if (!current()) return;
       state.notice =
         result === 'no-update'
@@ -673,6 +659,10 @@ export class PluginManagerPanel {
       state.cancelInstall?.();
       return;
     }
+    if (command.type === 'extras') {
+      if (!state.busy) this.#host.openExtras();
+      return;
+    }
     if (command.type === 'select') {
       if (
         !Number.isInteger(command.index) ||
@@ -713,9 +703,7 @@ export class PluginManagerPanel {
     const bindings = this.#host.bindings();
     const actions = plugin
       ? [
-          plugin.installed === false
-            ? this.hint(bindings, 'plugins-list', 'pluginsInstall')
-            : this.hint(bindings, 'plugins-list', 'pluginsUpdate'),
+          this.hint(bindings, 'plugins-list', 'pluginsUpdate'),
           !plugin.enabled && plugin.canEnable
             ? this.hint(bindings, 'plugins-list', 'pluginsEnable')
             : null,
@@ -736,7 +724,6 @@ export class PluginManagerPanel {
         id: item.id,
         name: item.name,
         version: item.version,
-        installed: item.installed,
         pendingRestart: item.pendingRestart,
         enabled: item.enabled,
         canEnable: item.canEnable,
@@ -762,6 +749,7 @@ export class PluginManagerPanel {
             : '',
       listStatus: loading ? 'muted' : state.error ? 'error' : 'normal',
       canCancel: !!state.cancelInstall,
+      canOpenExtras: !state.busy,
       loading: state.loading,
       shortcuts: actions.length
         ? `Shortcuts\n${actions.join('  ·  ')}`
@@ -780,9 +768,7 @@ export class PluginManagerPanel {
     const plugin = state.filtered[state.selected];
     const actions = plugin
       ? [
-          plugin.installed === false
-            ? this.hint(bindings, 'plugins-list', 'pluginsInstall')
-            : this.hint(bindings, 'plugins-list', 'pluginsUpdate'),
+          this.hint(bindings, 'plugins-list', 'pluginsUpdate'),
           !plugin.enabled && plugin.canEnable
             ? this.hint(bindings, 'plugins-list', 'pluginsEnable')
             : null,
@@ -806,7 +792,10 @@ export class PluginManagerPanel {
       ownedContext === 'plugins-input'
         ? PLUGINS_INPUT_ACTIONS
         : PLUGINS_LIST_ACTIONS.filter(
-            (action) => !action.startsWith('plugins') || action === 'pluginsRefresh',
+            (action) =>
+              !action.startsWith('plugins') ||
+              action === 'pluginsRefresh' ||
+              action === 'pluginsInstall',
           );
     const hints = navigation
       .map((action) => this.hint(bindings, ownedContext, action))

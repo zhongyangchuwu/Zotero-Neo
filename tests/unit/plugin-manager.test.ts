@@ -205,6 +205,7 @@ function createPanelFixture(
   const state = new PluginManagerRuntime();
   const logger = { debug: vi.fn(), diagnostic: vi.fn() };
   const host = new ModuleHost(logger, () => true);
+  const openExtras = vi.fn();
   const panel = host.activate('extensions', (scope) => {
     const instance = new PluginManagerPanel({
       window,
@@ -213,11 +214,12 @@ function createPanelFixture(
       bindings,
       themeRoot: themeRoot ?? ((root) => session.theme.add(root)),
       isCurrent: () => scope.isCurrent(),
+      openExtras,
     });
     scope.add(() => instance.close());
     return instance;
   });
-  return { window, state, host, panel };
+  return { window, state, host, panel, openExtras };
 }
 
 describe('configurable plugin manager contexts', () => {
@@ -351,7 +353,11 @@ describe('configurable plugin manager contexts', () => {
     const ime = pickerKey('F4', input);
     panel.handleKey(ime);
     expect(ime.preventDefault).not.toHaveBeenCalled();
-    expect(state.filtered).toHaveLength(4);
+    expect(state.filtered.map(({ id }) => id)).toEqual([
+      'alpha@example.test',
+      'beta@example.test',
+      ZOTERO_NEO_PLUGIN_ID,
+    ]);
     expect(window.document.activeElement).toBe(input);
     input.emit('compositionend');
     input.emit('input');
@@ -465,79 +471,21 @@ describe('configurable plugin manager contexts', () => {
       panel.close();
     }
   });
-  it('does not download a missing provider without consent', async () => {
+  it('opens Extras from an empty filtered list without downloading anything', async () => {
     const native = installManagerHost();
     const getInstallForURL = vi.fn();
     Reflect.set(native.manager, 'getInstallForURL', getInstallForURL);
-    const { state, panel, window } = createPanelFixture();
-    Reflect.set(
-      window,
-      'confirm',
-      vi.fn(() => false),
-    );
+    const { state, panel, openExtras } = createPanelFixture();
     panel.open();
     await vi.waitFor(() => expect(state.loading).toBe(false));
     const input = state.input as HTMLInputElement & { emit(type: string): void };
     input.value = 'Translate for Zotero';
     input.emit('input');
+    expect(state.list?.textContent).toContain('No matching plugins');
+    expect(state.footer?.textContent).toContain('i Open Extras');
     panel.handleKey(pickerKey('i', state.overlay));
+    expect(openExtras).toHaveBeenCalledOnce();
     expect(getInstallForURL).not.toHaveBeenCalled();
-    expect(state.busy).toBe(false);
-    panel.close();
-  });
-
-  it('does not execute a late download after cancellation fails and the panel reopens', async () => {
-    const native = installManagerHost();
-    type Listener = { onDownloadEnded?: (install: unknown) => boolean };
-    let listener: Listener | null = null;
-    const install = {
-      state: 0,
-      addon: {
-        id: 'zoteropdftranslate@euclpts.com',
-        type: 'extension',
-        name: 'Translate',
-        version: '2.4.8',
-        isCompatible: true,
-      },
-      sourceURI: { spec: 'https://example.test/translate.xpi' },
-      addListener(value: Listener) {
-        listener = value;
-      },
-      removeListener(value: Listener) {
-        if (listener === value) listener = null;
-      },
-      cancel() {
-        throw new Error('channel already cleared');
-      },
-      install: vi.fn(),
-    };
-    Reflect.set(native.manager, 'STATE_AVAILABLE', 0);
-    Reflect.set(native.manager, 'STATE_DOWNLOADED', 3);
-    Reflect.set(
-      native.manager,
-      'getInstallForURL',
-      vi.fn(async () => install),
-    );
-    const { state, panel, window } = createPanelFixture();
-    const confirm = vi.fn(() => true);
-    Reflect.set(window, 'confirm', confirm);
-    panel.open();
-    await vi.waitFor(() => expect(state.loading).toBe(false));
-    const input = state.input as HTMLInputElement & { emit(type: string): void };
-    input.value = 'Translate for Zotero';
-    input.emit('input');
-    panel.handleKey(pickerKey('i', state.overlay));
-    await vi.waitFor(() => expect(install.install).toHaveBeenCalledOnce());
-    panel.close();
-    panel.open();
-    await vi.waitFor(() => expect(state.loading).toBe(false));
-    const replacement = state.overlay;
-    install.state = 3;
-    const continuation = (listener as Listener | null)?.onDownloadEnded?.(install) !== false;
-    expect(continuation).toBe(false);
-    expect(confirm).toHaveBeenCalledOnce();
-    expect(state.overlay).toBe(replacement);
-    expect(state.notice).toBe('');
     panel.close();
   });
 
@@ -631,6 +579,7 @@ function createModuleFixture(themeRoot?: (root: HTMLElement) => () => void) {
     logger,
     bindings: () => DEFAULT_BINDINGS,
     themeRoot: themeRoot ?? ((root) => session.theme.add(root)),
+    openExtras: () => {},
   });
   return { host, module, bodyChildren };
 }

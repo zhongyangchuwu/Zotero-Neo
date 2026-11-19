@@ -19,7 +19,7 @@ Zotero Neo 是一个受 Vim/Neovim 启发的 Zotero 插件。它给文献列表�
 - [文献库与批量整理](docs/MAIN_GUIDE.md)：查找论文、建立临时选择集、整理标签和分类。
 - [笔记](docs/NOTE_GUIDE.md)：查找已有笔记，按需使用 Vim 风格编辑。
 
-[更多功能](docs/FEATURES.md)包括引用增强和 AI 问答（实验）；[设置快照](docs/SETTINGS_GUIDE.md#导出和恢复配置)用于导出和恢复配置。选区的手动翻译由单独安装的 [Neo Translate Adapter](docs/SELECTION_GUIDE.md#手动翻译选区) 接入，翻译服务由 Translate for Zotero 提供。
+[更多功能](docs/FEATURES.md)包括引用增强和 AI 问答（实验）；[设置快照](docs/SETTINGS_GUIDE.md#导出和恢复配置)用于导出和恢复配置。[手动翻译选区](docs/SELECTION_GUIDE.md#手动翻译选区)由 Neo 的 **Extras → 选区翻译**提供，默认关闭，翻译服务由 Translate for Zotero 提供。
 
 ## 参考与开发
 

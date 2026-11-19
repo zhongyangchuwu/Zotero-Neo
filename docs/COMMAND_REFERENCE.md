@@ -334,9 +334,9 @@ Reader Normal 中按 `<Space>ro`、`<Space>rm`、`<Space>ra` 和 `<Space>rt` 可
 
 ### 选区操作、Plugin Manager、设置与 Neo 选择集面板
 
-在 Reader Select 中按 `a` / Enter 打开选区操作。用方向键或 `j` / `k` 移动，按 `Home` / `g` 选择首项，按 `End` / `G` 选择末项，按 `1` 至 `9` 或 Enter 执行操作。按 Escape 关闭面板并保留选区。内置操作有“为选区添加下划线”和“添加批注评论”；外部适配器可添加[手动翻译](SELECTION_GUIDE.md#手动翻译选区)。按 `y` 可复制译文。
+在 Reader Select 中按 `a` / Enter 打开选区操作。用方向键或 `j` / `k` 移动，按 `Home` / `g` 选择首项，按 `End` / `G` 选择末项，按 `1` 至 `9` 或 Enter 执行操作。按 Escape 关闭面板并保留选区。内置操作有“为选区添加下划线”和“添加批注评论”；开启 Extra 后可使用[手动翻译](SELECTION_GUIDE.md#手动翻译选区)。按 `y` 可复制译文。
 
-按 `<Space>pp` 打开常驻 Plugin Manager。在 `plugins-list` 中，默认用 `j` / Down、`k` / Up 移动，`gg` / Home 和 `G` / End 跳到首项／末项，`Ctrl+d` / `Ctrl+u` 翻页，`/` 筛选，Escape / `q` 关闭。`r` 重新读取列表，不检查更新；`i` 经确认安装所选的未安装 Translate 条目；`u` 经确认检查所选已安装插件的更新，再确认安装。Zotero 允许时，`e` / `d` 启用或停用；`p` 打开已注册设置，`o` 打开主页，`R` 打开关联 GitHub README，`L` 打开提交历史。`plugins-input` 中 Escape 返回结果。生命周期能力由 Zotero AddonManager 决定；Neo 不能在自己的面板中停用自身。
+按 `<Space>pp` 打开常驻 Plugin Manager。在 `plugins-list` 中，默认用 `j` / Down、`k` / Up 移动，`gg` / Home 和 `G` / End 跳到首项／末项，`Ctrl+d` / `Ctrl+u` 翻页，`/` 筛选，Escape / `q` 关闭。`r` 重新读取列表，不检查更新；`i` 或 Extras 按钮打开设置的 Extras 页面；`u` 经确认检查所选已安装插件的更新，再确认安装。Zotero 允许时，`e` / `d` 启用或停用；`p` 打开已注册设置，`o` 打开主页，`R` 打开关联 GitHub README，`L` 打开提交历史。`plugins-input` 中 Escape 返回结果。生命周期能力由 Zotero AddonManager 决定；Neo 不能在自己的面板中停用自身。
 
 按 `<Space>ps` 打开设置；快捷键修改在点击**应用绑定**前仍是草稿。按 `<Space>ss` 打开 Main 选择集面板：按 `j` / `k` 移动，按 `Home` / `gg` 或 `End` / `G` 跳到首项/末项，按 Enter 在文库中显示条目，按 `x` 将条目从 Neo 选择集中移除，按 `c` 清空选择集，按 `r` 刷新，按 Escape / `q` 关闭。条目不可用时无法显示；显示失败时面板会保持打开。
 

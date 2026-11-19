@@ -124,14 +124,15 @@ Flash 只查找当前视图中可见的文字。匹配目标超过 48 个时，�
 
 ## 手动翻译选区
 
-1. 在 Zotero 中安装并启用当前版本的 Neo、[Translate for Zotero](https://github.com/windingwind/zotero-pdf-translate/releases) 和 **Zotero Neo Translate Adapter**。单独的 `zotero-neo-translate.xpi` 可从对应的 [GitHub Actions 构建](https://github.com/zhongyangchuwu/Zotero-Neo/actions/workflows/build.yml)下载，也可用 `npm ci`、`npm run build` 在源码目录构建，文件位于 `build/`。用 Zotero 原生插件管理器从文件安装。
-2. 在 PDF 选中文字，按 `a` 或 `Enter` 打开选区操作。上游翻译 API 就绪时，选择**翻译**（Translate）才会发送当前选区；结果可用 `y` 复制。服务、目标语言和密钥仍由 Translate for Zotero 管理。
+1. 安装并启用 Neo。在 **设置 → Extras → 选区翻译**中检查 [Translate for Zotero](https://github.com/windingwind/zotero-pdf-translate/releases) 的状态；需要时从这里安装或启用，并在上游设置中配置服务、目标语言和密钥。具体步骤见[设置指南](SETTINGS_GUIDE.md#准备翻译增强)。
+2. 开启**选区翻译**。该 Extra 默认关闭，开关立即生效，不需要重启；它不启用自动翻译或 `translation` 模块。
+3. 在 PDF 选中文字，按 `a` 或 `Enter` 打开选区操作。上游公开翻译 API 就绪时，选择**翻译**（Translate）才会发送当前选区；结果可用 `y` 复制。
 
-从原来内置的选区动作升级时，只需另装适配器，不用迁移配置或已保存的译文。该动作不依赖 Neo 的**翻译增强**开关；停用适配器后重新打开选区菜单，翻译入口消失，复制和原生批注不受影响。
+旧实验性 **Zotero Neo Translate Adapter** 不再需要，可在 Zotero 原生插件管理器中卸载；它的启用状态不会自动迁移，需要自行开启 Extra。`pdf-translate.translate` 动作 ID 由 Neo 内部保留。关闭 Extra 不会停用或卸载 Translate for Zotero，也不影响复制、原生批注或已有便签。
 
 ## 保存自动翻译的译文
 
-按[设置指南](SETTINGS_GUIDE.md#准备翻译增强)准备并启用翻译增强，即可使用译文保存入口；无需安装手动翻译适配器。自动结果保存只支持 Translate for Zotero 2.4.8 的就绪运行时。
+按[设置指南](SETTINGS_GUIDE.md#准备翻译增强)在 Extras 准备依赖，并在**模块**中启用和保存翻译增强、完全重启 Zotero，即可使用译文保存入口；不需要开启手动翻译 Extra。自动结果保存只支持 Translate for Zotero 2.4.8 的就绪运行时。
 
 1. 像往常一样在 PDF 或 Reading Mode 中选中文字，等待自动译文完成。
 2. 如需修订，直接修改弹窗译文。点击“保存译文”，把当前显示的完整内容保存下来；这一操作复用已有翻译结果。

@@ -86,6 +86,7 @@ import {
   createReaderTranslationModule,
   type ReaderTranslationModule,
 } from '../modules/translation';
+import { SelectionTranslation } from '../modules/translation/selection-action';
 import {
   createReaderAnnotationsModule,
   type ReaderAnnotationsModule,
@@ -168,6 +169,7 @@ interface SessionSelectionBridge {
     context: ReaderSelectionContext,
     isCurrent: () => boolean,
   ) => readonly ReaderSelectionActionDefinition[];
+  readonly translation: (language: KeyGuideLanguage) => ReaderSelectionActionDefinition | null;
   readonly noteOwner: (session: ReaderSession) => void;
   readonly clearOwner: (session: ReaderSession) => void;
 }
@@ -239,6 +241,7 @@ export class ReaderController implements ReaderControllerApi {
   #annotationHeaderListener: ReaderEventListener | null = null;
   #pluginID: string | null = null;
   readonly #selectionActions = new ReaderSelectionActionRegistry();
+  #selectionTranslation: SelectionTranslation | null = null;
   #selectionOwner: ReaderSession | null = null;
 
   constructor(dependencies: ReaderControllerDependencies) {
@@ -274,6 +277,19 @@ export class ReaderController implements ReaderControllerApi {
       const message = `reader listener registration failed: ${String(error)}`;
       this.#dependencies.logger.debug(message);
       this.#dependencies.logger.diagnostic(message);
+      return;
+    }
+    try {
+      this.#selectionTranslation = new SelectionTranslation(
+        this.#dependencies.preferences,
+        pluginId,
+      );
+    } catch (error) {
+      reportDiagnosticError(
+        this.#dependencies.logger,
+        'Selection translation initialization failed',
+        error,
+      );
     }
   }
 
@@ -281,11 +297,15 @@ export class ReaderController implements ReaderControllerApi {
     const toolbarListener = this.#toolbarListener;
     const selectionPopupListener = this.#selectionPopupListener;
     const annotationHeaderListener = this.#annotationHeaderListener;
+    const selectionTranslation = this.#selectionTranslation;
     // Retire before touching the host registry so queued callbacks cannot reclaim input.
     this.#toolbarListener = null;
     this.#selectionPopupListener = null;
     this.#annotationHeaderListener = null;
     this.#pluginID = null;
+    this.#selectionTranslation = null;
+    const failure = new CleanupFailure();
+    if (selectionTranslation) failure.run(() => selectionTranslation.dispose());
     if (toolbarListener) {
       try {
         unregisterReaderEvent('renderToolbar', toolbarListener);
@@ -310,7 +330,6 @@ export class ReaderController implements ReaderControllerApi {
     for (const timer of this.#waitTimers.values()) clearTimeout(timer);
     this.#waitTimers.clear();
     this.#pending.clear();
-    const failure = new CleanupFailure();
     for (const session of this.#sessions.values()) failure.run(() => session.dispose());
     this.#sessions.clear();
     this.#selectionOwner = null;
@@ -465,6 +484,7 @@ export class ReaderController implements ReaderControllerApi {
           jumpHost: this.#jumpHost,
           selection: {
             registered: (context, isCurrent) => this.registeredSelectionActions(context, isCurrent),
+            translation: (language) => this.#selectionTranslation?.action(language) ?? null,
             noteOwner: (owner) => this.noteSelectionOwner(owner),
             clearOwner: (owner) => this.clearSelectionOwner(owner),
           },
@@ -949,10 +969,15 @@ export class ReaderSession {
           language: () => this.keyGuideLanguage(),
           registeredActions: (context, isCurrent) =>
             this.#dependencies.selection?.registered(context, isCurrent) ?? [],
-          contributedActions: (window, language) => [
-            ...(this.#annotations?.selectionActions(window, language) ?? []),
-            ...(this.#ai?.selectionActions() ?? []),
-          ],
+          contributedActions: (window, language) => {
+            const actions = [
+              ...(this.#annotations?.selectionActions(window, language) ?? []),
+              ...(this.#ai?.selectionActions() ?? []),
+            ];
+            const translation = this.#dependencies.selection?.translation(language);
+            if (translation) actions.push(translation);
+            return actions;
+          },
           showStatus: (message, duration) => this.showStatus(message, duration),
           debug: (message) => dependencies.controller.dependencies.logger.debug(message),
         }),
