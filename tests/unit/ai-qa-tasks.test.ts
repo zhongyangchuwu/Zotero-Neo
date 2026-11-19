@@ -1,6 +1,5 @@
 import { describe, expect, it, vi } from 'vitest';
 import { createAIQATasks } from '../../src/ai-qa/tasks';
-import { createAIQARepository, type AIQAStorage } from '../../src/ai-qa/repository';
 import type { AIClient, AIGenerationResult } from '../../src/ai/contracts';
 import type { AIQATaskInput } from '../../src/ai-qa/contracts';
 
@@ -31,32 +30,16 @@ const input: AIQATaskInput = {
   isCurrent: async () => true,
 };
 function setup(generate: AIClient['generate']) {
-  let contents: string | null = null;
-  const storage: AIQAStorage = {
-    async read() {
-      return contents;
-    },
-    async write(_source, value, current) {
-      if (!(await current())) return false;
-      contents = value;
-      return true;
-    },
-  };
-  const repository = createAIQARepository(storage);
-  return {
-    repository,
-    tasks: createAIQATasks({
-      client: { generate },
-      repository,
-      createAbortController: () => new AbortController(),
-    }),
-  };
+  return createAIQATasks({
+    client: { generate },
+    createAbortController: () => new AbortController(),
+  });
 }
 describe('reader AI tasks', () => {
   it('prevents duplicate requests and retires a cancelled late model response', async () => {
     const { promise, resolve } = Promise.withResolvers<AIGenerationResult>();
     const generate = vi.fn(() => promise);
-    const { tasks, repository } = setup(generate);
+    const tasks = setup(generate);
     const running = tasks.run(input);
     const rejected = expect(running).rejects.toThrow('cancelled');
     await expect(tasks.run(input)).rejects.toThrow('busy');
@@ -65,64 +48,44 @@ describe('reader AI tasks', () => {
     resolve(result);
     await rejected;
     expect(tasks.state(1).phase).toBe('cancelled');
-    expect(await repository.list(input.source)).toEqual([]);
   });
   it('rejects a source changed during a request, and invalid model references', async () => {
     let current = true;
-    const { tasks, repository } = setup(async () => {
+    const tasks = setup(async () => {
       current = false;
       return result;
     });
     await expect(tasks.run({ ...input, isCurrent: async () => current })).rejects.toThrow(
       'stale-source',
     );
-    expect(await repository.list(input.source)).toEqual([]);
     const invalid = setup(async () => ({
       ...result,
       output: { paragraphs: [{ text: 'Claim', evidenceIDs: ['missing'] }], guide: [] },
     }));
-    await expect(invalid.tasks.run(input)).rejects.toThrow('invalid-output');
-    expect(await invalid.repository.list(input.source)).toEqual([]);
+    await expect(invalid.run(input)).rejects.toThrow('invalid-output');
+    expect(invalid.state(input.source.itemID).phase).toBe('failed');
   });
-  it('does not commit when the source changes while the write is staged', async () => {
-    const staged = Promise.withResolvers<void>();
-    const release = Promise.withResolvers<void>();
-    let contents: string | null = null;
-    let current = true;
-    const storage: AIQAStorage = {
-      async read() {
-        return contents;
-      },
-      async write(_source, value, isCurrent) {
-        staged.resolve();
-        await release.promise;
-        if (!(await isCurrent())) return false;
-        contents = value;
-        return true;
-      },
-    };
-    const repository = createAIQARepository(storage);
-    const tasks = createAIQATasks({
-      client: { generate: async () => result },
-      repository,
-      createAbortController: () => new AbortController(),
-    });
-    const running = tasks.run({ ...input, isCurrent: async () => current });
-    const rejected = expect(running).rejects.toThrow('stale-source');
-    await staged.promise;
-    current = false;
-    release.resolve();
-    await rejected;
-    expect(contents).toBeNull();
-  });
-  it('persists completed results without ephemeral image bytes', async () => {
-    const generate = vi.fn<AIClient['generate']>(async () => result);
-    const { tasks, repository } = setup(generate);
-    const saved = await tasks.run({
-      ...input,
-      images: [{ evidenceID: input.evidence[0]!.id, data: 'base64-image', mediaType: 'image/png' }],
-    });
-    expect((await repository.list(input.source)).map((record) => record.id)).toEqual([saved.id]);
-    expect(JSON.stringify(await repository.list(input.source))).not.toContain('base64-image');
-  });
+  it.each(['explain', 'question', 'guide'] as const)(
+    'returns a validated %s answer without any history dependency or image bytes',
+    async (kind) => {
+      const generate = vi.fn<AIClient['generate']>(async () => result);
+      const tasks = setup(generate);
+      const answer = await tasks.run({
+        ...input,
+        kind,
+        images: [
+          { evidenceID: input.evidence[0]!.id, data: 'base64-image', mediaType: 'image/png' },
+        ],
+      });
+      expect(answer).toMatchObject({
+        kind,
+        source: input.source,
+        evidence: input.evidence,
+        output: result.output,
+        revision: 1,
+      });
+      expect(JSON.stringify(answer)).not.toContain('base64-image');
+      expect(tasks.state(input.source.itemID).phase).toBe('complete');
+    },
+  );
 });

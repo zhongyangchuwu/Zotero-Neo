@@ -32,6 +32,9 @@ export const AI_QA_TEXT_KEYS = [
   'preparing',
   'requesting',
   'saving',
+  'temporary',
+  'saveHistory',
+  'historyUnavailable',
   'complete',
   'failed',
   'cancelled',
@@ -70,6 +73,7 @@ export interface AIQARecordView {
   readonly record: AIQARecord;
   readonly sourceCurrent: boolean;
   readonly adoption: SourceNoteReceipt | 'unavailable' | null;
+  readonly temporary?: { readonly saving: boolean; readonly saveError: string | null };
 }
 
 /** Safe projection only; model keys, native Reader handles and mutable repository state never enter it. */
@@ -84,6 +88,8 @@ export interface AIQAViewModel {
   readonly limitedContext: boolean;
   readonly task: AIQATaskState;
   readonly records: readonly AIQARecordView[];
+  readonly historyUnavailable: boolean;
+  readonly historyLoading: boolean;
   readonly preview: AIQASourcePreview | null;
   readonly error: string | null;
   readonly notice: string | null;

@@ -79,7 +79,7 @@ Zotero 原生标签页清单是已打开 Reader/Note 视图的唯一事实来源
 
 标签模块不持有 Main session、原生 pane 或 Reader 对象。Picker 端口返回仅能关闭本次调用的释放句柄；视图或窗口退休后不能确认旧选择、重画状态或关闭后来替换的界面。已接纳的保存继续按原生事务结果完成，不因模块退休而伪装成取消。
 
-`src/modules/extensions/` 拥有 Zotero 扩展的 Plugin Manager，列表包括已安装扩展及固定官方 Translate 安装条目。`index.ts` 为每个 MainWindow 创建模块作用域、面板和状态；Main session 不再持有插件面板状态。Main/Reader/Note 的 `managePlugins` 进入实际所属窗口的同一面板，局部输入继续使用 `plugins-input` / `plugins-list` 和既有重绑定。
+`src/modules/extensions/` 拥有 Zotero 扩展的 Plugin Manager，列表只显示已安装扩展，支持的上游插件从 Extras 安装。`index.ts` 为每个 MainWindow 创建模块作用域、面板和状态；Main session 不再持有插件面板状态。Main/Reader/Note 的 `managePlugins` 进入实际所属窗口的同一面板，局部输入继续使用 `plugins-input` / `plugins-list` 和既有重绑定。
 
 Plugin Manager 的列表和详情由静态打包的 React 视图呈现；搜索输入、IME、焦点与原生扩展操作仍由面板控制器负责。视图只接收展示模型和选择／链接命令，不持有原生 AddonManager 对象。
 
@@ -141,7 +141,7 @@ Reader Surface 保留输入/IME/count/前缀、模式、CurrentTarget、精确�
 
 本地分析和文库查找不访问网络。共享学术查询由 `src/scholarly/` 拥有：`query.ts` 规范化条目和 BibTeX 线索，`service.ts` 协调来源、结果与缓存，`adapters/` 分别实现 Semantic Scholar、arXiv、Crossref 和 INSPIRE，`cache.ts` 管理本机缓存，`rate.ts` 跨消费者限制请求。组合根注入应用级服务，Reader 界面和 Main 审阅复用它；适配器不写文库。来源能力、查询与缓存行为见[阅读器指南](READER_GUIDE.md#查看元数据和外部来源)。
 
-`src/metadata-review/` 固定 Main 条目范围、展示来源和字段差异；`src/operations/metadata.ts` 在事务内重查目标及审阅基线，只写明确选择的字段。`src/operations/references.ts` 继续负责确认后添加参考文献。来源缓存不是审阅历史，清除缓存不删除成果。`src/artifacts/` 负责版本化成果和修订，`src/platform/artifacts.ts` 通过 Zotero 正式导入附件；审阅笔记由 `src/operations/artifact-note.ts` 单独投影。封套、迁移与互通边界见[成果附件格式](ARTIFACT_FORMAT.md)。
+`src/metadata-review/` 固定 Main 条目范围、展示来源和字段差异。原生条目右键使用 Zotero 选中的条目，命令面板按 Main 目标规则取条目；两者打开同一工具。`src/operations/metadata.ts` 在事务内重查目标及检查时的原值，只写批量补全或用户明确选择的字段。留档是单独操作，字段更新不读取或创建成果附件。`src/operations/references.ts` 继续负责明确添加参考文献。`src/artifacts/` 负责版本化修订，`src/platform/artifacts.ts` 导入正式附件；展示笔记由 `src/operations/artifact-note.ts` 投影。详见[成果附件格式](ARTIFACT_FORMAT.md)。
 
 本模块不依赖或调用 AI 问答，不生成摘要或对论文质量分类。查询按来源能力发送所需书目线索，不上传笔记或 PDF；只有用户明确查询或刷新才访问来源。
 
@@ -178,7 +178,7 @@ Reader Surface 保留输入/IME/count/前缀、模式、CurrentTarget、精确�
 
 `src/platform/ai-runtime.ts` 按首次生成请求惰性建立无窗口 runtime；关闭的模块不注册入口／动作，不挂载面板或界面 runtime，也不读取凭据或发送请求。打开面板前先从发起的 Reader 捕获选区与视图，打开本身只读取缓存和已存成果；用户明确发起任务后才准备证据并请求模型。输入最多 40 条证据、32,000 字符；模型仅收到明确证据 ID，不返回可执行 HTML 或位置坐标；有效 ID 不证明语义正确。
 
-主窗口标签页 Reader 使用原生 ItemPaneManager section；Toolkit 通过窄的私有 `item-details.tabID` seam 解析精确 Reader。独立 Reader 使用单独工具窗，绑定发起它的 Reader，不挤压 PDF 布局，并复用同一 controller、React 视图和成果仓库。关闭工具窗只释放界面，不取消已接纳任务；Reader 退出时关闭其工具窗，但已接纳任务仍可完成。显式取消不保存部分结果。成果以正式 Zotero 附件保存；旧旁路文件按需迁移并保留，来源变化时保留历史但停用旧定位。跨设备同步尚未验证，详见[成果附件格式](ARTIFACT_FORMAT.md)。来源跳转先预览再明确确认，只有用户明确采纳时才通过既有 Operation 写入带来源的 Zotero Note，不自动创建 PDF 批注。
+主窗口标签页 Reader 使用原生 ItemPaneManager section；Toolkit 通过窄的私有 `item-details.tabID` seam 解析精确 Reader。独立 Reader 使用单独工具窗，绑定发起它的 Reader，不挤压 PDF 布局，并复用同一 controller 和 React 视图。生成结果先留在发起的 Reader 中，重开同一 Reader 的面板可继续查看；关闭 Reader 后不保留未保存的结果。明确保存才发布正式 Zotero 附件，附件保存失败不丢弃临时答案。旧旁路文件按需迁移并保留，来源变化时保留历史但停用旧定位。只有明确另存为笔记才写入带来源的 Zotero Note，不自动创建 PDF 批注。
 
 生成段落仅投影自己的 `evidenceIDs`，人工修订不继承原稿的逐段引用。采纳回执绑定成果与修订，通过既有 source-note 身份查询找回笔记，不扫描整库；打开前再次验证可访问性，并委托来源 Reader 的实际主窗口打开。重复采纳复用笔记而不覆盖人工正文。
 

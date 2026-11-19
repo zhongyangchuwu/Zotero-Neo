@@ -2,8 +2,8 @@
 layout: home
 hero:
   name: Zotero Neo
-  text: 用键盘操作 Zotero。
-  tagline: 浏览文献、阅读 PDF、做批注和查找笔记，少在鼠标和键盘之间来回切换。
+  text: 一组 Zotero 增强工具
+  tagline: 按需定位论文引用、筛选文献、摘录图表，也可用 Vim 风格按键操作。
   actions:
     - theme: brand
       text: 安装 Neo
@@ -15,25 +15,23 @@ hero:
       text: 使用指南
       link: /docs/USER_GUIDE
 features:
-  - title: 用键盘选中 PDF 文字
-    details: 按 v，输入页面上看到的词句来定位文字，再调整选区、复制或高亮。
+  - title: 定位论文里的引用
+    details: 从 PDF 的引文预览或工具栏进入，查看同一篇参考文献在正文的其他提及。
+    link: /docs/READER_GUIDE#查找和核对参考文献
+    linkText: 查找引用
+  - title: 在独立表格里筛选文献
+    details: 从 Zotero 的「工具」菜单打开文献表格，按标签或书目字段筛选，不改变主列表。
+    link: /docs/MAIN_GUIDE#用独立表格整理文献
+    linkText: 筛选文献
+  - title: 输入词句，选中 PDF 文字
+    details: 按 v，输入页面上看到的词句定位选区，再调整范围、复制或高亮。
     link: /docs/SELECTION_GUIDE#从一段文字开始
     linkText: 试试文本选择
-  - title: 随手标记要看的论文
-    details: 浏览文献时按 s 记下条目，之后一起添加标签或整理到分类中。
-    link: /docs/MAIN_GUIDE
-    linkText: 整理文献
-  - title: 在论文里快速跳转
-    details: 跳到标题、图表和批注；需要对照两处内容时，可以分屏阅读。
-    link: /docs/READER_GUIDE
-    linkText: 阅读 PDF
 ---
 
 ## 从哪里开始
 
-第一次使用，先看[安装与入门](./docs/GETTING_STARTED.md)。安装好后，打开一篇 PDF，点击页面，试试按 `j` / `k` 滚动；在文献列表中，同样的按键用来切换条目。
-
-如果想按任务学习，可以从[使用指南](./docs/USER_GUIDE.md)开始。它会带你找到文献库、PDF、批注和笔记对应的操作。
+先看[安装与入门](./docs/GETTING_STARTED.md)，然后从上面挑一个工具试用。想看其他工具和入口，可以按任务查[使用指南](./docs/USER_GUIDE.md)。
 
 ## 查快捷键和解决问题
 

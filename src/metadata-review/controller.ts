@@ -3,6 +3,7 @@ import type { KeyGuideLanguage } from '../input/key-guide-config';
 import { compositionOwnsKey } from '../input/composition';
 import { keyString } from '../input/keys';
 import { isDeadObject } from '../platform/cross-compartment';
+import { confirmChromeAction } from '../platform/chrome-windows';
 import { mountNativeReactView } from '../platform/native-ui';
 import type { NativeReactView } from '../ui/react/types';
 import { PREPARATION_BACKDROP_STYLE, PREPARATION_PANEL_STYLE } from '../ui/react/shells/reader';
@@ -57,12 +58,14 @@ interface ReviewRow {
   selected: Set<MetadataField>;
   applied: readonly MetadataField[];
   history: readonly NeoArtifact[];
+  historyStatus?: string;
+  historyError?: boolean;
+  historyRequest?: object;
   parents: readonly string[];
   recordID?: string;
   savedJSON?: string;
   savedAttachment?: string;
   savedRevision?: string;
-  revision: number;
   pendingPublication?: { readonly json: string; readonly input: ArtifactInput };
 }
 interface ReviewView {
@@ -78,6 +81,7 @@ interface ReviewView {
   index: number;
   source: ScholarlySource;
   busy: boolean;
+  batchStatus: string;
   composition: boolean;
   abort?: AbortController;
 }
@@ -123,7 +127,7 @@ export class MetadataReviewController implements MetadataReviewPort {
     root.setAttribute('aria-modal', 'true');
     root.setAttribute(
       'aria-label',
-      host.language() === 'zh-CN' ? '检查论文信息' : 'Check paper details',
+      host.language() === 'zh-CN' ? '补全论文信息' : 'Complete paper details',
     );
     backdrop.append(root);
     const focus = doc.activeElement as HTMLElement | null;
@@ -149,7 +153,6 @@ export class MetadataReviewController implements MetadataReviewPort {
           applied: [],
           history: [],
           parents: [],
-          revision: 0,
         }),
       );
     const view: ReviewView = {
@@ -161,6 +164,7 @@ export class MetadataReviewController implements MetadataReviewPort {
       index: 0,
       source: 'crossref',
       busy: false,
+      batchStatus: '',
       composition: false,
       react: null,
       untheme: host.themeRoot(backdrop),
@@ -184,7 +188,7 @@ export class MetadataReviewController implements MetadataReviewPort {
       model: this.#model(view),
       isCurrent: () => this.#current(view),
       loadingText: this.#text(view, '正在载入…', 'Loading…'),
-      errorText: this.#text(view, '无法打开论文信息检查', 'Could not open the paper details check'),
+      errorText: this.#text(view, '无法打开论文信息补全', 'Could not open paper details'),
       onError: (error) => this.#debug(String(error)),
       dispatch: (command) => {
         if (this.#current(view)) this.#dispatch(view, command);
@@ -197,7 +201,6 @@ export class MetadataReviewController implements MetadataReviewPort {
           view.react?.getElement('source')?.focus();
       })
       .catch((error) => this.#debug(String(error)));
-    if (rows[0]) void this.#history(view, rows[0]);
     return () => {
       if (this.#view === view) this.close();
     };
@@ -212,12 +215,21 @@ export class MetadataReviewController implements MetadataReviewPort {
       items: view.rows.map((entry) => ({ title: entry.title, status: entry.status })),
       itemIndex: view.index,
       busy: view.busy,
+      querying: !!view.abort,
+      fillCount: view.rows.reduce(
+        (count, entry) =>
+          !entry.applied.length && entry.plan?.changes.some((change) => change.selected)
+            ? count + 1
+            : count,
+        0,
+      ),
+      batchStatus: view.batchStatus,
       status:
         row?.status ||
         this.#text(
           view,
-          '尚未检查。只读加载已有成果，不自动联网。',
-          'Not inspected. Saved results are loaded locally without network queries.',
+          '尚未检查。点击检查后才会查询来源。',
+          'Not checked yet. Check an item to query its source.',
         ),
       error: row?.error ?? false,
       candidates:
@@ -248,6 +260,8 @@ export class MetadataReviewController implements MetadataReviewPort {
           id: artifact.revisionID,
           title: `${artifact.createdAt} · ${artifact.revisionID} · ${'stage' in artifact.payload ? String(artifact.payload.stage) : ''}`,
         })) ?? [],
+      historyStatus: row?.historyStatus ?? '',
+      historyError: row?.historyError ?? false,
       canApply: !!row?.plan && !!row.selected.size && !row.applied.length,
       canSave: !!row?.plan,
       bibtex: row?.bibtex || '',
@@ -267,6 +281,10 @@ export class MetadataReviewController implements MetadataReviewPort {
       view.abort?.abort();
       return;
     }
+    if (command.type === 'load-history') {
+      if (row && command.index === view.index) void this.#history(view, row);
+      return;
+    }
     if (view.busy) return;
     switch (command.type) {
       case 'source':
@@ -275,27 +293,36 @@ export class MetadataReviewController implements MetadataReviewPort {
           command.value !== view.source
         ) {
           view.source = command.value as ScholarlySource;
-          if (row) {
-            row.plan = undefined;
-            row.papers = [];
-            row.candidateIndex = -1;
-            row.revision++;
+          view.batchStatus = '';
+          for (const entry of view.rows) {
+            if (entry.applied.length) continue;
+            entry.plan = undefined;
+            entry.papers = [];
+            entry.candidateIndex = -1;
+            entry.status = '';
+            entry.error = false;
           }
         }
         break;
       case 'item':
         if (Number.isInteger(command.index) && view.rows[command.index]) {
           view.index = command.index;
-          void this.#history(view, view.rows[view.index]!);
         }
         break;
       case 'bibtex':
         if (row && command.value.length <= 32768) row.bibtex = command.value;
         break;
       case 'candidate':
-        if (row && Number.isInteger(command.index) && row.papers[command.index] && row.snapshot) {
+        if (
+          row &&
+          !row.applied.length &&
+          Number.isInteger(command.index) &&
+          row.papers[command.index] &&
+          row.snapshot
+        ) {
           row.candidateIndex = command.index;
           this.#plan(row, row.snapshot, row.papers[command.index]!);
+          row.status = this.#text(view, '已选择来源记录。', 'Source record selected.');
         }
         break;
       case 'field':
@@ -335,7 +362,23 @@ export class MetadataReviewController implements MetadataReviewPort {
         void this.#inspect(view, false, true);
         return;
       case 'apply':
-        if (row) void this.#apply(view, row);
+        if (
+          row?.selected.has('citationKey') &&
+          !confirmChromeAction(
+            view.host.window,
+            this.#text(view, '更改引用键', 'Change citation key'),
+            this.#text(
+              view,
+              '更改引用键可能破坏已有文稿中的引用。仍要更新勾选的字段吗？',
+              'Changing the citation key may break references in existing manuscripts. Update the selected fields anyway?',
+            ),
+          )
+        )
+          return;
+        void this.#apply(view, false);
+        return;
+      case 'fill':
+        void this.#apply(view, true);
         return;
       case 'save':
         if (row) void this.#save(view, row);
@@ -343,8 +386,7 @@ export class MetadataReviewController implements MetadataReviewPort {
     }
     this.#render(view);
   }
-  #plan(row: ReviewRow, snapshot: MetadataSnapshot, paper: ScholarlyPaper): void {
-    row.revision++;
+  #plan(row: ReviewRow, snapshot: MetadataSnapshot, paper: ScholarlyPaper): MetadataPlan {
     row.recordID = `metadata:${paper.source}:${paper.sourceID}`;
     row.snapshot = snapshot;
     row.plan = createMetadataPlan(snapshot, paper);
@@ -357,25 +399,32 @@ export class MetadataReviewController implements MetadataReviewPort {
     row.savedAttachment = undefined;
     row.savedRevision = undefined;
     row.pendingPublication = undefined;
+    return row.plan;
   }
   async #history(view: ReviewView, row: ReviewRow): Promise<void> {
-    const revision = row.revision;
+    const request = (row.historyRequest = {});
+    const current = () => this.#current(view) && row.historyRequest === request;
+    row.historyStatus = this.#text(view, '正在读取记录…', 'Loading saved results…');
+    row.historyError = false;
+    this.#render(view);
     try {
       const listing = await this.#artifacts.list(row.item, 'metadata-review');
-      if (!this.#current(view)) return;
+      if (!current()) return;
       row.history = listing.artifacts.filter(
         (entry) => !!readMetadataReviewPaper(entry.payload, row.key),
       );
-      if (revision === row.revision && (!listing.complete || listing.issues.length)) {
-        row.status =
+      row.historyStatus = '';
+      if (!listing.complete || listing.issues.length) {
+        row.historyError = true;
+        row.historyStatus =
           listing.issues.map((issue) => issue.message).join('\n') ||
           this.#text(view, '部分成果尚未下载', 'Some artifacts have not been downloaded');
       }
       this.#render(view);
     } catch (error) {
-      if (this.#current(view) && revision === row.revision) {
-        row.status = String(error);
-        row.error = true;
+      if (current()) {
+        row.historyStatus = String(error);
+        row.historyError = true;
         this.#render(view);
       }
     }
@@ -386,12 +435,17 @@ export class MetadataReviewController implements MetadataReviewPort {
     view.abort = abort;
     view.busy = true;
     const indexes = all ? view.rows.map((_, index) => index) : [view.index];
+    view.batchStatus = '';
     try {
       for (const index of indexes) {
         if (!this.#current(view) || abort.signal.aborted) break;
         const row = view.rows[index]!;
-        row.revision++;
-        view.index = index;
+        if (all)
+          view.batchStatus = this.#text(
+            view,
+            `正在检查 ${index + 1}/${indexes.length} 篇`,
+            `Checking ${index + 1}/${indexes.length} items`,
+          );
         row.status = this.#text(view, '正在查询…', 'Querying…');
         row.error = false;
         row.plan = undefined;
@@ -407,14 +461,16 @@ export class MetadataReviewController implements MetadataReviewPort {
             source: view.source,
             ...(refresh ? { mode: 'refresh' as const } : {}),
           });
-          if (!this.#current(view) || abort.signal.aborted) break;
+          if (!this.#current(view)) break;
+          if (abort.signal.aborted) {
+            row.status = this.#text(view, '已停止；未应用字段。', 'Stopped; no fields applied.');
+            break;
+          }
           if (result.kind === 'found') {
-            this.#plan(row, snapshot, result.paper);
-            row.status = this.#text(
-              view,
-              '已按标识符找到论文。请核对建议值。',
-              'Paper matched by identifier. Check the suggested values.',
-            );
+            const plan = this.#plan(row, snapshot, result.paper);
+            row.status = plan.changes.length
+              ? this.#text(view, '已按标识符匹配。', 'Matched by identifier.')
+              : this.#text(view, '已匹配，没有可更新的字段。', 'Matched; no fields to update.');
           } else if (result.kind === 'candidates') {
             row.papers = result.papers;
             row.status = this.#text(
@@ -440,6 +496,14 @@ export class MetadataReviewController implements MetadataReviewPort {
       if (this.#current(view)) {
         view.busy = false;
         view.abort = undefined;
+        if (all)
+          view.batchStatus = abort.signal.aborted
+            ? this.#text(
+                view,
+                '已停止检查。此前找到的建议仍可使用。',
+                'Check stopped. Existing suggestions are still available.',
+              )
+            : '';
         this.#render(view);
       }
     }
@@ -455,7 +519,7 @@ export class MetadataReviewController implements MetadataReviewPort {
     row.savedRevision = receipt.artifact.revisionID;
     row.pendingPublication = undefined;
   }
-  async #persist(view: ReviewView, row: ReviewRow, project: boolean): Promise<void> {
+  async #persist(view: ReviewView, row: ReviewRow): Promise<void> {
     if (!row.plan) throw new Error('Inspect or load a proposal first');
     const payload = metadataReviewPayload(row.plan, [...row.selected], row.applied);
     const json = JSON.stringify(payload);
@@ -487,7 +551,7 @@ export class MetadataReviewController implements MetadataReviewPort {
       };
       await this.#publishPending(view, row);
     }
-    if (project && row.savedAttachment) {
+    if (row.savedAttachment) {
       await projectArtifactNote(
         row.item,
         row.savedAttachment,
@@ -511,19 +575,21 @@ export class MetadataReviewController implements MetadataReviewPort {
   }
   async #save(view: ReviewView, row: ReviewRow): Promise<void> {
     view.busy = true;
-    row.error = false;
+    row.historyError = false;
+    row.historyStatus = this.#text(view, '正在保存记录…', 'Saving results…');
     this.#render(view);
     try {
-      await this.#persist(view, row, true);
-      row.status = this.#text(
-        view,
-        '结果和笔记已保存在本机。要在其他设备查看，请使用 Zotero 同步。',
-        'Results and note saved locally. Use Zotero sync to view them on another device.',
-      );
+      await this.#persist(view, row);
       await this.#history(view, row);
+      if (!row.historyStatus)
+        row.historyStatus = this.#text(
+          view,
+          '结果和笔记已保存在本机。要在其他设备查看，请使用 Zotero 同步。',
+          'Results and note saved locally. Use Zotero sync to view them on another device.',
+        );
     } catch (error) {
-      row.status = String(error);
-      row.error = true;
+      row.historyStatus = String(error);
+      row.historyError = true;
     } finally {
       if (this.#current(view)) {
         view.busy = false;
@@ -531,38 +597,49 @@ export class MetadataReviewController implements MetadataReviewPort {
       }
     }
   }
-  async #apply(view: ReviewView, row: ReviewRow): Promise<void> {
-    if (!row.plan || row.applied.length || !row.selected.size) return;
+  async #apply(view: ReviewView, fill: boolean): Promise<void> {
     view.busy = true;
-    row.error = false;
+    view.batchStatus = '';
     this.#render(view);
+    let updated = 0;
+    let failed = 0;
     try {
-      await this.#persist(view, row, false);
-      row.applied = await applyMetadataPlan(row.plan, [...row.selected], () => this.#current(view));
-      try {
-        await this.#persist(view, row, true);
-        row.status = this.#text(
-          view,
-          '字段已更新，更新记录已保存在本机。',
-          'Fields updated and the update record saved locally.',
-        );
-      } catch (error) {
-        row.status =
-          this.#text(
+      const current = () => this.#current(view);
+      const first = fill ? 0 : view.index;
+      const end = fill ? view.rows.length : first + 1;
+      for (let index = first; index < end; index++) {
+        if (!current()) break;
+        const row = view.rows[index];
+        if (!row?.plan || row.applied.length) continue;
+        const fields = fill
+          ? row.plan.changes.filter((change) => change.selected).map((change) => change.field)
+          : [...row.selected];
+        if (!fields.length) continue;
+        row.error = false;
+        try {
+          row.applied = await applyMetadataPlan(row.plan, fields, current);
+          row.selected = new Set(row.applied);
+          row.status = this.#text(
             view,
-            '字段已更新，但更新记录未保存。请重试保存结果，不要再次更新字段。',
-            'Fields were updated, but the update record could not be saved. Save the results again instead of updating fields.',
-          ) +
-          '\n' +
-          String(error);
-        row.error = true;
+            `已更新 ${row.applied.length} 个字段。`,
+            `Updated ${row.applied.length} fields.`,
+          );
+          updated++;
+        } catch (error) {
+          row.status = error instanceof Error ? error.message : String(error);
+          row.error = true;
+          failed++;
+        }
       }
-    } catch (error) {
-      row.status = String(error);
-      row.error = true;
     } finally {
       if (this.#current(view)) {
         view.busy = false;
+        if (fill)
+          view.batchStatus = this.#text(
+            view,
+            `已补全 ${updated} 篇，${failed} 篇未能补全。各条目状态可在列表中查看。`,
+            `Completed ${updated} items; ${failed} could not be updated. See the item list for details.`,
+          );
         this.#render(view);
       }
     }

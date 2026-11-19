@@ -314,6 +314,7 @@ export class ZoteroNeoAddon implements ZoteroNeoController {
         resolveOwner: (window) => this.#mainWindows.get(nativeObjectIdentity(window))?.owner,
         language: () => neoCommandLanguage(this.#preferences, Zotero.locale ?? ''),
         openTable: (window) => this.#literatureTables.open(window),
+        reviewMetadata: (window, items) => this.#main.openMetadataReview(window, items),
         ...(attributes
           ? {
               manageAttributes: (window) => this.#main.openItemAttributes(window),

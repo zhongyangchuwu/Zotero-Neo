@@ -37,7 +37,6 @@ export class AIQAController {
     const repository = createAIQARepository(attachmentReadingStorage());
     this.#tasks = createAIQATasks({
       client: this.#service,
-      repository,
       createAbortController: createAIAbortController,
     });
     this.#reader = new AIQAReaderApplication({
@@ -107,20 +106,35 @@ export class AIQAController {
   }
 
   #model(port: AIQAReaderPresentationPort): AIQAViewModel | null {
-    const state = this.#reader.snapshot(port.reader);
-    if (!state) return null;
-    const text = (key: string): string => t(`reader.ai.${key}`, port.language());
+    const snapshot = this.#reader.snapshot(port.reader);
+    if (!snapshot) return null;
+    const { temporary, adoptions, ...state } = snapshot;
+    const language = port.language();
+    const text = (key: string): string => t(`reader.ai.${key}`, language);
     const labels = Object.fromEntries(
       AI_QA_TEXT_KEYS.map((key) => [key, text(key)]),
     ) as AIQAViewModel['labels'];
+    const records: AIQAViewModel['records'][number][] = state.records.map((record) => ({
+      record,
+      sourceCurrent: record.source.fingerprint === state.source?.fingerprint,
+      adoption: adoptions[record.id] ?? null,
+    }));
+    if (temporary) {
+      const { record, saving, saveError } = temporary;
+      records.unshift({
+        record,
+        sourceCurrent: true,
+        adoption: adoptions[record.id] ?? null,
+        temporary: {
+          saving,
+          saveError: saveError ? text(`error.${saveError}`) : null,
+        },
+      });
+    }
     return {
       ...state,
       labels,
-      records: state.records.map((record) => ({
-        record,
-        sourceCurrent: record.source.fingerprint === state.source?.fingerprint,
-        adoption: state.adoptions[record.id] ?? null,
-      })),
+      records,
       error: state.error ? text(`error.${state.error}`) : null,
       notice:
         [

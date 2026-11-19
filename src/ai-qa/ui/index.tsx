@@ -114,8 +114,6 @@ function phaseText(phase: AIQATaskPhase, labels: Labels): string | null {
       return labels.preparing;
     case 'requesting':
       return labels.requesting;
-    case 'saving':
-      return labels.saving;
     case 'complete':
       return labels.complete;
     case 'failed':
@@ -131,6 +129,7 @@ interface ResultCardProps {
   readonly record: AIQARecord;
   readonly sourceCurrent: boolean;
   readonly adoption: AIQAViewModel['records'][number]['adoption'];
+  readonly temporary: AIQAViewModel['records'][number]['temporary'];
   readonly activeEvidenceID: string | null;
   readonly previewEvidenceID: string | null;
   readonly labels: Labels;
@@ -143,6 +142,7 @@ const ResultCard = React.memo(function ResultCard({
   record,
   sourceCurrent,
   adoption,
+  temporary,
   activeEvidenceID,
   previewEvidenceID,
   labels,
@@ -171,7 +171,11 @@ const ResultCard = React.memo(function ResultCard({
         <h3>{record.contextTitle || record.source.fileName}</h3>
         <div className="neo-ai-qa-statuses">
           <span className="neo-ai-qa-chip">
-            {record.userText === null ? labels.generated : labels.modified}
+            {temporary
+              ? labels.temporary
+              : record.userText === null
+                ? labels.generated
+                : labels.modified}
           </span>
           <span className="neo-ai-qa-chip">
             {adoption === 'unavailable'
@@ -335,11 +339,24 @@ const ResultCard = React.memo(function ResultCard({
         </form>
       ) : (
         <div className="neo-ai-qa-actions">
-          <button type="button" onClick={beginEdit}>
-            {labels.edit}
-          </button>
+          {temporary ? (
+            <button
+              type="button"
+              disabled={temporary.saving || !sourceCurrent}
+              onClick={() =>
+                dispatch({ type: 'save-history', resultID: record.id, revision: record.revision })
+              }
+            >
+              {temporary.saving ? labels.saving : labels.saveHistory}
+            </button>
+          ) : (
+            <button type="button" onClick={beginEdit}>
+              {labels.edit}
+            </button>
+          )}
           <button
             type="button"
+            disabled={!!temporary && !sourceCurrent}
             onClick={() =>
               dispatch({ type: 'save-note', resultID: record.id, revision: record.revision })
             }
@@ -360,32 +377,38 @@ const ResultCard = React.memo(function ResultCard({
               {labels.openNote}
             </button>
           )}
-          {confirmRevision === null ? (
-            <button type="button" onClick={() => setConfirmRevision(record.revision)}>
-              {labels.remove}
-            </button>
-          ) : (
-            <div
-              className="neo-ai-qa-inline-confirm"
-              role="group"
-              aria-label={labels.confirmRemove}
-            >
-              <span>{labels.confirmRemove}</span>
-              <button
-                type="button"
-                onClick={() => {
-                  dispatch({ type: 'remove', resultID: record.id, revision: confirmRevision });
-                  setConfirmRevision(null);
-                }}
-              >
+          {!temporary &&
+            (confirmRevision === null ? (
+              <button type="button" onClick={() => setConfirmRevision(record.revision)}>
                 {labels.remove}
               </button>
-              <button type="button" onClick={() => setConfirmRevision(null)}>
-                {labels.cancel}
-              </button>
-            </div>
-          )}
+            ) : (
+              <div
+                className="neo-ai-qa-inline-confirm"
+                role="group"
+                aria-label={labels.confirmRemove}
+              >
+                <span>{labels.confirmRemove}</span>
+                <button
+                  type="button"
+                  onClick={() => {
+                    dispatch({ type: 'remove', resultID: record.id, revision: confirmRevision });
+                    setConfirmRevision(null);
+                  }}
+                >
+                  {labels.remove}
+                </button>
+                <button type="button" onClick={() => setConfirmRevision(null)}>
+                  {labels.cancel}
+                </button>
+              </div>
+            ))}
         </div>
+      )}
+      {temporary?.saveError && (
+        <p className="neo-ai-qa-status neo-ai-qa-status-error" role="alert">
+          {temporary.saveError}
+        </p>
       )}
       {!editing && !sourceCurrent && <p className="neo-ai-qa-muted">{labels.stale}</p>}
     </article>
@@ -442,10 +465,7 @@ function AIQAApp({ model, dispatch }: AIQAAppProps): ReactTypes.ReactElement {
       : previewEvidence.precision === 'text'
         ? labels.textRange
         : labels.pageRegion;
-  const busy =
-    model.task.phase === 'preparing' ||
-    model.task.phase === 'requesting' ||
-    model.task.phase === 'saving';
+  const busy = model.task.phase === 'preparing' || model.task.phase === 'requesting';
   const phase = phaseText(model.task.phase, labels);
   const previewImage = model.preview === null ? null : safeImageDataURL(model.preview.imageDataURL);
 
@@ -594,7 +614,7 @@ function AIQAApp({ model, dispatch }: AIQAAppProps): ReactTypes.ReactElement {
       {!model.configuration.configured && (
         <p className="neo-ai-qa-status neo-ai-qa-status-info">{labels.unconfigured}</p>
       )}
-      {model.loading && (
+      {(model.loading || model.historyLoading) && (
         <p className="neo-ai-qa-status neo-ai-qa-status-info" role="status">
           {labels.loading}
         </p>
@@ -615,6 +635,11 @@ function AIQAApp({ model, dispatch }: AIQAAppProps): ReactTypes.ReactElement {
           role="status"
         >
           {phase}
+        </p>
+      )}
+      {model.historyUnavailable && (
+        <p className="neo-ai-qa-status neo-ai-qa-status-error" role="alert">
+          {labels.historyUnavailable}
         </p>
       )}
       {model.limitedContext && (
@@ -851,31 +876,31 @@ function AIQAApp({ model, dispatch }: AIQAAppProps): ReactTypes.ReactElement {
         tabIndex={0}
         ref={resultList}
       >
-        {model.records.length === 0 ? (
-          <p className="neo-ai-qa-muted">{labels.noRecords}</p>
-        ) : (
-          model.records.map(({ record, sourceCurrent, adoption }) => (
-            <ResultCard
-              key={record.id}
-              record={record}
-              sourceCurrent={sourceCurrent}
-              adoption={adoption}
-              activeEvidenceID={
-                currentEntry?.record.id === record.id ? currentEntry.evidence.id : null
-              }
-              previewEvidenceID={
-                currentEntry?.record.id === record.id &&
-                model.preview?.id === `${record.id}/${currentEntry.evidence.id}`
-                  ? currentEntry.evidence.id
-                  : null
-              }
-              labels={labels}
-              dispatch={dispatch}
-              onPreview={handlePreview}
-              onJump={handleJump}
-            />
-          ))
-        )}
+        {model.records.length === 0
+          ? !model.historyLoading &&
+            !model.historyUnavailable && <p className="neo-ai-qa-muted">{labels.noRecords}</p>
+          : model.records.map(({ record, sourceCurrent, adoption, temporary }) => (
+              <ResultCard
+                key={record.id}
+                record={record}
+                sourceCurrent={sourceCurrent}
+                adoption={adoption}
+                temporary={temporary}
+                activeEvidenceID={
+                  currentEntry?.record.id === record.id ? currentEntry.evidence.id : null
+                }
+                previewEvidenceID={
+                  currentEntry?.record.id === record.id &&
+                  model.preview?.id === `${record.id}/${currentEntry.evidence.id}`
+                    ? currentEntry.evidence.id
+                    : null
+                }
+                labels={labels}
+                dispatch={dispatch}
+                onPreview={handlePreview}
+                onJump={handleJump}
+              />
+            ))}
       </section>
 
       {model.preview && (

@@ -41,7 +41,7 @@ const userSidebar = [
   {
     text: '使用指南',
     items: [
-      { text: '概览与工作流', link: '/docs/USER_GUIDE' },
+      { text: '按任务找工具', link: '/docs/USER_GUIDE' },
       { text: '基本概念', link: '/docs/CONCEPTS' },
       { text: '文本输入与输入法', link: '/docs/INPUT_METHODS' },
       { text: '文献库与阅读清单', link: '/docs/MAIN_GUIDE' },
@@ -95,7 +95,7 @@ const developerSidebar = [
 export default defineConfig({
   lang: 'zh-CN',
   title: 'Zotero Neo',
-  description: '通过键盘浏览 Zotero 文献库、阅读 PDF 并处理笔记。',
+  description: '按需使用的 Zotero 增强工具，提供引用定位、文献筛选、PDF 选区和 Vim 风格键盘操作。',
   base: '/Zotero-Neo/',
   srcExclude: [
     '**/AGENTS.md',

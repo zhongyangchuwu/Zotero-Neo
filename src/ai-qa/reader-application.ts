@@ -20,6 +20,7 @@ import type {
   AIQAInputImage,
   AIQARecord,
   AIQARepository,
+  AIQASource,
   AIQATaskKind,
   AIQATasks,
   AIQATaskState,
@@ -50,14 +51,22 @@ interface Session {
   records: readonly AIQARecord[];
   adoptions: Readonly<Record<string, SourceNoteReceipt | 'unavailable' | null>>;
   preview: AIQASourcePreview | null;
+  temporary: TemporaryAnswer | null;
+  historyLoading: boolean;
+  historyUnavailable: boolean;
   previewAbort: AbortController | null;
   error: AIQAErrorCode | null;
   notice: AIQAReaderNotice | null;
   loading: boolean;
   pendingLoad: Promise<void> | null;
   recordsRevision: number;
-  resultID: string | null;
   operationRevision: number;
+}
+interface TemporaryAnswer {
+  readonly record: AIQARecord;
+  readonly access: AIQAReaderViewAccess | null;
+  saving: boolean;
+  saveError: NonNullable<AIQAReaderSnapshot['temporary']>['saveError'];
 }
 interface Preparation {
   readonly abort: AbortController;
@@ -67,6 +76,14 @@ interface Invocation {
   readonly selection: ReaderSelectionContext | null;
   readonly access: AIQAReaderViewAccess | null;
   readonly sectionID: string | null;
+}
+
+function sameAttachment(a: AIQASource, b: AIQASource): boolean {
+  return a.itemID === b.itemID && a.libraryID === b.libraryID && a.key === b.key;
+}
+
+function sameSource(a: AIQASource, b: AIQASource): boolean {
+  return sameAttachment(a, b) && a.fingerprint === b.fingerprint;
 }
 
 /** UI-independent Reader application state; injected services retain their own lifetimes. */
@@ -96,14 +113,7 @@ export class AIQAReaderApplication {
     this.#preferences = options.preferences;
     this.#logger = options.logger;
     this.#unsubscribe = this.#tasks.subscribe(() => {
-      for (const state of this.#sessions.values()) {
-        const task = this.#task(state);
-        if (task.phase === 'complete' && task.resultID !== state.resultID) {
-          state.resultID = task.resultID;
-          void this.#execute(state, () => this.#reloadRecords(state));
-        }
-        this.#emit(state);
-      }
+      for (const state of this.#sessions.values()) this.#emit(state);
     });
     for (const key of [DOCUMENT_PROVIDER_KEY, OXR_ENDPOINT_KEY, LOCAL_RULES_KEY]) {
       const stop = this.#preferences.observe?.(key, () => {
@@ -130,6 +140,9 @@ export class AIQAReaderApplication {
       access: null,
       records: [],
       adoptions: {},
+      temporary: null,
+      historyLoading: false,
+      historyUnavailable: false,
       preview: null,
       previewAbort: null,
       error: null,
@@ -137,7 +150,6 @@ export class AIQAReaderApplication {
       loading: false,
       pendingLoad: null,
       recordsRevision: 0,
-      resultID: null,
       operationRevision: 0,
     };
     this.#sessions.set(port.reader, state);
@@ -145,6 +157,7 @@ export class AIQAReaderApplication {
       if (this.#sessions.get(port.reader) !== state) return;
       this.#sessions.delete(port.reader);
       state.recordsRevision += 1;
+      state.temporary = null;
       state.previewAbort?.abort();
     };
   }
@@ -188,7 +201,18 @@ export class AIQAReaderApplication {
 
   async dispatch(reader: ReaderRuntime, command: AIQAReaderCommand): Promise<void> {
     const state = this.#sessions.get(reader);
-    if (state) await this.#execute(state, () => this.#command(state, command));
+    if (!state) return;
+    if (command.type === 'save-history') {
+      const temporary = state.temporary;
+      if (
+        !temporary ||
+        temporary.record.id !== command.resultID ||
+        temporary.record.revision !== command.revision ||
+        temporary.saving
+      )
+        return;
+    }
+    await this.#execute(state, () => this.#command(state, command));
   }
 
   async configure(
@@ -227,6 +251,7 @@ export class AIQAReaderApplication {
     if (!state || !this.#current(state)) return null;
     const task = this.#task(state);
     const hasSelection = !!state.selection?.text.trim();
+    const temporary = state.temporary;
     return {
       configuration: this.#service.configuration(),
       source: state.capture?.source ?? null,
@@ -239,6 +264,13 @@ export class AIQAReaderApplication {
       limitedContext: state.context?.limited ?? false,
       task,
       records: state.records,
+      temporary: temporary && {
+        record: temporary.record,
+        saving: temporary.saving,
+        saveError: temporary.saveError,
+      },
+      historyLoading: state.historyLoading,
+      historyUnavailable: state.historyUnavailable,
       adoptions: state.adoptions,
       preview: state.preview,
       error: state.error ?? task.error,
@@ -275,7 +307,6 @@ export class AIQAReaderApplication {
           kind: preparation.kind,
           phase: 'preparing',
           error: null,
-          resultID: null,
         }
       : this.#tasks.state(itemID);
   }
@@ -306,30 +337,47 @@ export class AIQAReaderApplication {
     if (state.pendingLoad) return state.pendingLoad;
     state.loading = true;
     this.#emit(state);
-    const revision = state.contextRevision;
-    const current = (): boolean => this.#current(state) && state.contextRevision === revision;
     const load = async (): Promise<void> => {
       const capture = await captureAIQASource(state.port.reader);
-      if (!current()) return;
-      if (state.capture?.source.fingerprint !== capture.source.fingerprint) {
+      if (!this.#current(state)) return;
+      const previousSource = state.capture?.source;
+      if (previousSource && !sameSource(previousSource, capture.source)) {
+        state.contextRevision++;
         state.context = null;
+        this.#replaceTemporary(state, null);
+        state.previewAbort?.abort();
         state.preview = null;
+        if (!sameAttachment(previousSource, capture.source)) {
+          state.records = [];
+          state.adoptions = {};
+          state.historyUnavailable = false;
+        }
       }
       state.capture = capture;
-      await this.#reloadRecords(state);
-      const context = await readAIQAContext(
-        state.port.reader,
-        this.#preferences,
-        capture,
-        current,
-        {
-          prepare: false,
-          sectionID: state.context?.sectionID ?? null,
-          selection: state.selection,
-          pageIndex: state.access?.pageIndex ?? null,
-        },
+      // Reading legacy/formal history is independent of preparing a question or a guide.
+      void this.#reloadRecords(state).catch(() =>
+        this.#logger.debug('AI Q&A history could not be loaded'),
       );
-      if (current()) state.context = context;
+      const revision = state.contextRevision;
+      const current = (): boolean => this.#current(state) && state.contextRevision === revision;
+      this.#emit(state);
+      try {
+        const context = await readAIQAContext(
+          state.port.reader,
+          this.#preferences,
+          capture,
+          current,
+          {
+            prepare: false,
+            sectionID: state.context?.sectionID ?? null,
+            selection: state.selection,
+            pageIndex: state.access?.pageIndex ?? null,
+          },
+        );
+        if (current()) state.context = context;
+      } catch {
+        if (current()) this.#logger.debug('AI Q&A cached context could not be loaded');
+      }
     };
     state.pendingLoad = load().finally(() => {
       state.pendingLoad = null;
@@ -342,25 +390,30 @@ export class AIQAReaderApplication {
     const capture = state.capture;
     if (!capture) return;
     const revision = ++state.recordsRevision;
+    const current = (): boolean =>
+      this.#current(state) && state.capture === capture && state.recordsRevision === revision;
+    state.historyLoading = true;
     const previousAdoptions = state.adoptions;
-    const records = await this.#repository.list(capture.source);
-    let adoptions: Session['adoptions'];
     try {
-      if (records.length === 0) {
-        adoptions = {};
-      } else {
-        if (!(await capture.isCurrent())) throw new AIQAError('stale-source');
-        adoptions = await findAIQAAdoptions(records, capture);
-        if (!(await capture.isCurrent())) throw new AIQAError('stale-source');
+      const records = await this.#repository.list(capture.source);
+      if (!current()) return;
+      let adoptions: Session['adoptions'] = {};
+      if (records.length > 0) {
+        try {
+          if (!(await capture.isCurrent())) throw new AIQAError('stale-source');
+          adoptions = await findAIQAAdoptions(records, capture);
+          if (!(await capture.isCurrent())) throw new AIQAError('stale-source');
+        } catch {
+          adoptions = Object.fromEntries(
+            records.map((record) => [record.id, 'unavailable' as const]),
+          );
+        }
       }
-    } catch {
-      adoptions = Object.fromEntries(records.map((record) => [record.id, 'unavailable' as const]));
-    }
-    if (this.#current(state) && state.capture === capture && state.recordsRevision === revision) {
+      if (!current()) return;
       const currentRecords = state.records;
       const currentAdoptions = state.adoptions;
       state.records = records;
-      state.adoptions = Object.fromEntries(
+      const nextAdoptions = Object.fromEntries(
         records.map((record) => [
           record.id,
           currentAdoptions[record.id] !== previousAdoptions[record.id] &&
@@ -371,6 +424,26 @@ export class AIQAReaderApplication {
             : adoptions[record.id],
         ]),
       );
+      if (state.temporary) {
+        const { record } = state.temporary;
+        if (
+          records.some((entry) => entry.id === record.id && sameSource(entry.source, record.source))
+        ) {
+          state.temporary = null;
+        } else if (record.id in currentAdoptions) {
+          nextAdoptions[record.id] = currentAdoptions[record.id];
+        }
+      }
+      state.adoptions = nextAdoptions;
+      state.historyUnavailable = false;
+    } catch (error) {
+      if (current()) state.historyUnavailable = true;
+      throw error;
+    } finally {
+      if (current()) {
+        state.historyLoading = false;
+        this.#emit(state);
+      }
     }
   }
   async #run(
@@ -385,7 +458,7 @@ export class AIQAReaderApplication {
     const itemID = capture.source.itemID;
     if (
       this.#preparing.has(itemID) ||
-      ['preparing', 'requesting', 'saving'].includes(this.#tasks.state(itemID).phase)
+      ['preparing', 'requesting'].includes(this.#tasks.state(itemID).phase)
     )
       throw new AIQAError('busy');
     question = question.trim();
@@ -393,7 +466,9 @@ export class AIQAReaderApplication {
       throw new AIQAError('unsupported');
     const preparation: Preparation = { abort: createAIAbortController(), kind };
     this.#preparing.set(itemID, preparation);
-    const current = (): boolean => !this.#disposed && !preparation.abort.signal.aborted;
+    const revision = state.contextRevision;
+    const current = (): boolean =>
+      !this.#disposed && !preparation.abort.signal.aborted && state.contextRevision === revision;
     this.#emit(state);
     try {
       if (!(await capture.isCurrent())) throw new AIQAError('stale-source');
@@ -445,7 +520,7 @@ export class AIQAReaderApplication {
       }
       if (!current()) throw new AIQAError('cancelled');
       this.#preparing.delete(itemID);
-      await this.#tasks.run({
+      const record = await this.#tasks.run({
         source: capture.source,
         kind,
         question:
@@ -453,25 +528,108 @@ export class AIQAReaderApplication {
         contextTitle: title,
         evidence,
         images,
-        isCurrent: () => capture.isCurrent(),
+        isCurrent: async () => current() && (await capture.isCurrent()) && current(),
       });
+      if (
+        this.#current(state) &&
+        current() &&
+        state.capture &&
+        sameSource(state.capture.source, record.source)
+      ) {
+        this.#replaceTemporary(state, {
+          record,
+          access: invocation.access,
+          saving: false,
+          saveError: null,
+        });
+      }
     } finally {
       if (this.#preparing.get(itemID) === preparation) this.#preparing.delete(itemID);
       this.#emit(state);
     }
   }
+  #replaceTemporary(state: Session, temporary: TemporaryAnswer | null): void {
+    const previous = state.temporary?.record;
+    if (previous) {
+      if (state.preview?.id.startsWith(`${previous.id}/`)) {
+        state.previewAbort?.abort();
+        state.preview = null;
+      }
+      if (previous.id in state.adoptions) {
+        const adoptions = { ...state.adoptions };
+        delete adoptions[previous.id];
+        state.adoptions = adoptions;
+      }
+    }
+    state.temporary = temporary;
+  }
+  #findRecord(state: Session, id: string): AIQARecord | undefined {
+    return state.temporary?.record.id === id
+      ? state.temporary.record
+      : state.records.find((value) => value.id === id);
+  }
   #record(state: Session, id: string): AIQARecord {
-    const record = state.records.find((value) => value.id === id);
+    const record = this.#findRecord(state, id);
     if (!record) throw new AIQAError('storage');
     return record;
+  }
+  async #saveHistory(state: Session, id: string, revision: number): Promise<void> {
+    const temporary = state.temporary;
+    if (!temporary || temporary.record.id !== id || temporary.record.revision !== revision) return;
+    if (state.historyLoading) {
+      temporary.saveError = 'history-loading';
+      return;
+    }
+    const capture = state.capture;
+    const { record } = temporary;
+    const operationRevision = state.operationRevision;
+    const reconcile = temporary.saveError === 'storage';
+    // An admitted save owns this record, not the panel or whichever draft is shown later.
+    const sameCapturedSource = (): boolean =>
+      !this.#disposed && !!state.capture && sameSource(state.capture.source, record.source);
+    const current = async (): Promise<boolean> =>
+      sameCapturedSource() && !!capture && (await capture.isCurrent()) && sameCapturedSource();
+    temporary.saving = true;
+    temporary.saveError = null;
+    this.#emit(state);
+    try {
+      if (!(await current())) throw new AIQAError('stale-source');
+      // The storage layer can report a failure while refreshing after publication.
+      const existing = reconcile
+        ? (await this.#repository.list(record.source)).find(
+            (entry) => entry.id === record.id && sameSource(entry.source, record.source),
+          )
+        : undefined;
+      const saved = existing ?? (await this.#repository.add(record, current));
+      if (!this.#current(state) || !sameCapturedSource()) return;
+      if (!state.records.some((entry) => entry.id === saved.id))
+        state.records = [...state.records, saved];
+      if (state.temporary === temporary) state.temporary = null;
+      if (state.operationRevision === operationRevision) state.notice = 'historySaved';
+      if (state.historyUnavailable)
+        void this.#reloadRecords(state).catch(() =>
+          this.#logger.debug('AI Q&A history could not be reloaded after saving'),
+        );
+    } catch (error) {
+      temporary.saveError = error instanceof AIQAError ? error.code : 'storage';
+      this.#logger.debug(`AI Q&A history save failed code=${temporary.saveError}`);
+      if (state.temporary !== temporary && this.#current(state) && sameCapturedSource())
+        throw error;
+    } finally {
+      temporary.saving = false;
+    }
   }
   async #evidence(state: Session, resultID: string, evidenceID: string): Promise<AIQAEvidence> {
     const record = this.#record(state, resultID),
       capture = state.capture;
     if (
       !capture ||
-      record.source.fingerprint !== capture.source.fingerprint ||
-      !(await capture.isCurrent())
+      !sameSource(record.source, capture.source) ||
+      !(await capture.isCurrent()) ||
+      !this.#current(state) ||
+      !state.capture ||
+      !sameSource(state.capture.source, record.source) ||
+      this.#findRecord(state, resultID)?.revision !== record.revision
     )
       throw new AIQAError('stale-source');
     const evidence = record.evidence.find((value) => value.id === evidenceID);
@@ -523,7 +681,7 @@ export class AIQAReaderApplication {
         const capture = state.capture;
         if (!capture || !state.context?.sections.some((value) => value.id === command.id))
           throw new AIQAError('unsupported');
-        const revision = state.contextRevision;
+        const revision = ++state.contextRevision;
         const current = (): boolean => this.#current(state) && state.contextRevision === revision;
         const context = await readAIQAContext(
           state.port.reader,
@@ -537,22 +695,29 @@ export class AIQAReaderApplication {
             pageIndex: state.access?.pageIndex ?? null,
           },
         );
-        if (current()) state.context = context;
+        if (current()) {
+          state.context = context;
+          state.contextRevision++;
+        }
         return;
       }
       case 'preview':
         return this.#preview(state, command.resultID, command.evidenceID);
       case 'jump': {
+        const access =
+          state.temporary?.record.id === command.resultID ? state.temporary.access : state.access;
         const evidence = await this.#evidence(state, command.resultID, command.evidenceID);
         if (
           state.preview?.id !== `${command.resultID}/${command.evidenceID}` ||
           !evidence.location ||
-          !state.access?.isCurrent() ||
-          !state.access.jump(evidence.location)
+          !access?.isCurrent() ||
+          !access.jump(evidence.location)
         )
           throw new AIQAError('stale-source');
         return;
       }
+      case 'save-history':
+        return this.#saveHistory(state, command.resultID, command.revision);
       case 'save-note': {
         const capture = state.capture;
         const operationRevision = state.operationRevision;
@@ -570,9 +735,7 @@ export class AIQAReaderApplication {
         if (
           this.#current(state) &&
           state.capture === capture &&
-          state.records.some(
-            (entry) => entry.id === record.id && entry.revision === record.revision,
-          )
+          this.#findRecord(state, record.id)?.revision === record.revision
         ) {
           state.adoptions = { ...state.adoptions, [record.id]: receipt };
           if (state.operationRevision === operationRevision)
@@ -596,9 +759,7 @@ export class AIQAReaderApplication {
           !this.#current(state) ||
           state.operationRevision !== operationRevision ||
           state.capture !== capture ||
-          !state.records.some(
-            (entry) => entry.id === record.id && entry.revision === record.revision,
-          )
+          this.#findRecord(state, record.id)?.revision !== record.revision
         )
           return;
         state.adoptions = { ...state.adoptions, [record.id]: receipt ?? 'unavailable' };
@@ -610,9 +771,7 @@ export class AIQAReaderApplication {
               this.#current(state) &&
               state.operationRevision === operationRevision &&
               state.capture === capture &&
-              state.records.some(
-                (entry) => entry.id === record.id && entry.revision === record.revision,
-              )
+              this.#findRecord(state, record.id)?.revision === record.revision
             )
               state.adoptions = { ...state.adoptions, [record.id]: 'unavailable' };
           }
@@ -620,14 +779,16 @@ export class AIQAReaderApplication {
         return;
       }
       case 'edit': {
-        const record = this.#record(state, command.resultID);
+        const record = state.records.find((entry) => entry.id === command.resultID);
+        if (!record) throw new AIQAError('storage');
         await this.#repository.edit(record.source, record.id, command.revision, command.text);
         await this.#reloadRecords(state);
         state.notice = 'saved';
         return;
       }
       case 'remove': {
-        const record = this.#record(state, command.resultID);
+        const record = state.records.find((entry) => entry.id === command.resultID);
+        if (!record) throw new AIQAError('storage');
         await this.#repository.remove(record.source, record.id, command.revision);
         state.previewAbort?.abort();
         state.preview = null;
@@ -644,7 +805,10 @@ export class AIQAReaderApplication {
     for (const preparation of this.#preparing.values())
       failure.run(() => preparation.abort.abort());
     this.#preparing.clear();
-    for (const state of this.#sessions.values()) failure.run(() => state.previewAbort?.abort());
+    for (const state of this.#sessions.values()) {
+      state.temporary = null;
+      failure.run(() => state.previewAbort?.abort());
+    }
     failure.run(this.#unsubscribe);
     for (const stop of this.#stopPreferences) failure.run(stop);
     this.#sessions.clear();
