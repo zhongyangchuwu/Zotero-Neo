@@ -30,64 +30,22 @@ function tokenizeSearchText(text: string): string[] {
   return tokens;
 }
 
-const userSidebar = [
+const guides = [
   {
     text: '开始使用',
     items: [
-      { text: '功能介绍', link: '/docs/FEATURES' },
-      { text: '安装与入门', link: '/docs/GETTING_STARTED' },
+      { text: '3 分钟快速上手', link: '/docs/GETTING_STARTED' },
+      { text: '文献库与工作区', link: '/docs/MAIN_GUIDE' },
+      { text: 'PDF 阅读与批注', link: '/docs/READER_GUIDE' },
     ],
   },
   {
-    text: '使用指南',
+    text: '查阅',
     items: [
-      { text: '按任务找工具', link: '/docs/USER_GUIDE' },
-      { text: '基本概念', link: '/docs/CONCEPTS' },
-      { text: '文本输入与输入法', link: '/docs/INPUT_METHODS' },
-      { text: '文献库与阅读清单', link: '/docs/MAIN_GUIDE' },
-      { text: '阅读与导航 PDF', link: '/docs/READER_GUIDE' },
-      { text: '文本选择与批注', link: '/docs/SELECTION_GUIDE' },
-      { text: '查找与编辑笔记', link: '/docs/NOTE_GUIDE' },
-      { text: '标签整理', link: '/docs/TAGS' },
-      { text: '搜索与导航', link: '/docs/SEARCH_GUIDE' },
-      { text: '快捷键与设置', link: '/docs/SETTINGS_GUIDE' },
-    ],
-  },
-  {
-    text: '参考手册',
-    items: [
+      { text: '设置与偏好', link: '/docs/SETTINGS_GUIDE' },
       { text: '命令与快捷键', link: '/docs/COMMAND_REFERENCE' },
-      { text: '设置参考', link: '/docs/SETTINGS_REFERENCE' },
-    ],
-  },
-  {
-    text: '帮助',
-    items: [{ text: '故障排查', link: '/docs/TROUBLESHOOTING' }],
-  },
-];
-
-const developerSidebar = [
-  {
-    text: '开发指南',
-    items: [
-      { text: '开发与调试', link: '/docs/DEVELOPMENT' },
-      { text: '文档编写规范', link: '/docs/DOCUMENTATION_AUTHORING' },
-    ],
-  },
-  {
-    text: '设计与架构',
-    items: [
-      { text: '架构', link: '/docs/ARCHITECTURE' },
-      { text: '模块拆分与基座设计', link: '/docs/MODULE_DESIGN' },
-      { text: '交互模型', link: '/docs/INTERACTION_MODEL' },
-      { text: '导航历史设计', link: '/docs/NAVIGATION_HISTORY_DESIGN' },
-    ],
-  },
-  {
-    text: '项目资料',
-    items: [
-      { text: 'main 分支验收', link: '/docs/ACCEPTANCE' },
-      { text: '录制指南', link: '/docs/RECORDING_GUIDE' },
+      { text: '常见问题', link: '/docs/TROUBLESHOOTING' },
+      { text: '路线图', link: '/docs/ROADMAP' },
     ],
   },
 ];
@@ -95,9 +53,10 @@ const developerSidebar = [
 export default defineConfig({
   lang: 'zh-CN',
   title: 'Zotero Neo',
-  description: '按需使用的 Zotero 增强工具，提供引用定位、文献筛选、PDF 选区和 Vim 风格键盘操作。',
+  description: 'Zotero 的模块化增强工具链：键盘优先的文献查找与 PDF 阅读，以及扩展管理与配置同步。',
   base: '/Zotero-Neo/',
   srcExclude: [
+    'README.md',
     '**/AGENTS.md',
     '**/.*/**',
     '.github/**',
@@ -129,36 +88,20 @@ export default defineConfig({
   themeConfig: {
     siteTitle: 'Zotero Neo',
     nav: [
-      { text: '功能介绍', link: '/docs/FEATURES' },
-      { text: '安装与入门', link: '/docs/GETTING_STARTED' },
-      { text: '使用指南', link: '/docs/USER_GUIDE' },
-      {
-        text: '参考手册',
-        items: [
-          { text: '命令与快捷键', link: '/docs/COMMAND_REFERENCE' },
-          { text: '设置参考', link: '/docs/SETTINGS_REFERENCE' },
-        ],
-      },
+      { text: '使用指南', link: '/docs/MAIN_GUIDE' },
       {
         text: '项目',
         items: [
           { text: '更新记录', link: '/CHANGELOG' },
-          { text: '路线图', link: '/docs/ROADMAP' },
           { text: '开发与调试', link: '/docs/DEVELOPMENT' },
           { text: 'GitHub', link: 'https://github.com/zhongyangchuwu/Zotero-Neo' },
         ],
       },
     ],
     sidebar: {
-      '/': userSidebar,
-      '/docs/DEVELOPMENT': developerSidebar,
-      '/docs/DOCUMENTATION_AUTHORING': developerSidebar,
-      '/docs/ARCHITECTURE': developerSidebar,
-      '/docs/MODULE_DESIGN': developerSidebar,
-      '/docs/INTERACTION_MODEL': developerSidebar,
-      '/docs/NAVIGATION_HISTORY_DESIGN': developerSidebar,
-      '/docs/ACCEPTANCE': developerSidebar,
-      '/docs/RECORDING_GUIDE': developerSidebar,
+      '/docs/internal/': [],
+      '/docs/DEVELOPMENT': [],
+      '/docs/': guides,
     },
     outline: {
       label: '本页目录',
@@ -184,6 +127,11 @@ export default defineConfig({
     search: {
       provider: 'local',
       options: {
+        _render(source, env, md) {
+          if (env.relativePath.startsWith('docs/internal/')) return '';
+          const html = md.render(source, env);
+          return env.frontmatter?.search === false ? '' : html;
+        },
         locales: {
           root: {
             translations: {

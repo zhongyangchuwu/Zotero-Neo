@@ -1,48 +1,23 @@
-# 安装 Neo 并开始使用
-
-Neo 是 Zotero 插件。安装后，文献、PDF 附件和笔记都留在原来的 Zotero 文库中，不需要迁移数据。
+# 3 分钟快速上手
 
 ## 获取 XPI 安装包
 
-日常使用优先从 [GitHub Releases](https://github.com/zhongyangchuwu/Zotero-Neo/releases/latest) 下载正式版 `zotero-neo.xpi`；安装后由 Zotero 管理后续更新。
-
-文档描述当前 `main`，可能包含尚未发布的改进。需要试用开发版时，可以：
-
-- **下载构建包**：打开 [main 分支的 GitHub Actions 构建记录](https://github.com/zhongyangchuwu/Zotero-Neo/actions/workflows/build.yml?query=branch%3Amain)，选择一次成功的运行，在 **Artifacts** 中下载 `zotero-neo-linux`。解压后找到 `zotero-neo.xpi`。下载通常需要登录 GitHub；旧构建附件可能过期。
-- **自己构建**：获取 `main` 分支源码，按[开发指南](DEVELOPMENT.md#构建)安装依赖并执行构建，根目录会生成 `zotero-neo.xpi`。
-
-虽然 CI 附件名称中有 `linux`，XPI 本身不需要按操作系统分别编译。Neo 面向 macOS、Linux 和 Windows 上最新的 Zotero 稳定版；具体兼容版本见对应提交的 `manifest.json`。
+从 [GitHub Releases](https://github.com/zhongyangchuwu/Zotero-Neo/releases/latest) 下载 `zotero-neo.xpi`。Neo 面向 macOS、Linux 和 Windows 上最新的 Zotero 稳定版；正式包可能还没有本站记录的近期改动。
 
 ## 在 Zotero 中安装
 
-1. 打开 Zotero，进入 **Tools → Plugins**（工具 → 插件），点击齿轮图标。
-2. 选择 **Install Plugin From File…**，选中 `zotero-neo.xpi`。
-3. 按提示重启 Zotero。
+进入 **工具 → 插件**，点击齿轮，选择 **Install Plugin From File…**，选中 XPI，再按提示重启 Zotero。原有文献库不需要迁移。正式版可用 Zotero 插件管理器检查更新。
 
-## 自动更新
+## 先试这 5 个快捷键
 
-在 Zotero 插件管理器的齿轮菜单中开启 **Update Add-ons Automatically**。Neo 沿用固定扩展 ID 和更新地址；已有正式版无需卸载或重装，也不需要每次手动下载 XPI。
+让条目列表或 PDF 正文获得焦点。`<Space>ff` 表示依次按空格、`f`、`f`，不是同时按。
 
-可用 **Check for Updates** 主动检查。更新必须同时满足：正式更新清单已公布更高版本、该版本兼容当前 Zotero、网络可访问更新清单与 GitHub 下载地址。按宿主提示完成安装或重启；发布后不一定立即收到更新。
+| 在哪里 | 按键 | 试一件事 |
+| --- | --- | --- |
+| 文库条目列表 | `<Space>ff` | 按标题或作者找论文，`Enter` 打开。 |
+| 文库条目列表 | `s` | 标记当前论文，留待稍后一起整理。 |
+| PDF 正文 | `j` | 向下滚动，不用把手移到鼠标。 |
+| PDF 正文 | `v` | 输入眼前的一小段文字，再按字母提示选中它。 |
+| 文库或 PDF 正文 | `:` | 按动作名称找命令，不必先记住按键。 |
 
-开发包可能与正式包使用相同版本号；版本号相同不会触发升级。需要替换同号开发包时，手动安装正式包一次，或等待更高版本。不要卸载插件来尝试解决更新问题；先检查插件自动更新设置和网络。
-
-## 打开 PDF 试试
-
-1. 打开一篇 PDF，等页面加载完成。
-2. 点击 PDF 正文，让页面获得键盘焦点。
-3. 按 `j` 向下滚动，按 `k` 向上滚动。
-
-如果没有反应，先点击页面再试。搜索框、批注输入框或侧栏获得焦点时，这些键可能由 Zotero 自己处理。仍然无效可看[按键没有反应](TROUBLESHOOTING.md#按键没有反应)。
-
-要打开 Neo 设置，依次按 `Space`、`p`、`s`。这里的三个键是**依次按**，不是同时按。普通设置通常立即保存；快捷键确认后立即保存，模块开关保存后需要完全重启 Zotero 才生效。
-
-## 下一步
-
-- [文献库](MAIN_GUIDE.md#开始浏览文库)：移动、查找和批量整理条目。
-- [PDF 阅读](READER_GUIDE.md#开始分屏阅读)：翻页、跳转、分屏。
-- [文字选择与批注](SELECTION_GUIDE.md#从一段文字开始)：用键盘选中文字并高亮。
-- [笔记](NOTE_GUIDE.md#开始查找并编辑笔记)：查找和编辑 Zotero 笔记。
-- [设置指南](SETTINGS_GUIDE.md)：更改按键、滚动方式和外观。
-
-`Ctrl+d` 则表示按住 Ctrl 再按 d。在 macOS 上，Neo 接管的 Ctrl 类快捷键也接受 Command。更多按键记法见[命令参考](COMMAND_REFERENCE.md#按键记法与输入规则)。
+没反应时，先点一下要操作的区域，再查[常见问题](TROUBLESHOOTING.md#按键没有反应)。

@@ -22,7 +22,7 @@ powershell -ExecutionPolicy Bypass -File tools\build.ps1
 Get-FileHash zotero-neo.xpi -Algorithm SHA256
 ```
 
-`npm run verify` 检查格式、类型、契约、构建和 XPI 成员；人工验收仍需单独执行。也可以从同一 `main` 提交的成功 CI 运行取得构建附件，获取方式见[安装与入门](GETTING_STARTED.md#获取-xpi-安装包)。
+`npm run verify` 检查格式、类型、契约、构建和 XPI 成员；人工验收仍需单独执行。也可以从同一 `main` 提交的成功 CI 运行[获取开发构建](../DEVELOPMENT.md#获取开发构建)。
 
 安装和更新结果只适用于记录的那个包身份。包字节变化后，记录新的提交与哈希并执行受影响的包验收；其他构建的结果不能转记为当前包的 PASS。
 
@@ -37,7 +37,7 @@ Get-FileHash zotero-neo.xpi -Algorithm SHA256
 5. 不登录同步账户。只导入有授权／公有领域的 PDF，或者自己制作的测试文档。不把私人 PDF、笔记、窗口标题或剪贴板内容录进视频。
 6. 使用原生 Add-on Manager 持久安装 XPI。此轮不运行 `npm run dev:start` / `npm run dev`，不混用同 ID 的临时 RDP 加载和持久包；临时加载不能证明安装／升级。
 
-`npm run dev:setup -- --profile ...` 为已存在的开发 profile 配置 RDP，也支持未注册到 `profiles.ini` 的独立目录。工具不提供 `--data-dir` 或 `--port` 参数，也不替代上面的数据隔离和持久包验收。技术排查需要 RDP 时，另建开发 profile，遵守[开发指南](DEVELOPMENT.md#本地-zotero-gui-迭代)。
+`npm run dev:setup -- --profile ...` 为已存在的开发 profile 配置 RDP，也支持未注册到 `profiles.ini` 的独立目录。工具不提供 `--data-dir` 或 `--port` 参数，也不替代上面的数据隔离和持久包验收。技术排查需要 RDP 时，另建开发 profile，遵守[开发指南](../DEVELOPMENT.md#本地-zotero-gui-迭代)。
 
 ### 最小数据集
 
@@ -179,7 +179,7 @@ Get-FileHash zotero-neo.xpi -Algorithm SHA256
 
 #### 引用增强（无 AI）
 
-以下检查属于 U9；在隔离 profile 中逐项操作 Reader，记录实际观察结果。源码和自动化结果不能代替实际操作，也不要预填 `PASS`。详细步骤见[阅读器指南](READER_GUIDE.md#查找和核对参考文献)。
+以下检查属于 U9；在隔离 profile 中逐项操作 Reader，记录实际观察结果。源码和自动化结果不能代替实际操作，也不要预填 `PASS`。详细步骤见[阅读器指南](../READER_GUIDE.md#查找和核对参考文献)。
 
 - 在未设置模块偏好的新 profile 中确认 `references` 默认开启、`ai-qa` 默认关闭；工具栏**查找参考文献**和 Reader Normal 的 `<Space>fr` 只打开当前 PDF 的参考文献搜索清单。关闭 `references` 并完全重启后，预览控件、右键动作、工具栏与按键入口均不可用；Neo 热重载或重新打开 PDF 不得提前应用模块请求。另确认启动快照中没有 `references` 的旧进程保持关闭，直到完全重启。
 - 使用授权且有可选中文本的 PDF，最好选没有内嵌引文链接的样本。悬停已识别的正文引文时，检查原生预览保留文献原文和链接，逐条提供**文中引用**、**本地副本**和**论文详情**；分组引文不得把第二条动作绑定到第一条。悬停不抢焦点或访问元数据服务，原生单击跳转、拖选与双击选词仍可用。

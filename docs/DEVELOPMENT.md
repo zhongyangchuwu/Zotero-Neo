@@ -14,7 +14,7 @@ npm ci
 
 两种 XPI 构建入口都会调用 `npm run verify`，依次检查 Prettier、严格 TypeScript、Vitest、包构建与 XPI 成员。
 
-固定 PDF 的来源清单、原生捕获命令、逐核验点评分和冷／暖耗时见[解析质量评测](QUALITY_EVALUATION.md)。评测分别记录解析正确率和实际任务成功率；契约测试、缓存命中与处理完成不能代替这两项结果。
+固定 PDF 的来源清单、原生捕获命令、逐核验点评分和冷／暖耗时见[解析质量评测](internal/QUALITY_EVALUATION.md)。评测分别记录解析正确率和实际任务成功率；契约测试、缓存命中与处理完成不能代替这两项结果。
 
 ## 构建
 
@@ -32,6 +32,10 @@ powershell -ExecutionPolicy Bypass -File tools\build.ps1
 
 构建产出单个 `zotero-neo.xpi`，CI 上传该主包。选区翻译 Extra 已包含在 Neo 中，不再构建或发布独立的实验性翻译适配器 XPI。
 
+### 获取开发构建
+
+在 [main 分支的 GitHub Actions 构建记录](https://github.com/zhongyangchuwu/Zotero-Neo/actions/workflows/build.yml?query=branch%3Amain)中选择成功的运行，从 **Artifacts** 下载 `zotero-neo-linux`，解压取得 `zotero-neo.xpi`。下载通常需要登录 GitHub，旧构建附件可能过期；产物名称不限制系统。日常安装请用[正式发布包](GETTING_STARTED.md#获取-xpi-安装包)。
+
 ### 发布小版本
 
 稳定版按完整、可验收的用户改进发布；修复用补丁版本，新增能力或改变交互契约时提升次版本。每周保留一个发布窗口，有已验收内容才发布；严重回归及时修复，不把每个合并提交自动推给用户。正式版本号不得重复使用，也不得覆盖已公布的 XPI。
@@ -39,7 +43,7 @@ powershell -ExecutionPolicy Bypass -File tools\build.ps1
 #### 准备候选
 
 1. 在功能分支同步 `manifest.json`、`package.json` 和 `package-lock.json` 的版本。扩展 ID 与 `update_url` 保持不变，兼容范围只声明实际支持的 Zotero。
-2. 构建确切候选，运行适用检查，并按[安装升级验收](ACCEPTANCE.md#3-安装和升级)验证持久包。记录源码提交、包 SHA-256、宿主版本和真实结果；热重载不代替升级。
+2. 构建确切候选，运行适用检查，并按[安装升级验收](internal/ACCEPTANCE.md#_3-安装和升级)验证持久包。记录源码提交、包 SHA-256、宿主版本和真实结果；热重载不代替升级。
 3. 从该包准备候选清单，例如：
 
    ```bash
@@ -72,7 +76,7 @@ GITHUB_REPOSITORY=zhongyangchuwu/Zotero-Neo node tools/promote-release.mjs v0.3.
 
 ### 文档站
 
-仓库根目录也是 VitePress 文档站根目录，配置位于 `.vitepress/config.ts`。Markdown 来源包括根页面和 `docs/*.md`，静态构建输出到 `.vitepress/dist/`。文档默认只维护中文；现有英文按需迁移，不建立双语副本，具体要求见[文档编写规范](DOCUMENTATION_AUTHORING.md)。
+仓库根目录也是 VitePress 文档站根目录，配置位于 `.vitepress/config.ts`，静态构建输出到 `.vitepress/dist/`。七篇日常用户文档位于 `docs/` 根目录；[内部归档](internal/README.md)不进用户侧边栏或搜索。GitHub 的 `README.md` 与站点首页 `index.md` 各有一处入口。中文文档规范见[文档编写规范](internal/DOCUMENTATION_AUTHORING.md)。
 
 安装上述共享依赖后，在根目录运行：
 
@@ -190,15 +194,15 @@ v1 明文封套标识为 `format: zotero-neo-settings`、`schemaVersion: 1`，�
 
 ## 运行时架构
 
-交互模型与当前功能所有权见[架构](ARCHITECTURE.md)。Neo 使用严格 TypeScript，通过打包生成 Gecko Bootstrap 运行时；内部 Toolkit 不新增运行时依赖。
+交互模型与当前功能所有权见[架构](internal/ARCHITECTURE.md)。Neo 使用严格 TypeScript，通过打包生成 Gecko Bootstrap 运行时；内部 Toolkit 不新增运行时依赖。
 
 `src/toolkit/main/private-types.ts` 和 `src/toolkit/reader/private-types.ts` 将宿主结构类型限制在 Toolkit 内。`src/toolkit/index.ts` 汇总 Main/Reader 入口；Main 包含 Note-pane 能力，无单独 Note Toolkit。功能代码使用这些能力入口，原生结构类型和私有实现留在 Toolkit 内。没有等价公开 API 时，保留契约后必需的私有能力。
 
 Zotero 管理 Items、视图、标签页、Notes 和 Reader 状态。功能负责目标选择、基数、确认与反馈；Toolkit 负责宿主查找、原生协议、DOM 接缝、跨 compartment 载荷和资源退休。公开 API 能保留行为时优先使用；必要的私有依赖即使经过包装，仍属于私有能力。公开条目 API 和 `src/platform/zotero-items.ts` 可以直接使用，无需逐个套一对一包装。
 
-学术来源及应用用例的依赖方向见[架构：引用增强](ARCHITECTURE.md#引用增强)。`src/scholarly/` 是共享查询、来源适配、限速与缓存的规范位置；`src/metadata-review/` 管理差异和审阅界面，文库写入属于 `src/operations/metadata.ts`。成果封套、各 payload、原生附件与旧旁路迁移见[成果附件格式](ARTIFACT_FORMAT.md)；缓存不能代替审阅回执。
+学术来源及应用用例的依赖方向见[架构：引用增强](internal/ARCHITECTURE.md#引用增强)。`src/scholarly/` 是共享查询、来源适配、限速与缓存的规范位置；`src/metadata-review/` 管理差异和审阅界面，文库写入属于 `src/operations/metadata.ts`。成果封套、各 payload、原生附件与旧旁路迁移见[成果附件格式](internal/ARTIFACT_FORMAT.md)；缓存不能代替审阅回执。
 
-元数据审阅的双端同步、按需下载与离线分支已有实测；外部 harness 的附件读取／导入仍需用实际 MCP 工具单独核验。具体范围与证据见[成果附件格式](ARTIFACT_FORMAT.md#跨设备可用性)，不以本机保存或复制附件替代同步验收。
+元数据审阅的双端同步、按需下载与离线分支已有实测；外部 harness 的附件读取／导入仍需用实际 MCP 工具单独核验。具体范围与证据见[成果附件格式](internal/ARTIFACT_FORMAT.md#跨设备可用性)，不以本机保存或复制附件替代同步验收。
 
 **来源选择与社区参考**
 
@@ -266,7 +270,7 @@ export function inspectPages(pages: readonly LocalFigurePage[]) {
 
 不传第三个参数时不收集诊断事件。事件中的 `ruleId`、`outcome`、`reason` 和可用的候选／题注引用用于解释候选、正文阻挡、缺少主体及关联争用；没有证据时不能从空结果伪造精确原因。诊断不写入区域缓存，也不作为解析策略的输入。
 
-实际 Reader 使用高级字符串偏好 `extensions.zotero-neo.documentAnalysis.local.rules`，值为上述输入配置的 JSON；空字符串表示默认组合，操作见[设置参考](SETTINGS_REFERENCE.md#本地规则配置高级)。有效参数、启用规则及引擎／几何／规则修订进入规范化指纹，等价 JSON 的缓存身份相同。本地适配器代次为 4，当前引擎修订为 3、几何修订为 2；配置变化使在途和已展示结果退休，但普通读取仍不自动保存缓存。旧槽与绑定旧解析身份的纠错保留，不按区域 ID 强行迁移。
+实际 Reader 使用高级字符串偏好 `extensions.zotero-neo.documentAnalysis.local.rules`，值为上述输入配置的 JSON；空字符串表示默认组合。有效参数、启用规则及引擎／几何／规则修订进入规范化指纹，等价 JSON 的缓存身份相同。本地适配器代次为 4，当前引擎修订为 3、几何修订为 2；配置变化使在途和已展示结果退休，但普通读取仍不自动保存缓存。旧槽与绑定旧解析身份的纠错保留，不按区域 ID 强行迁移。
 
 #### 回放原生几何与规则消融
 
@@ -285,19 +289,19 @@ node tools/replay-local-rules.mjs \
 
 指定 `--baseline` 后，每篇输入都必须有相同 PDF 哈希的旧观测；空或缺失的对照会报错。未指定时明确记录未比较，不把空对照列表视为输出相等。
 
-新增规则先说明适用证据、来源和参数单位，再增加真实行为正例、负例及必要的变换检查。按规则组合消融，分别检查误题注、错误合并、裁图边界与未关联原因；不按论文 ID、题号或 gold 框写分支。固定核验点全过不能代替额外对象审查或未见样本验证，质量口径见[解析质量评测](QUALITY_EVALUATION.md)。
+新增规则先说明适用证据、来源和参数单位，再增加真实行为正例、负例及必要的变换检查。按规则组合消融，分别检查误题注、错误合并、裁图边界与未关联原因；不按论文 ID、题号或 gold 框写分支。固定核验点全过不能代替额外对象审查或未见样本验证，质量口径见[解析质量评测](internal/QUALITY_EVALUATION.md)。
 
 ### 模块基座与启动配置
 
 `src/core/module-host.ts` 提供按 MainWindow 或 ReaderSession 隔离的模块宿主及独立模块作用域。同步激活失败会释放部分资源并保留原错误；动作贡献按 `(BindingContext, ActionId)` 唯一登记，返回有类型的调用入口。退出先使全部回调失效，再完成其余释放，即使某次清理失败也不会中断其他模块。
 
-`src/modules/index.ts` 是静态内置清单，启动校验 ID、依赖图和精确上下文贡献。完整能力目录见[模块所有权表](MODULE_DESIGN.md#模块目录与所有权)；16 个核心模块固定启用，7 个可选增强为 `reader-hints`、`extensions`、`translation`、`references`、`ai-qa`、`tab-enhancements` 与 `item-attributes`。`ai-qa` 依赖核心 `reader-selection`，`references` 不依赖 AI 问答，`tab-enhancements` 依赖核心 `workspace`。
+`src/modules/index.ts` 是静态内置清单，启动校验 ID、依赖图和精确上下文贡献。完整能力目录见[模块所有权表](internal/MODULE_DESIGN.md#模块目录与所有权)；16 个核心模块固定启用，7 个可选增强为 `reader-hints`、`extensions`、`translation`、`references`、`ai-qa`、`tab-enhancements` 与 `item-attributes`。`ai-qa` 依赖核心 `reader-selection`，`references` 不依赖 AI 问答，`tab-enhancements` 依赖核心 `workspace`。
 
 MainWindow 组合标签、扩展、分类、工作集、Library、Notes、Workspace、文档准备与配置迁移入口；启用时，标签页增强会在 Zotero 初始化完成后按该窗口的有效 session 延迟激活。ReaderSession 直接组合导航、章节查找、图表浏览、解析对照、选择、批注、对象摘录、章节笔记、文档准备、hints、引用增强、可选翻译与 AI 问答、独立 Library citekey 贡献及 Workspace 分屏/焦点。各模块仅接收具名端口；Operations 与 Toolkit 保持各自负责方。
 
 `src/core/module-runtime.ts` 根据七项可选请求应用增强；`reader-hints`、`extensions` 与 `references` 默认开启，其余四项对新配置默认关闭。`src/platform/module-startup.ts` 在 Zotero 应用对象上保留请求的 JSON 快照，因此 Neo 热重载不会应用新请求，完全退出并重启 Zotero 后才会应用。旧启动快照缺少可选字段时，已应用值按关闭处理；旧版 `reader-ai` 启用偏好不构成启用 `ai-qa` 的同意；旧核心键 `extensions.zotero-neo.modules.<core>.enabled=false` 不会关闭核心功能。
 
-实机核对模块配置时使用专用 profile 和自有数据，确认七项可选请求保存、Neo 热重载与 Zotero 完全退出／重启的差异；确认默认引用增强已启用、其本地分析和文库查找不发起元数据请求，只有用户明确查询才访问来源；确认默认状态下 AI 问答无入口／选区动作，且不挂载面板 runtime、不读取凭据或发送请求；确认新配置默认关闭翻译、标签页增强和条目自定义属性。手动启用 `ai-qa` 并重启后入口可用，关闭再重启后入口撤除且既有成果仍保留。恢复默认后 `reader-hints`、`extensions`、`references` 开启，其余四项关闭，其中 `translation=false` 显式保留；关闭全部七项后核心模块仍须可用，旧核心 `false` 偏好无效，恢复默认不改变行为偏好（包括 `noteEditor.enabled`）。故障只注入自有宿主并恢复原方法；回读自有数据与偏好，确认进程状态。不要把“关闭全部模块”作为配置场景。完整用户状态说明见[设置参考](SETTINGS_REFERENCE.md#模块)。
+实机核对模块配置时使用专用 profile 和自有数据，确认七项可选请求保存、Neo 热重载与 Zotero 完全退出／重启的差异；确认默认引用增强已启用、其本地分析和文库查找不发起元数据请求，只有用户明确查询才访问来源；确认默认状态下 AI 问答无入口／选区动作，且不挂载面板 runtime、不读取凭据或发送请求；确认新配置默认关闭翻译、标签页增强和条目自定义属性。手动启用 `ai-qa` 并重启后入口可用，关闭再重启后入口撤除且既有成果仍保留。恢复默认后 `reader-hints`、`extensions`、`references` 开启，其余四项关闭，其中 `translation=false` 显式保留；关闭全部七项后核心模块仍须可用，旧核心 `false` 偏好无效，恢复默认不改变行为偏好（包括 `noteEditor.enabled`）。故障只注入自有宿主并恢复原方法；回读自有数据与偏好，确认进程状态。不要把“关闭全部模块”作为配置场景。完整用户状态说明见[设置参考[模块设置](SETTINGS_GUIDE.md#开关可选功能)。
 
 #### 条目自定义属性手动核对
 
@@ -338,7 +342,7 @@ Notes 按窗口拥有候选、选择后的打开编排及可选 Vim 编辑的模
 
 Reader 导航拥有页面/滚动/缩放/搜索、语义与批注位置遍历、marks、按需 captions、原生侧栏增强及平滑滚动状态，登记 Normal 与四个侧栏上下文的实际处理器。Surface 保留输入和精确视图、CurrentTarget、共享导航历史与 Toolkit 导航宿主；Workspace 复用该宿主处理分屏与方向焦点。marks 保存完成后重查发起交互，不能覆盖新的输入或界面状态；销毁视图时先清空 RAF/完成回调的所有权，再尝试原生取消，即使取消失败也不保留旧视图或阻塞下一次滚动。
 
-Reader 选择拥有 DOM 范围、文本 motions、Flash 输入/标签、复制/搜索及动作面板；Surface 仍保留模式、输入仲裁、精确视图和共享滚动。交互同时捕获 ReaderView 与 Document，新的动作/原生选择接纳前先退休替换视图；旧输入、可用性判断和晚到结果不能操作后继界面。临时样式、anchor、主题与监听均随所属交互释放，具体边界见[架构](ARCHITECTURE.md#reader)。
+Reader 选择拥有 DOM 范围、文本 motions、Flash 输入/标签、复制/搜索及动作面板；Surface 仍保留模式、输入仲裁、精确视图和共享滚动。交互同时捕获 ReaderView 与 Document，新的动作/原生选择接纳前先退休替换视图；旧输入、可用性判断和晚到结果不能操作后继界面。临时样式、anchor、主题与监听均随所属交互释放，具体边界见[架构](internal/ARCHITECTURE.md#reader)。
 
 Reader 批注模块拥有创建/删除/改色/过滤/复制及评论编辑，Surface 保留 CurrentTarget、NativeInput 和混合按键路由。评论输入、系统按键、主题、popup guard 与计时器属于精确 ReaderView / Document；退休先释放界面，已接纳的保存可以完成，但不抢回后继界面的焦点。
 
@@ -411,7 +415,7 @@ Bootstrap chrome 与 Zotero content 之间传递对象时，必须克隆到接�
 
 异步宿主工作在应用结果前检查捕获的 Reader/session/view 身份和 generation。退出先退休回调，再移除监听器；只在 wrapper 仍自有时恢复被 patch 的方法，并防护已销毁 Gecko wrapper。活宿主上的失败必须可观测。
 
-标签过滤读取当前渲染 Scope 的完整行结果，包括原生多行选择，不扩大到全库。分类动作目标与确认见[交互模型](INTERACTION_MODEL.md#动作目标契约)。
+标签过滤读取当前渲染 Scope 的完整行结果，包括原生多行选择，不扩大到全库。分类动作目标与确认见[交互模型](internal/INTERACTION_MODEL.md#动作目标契约)。
 
 ## 诊断
 
@@ -433,7 +437,7 @@ Bootstrap 将诊断写入 profile 下的 `zotero-neo-startup.log`，并通过 `Z
 
 `modules/chapter-notes/index.ts` 按 ReaderSession 创建独立的 `chapter-notes` 实例，拥有章节整理、筛选、预览与显式保存，不由 Main 的 `notes` 模块转发。Toolkit 的 `sourceNoteEntries()` 读取精确 PDF 的公开批注 SDK、相关笔记及原生嵌图来源；HTML 在惰性 template 中解析，外部资源不插入活文档。模块内 `chapter-plan.ts` 用唯一原文或无歧义位置归属章节，跨章节／不确定内容保留待归类。对象副本按来源内容去重，独立批注保持身份。保存前重新读取来源内容，生成笔记用内容身份串行接纳并复用已有条目，手工修改不覆盖；新内容另建带时间的版本，生成结果不递归收集。
 
-来源 Note 的幂等身份由 `platform/note-relations.ts` 定义，保留 `urn:zotero-neo:chapter-note:v1:<32 个小写十六进制字符>` 的原值，但存入 Zotero 标签，不写入任何关系谓词。新标记使用 `type: 1`，已有同名 `type: 0` 保留原类型；内部身份只按完整名称判断。`dc:relation` 保留真实来源 PDF 的 Zotero URI；写入方按该 URI 查找相关 Note，再核对身份标签、文库和所属条目。章节整理按身份标签排除生成结果。标记随 Note 同步，不受原生笔记编辑器的 HTML 规范化影响；用户边界见[来源笔记的内部标记](NOTE_GUIDE.md#来源笔记的内部标记)。
+来源 Note 的幂等身份由 `platform/note-relations.ts` 定义，保留 `urn:zotero-neo:chapter-note:v1:<32 个小写十六进制字符>` 的原值，但存入 Zotero 标签，不写入任何关系谓词。新标记使用 `type: 1`，已有同名 `type: 0` 保留原类型；内部身份只按完整名称判断。`dc:relation` 保留真实来源 PDF 的 Zotero URI；写入方按该 URI 查找相关 Note，再核对身份标签、文库和所属条目。章节整理按身份标签排除生成结果。标记随 Note 同步，不受原生笔记编辑器的 HTML 规范化影响。
 
 读取已有图表摘录时，`src/toolkit/main/source-notes.ts` 为本次读取延迟创建一个无浏览上下文的 HTML 文档，在其 `template.content` 中解析 Zotero 原生笔记 HTML。主窗口是 XHTML，不能直接使用其片段解析器；模板内容不插入活文档。解析后仍逐张核对来源 PDF URI、页内位置和嵌图附件归属，坏图片只隔离自身，生成 Note 在解析前排除。
 
