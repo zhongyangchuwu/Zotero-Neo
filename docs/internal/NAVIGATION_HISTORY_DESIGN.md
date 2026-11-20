@@ -1,6 +1,6 @@
 # 统一导航执行与历史策略
 
-Neo 为每个 Main 窗口维护一个有界导航历史。`NavigationHistoryState` 拥有位置和遍历索引；`NavigationCoordinator` 应用类型化策略，并负责接纳、分发、完成和提交。Neo 发起的操作使用 `NavigationPort.execute()`；已经运行的 Reader 原生导航通过 `observeNative()` 观察，而不是再次分发。命令行为见[导航与共享跳转历史](COMMAND_REFERENCE.md#导航与共享跳转历史)，Reader 私有传输约束见[开发指南](DEVELOPMENT.md#运行时架构)。
+Neo 为每个 Main 窗口维护一个有界导航历史。`NavigationHistoryState` 拥有位置和遍历索引；`NavigationCoordinator` 应用类型化策略，并负责接纳、分发、完成和提交。Neo 发起的操作使用 `NavigationPort.execute()`；已经运行的 Reader 原生导航通过 `observeNative()` 观察，而不是再次分发。命令行为见[导航与共享跳转历史](../MAIN_GUIDE.md#切换标签页和返回)，Reader 私有传输约束见[开发指南](../DEVELOPMENT.md#运行时架构)。
 
 ## 目录
 

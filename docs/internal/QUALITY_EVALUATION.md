@@ -1,6 +1,6 @@
 # 核对 PDF 解析质量
 
-维护者可用固定 PDF 复现局部质量核验，并分别记录解析结果与实际阅读任务。工具在隔离配置中读取数据；云端上传另需授权。普通阅读与局部纠错见[选择指南](SELECTION_GUIDE.md#修正图表关联与正文归属)。
+维护者可用固定 PDF 复现局部质量核验，并分别记录解析结果与实际阅读任务。工具在隔离配置中读取数据；云端上传另需授权。历史纠错流程见[局部纠错与实际任务](#局部纠错与实际任务)。
 
 ## 区分三种结果
 
@@ -30,14 +30,14 @@ A/B 清单记录下载 URL、SHA-256、许可证、物理页序号和标注来�
 
 `corpus-e.json` 保留代次 3 的独立首测：12 篇论文、23 页、31 组对象（24 图、7 表），PDF 身份与 C/D 均不重叠。选择时分别按年份和数字后缀排序，取前六篇未使用且符合条件的 ICML／NeurIPS 论文，纳入各篇前两个有标注页面的全部对象。代次 3 的清单在预测前固定，实现冻结后才提取 E 并运行新旧版本，当轮未按结果调参。本轮质量修复已使用 E，因此 E 现与 C/D 一同作为已见回归与校准集。
 
-PDF 下载自原会议站，并固定本次实际字节哈希。上游提供的身份信息是题注与页面几何，本次据此核对文档；历史 PDF 字节哈希缺失。C 与 D 的大多数标注从 72 dpi 左上原点转换到未旋转 PDF 用户坐标；D 中 `d-icml10_1` 的标注为 100 dpi，先缩放至 PDF 点。E 还包含 A4 页面和分数 DPI，按各页 CropBox 与标注 DPI 转换。主体和题注保持分开。版本、许可、选择规则和其他数据集取舍见 [`figure-datasets.json`](../evidence/document-quality/figure-datasets.json)。仓库保存来源清单和评分，PDF 与完整正文留在测试环境；论文版权按各自声明处理。
+PDF 下载自原会议站，并固定本次实际字节哈希。上游提供的身份信息是题注与页面几何，本次据此核对文档；历史 PDF 字节哈希缺失。C 与 D 的大多数标注从 72 dpi 左上原点转换到未旋转 PDF 用户坐标；D 中 `d-icml10_1` 的标注为 100 dpi，先缩放至 PDF 点。E 还包含 A4 页面和分数 DPI，按各页 CropBox 与标注 DPI 转换。主体和题注保持分开。版本、许可、选择规则和其他数据集取舍见 [`figure-datasets.json`](https://github.com/zhongyangchuwu/Zotero-Neo/blob/main/evidence/document-quality/figure-datasets.json)。仓库保存来源清单和评分，PDF 与完整正文留在测试环境；论文版权按各自声明处理。
 
 `corpus-f.json` 保留上一轮引擎修订 2 的独立首测：12 篇论文、103 页中的 22 个选定页、29 组对象（26 图、3 表）。同样按会议、年份和数字后缀确定性选择，排除 A–E 的 PDF 字节身份、C/D/E 的论文 ID 和此前测试目录已准备或审阅的论文；每个会议取前六篇符合条件的论文，纳入前两个有标注页面的全部对象。来源身份、页面和标注先固定，当轮最终实现冻结后才提取并预测 F，首测后未再调规则。当前引擎修订 4 及此前的修订 3 均已使用 F 修复错误，因此 F 现与 C/D/E 一同作为已见回归与校准集。这是非随机公开切片，不代表全部论文。
 
 
 ## 准备并捕获原生结果
 
-准备仓库开发依赖、公开 PDF 网络访问和一个文库／数据目录均已隔离的 Zotero 配置，再按[本地 GUI 迭代](DEVELOPMENT.md#本地-zotero-gui-迭代)配置 RDP。捕获命令会导入 PDF，并逐篇打开、关闭 Reader，因此请使用专门的测试文库。
+准备仓库开发依赖、公开 PDF 网络访问和一个文库／数据目录均已隔离的 Zotero 配置，再按[本地 GUI 迭代](../DEVELOPMENT.md#本地-zotero-gui-迭代)配置 RDP。捕获命令会导入 PDF，并逐篇打开、关闭 Reader，因此请使用专门的测试文库。
 
 ```bash
 npm run quality:prepare -- \
@@ -112,9 +112,9 @@ npm run quality:evaluate -- \
 
 实际查看 35 张比较页上的全部 140 组、9 张原整页、2 张主要案例比较图与 5 张标题细节，共 51 张图；生成的 538 张图并非逐张打开。未发现新带入完整的无关邻图或题注，但截图不保证内容纯净：`e-icml10_9` 第 3 页 Figure 1 新显露约 18.22 pt 宽的邻近正文窄条，旧主体已含有上部正文及标题片段；`c-icml13_2` 第 2 页 Table 1 原已带入两行后续正文／公式，新旧截图相同。按优先保全作者内容的取舍保留这些上下文，不用遮罩隐藏。
 
-本轮未运行新的解析或评分，也没有独立新样本。比较基于 Poppler 原页栅格，不冒充 PDF.js 的逐字节结果；五个标题、完整来源身份、范围与上下文风险见 [`object-envelope-capture.json`](../evidence/document-quality/object-envelope-capture.json)。
+本轮未运行新的解析或评分，也没有独立新样本。比较基于 Poppler 原页栅格，不冒充 PDF.js 的逐字节结果；五个标题、完整来源身份、范围与上下文风险见 [`object-envelope-capture.json`](https://github.com/zhongyangchuwu/Zotero-Neo/blob/main/evidence/document-quality/object-envelope-capture.json)。
 
-Windows Zotero 10.0.8 专属 profile 的六例真实界面验证中，图表列表、对象摘录和保存笔记的 PNG 逐字节一致；每例首次保存均新建连续截图笔记，重复及重开后保存均复用新笔记。六份旧笔记与图片保持不变，包括加入手工内容的旧笔记；四份解析缓存指纹不变，六例原文导航均确认实际渲染。初次原页空白失败及冷启动恢复过程保留，不用正常预览冒充原页渲染。未改动全局剪贴板，未实测原生复制图片、物理键盘／IME 或持久 XPI 安装；界面、图片、身份、缓存和清理记录见 [`object-envelope-capture-uat.json`](../evidence/document-quality/object-envelope-capture-uat.json)。
+Windows Zotero 10.0.8 专属 profile 的六例真实界面验证中，图表列表、对象摘录和保存笔记的 PNG 逐字节一致；每例首次保存均新建连续截图笔记，重复及重开后保存均复用新笔记。六份旧笔记与图片保持不变，包括加入手工内容的旧笔记；四份解析缓存指纹不变，六例原文导航均确认实际渲染。初次原页空白失败及冷启动恢复过程保留，不用正常预览冒充原页渲染。未改动全局剪贴板，未实测原生复制图片、物理键盘／IME 或持久 XPI 安装；界面、图片、身份、缓存和清理记录见 [`object-envelope-capture-uat.json`](https://github.com/zhongyangchuwu/Zotero-Neo/blob/main/evidence/document-quality/object-envelope-capture-uat.json)。
 
 ## 已测本地规则
 
@@ -135,11 +135,11 @@ Windows Zotero 10.0.8 专属 profile 的六例真实界面验证中，图表列�
 
 源图审阅覆盖全部 21 组变化（19 组旧对象变化、1 组恢复主体、1 组移除误题注），共 15 篇、18 页。实际查看 21 张新旧对照、18 张整页、12 张细节和 1 张单独裁图；生成的 157 张成员裁图并非逐张查看。11 个正文区域变化页中的 26 段图内标签转入主体，未发现普通正文丢失，也未发现新增的具体误关联。
 
-审阅另发现 `e-icml10_9` 第 7 页 Figure 2／3 的五个旋转纵轴标题仍在主体裁图外；这些不是本轮新增回归，也不能因配对通过而忽略。本轮没有新的独立验证集，不声称全文 precision／recall 100% 或所有标签完整。冻结输入、变化清单、源图审阅和残留位置见 [`local-rules-v4-completeness.json`](../evidence/document-quality/local-rules-v4-completeness.json)。
+审阅另发现 `e-icml10_9` 第 7 页 Figure 2／3 的五个旋转纵轴标题仍在主体裁图外；这些不是本轮新增回归，也不能因配对通过而忽略。本轮没有新的独立验证集，不声称全文 precision／recall 100% 或所有标签完整。冻结输入、变化清单、源图审阅和残留位置见 [`local-rules-v4-completeness.json`](https://github.com/zhongyangchuwu/Zotero-Neo/blob/main/evidence/document-quality/local-rules-v4-completeness.json)。
 
 在 Windows Zotero 10.0.8 的隔离文库中，最终版本的六处图表／摘录预览与原文定位均通过，重复保存复用原六张笔记，HTML、来源几何和嵌图保持不变。初始候选的新建笔记 PNG 与当时预览为 6/6 字节相同；最终版本冷启动后为 5/6，相同尺寸的 Figure 4 预览有 22 个像素差异，实际查看未见内容缺失，未覆盖原笔记。
 
-引擎修订 3 的旧缓存和修订 4 的新缓存字节均保持不变，实际重开 Reader 后显示已加载本地缓存。一次热重载后原生视图隐藏、停止绘制，未作为通过证据；同一隔离配置冷启动、恢复可见绘制后重验成功。两阶段身份、逐项结果、截图／缓存哈希与物理键盘、输入法、XPI 安装等未测项见 [`local-rules-v4-completeness-uat.json`](../evidence/document-quality/local-rules-v4-completeness-uat.json)。
+引擎修订 3 的旧缓存和修订 4 的新缓存字节均保持不变，实际重开 Reader 后显示已加载本地缓存。一次热重载后原生视图隐藏、停止绘制，未作为通过证据；同一隔离配置冷启动、恢复可见绘制后重验成功。两阶段身份、逐项结果、截图／缓存哈希与物理键盘、输入法、XPI 安装等未测项见 [`local-rules-v4-completeness-uat.json`](https://github.com/zhongyangchuwu/Zotero-Neo/blob/main/evidence/document-quality/local-rules-v4-completeness-uat.json)。
 
 ### 代次 4：引擎修订 3 的历史召回修复
 
@@ -156,11 +156,11 @@ Windows Zotero 10.0.8 专属 profile 的六例真实界面验证中，图表列�
 
 对照原页审阅三处新增主体及选定页中所有变化的旧对象框／成员。两组算法步骤与共享定义、数学表的三列和全部 16 行、柱状图的坐标轴／类别／图例均完整；另恢复了旧通过表格右侧遗漏的两列。审阅发现一处回归：旧通过题注的脚标丢失并轻微裁切；最终版本已将其文字与边界恢复为旧基线。选定 87 页仍输出 138 个候选，其中 137 个有主体、1 个仅有题注；这个额外候选仍是 `f-icml13_7` 第 2 页正文中的 Figure 1 引用误报。所审阅源图中没有发现额外主体误报，不等于全文 precision 100%。
 
-上一轮已知的内部标签、子图说明与横线端点裁切仍保留为缺陷，不能因配对全过就视为解决。冻结身份、逐项分数、真实框变化和源图审阅范围见 [`local-rules-v4-recall.json`](../evidence/document-quality/local-rules-v4-recall.json)；旧质量基线与当轮独立 F 首测保留在下节。
+上一轮已知的内部标签、子图说明与横线端点裁切仍保留为缺陷，不能因配对全过就视为解决。冻结身份、逐项分数、真实框变化和源图审阅范围见 [`local-rules-v4-recall.json`](https://github.com/zhongyangchuwu/Zotero-Neo/blob/main/evidence/document-quality/local-rules-v4-recall.json)；旧质量基线与当轮独立 F 首测保留在下节。
 
 在 Windows Zotero 10.0.8 的隔离文库中，三处均完成实际图表列表预览、原文定位和摘录保存；三张笔记嵌图与各自预览 PNG 逐字节相同。算法摘录重复保存复用同一笔记，明确选择“Open note”后激活原生笔记标签页。
 
-旧引擎修订 2 的真实界面缓存保留原样，普通浏览跳过旧身份且不写新槽；显式本地解析另存引擎修订 3，重开 Reader 后界面确认加载本地缓存，新旧缓存字节均未变。配置、截图、嵌图和缓存哈希见 [`local-rules-v4-recall-uat.json`](../evidence/document-quality/local-rules-v4-recall-uat.json)。本轮使用临时加载插件与程序化输入，物理键盘、输入法及重新安装 XPI 未测。
+旧引擎修订 2 的真实界面缓存保留原样，普通浏览跳过旧身份且不写新槽；显式本地解析另存引擎修订 3，重开 Reader 后界面确认加载本地缓存，新旧缓存字节均未变。配置、截图、嵌图和缓存哈希见 [`local-rules-v4-recall-uat.json`](https://github.com/zhongyangchuwu/Zotero-Neo/blob/main/evidence/document-quality/local-rules-v4-recall-uat.json)。本轮使用临时加载插件与程序化输入，物理键盘、输入法及重新安装 XPI 未测。
 
 
 ### 代次 4：引擎修订 2 的历史质量基线
@@ -180,14 +180,14 @@ C/D/E 的 34 篇、293 页全部重新捕获，配对从 98/108 提升到 107/10
 
 该轮未关联主体为 `e-nips09_5` Figure 2、`f-icml12_6` Table 1 和 `f-nips10_4` Figure 2，原页主体均存在。过阈值也不等于裁图完整：`e-icml11_3` Figure 1 漏掉顶行两个 ρ 内部标题，`f-icml12_4` Figure 1 漏掉 level 0–3 标签，`f-icml12_6` Figure 1 漏掉两段子图说明；`e-nips09_6` Table 1 略裁去横线两端，未见文字或公式缺失。没有证实前一幅复合图额外截断曲线。
 
-冻结身份、逐项分数／矩形、原生解码对照和源图审阅范围见 [`local-rules-v4-quality.json`](../evidence/document-quality/local-rules-v4-quality.json)。上述均为选定公开核验点，不是全文精确率、召回率、无损裁图保证或新排行榜；也未重新运行其他工具或模型。
+冻结身份、逐项分数／矩形、原生解码对照和源图审阅范围见 [`local-rules-v4-quality.json`](https://github.com/zhongyangchuwu/Zotero-Neo/blob/main/evidence/document-quality/local-rules-v4-quality.json)。上述均为选定公开核验点，不是全文精确率、召回率、无损裁图保证或新排行榜；也未重新运行其他工具或模型。
 
 
-在 Windows Zotero 10.0.8 的隔离文库中，实际查看该复合图预览、跳到第 5 页，并完成摘录保存／重复复用／打开原生笔记。旧版实际界面生成的 547 区域缓存仍保留：普通浏览跳过旧身份且不写新槽；显式本地解析另存 507 区域，重开后生产 Reader 返回 `origin: cache`，新旧缓存字节均未变。截图、配置身份、嵌图和缓存哈希见 [`local-rules-v4-quality-uat.json`](../evidence/document-quality/local-rules-v4-quality-uat.json)。这证明操作路径，不消除上述裁图缺陷；物理键盘、输入法与重新安装 XPI 未测。
+在 Windows Zotero 10.0.8 的隔离文库中，实际查看该复合图预览、跳到第 5 页，并完成摘录保存／重复复用／打开原生笔记。旧版实际界面生成的 547 区域缓存仍保留：普通浏览跳过旧身份且不写新槽；显式本地解析另存 507 区域，重开后生产 Reader 返回 `origin: cache`，新旧缓存字节均未变。截图、配置身份、嵌图和缓存哈希见 [`local-rules-v4-quality-uat.json`](https://github.com/zhongyangchuwu/Zotero-Neo/blob/main/evidence/document-quality/local-rules-v4-quality-uat.json)。这证明操作路径，不消除上述裁图缺陷；物理键盘、输入法与重新安装 XPI 未测。
 
 ### 代次 4：规则架构回归
 
-架构拆分时的适配器代次为 4。布局事实、可选规则、题注归属和正文构建拆为纯 TypeScript 内核，配置与诊断用法见[开发指南](DEVELOPMENT.md#本地规则内核与配置)。该次未调整默认规则以追求更高通过数。
+架构拆分时的适配器代次为 4。布局事实、可选规则、题注归属和正文构建拆为纯 TypeScript 内核，配置与诊断用法见[开发指南](../DEVELOPMENT.md#本地规则内核与配置)。该次未调整默认规则以追求更高通过数。
 
 使用代次 3 留存的同一批完整原生文字／绘图几何，回放 C/D/E 的 34 篇文档、293 页。默认组合的完整区域数组和对象组均逐项相同，不仅是评分相同。五组消融分别关闭一个规则或缩短关联距离：
 
@@ -200,13 +200,13 @@ C/D/E 的 34 篇、293 页全部重新捕获，配对从 98/108 提升到 107/10
 | 关闭复合面板带 | 34/34 | 22/34 | 75/108 |
 | `association.maxDistanceLines: 2` | 34/34 | 6/34 | 96/108 |
 
-这些结果证明配置影响真实输出，不构成新的默认值、精确率排名或质量提升。E 在该次仅作架构回归，不是新的独立验证集；代次 3 已知的五个额外题注、缺失主体和裁图问题在架构拆分时保留。回放耗时只含分组，不含 PDF 提取和 Reader 初始化。配置、源码／输入哈希、逐文档对照与诊断统计见 [`local-rules-v4-architecture.json`](../evidence/document-quality/local-rules-v4-architecture.json)。
+这些结果证明配置影响真实输出，不构成新的默认值、精确率排名或质量提升。E 在该次仅作架构回归，不是新的独立验证集；代次 3 已知的五个额外题注、缺失主体和裁图问题在架构拆分时保留。回放耗时只含分组，不含 PDF 提取和 Reader 初始化。配置、源码／输入哈希、逐文档对照与诊断统计见 [`local-rules-v4-architecture.json`](https://github.com/zhongyangchuwu/Zotero-Neo/blob/main/evidence/document-quality/local-rules-v4-architecture.json)。
 
-另在 Windows Zotero 10.0.8 的专用配置中，实际打开图表列表并检查一张图的预览，再从解析对照按钮保存默认与关闭无框表的结果。两种配置写入不同槽；错误 JSON 会清除旧组并显示错误，等价默认配置可复用原槽，默认缓存字节保持不变。在途读取遇到配置切换后返回空结果。来源、截图与缓存哈希见 [`local-rules-v4-uat.json`](../evidence/document-quality/local-rules-v4-uat.json)。该次使用临时加载插件和程序化输入，物理键盘、输入法与重新安装 XPI 未测。
+另在 Windows Zotero 10.0.8 的专用配置中，实际打开图表列表并检查一张图的预览，再从解析对照按钮保存默认与关闭无框表的结果。两种配置写入不同槽；错误 JSON 会清除旧组并显示错误，等价默认配置可复用原槽，默认缓存字节保持不变。在途读取遇到配置切换后返回空结果。来源、截图与缓存哈希见 [`local-rules-v4-uat.json`](https://github.com/zhongyangchuwu/Zotero-Neo/blob/main/evidence/document-quality/local-rules-v4-uat.json)。该次使用临时加载插件和程序化输入，物理键盘、输入法与重新安装 XPI 未测。
 
 ### 代次 3 质量基线
 
-代次 3 的 C/D 用于回归与校准，E 用于实现冻结后的独立验证。通过要求主体和题注 IoU 均 ≥ 0.5。逐项报告分别为 [C](../evidence/document-quality/local-rules-v3-calibration.json)、[D](../evidence/document-quality/local-rules-v3-regression.json) 和 [E](../evidence/document-quality/local-rules-v3-validation.json)；E 的旧版对照见 [`local-rules-v2-holdout-e.json`](../evidence/document-quality/local-rules-v2-holdout-e.json)。
+代次 3 的 C/D 用于回归与校准，E 用于实现冻结后的独立验证。通过要求主体和题注 IoU 均 ≥ 0.5。逐项报告分别为 [C](https://github.com/zhongyangchuwu/Zotero-Neo/blob/main/evidence/document-quality/local-rules-v3-calibration.json)、[D](https://github.com/zhongyangchuwu/Zotero-Neo/blob/main/evidence/document-quality/local-rules-v3-regression.json) 和 [E](https://github.com/zhongyangchuwu/Zotero-Neo/blob/main/evidence/document-quality/local-rules-v3-validation.json)；E 的旧版对照见 [`local-rules-v2-holdout-e.json`](https://github.com/zhongyangchuwu/Zotero-Neo/blob/main/evidence/document-quality/local-rules-v2-holdout-e.json)。
 
 | 语料 | 完成提取的文档 | 代次 2 配对通过 | 代次 3 配对通过 | 代次 3 主体可计算 IoU | 代次 3 主体未关联 |
 | --- | --- | --- | --- | --- | --- |
@@ -214,7 +214,7 @@ C/D/E 的 34 篇、293 页全部重新捕获，配对从 98/108 提升到 107/10
 | D：回归与校准 | 12/12 | 17/30 | 26/30 | 27/30 | 3/30 |
 | E：独立验证 | 12/12 | 19/31 | 25/31 | 25/31 | 6/31 |
 
-所有旧配对通过项均保留。三项原本已失败的主体改为未关联：`d-icml10_6` Figure 1 原 IoU 0.2260、`e-nips09_5` Figure 2 原 IoU 0.4838、`e-nips09_6` Table 1 原 IoU 0。这不表示每项几何都没有退化；逐项增减、冻结身份与原生几何来源见 [`local-rules-v3-comparison.json`](../evidence/document-quality/local-rules-v3-comparison.json)。
+所有旧配对通过项均保留。三项原本已失败的主体改为未关联：`d-icml10_6` Figure 1 原 IoU 0.2260、`e-nips09_5` Figure 2 原 IoU 0.4838、`e-nips09_6` Table 1 原 IoU 0。这不表示每项几何都没有退化；逐项增减、冻结身份与原生几何来源见 [`local-rules-v3-comparison.json`](https://github.com/zhongyangchuwu/Zotero-Neo/blob/main/evidence/document-quality/local-rules-v3-comparison.json)。
 
 本次先用重复的原生单元格位置识别表体，再合并正文，补足少线／无框表；图形分组保留小字号标签和换行子图说明，同时用题注、正文及相邻对象阻隔限制扩张。PDF 绘图解码按实际路径、Form 和 Group 裁剪范围约束绘制区域。裁剪使用保守轴对齐包围框，不是任意路径的逐像素掩膜。
 
@@ -224,21 +224,21 @@ D 仍有三项主体未关联：`d-icml10_6` Figure 1／3 和 `d-nips09_1` Figur
 
 宿主为 Windows Zotero 10.0.8／PDF.js 5.7.0，源码是基于 `da0875ec5ffdbfc4098b7335593b42a404f50065` 的任务工作树，最终辅助 bundle SHA-256 为 `67f179955165d38b36f8e42d158fb9a00c4d4948db1def270a63776ca7036d60`。旧版和候选分别保留相同 PDF 字节上的版本化原生几何；C/D 复用解码器未变化的捕获，E 在最终冻结后重新提取。评分调用生产分组函数，`durationMs` 只计分组重放，不含 PDF 提取、Reader 初始化或人类核对。108 个静态核验点的实际任务仍各自标为未执行。
 
-另在专用 Zotero 配置中核验了少线表的浏览／原文跳转、对象摘录保存／打开／重复复用，以及含子图说明的复合图预览与定位。真实旧代次 2 缓存保持原样：普通浏览跳过旧槽且不保存新缓存；显式本地解析写入代次 3，重开后复用。截图、完整 PNG、嵌图与缓存哈希见 [`local-rules-v3-uat.json`](../evidence/document-quality/local-rules-v3-uat.json)。表格本地解析时 SDT 读取计数为 0；整轮宿主交互另拦截了一次 `SDT.getReader` 和两次 `SDT.getPack`，未发生远端 HTTP，调用栈未记录。物理键盘与输入法保持未测。
+另在专用 Zotero 配置中核验了少线表的浏览／原文跳转、对象摘录保存／打开／重复复用，以及含子图说明的复合图预览与定位。真实旧代次 2 缓存保持原样：普通浏览跳过旧槽且不保存新缓存；显式本地解析写入代次 3，重开后复用。截图、完整 PNG、嵌图与缓存哈希见 [`local-rules-v3-uat.json`](https://github.com/zhongyangchuwu/Zotero-Neo/blob/main/evidence/document-quality/local-rules-v3-uat.json)。表格本地解析时 SDT 读取计数为 0；整轮宿主交互另拦截了一次 `SDT.getReader` 和两次 `SDT.getPack`，未发生远端 HTTP，调用栈未记录。物理键盘与输入法保持未测。
 
 ### 代次 2 历史记录
 
-代次 2 的 C 校准结果为 42/47，D 独立首测为 17/30，分别保存在 [`local-rules-v2-calibration.json`](../evidence/document-quality/local-rules-v2-calibration.json) 和 [`local-rules-v2-validation.json`](../evidence/document-quality/local-rules-v2-validation.json)。当轮修正狭长层级连接干、英文段首图表引用与题注字号边界，未按 D 的首测结果继续调参。
+代次 2 的 C 校准结果为 42/47，D 独立首测为 17/30，分别保存在 [`local-rules-v2-calibration.json`](https://github.com/zhongyangchuwu/Zotero-Neo/blob/main/evidence/document-quality/local-rules-v2-calibration.json) 和 [`local-rules-v2-validation.json`](https://github.com/zhongyangchuwu/Zotero-Neo/blob/main/evidence/document-quality/local-rules-v2-validation.json)。当轮修正狭长层级连接干、英文段首图表引用与题注字号边界，未按 D 的首测结果继续调参。
 
-当轮宿主同为 Windows Zotero 10.0.8／PDF.js 5.7.0，源码基于 `834e40ce5f2ee2574020dd355b9d54115c5fb77b`，辅助 bundle SHA-256 为 `8c92430d1b87c443ca9062492c398dd2c4328b75e06275f798ed35e386c5c421`。代次 1 → 2 的缓存升级、预览与定位记录继续保留在 [`local-rules-v2-uat.json`](../evidence/document-quality/local-rules-v2-uat.json)，与本次代次 2 → 3 核验分开。
+当轮宿主同为 Windows Zotero 10.0.8／PDF.js 5.7.0，源码基于 `834e40ce5f2ee2574020dd355b9d54115c5fb77b`，辅助 bundle SHA-256 为 `8c92430d1b87c443ca9062492c398dd2c4328b75e06275f798ed35e386c5c421`。代次 1 → 2 的缓存升级、预览与定位记录继续保留在 [`local-rules-v2-uat.json`](https://github.com/zhongyangchuwu/Zotero-Neo/blob/main/evidence/document-quality/local-rules-v2-uat.json)，与本次代次 2 → 3 核验分开。
 
 ### 首轮历史记录
 
-首轮 C 基线保留在 [`local-rules-baseline.json`](../evidence/document-quality/local-rules-baseline.json)：配对通过 39/47，40 项主体可计算 IoU，7 项主体未关联。同篇 `c-icml14_9` Figure 3 的题注 IoU 为 0.9720、主体 IoU 为 0.3723；其余七项保留已识别题注，主体待关联。正文引用也曾被误列为题注，额外误报需单独审阅。
+首轮 C 基线保留在 [`local-rules-baseline.json`](https://github.com/zhongyangchuwu/Zotero-Neo/blob/main/evidence/document-quality/local-rules-baseline.json)：配对通过 39/47，40 项主体可计算 IoU，7 项主体未关联。同篇 `c-icml14_9` Figure 3 的题注 IoU 为 0.9720、主体 IoU 为 0.3723；其余七项保留已识别题注，主体待关联。正文引用也曾被误列为题注，额外误报需单独审阅。
 
 该轮宿主同为 Windows Zotero 10.0.8／PDF.js 5.7.0，源码是基于 `d4129d4dd038232b32b728a52b55fe191813a34a` 的任务工作树，实际辅助 bundle SHA-256 为 `a13be636ef4d2d92c96dd119750ff86cc702a1d498db11a656dacc0cb72f024f`。47 项静态评分与界面流程分别记录。
 
-首轮专用配置已走通图表列表、预览、原文跳转、解析缓存保存／复用及图文笔记保存／打开，记录见 [`local-rules-uat.json`](../evidence/document-quality/local-rules-uat.json)。这些操作通过 Firefox RDP 驱动真实界面，并逐张检查截图；物理键盘与输入法的手动验收按[验收指南](ACCEPTANCE.md)另行执行。
+首轮专用配置已走通图表列表、预览、原文跳转、解析缓存保存／复用及图文笔记保存／打开，记录见 [`local-rules-uat.json`](https://github.com/zhongyangchuwu/Zotero-Neo/blob/main/evidence/document-quality/local-rules-uat.json)。这些操作通过 Firefox RDP 驱动真实界面，并逐张检查截图；物理键盘与输入法的手动验收按[验收指南](ACCEPTANCE.md)另行执行。
 
 ## 现成图表工具扩大对照
 
@@ -250,7 +250,7 @@ D 仍有三项主体未关联：`d-icml10_6` Figure 1／3 和 `d-nips09_1` Figur
 | PDFFigures2 `3d7ad467…` | 42/47 | 26/30 | 26/31 | 94/108 | 100/108 |
 | Neo 冻结后的代次 3 | 47/47 | 26/30 | 25/31 | 98/108 | 98/108 |
 
-配对沿用生产评分器，主体框和题注框都须达到 IoU ≥ 0.5，且同一资源不能重复计分。仅主体定位另外按同页、同类型、IoU ≥ 0.5 做最大数量一对一匹配，不以题注框通过为前提。外部工具只做坐标和数据结构转换，不修补预测；figure-extractor 保留原版含 8 pt 留白的实际裁图边界，不按标注收紧。原始输出、版本、输入与脚本哈希、逐项配对和独立主体匹配见 [`local-rules-v3-external-comparison.json`](../evidence/document-quality/local-rules-v3-external-comparison.json)。
+配对沿用生产评分器，主体框和题注框都须达到 IoU ≥ 0.5，且同一资源不能重复计分。仅主体定位另外按同页、同类型、IoU ≥ 0.5 做最大数量一对一匹配，不以题注框通过为前提。外部工具只做坐标和数据结构转换，不修补预测；figure-extractor 保留原版含 8 pt 留白的实际裁图边界，不按标注收紧。原始输出、版本、输入与脚本哈希、逐项配对和独立主体匹配见 [`local-rules-v3-external-comparison.json`](https://github.com/zhongyangchuwu/Zotero-Neo/blob/main/evidence/document-quality/local-rules-v3-external-comparison.json)。
 
 这些结果不证明 Neo 更好：
 
@@ -269,7 +269,7 @@ Neo 当前保持自包含 XPI，不附带或运行时下载 Python、JVM、原�
 
 ## DeepSeek OCR API 小样本对照
 
-本轮按用户授权，使用环境变量 `DEEPSEEK_API_KEY` 调用[官方 OCR 接口](https://api-docs.deepseek.com/zh-cn/guides/ocr)。Attention、ResNet 和 OmniDocBench 的原始 PDF 字节与先前实验相同，六个核验对象位于三个选定页；另用 Attention 第 4 页的复合图作独立诊断。四页分别调用 `rich_layout_recognition` 与 `text_recognition`，共 8 次成功请求，未重试。请求身份、来源哈希、配对规则和逐项结果见 [`deepseek-ocr-api-comparison.json`](../evidence/document-quality/deepseek-ocr-api-comparison.json)。
+本轮按用户授权，使用环境变量 `DEEPSEEK_API_KEY` 调用[官方 OCR 接口](https://api-docs.deepseek.com/zh-cn/guides/ocr)。Attention、ResNet 和 OmniDocBench 的原始 PDF 字节与先前实验相同，六个核验对象位于三个选定页；另用 Attention 第 4 页的复合图作独立诊断。四页分别调用 `rich_layout_recognition` 与 `text_recognition`，共 8 次成功请求，未重试。请求身份、来源哈希、配对规则和逐项结果见 [`deepseek-ocr-api-comparison.json`](https://github.com/zhongyangchuwu/Zotero-Neo/blob/main/evidence/document-quality/deepseek-ocr-api-comparison.json)。
 
 本节保留当轮 API 与代次 2 本地规则的对照；本次代次 3 改进未重新调用该接口。
 

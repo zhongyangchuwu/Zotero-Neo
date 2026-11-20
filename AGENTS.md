@@ -144,7 +144,9 @@ Components.utils.cloneInto(value, targetWindow);
 
 ### 文档
 
-项目文档默认只维护中文，不再维护英文版本。现有英文文档在相关任务涉及时按需翻译，更新引用后移除英文副本；没有独立双语文件时直接原位替换正文，保留文件名和 URL。命令、API、配置键与第三方许可证原文保持不变。具体规范见 `docs/DOCUMENTATION_AUTHORING.md`。
+项目文档默认只维护中文，不再维护英文版本。现有英文文档在相关任务涉及时按需翻译，更新引用后移除英文副本；没有独立双语文件时直接原位替换正文，保留文件名和 URL。命令、API、配置键与第三方许可证原文保持不变。具体规范见 `docs/internal/DOCUMENTATION_AUTHORING.md`。
+
+**日常功能与 UI 改动只按需更新 `docs/` 根目录的七篇用户文档。不得顺手同步改写 `docs/internal/` 的历史设计稿、验收或评测文档；只有任务明确要求更新架构或内部文档时才修改。**
 
 为不明显的方法添加 JSDoc 风格块注释，说明参数和副作用。宿主限制或复杂逻辑可以用行内注释解释。
 
@@ -164,7 +166,7 @@ Main 选择器也遵守相同原则。`src/main/picker/` 负责候选搜索、�
 
 在发起操作的 Surface 中解析条目目标：`src/main/main-item-target.ts` 应用 Main EffectiveSelection（Persistent Selection 优先于 CurrentTarget），`src/reader/item-target.ts` 解析活动 Reader 条目，`src/main/note-item-target.ts` 解析活动 Note 上下文。只在 `src/core/item-target.ts` 共享结果形状，并在 `src/platform/zotero-items.ts` 共享查找／顶层身份归一化；`src/operations/` 中的具体 Operation 接收明确解析过的条目或 ID。Reader 和 Note 不借用 Main Selection。调用方直接导入类型化的 Surface resolver；不保留共享兼容分发器／重导出。
 
-可选标签页增强由 `src/modules/tab-enhancements/` 按 MainWindow 拥有侧栏、标题格式与窗口级作用域；应用共享分组管理器通过已登记宿主处理跨窗口激活，核心 `workspace` 继续负责原生标签页激活与共享历史。Zotero 原生标签页清单是唯一事实来源：版本化 `viewID` 存在原生 `tab.data`，区分重复的 PDF 视图；`nativeID` 只用于当前原生操作，不作为持久身份。分组保存在 profile-local 键 `tabEnhancements.groups.v1`，与显示偏好分开，不写入 Zotero 标签或分类。Toolkit 的 `src/toolkit/main/tab-enhancements/` 负责私有 Tab API、外层布局、原生工具栏可逆租约及合并后的原生更新和 `item`/`tab` 通知；侧栏位于 `#appcontent` 外侧，不重挂 content deck 或 Reader/PDF iframe，不支持的原生布局保留原生标签页界面。MainWindow controller 等待 `Zotero.initializationPromise` 后再激活，并在回调中核对原 session 是否仍有效。详细设计见 `docs/ARCHITECTURE.md#标签页增强`、`docs/MODULE_DESIGN.md#标签页增强与原生标签页` 和 `docs/DEVELOPMENT.md#标签页增强手动核对`。
+可选标签页增强由 `src/modules/tab-enhancements/` 按 MainWindow 拥有侧栏、标题格式与窗口级作用域；应用共享分组管理器通过已登记宿主处理跨窗口激活，核心 `workspace` 继续负责原生标签页激活与共享历史。Zotero 原生标签页清单是唯一事实来源：版本化 `viewID` 存在原生 `tab.data`，区分重复的 PDF 视图；`nativeID` 只用于当前原生操作，不作为持久身份。分组保存在 profile-local 键 `tabEnhancements.groups.v1`，与显示偏好分开，不写入 Zotero 标签或分类。Toolkit 的 `src/toolkit/main/tab-enhancements/` 负责私有 Tab API、外层布局、原生工具栏可逆租约及合并后的原生更新和 `item`/`tab` 通知；侧栏位于 `#appcontent` 外侧，不重挂 content deck 或 Reader/PDF iframe，不支持的原生布局保留原生标签页界面。MainWindow controller 等待 `Zotero.initializationPromise` 后再激活，并在回调中核对原 session 是否仍有效。详细设计见 `docs/internal/ARCHITECTURE.md#标签页增强`、`docs/internal/MODULE_DESIGN.md#标签页增强与原生标签页` 和 `docs/DEVELOPMENT.md#标签页增强手动核对`。
 
 ## 关键文件
 

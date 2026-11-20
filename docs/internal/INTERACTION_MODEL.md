@@ -1,10 +1,10 @@
 # 文库交互模型
 
-本文定义文库及其 Main、Reader、Note 交互界面的操作契约。[命令参考](COMMAND_REFERENCE.md)维护准确快捷键；[导航设计](NAVIGATION_HISTORY_DESIGN.md)维护历史记录与恢复规则；[架构](ARCHITECTURE.md)描述运行时所有权。
+本文定义文库及其 Main、Reader、Note 交互界面的操作契约。[命令参考](../COMMAND_REFERENCE.md)维护准确快捷键；[导航设计](NAVIGATION_HISTORY_DESIGN.md)维护历史记录与恢复规则；[架构](ARCHITECTURE.md)描述运行时所有权。
 
 ## 术语
 
-文档和中文 UI 标签使用下列名称。下文定义交互契约；准确按键和动作可用性由[命令参考](COMMAND_REFERENCE.md)维护。
+文档和中文 UI 标签使用下列名称。下文定义交互契约；准确按键和动作可用性由[命令参考](../COMMAND_REFERENCE.md)维护。
 
 | 术语 | 中文名称 |
 | --- | --- |
@@ -169,7 +169,7 @@ Find 和 Filter 是不同的操作。
 - 不回退到全局条目选择器；
 - 没有匹配项时也不清除筛选条件。
 
-局部 Find 通过 Main Normal 绑定以及在当前 View 中确认的重复操作打开；它只移动 Cursor。准确按键见[命令参考](COMMAND_REFERENCE.md)。
+局部 Find 通过 Main Normal 绑定以及在当前 View 中确认的重复操作打开；它只移动 Cursor。准确按键见[命令参考](../COMMAND_REFERENCE.md)。
 
 ### 筛选
 
@@ -253,13 +253,13 @@ Reader 和 Note 从各自当前 Surface 解析条目，不借用 Main Selection�
 
 ## 导航跳转历史
 
-每个 Main 窗口拥有一个由 Main、Reader 和 Note 共用的内存历史栈。持久 Main Selection 不属于历史位置。[导航设计](NAVIGATION_HISTORY_DESIGN.md)说明哪些宿主操作会记录、完成／当前性要求及恢复行为；准确用户按键见[命令参考](COMMAND_REFERENCE.md)。
+每个 Main 窗口拥有一个由 Main、Reader 和 Note 共用的内存历史栈。持久 Main Selection 不属于历史位置。[导航设计](NAVIGATION_HISTORY_DESIGN.md)说明哪些宿主操作会记录、完成／当前性要求及恢复行为；准确用户按键见[命令参考](../COMMAND_REFERENCE.md)。
 
 ## 键位图方向
 
-Main 和 Reader 具有 Normal/Visual 交互；Note 具有 Normal/Insert。`BindingContext` 标识负责方及其能力集合，不是单独的 Surface 模式或领域状态。准确上下文和绑定见[命令参考](COMMAND_REFERENCE.md)；模式不会继承其他模式或全局后备绑定。
+Main 和 Reader 具有 Normal/Visual 交互；Note 具有 Normal/Insert。`BindingContext` 标识负责方及其能力集合，不是单独的 Surface 模式或领域状态。准确上下文和绑定见[命令参考](../COMMAND_REFERENCE.md)；模式不会继承其他模式或全局后备绑定。
 
-功能输入负责方只在各自定义的目标和生命周期内优先处理输入。批注评论编辑器拥有其捕获的 PDF 视图。设置 → Reader → **批注评论编辑**偏好控制能否进入编辑器；关闭后，`i` 会使用 Reader 范围的原生输入透传，直到按 Escape 或交互停用。Enter 插入原生换行。输入后立即保存本机草稿，停止输入两秒后尝试保存到原生批注；Escape 或输入交接会提交最终草稿并关闭。Reader／视图销毁释放编辑器和定时器，但保留本机草稿，已接纳的保存仍可完成。原生冲突需要明确覆盖，本机持久化失败时阻止主动关闭；强制退休则提示复制未持久化文本。这不是 Reader Insert 模式。Note Insert 会将普通文字交给 Zotero 原生编辑器。输入法组合输入的所有权见[输入法说明](INPUT_METHODS.md)。
+功能输入负责方只在各自定义的目标和生命周期内优先处理输入。批注评论编辑器拥有其捕获的 PDF 视图。设置 → Reader → **批注评论编辑**偏好控制能否进入编辑器；关闭后，`i` 会使用 Reader 范围的原生输入透传，直到按 Escape 或交互停用。Enter 插入原生换行。输入后立即保存本机草稿，停止输入两秒后尝试保存到原生批注；Escape 或输入交接会提交最终草稿并关闭。Reader／视图销毁释放编辑器和定时器，但保留本机草稿，已接纳的保存仍可完成。原生冲突需要明确覆盖，本机持久化失败时阻止主动关闭；强制退休则提示复制未持久化文本。这不是 Reader Insert 模式。Note Insert 会将普通文字交给 Zotero 原生编辑器。输入法组合输入的所有权见[输入法说明](../TROUBLESHOOTING.md#为什么输入中文时-enter-或-esc-没有执行命令)。
 
 Reader 歧义短命令的超时执行绑定发起它的精确视图、Document 与焦点代次；切换分屏、替换文档或失焦后不将旧命令转交给新的活动窗格。
 
