@@ -12,7 +12,12 @@ import type {
   SettingsSection,
 } from '../contracts';
 import { SettingsSnapshotError } from '../contracts';
-import { assertSettingsCurrent, sameSettingState, validateSettingsSection } from '../document';
+import {
+  assertSettingsCurrent,
+  isRetiredNeoPreference,
+  sameSettingState,
+  validateSettingsSection,
+} from '../document';
 import { BINDING_SCHEMA_VERSION } from '../../core/preferences';
 import { normalizeAIEndpoint } from '../../ai/configuration-policy';
 import {
@@ -159,7 +164,11 @@ export class BuiltinSettingsAdapter implements SettingsAdapter {
     const supported: string[] = [];
     let omitted = 0;
     for (const key of keys) {
-      if (key === 'bindings.schemaVersion' && this.id === 'zotero-neo') continue;
+      if (
+        this.id === 'zotero-neo' &&
+        (key === 'bindings.schemaVersion' || isRetiredNeoPreference(key))
+      )
+        continue;
       if (this.#field(key)) supported.push(key);
       else omitted++;
     }
@@ -481,7 +490,6 @@ export class BuiltinSettingsAdapter implements SettingsAdapter {
         label: field.label,
         category: field.category,
         secret: !!field.secret,
-        ...(field.presentation ? { presentation: field.presentation } : {}),
         before,
         after,
         selected:

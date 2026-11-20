@@ -19,8 +19,6 @@ export type NativeReactSurface =
   | 'document-preparation'
   | 'metadata-review'
   | 'settings-snapshots'
-  | 'item-attributes'
-  | 'literature-table'
   | 'document-comparison'
   | 'annotation-comment'
   | 'selection-actions'
@@ -76,5 +74,4 @@ export interface NativeReactViewOptions<Model extends object, Command> {
 declare global {
   var NeoReactRuntime: NativeReactLibrary | undefined;
   var NeoNativeUI: NativeUIRuntime | undefined;
-  var NeoLiteratureUI: NativeUIRuntime | undefined;
 }

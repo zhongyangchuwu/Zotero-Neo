@@ -170,11 +170,7 @@ npm run dev:status
 
 AI 问答工具窗使用生产 URI `chrome://zotero-neo-ai-qa/content/ai-qa-window.xhtml`，不直接以 file/jar URI 加载。`src/platform/ai-qa-ui.ts` 在首次打开时惰性注册已打包的 `content/` 资源并持有 `destruct()` 句柄；`src/toolkit/reader/ai-qa-panel.ts` 负责精确 Reader 的工具窗，窗口类型为 `zotero-neo:ai-qa`。Addon/Toolkit 退出时先关闭所拥有的窗口，再释放共享注册。
 
-Neo 文献表格复用 `zotero-neo-ui` 的 chrome 注册，静态外壳为 `content/literature-table-window.xhtml`。一个主窗口最多持有一个表格窗口；关闭主窗口或卸载 Neo 时先退休读取与订阅，再释放 UI 注册。Toolkit 单独读取原生文库、分类和条目；表格不修改主窗口的过滤器和树布局。
-
-文献表格单独打包为 `content/literature-ui.js`，不把表格用的 Base UI 控件加载到其他 Neo 面板。`vendor/base-ui/` 固定 `@base-ui/react@1.9.0` 及其依赖，用 `node tools/vendor-runtimes.mjs base-ui` 重新生成。控件复用工具窗已有的 React、ReactDOM 和 JSX runtime，不打入第二份 React。React 保存弹层、焦点和编辑草稿；`src/literature-table/` 控制筛选、排序、分页、命名视图及编辑基线，通过可序列化命令与结果交互。保存沿用 `setItemAttribute`，以事务回执判定成功，不以 Zotero 的变更通知代替回执。
-
-XPI 收录项目 `LICENSE`、`licenses/fuzzysort-LICENSE`，以及 AI SDK、React、age-encryption 和 Base UI 各自的 `*-NOTICE`、`*-provenance.json`。版本、完整性和上游来源记录在各 vendor 目录；`NOTICE` 保留许可证文本。可执行依赖静态进入生成的 bundle，不在运行时安装或下载，也不以原始 vendor 包作为单独的 XPI 成员。`tools/check-package.mjs` 对成员清单和打包后的 notice/provenance 内容作精确校验。
+XPI 收录项目 `LICENSE`、`licenses/fuzzysort-LICENSE`，以及 AI SDK、React 和 age-encryption 各自的 `*-NOTICE`、`*-provenance.json`。版本、完整性和上游来源记录在各 vendor 目录；`NOTICE` 保留许可证文本。可执行依赖静态进入生成的 bundle，不在运行时安装或下载，也不以原始 vendor 包作为单独的 XPI 成员。`tools/check-package.mjs` 对成员清单和打包后的 notice/provenance 内容作精确校验。
 
 ### 配置迁移格式与加密边界
 
@@ -295,21 +291,13 @@ node tools/replay-local-rules.mjs \
 
 `src/core/module-host.ts` 提供按 MainWindow 或 ReaderSession 隔离的模块宿主及独立模块作用域。同步激活失败会释放部分资源并保留原错误；动作贡献按 `(BindingContext, ActionId)` 唯一登记，返回有类型的调用入口。退出先使全部回调失效，再完成其余释放，即使某次清理失败也不会中断其他模块。
 
-`src/modules/index.ts` 是静态内置清单，启动校验 ID、依赖图和精确上下文贡献。完整能力目录见[模块所有权表](internal/MODULE_DESIGN.md#模块目录与所有权)；16 个核心模块固定启用，7 个可选增强为 `reader-hints`、`extensions`、`translation`、`references`、`ai-qa`、`tab-enhancements` 与 `item-attributes`。`ai-qa` 依赖核心 `reader-selection`，`references` 不依赖 AI 问答，`tab-enhancements` 依赖核心 `workspace`。
+`src/modules/index.ts` 是静态内置清单，启动校验 ID、依赖图和精确上下文贡献；可选增强为 `reader-hints`、`extensions`、`translation`、`references`、`ai-qa` 与 `tab-enhancements`。`ai-qa` 依赖核心 `reader-selection`，`references` 不依赖 AI 问答，`tab-enhancements` 依赖核心 `workspace`。
 
 MainWindow 组合标签、扩展、分类、工作集、Library、Notes、Workspace、文档准备与配置迁移入口；启用时，标签页增强会在 Zotero 初始化完成后按该窗口的有效 session 延迟激活。ReaderSession 直接组合导航、章节查找、图表浏览、解析对照、选择、批注、对象摘录、章节笔记、文档准备、hints、引用增强、可选翻译与 AI 问答、独立 Library citekey 贡献及 Workspace 分屏/焦点。各模块仅接收具名端口；Operations 与 Toolkit 保持各自负责方。
 
-`src/core/module-runtime.ts` 根据七项可选请求应用增强；`reader-hints`、`extensions` 与 `references` 默认开启，其余四项对新配置默认关闭。`src/platform/module-startup.ts` 在 Zotero 应用对象上保留请求的 JSON 快照，因此 Neo 热重载不会应用新请求，完全退出并重启 Zotero 后才会应用。旧启动快照缺少可选字段时，已应用值按关闭处理；旧版 `reader-ai` 启用偏好不构成启用 `ai-qa` 的同意；旧核心键 `extensions.zotero-neo.modules.<core>.enabled=false` 不会关闭核心功能。
+`src/core/module-runtime.ts` 根据六项可选请求应用增强；`reader-hints`、`extensions` 与 `references` 默认开启，其余三项对新配置默认关闭。`src/platform/module-startup.ts` 在 Zotero 应用对象上保留请求的 JSON 快照，因此 Neo 热重载不会应用新请求，完全退出并重启 Zotero 后才会应用。旧启动快照缺少可选字段时，已应用值按关闭处理；旧版 `reader-ai` 启用偏好不构成启用 `ai-qa` 的同意；旧核心键 `extensions.zotero-neo.modules.<core>.enabled=false` 不会关闭核心功能。
 
-实机核对模块配置时使用专用 profile 和自有数据，确认七项可选请求保存、Neo 热重载与 Zotero 完全退出／重启的差异；确认默认引用增强已启用、其本地分析和文库查找不发起元数据请求，只有用户明确查询才访问来源；确认默认状态下 AI 问答无入口／选区动作，且不挂载面板 runtime、不读取凭据或发送请求；确认新配置默认关闭翻译、标签页增强和条目自定义属性。手动启用 `ai-qa` 并重启后入口可用，关闭再重启后入口撤除且既有成果仍保留。恢复默认后 `reader-hints`、`extensions`、`references` 开启，其余四项关闭，其中 `translation=false` 显式保留；关闭全部七项后核心模块仍须可用，旧核心 `false` 偏好无效，恢复默认不改变行为偏好（包括 `noteEditor.enabled`）。故障只注入自有宿主并恢复原方法；回读自有数据与偏好，确认进程状态。不要把“关闭全部模块”作为配置场景。完整用户状态说明见[设置参考[模块设置](SETTINGS_GUIDE.md#开关可选功能)。
-
-#### 条目自定义属性手动核对
-
-在隔离配置中启用 `item-attributes` 并完全重启 Zotero。未选条目或位于只读文库时，`<Space>pa` 仍须能管理定义。创建文本和数字定义，验证原生列菜单、负数／小数／零／大整数／长小数／极小数的排序与原始显示、Info 单条目失焦保存；Info 的 Escape 沿用主窗口失焦策略，Neo 编辑窗的 Escape 则取消未提交值。在只读文库中加载插件后切回可写文库，仍须能编辑保存。原生多选不得只改第一条。通过 `<Space>ia` 核对 Neo 选择集优先、临时 Visual、目标固定、混合值、批量确认与清除，回读 Extra 和原生撤销结果。覆盖同键变化、无关行变化、重复键、未保存编辑及只读目标；取消或拒绝不能部分写入。
-
-批量保存故障只注入自有条目：第一条保存后让第二条失败，核对 SQL 与内存缓存回到原值、原始错误未被替换、无脏状态残留且可重试；另测保存等待期间发生的无关脏编辑仍保留。重命名、类型变更、删除定义、双 MainWindow、热重载及停用重启后，列身份与数据保留应符合[主窗口指南](MAIN_GUIDE.md#给文献添加自定义属性)。生命周期改动还需用 XPI 安装／更新验证，不修改个人文库或文字处理器配置。
-
-用选择型属性核对选项改名不改写 Extra，删除选项后显示旧值但不自动修复，重新选择才写入。测试单选和多选的单条与批量设置，确认混合值不会在未提交时合并。设置快照迁移定义及选项 ID，不迁移条目值。表格核对原生标签、部分发表日期、添加与修改日期、跨条目类型的书目列及选择型属性筛选；重新打开已命名视图后条件仍生效，原生主列表不受影响。
+实机核对模块配置时使用专用 profile 和自有数据，确认六项可选请求保存、Neo 热重载与 Zotero 完全退出／重启的差异；确认默认引用增强已启用、其本地分析和文库查找不发起元数据请求，只有用户明确查询才访问来源；确认默认状态下 AI 问答无入口／选区动作，且不挂载面板 runtime、不读取凭据或发送请求；确认新配置默认关闭翻译和标签页增强。手动启用 `ai-qa` 并重启后入口可用，关闭再重启后入口撤除且既有成果仍保留。恢复默认后 `reader-hints`、`extensions`、`references` 开启，其余三项关闭，其中 `translation=false` 显式保留；关闭全部六项后核心模块仍须可用，旧核心 `false` 偏好无效，恢复默认不改变行为偏好（包括 `noteEditor.enabled`）。故障只注入自有宿主并恢复原方法；回读自有数据与偏好，确认进程状态。不要把“关闭全部模块”作为配置场景。完整用户状态说明见[模块设置](SETTINGS_GUIDE.md#开关可选功能)。
 
 #### 翻译与安装手动核对
 

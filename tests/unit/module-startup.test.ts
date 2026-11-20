@@ -12,7 +12,7 @@ describe('application module startup flags', () => {
     delete legacy.translation;
     delete legacy.references;
     delete legacy['tab-enhancements'];
-    delete legacy['item-attributes'];
+    legacy['item-attributes'] = true;
     legacy.extensions = true;
     legacy['reader-ai'] = true;
     vi.stubGlobal('Zotero', {
@@ -26,7 +26,7 @@ describe('application module startup flags', () => {
       [modulePreferenceKey('extensions'), false],
       [modulePreferenceKey('ai-qa'), true],
       [modulePreferenceKey('tab-enhancements'), true],
-      [modulePreferenceKey('item-attributes'), true],
+      ['modules.item-attributes.enabled', true],
     ]);
     const preferences = {
       get: (key: string, fallback: boolean | number | string) => values.get(key) ?? fallback,
@@ -42,7 +42,6 @@ describe('application module startup flags', () => {
       'ai-qa': false,
       references: false,
       'tab-enhancements': false,
-      'item-attributes': false,
     });
     expect(reloaded.applied).toEqual(first.applied);
     expect(reloaded.requested()).toEqual({
@@ -52,7 +51,6 @@ describe('application module startup flags', () => {
       'ai-qa': true,
       references: true,
       'tab-enhancements': true,
-      'item-attributes': true,
     });
     const owner = {};
     const main = reloaded.createScope('main', owner, () => true);
@@ -76,8 +74,6 @@ describe('application module startup flags', () => {
     expect(reader.available('reader-normal', 'openReferences')).toBe(false);
     expect(main.activate('extensions', () => ({}))).not.toBeNull();
     expect(main.activate('tab-enhancements', vi.fn())).toBeNull();
-    expect(main.activate('item-attributes', vi.fn())).toBeNull();
-    expect(main.available('main-normal', 'editItemAttributes')).toBe(false);
     const inspected = reloaded.inspect(owner);
     expect(
       inspected.filter(({ id }) => isOptionalModule(id)).every((state) => state.pendingRestart),
@@ -100,7 +96,6 @@ describe('application module startup flags', () => {
       'ai-qa': true,
       references: true,
       'tab-enhancements': true,
-      'item-attributes': true,
     });
     expect(restarted.inspect({}).every((state) => !state.pendingRestart)).toBe(true);
     const reopened = restarted.createScope('reader', {}, () => true);

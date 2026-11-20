@@ -229,8 +229,6 @@ export const DEFAULT_BINDINGS = {
   'main-normal:<Space>fn': 'findNotes',
   'main-normal:<Space>pp': 'managePlugins',
   'main-normal:<Space>ps': 'openNeoSettings',
-  'main-normal:<Space>pa': 'manageItemAttributes',
-  'main-normal:<Space>ia': 'editItemAttributes',
   'main-normal:<Space>ss': 'manageSelection',
   'main-normal:<Space>sc': 'mainClearSelection',
   'main-normal:e': 'mainFocusTree',
@@ -274,7 +272,6 @@ export const DEFAULT_BINDINGS = {
   'main-select:o': 'mainSelectSwapEnds',
   'main-select:v': 'mainSelectCancel',
   'main-select:<Esc>': 'mainSelectCancel',
-  'main-select:<Space>ia': 'editItemAttributes',
   'reader-outline:[s': 'prevHeading',
   'reader-outline:]s': 'nextHeading',
   'reader-marks:[s': 'prevHeading',
@@ -417,7 +414,6 @@ const PREFIX_LABELS = {
   change: { en: 'Change', 'zh-CN': '修改' },
   inner: { en: 'Inner', 'zh-CN': '内部' },
   tags: { en: 'Tags', 'zh-CN': '标签' },
-  attributes: { en: 'Attributes', 'zh-CN': '属性' },
   collections: { en: 'Collections', 'zh-CN': '分类' },
   find: { en: 'Find', 'zh-CN': '查找' },
   panes: { en: 'Panes', 'zh-CN': '窗格' },
@@ -464,12 +460,9 @@ export const DEFAULT_PREFIX_BINDINGS = {
   'main-normal:<Space>t': prefix('tags'),
   'main-normal:<Space>c': prefix('collections'),
   'main-normal:<Space>p': prefix('neo'),
-  'main-normal:<Space>i': prefix('attributes'),
   'main-normal:<Space>s': prefix('selection'),
   'main-normal:<Space>y': prefix('citations'),
   'main-select:g': prefix('navigation'),
-  'main-select:<Space>': prefix('commands'),
-  'main-select:<Space>i': prefix('attributes'),
   'note-normal:g': prefix('navigation'),
   'note-normal:d': prefix('delete'),
   'note-normal:di': prefix('inner'),
@@ -972,15 +965,17 @@ export function migrateRetiredReaderInsertOverrides(raw: unknown): string {
   return retained.length ? JSON.stringify(Object.fromEntries(retained)) : '';
 }
 
-const RETIRED_SHORTCUT_ACTIONS = new Map<string, ActionId>([
+const RETIRED_SHORTCUT_ACTIONS = new Map<string, ActionId | null>([
   ['copyIdentifier', 'copyTarget'],
   ['followIdentifier', 'followLink'],
   ['focusReaderSidebar', 'focusReaderOutline'],
   ['openReaderAI', 'openAIQA'],
   ['openSettingsTransfer', 'openSettingsSnapshots'],
+  ['manageItemAttributes', null],
+  ['editItemAttributes', null],
 ]);
 
-/** Translate persisted retired IDs before earlier schema steps parse ActionIds. */
+/** Translate or remove persisted retired IDs before earlier schema steps parse ActionIds. */
 export function migrateRetiredShortcutActions(raw: unknown): string {
   if (typeof raw !== 'string') return '';
   const entries = parseBindingEntries(raw);
@@ -992,10 +987,11 @@ export function migrateRetiredShortcutActions(raw: unknown): string {
     return raw;
   return JSON.stringify(
     Object.fromEntries(
-      entries.map(([key, action]) => [
-        key,
-        typeof action === 'string' ? (RETIRED_SHORTCUT_ACTIONS.get(action) ?? action) : action,
-      ]),
+      entries.flatMap(([key, action]) => {
+        const replacement =
+          typeof action === 'string' ? RETIRED_SHORTCUT_ACTIONS.get(action) : undefined;
+        return replacement === null ? [] : [[key, replacement ?? action]];
+      }),
     ),
   );
 }

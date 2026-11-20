@@ -49,13 +49,13 @@ export function createSettingsFileCodec(): SettingsFileCodec {
       assertSettingsCurrent(context);
       if (disposed)
         throw new SettingsSnapshotError('cancelled', 'The settings operation was cancelled');
-      validateSettingsDocument(document);
       if (container === 'json') return serializeSettingsDocument(document);
+      const portable = validateSettingsDocument(document);
       if (container !== 'age')
         throw new SettingsSnapshotError('invalid-container', 'Unknown settings container');
       if (typeof password !== 'string' || password.length === 0)
         throw new SettingsSnapshotError('invalid-password', 'A non-empty password is required');
-      const result = await runner.run({ operation: 'seal', document, password }, context);
+      const result = await runner.run({ operation: 'seal', document: portable, password }, context);
       assertSettingsCurrent(context);
       if (!result.ok || result.operation !== 'seal' || typeof result.ciphertext !== 'string')
         throw new SettingsSnapshotError('crypto-failed', 'Settings encryption failed');
@@ -72,8 +72,7 @@ export function createSettingsFileCodec(): SettingsFileCodec {
       assertSettingsCurrent(context);
       if (!result.ok || result.operation !== 'open')
         throw new SettingsSnapshotError('crypto-failed', 'Settings decryption failed');
-      validateSettingsDocument(result.document);
-      return result.document;
+      return validateSettingsDocument(result.document);
     },
     dispose() {
       disposed = true;

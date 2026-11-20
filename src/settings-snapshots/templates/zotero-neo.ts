@@ -1,9 +1,6 @@
 import { READER_SCROLL_NUMBER_SPECS, KEY_GUIDE_NUMBER_SPECS } from '../../core/preferences';
 import { OPTIONAL_MODULE_IDS } from '../../modules';
 import { TAB_ENHANCEMENT_PREFERENCES } from '../../modules/tab-enhancements/config';
-import { ITEM_ATTRIBUTE_PREFERENCE } from '../../item-attributes/types';
-import { parseItemAttributeDefinitions } from '../../item-attributes/store';
-import { assertCustomExtraKey } from '../../toolkit/main';
 import type { SettingsValue } from '../contracts';
 import { parseAIConfiguration } from '../../ai/configuration-policy';
 import { SettingsSnapshotError } from '../contracts';
@@ -63,23 +60,6 @@ export const NEO_PREFERENCE_FIELDS: readonly TransferField[] = [
     restart: true,
     last: true,
   })),
-  {
-    key: ITEM_ATTRIBUTE_PREFERENCE,
-    label: 'Custom item attribute definitions',
-    category: 'Item attributes',
-    type: 'string',
-    presentation: 'item-attributes',
-    validate: (value) => {
-      if (typeof value !== 'string') return false;
-      try {
-        for (const definition of parseItemAttributeDefinitions(value))
-          assertCustomExtraKey(definition.key);
-        return true;
-      } catch {
-        return false;
-      }
-    },
-  },
   {
     key: 'bindings',
     label: 'Canonical key bindings',

@@ -80,6 +80,25 @@ export function validateSettingsSection(value: unknown): asserts value is Settin
     else if (entry.state.kind !== 'reset') invalid('Unknown settings operation');
   }
 }
+/** Names emitted by older Neo adapters, not transferable configuration. */
+export function isRetiredNeoPreference(key: unknown): boolean {
+  return key === 'itemAttributes.fields.v1' || key === 'modules.item-attributes.enabled';
+}
+
+/** Keep unknown values for normal validation; only the retired entries are opaque. */
+function withoutRetiredNeoEntries(entries: readonly unknown[]): readonly unknown[] {
+  let retained: unknown[] | undefined;
+  for (let index = 0; index < entries.length; index++) {
+    const entry = entries[index];
+    if (object(entry) && isRetiredNeoPreference(entry.key)) {
+      retained ??= entries.slice(0, index);
+    } else {
+      retained?.push(entry);
+    }
+  }
+  return retained ?? entries;
+}
+
 export function validateSettingsDocument(value: unknown): SettingsDocument {
   if (!object(value) || value.format !== 'zotero-neo-settings')
     invalid('This is not a Neo settings file');
@@ -100,14 +119,28 @@ export function validateSettingsDocument(value: unknown): SettingsDocument {
   )
     invalid('Invalid settings file metadata');
   const adapters = new Set<string>();
+  const sections: SettingsSection[] = [];
   let entries = 0;
-  for (const section of value.sections) {
+  for (const stored of value.sections) {
+    let section: unknown = stored;
+    if (object(stored)) {
+      if (stored.adapterID === 'itemAttributes') continue;
+      if (Array.isArray(stored.entries)) {
+        if ((entries += stored.entries.length) > MAX_ENTRIES)
+          invalid('Duplicate adapters or too many settings');
+        if (stored.adapterID === 'zotero-neo') {
+          const retained = withoutRetiredNeoEntries(stored.entries);
+          if (retained !== stored.entries) section = { ...stored, entries: retained };
+        }
+      }
+    }
     validateSettingsSection(section);
-    if (adapters.has(section.adapterID) || (entries += section.entries.length) > MAX_ENTRIES)
-      invalid('Duplicate adapters or too many settings');
+    if (adapters.has(section.adapterID)) invalid('Duplicate adapters or too many settings');
     adapters.add(section.adapterID);
+    sections.push(section);
   }
-  const document = value as unknown as SettingsDocument;
+  const { itemAttributes: _retired, ...metadata } = value;
+  const document = { ...metadata, sections } as unknown as SettingsDocument;
   return value.extensions === undefined
     ? document
     : { ...document, extensions: validateWorkspaceExtensionManifest(value.extensions) };

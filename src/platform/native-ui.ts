@@ -13,7 +13,6 @@ const H = 'http://www.w3.org/1999/xhtml';
 interface RuntimeWindow extends Window {
   NeoReactRuntime?: NativeReactLibrary;
   NeoNativeUI?: NativeUIRuntime;
-  NeoLiteratureUI?: NativeUIRuntime;
 }
 interface Registration {
   active: boolean;
@@ -29,14 +28,9 @@ interface OwnerEntry {
   active: boolean;
   library?: Promise<void>;
   libraryValue?: NativeReactLibrary;
-  readonly renderers: Partial<Record<Renderer, RendererEntry>>;
+  uiLoad?: Promise<NativeUIRuntime>;
+  uiValue?: NativeUIRuntime;
 }
-type Renderer = 'NeoNativeUI' | 'NeoLiteratureUI';
-type RendererEntry = { load?: Promise<NativeUIRuntime>; value?: NativeUIRuntime };
-const rendererScripts = {
-  NeoNativeUI: 'native-ui.js',
-  NeoLiteratureUI: 'literature-ui.js',
-} satisfies Record<Renderer, string>;
 const owners = new WeakMap<Window, OwnerEntry>();
 let registration: Registration | null = null;
 
@@ -59,12 +53,11 @@ function retireOwner(entry: OwnerEntry): void {
   entry.views.clear();
   if (!isDeadObject(entry.owner)) {
     failure.run(() => entry.owner.removeEventListener('unload', entry.unload));
-    for (const key of ['NeoNativeUI', 'NeoLiteratureUI'] as const) {
-      const runtime = entry.renderers[key]?.value;
-      if (!runtime) continue;
+    const runtime = entry.uiValue;
+    if (runtime) {
       failure.run(() => runtime.dispose());
       failure.run(() => {
-        if (entry.owner[key] === runtime) delete entry.owner[key];
+        if (entry.owner.NeoNativeUI === runtime) delete entry.owner.NeoNativeUI;
       });
     }
     failure.run(() => {
@@ -86,7 +79,6 @@ function ownerEntry(window: Window): OwnerEntry {
   const entry: OwnerEntry = {
     owner,
     document,
-    renderers: {},
     registration: active,
     views: new Set(),
     active: true,
@@ -152,22 +144,21 @@ export function ensureNativeReactRuntime(window: Window): Promise<void> {
   return entry.library;
 }
 
-function loadUI(entry: OwnerEntry, key: Renderer): Promise<NativeUIRuntime> {
-  const renderer = (entry.renderers[key] ??= {});
-  if (renderer.load) return renderer.load;
-  renderer.load = ensureNativeReactRuntime(entry.owner).then(() => {
+function loadUI(entry: OwnerEntry): Promise<NativeUIRuntime> {
+  if (entry.uiLoad) return entry.uiLoad;
+  entry.uiLoad = ensureNativeReactRuntime(entry.owner).then(() => {
     if (!ownerCurrent(entry)) throw new Error('Native UI owner retired');
-    const previous = entry.owner[key];
-    Services.scriptloader.loadSubScript(`${CONTENT_URI}${rendererScripts[key]}`, entry.owner);
-    const runtime = entry.owner[key];
+    const previous = entry.owner.NeoNativeUI;
+    Services.scriptloader.loadSubScript(`${CONTENT_URI}native-ui.js`, entry.owner);
+    const runtime = entry.owner.NeoNativeUI;
     if (!runtime || runtime === previous) throw new Error('Native UI renderer unavailable');
-    renderer.value = runtime;
+    entry.uiValue = runtime;
     return runtime;
   });
-  void renderer.load.catch(() => {
-    if (ownerCurrent(entry)) renderer.load = undefined;
+  void entry.uiLoad.catch(() => {
+    if (ownerCurrent(entry)) entry.uiLoad = undefined;
   });
-  return renderer.load;
+  return entry.uiLoad;
 }
 
 /**
@@ -224,10 +215,7 @@ export function mountNativeReactView<Model extends object, Command>(
     const copy = JSON.parse(JSON.stringify(nativeObjectIdentity(command as object))) as Command;
     if (current()) options.dispatch(copy);
   }, entry.owner);
-  const ready = loadUI(
-    entry,
-    options.surface === 'literature-table' ? 'NeoLiteratureUI' : 'NeoNativeUI',
-  )
+  const ready = loadUI(entry)
     .then((runtime) => {
       if (!current()) throw new Error('Native UI view retired before mount');
       const mounted = runtime.mount(

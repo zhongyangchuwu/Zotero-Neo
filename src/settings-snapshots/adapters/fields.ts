@@ -20,7 +20,6 @@ export interface TransferField {
   readonly path?: 'file' | 'directory';
   readonly manual?: string;
   readonly library?: boolean;
-  readonly presentation?: 'item-attributes';
   readonly normalize?: (state: SettingState) => SettingState;
   readonly validate?: (value: SettingsValue) => boolean;
 }

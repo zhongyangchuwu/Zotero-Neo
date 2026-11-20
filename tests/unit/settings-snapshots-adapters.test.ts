@@ -8,7 +8,11 @@ import type {
   SettingsSection,
   SettingsValue,
 } from '../../src/settings-snapshots/contracts';
-import { assertSettingsCurrent } from '../../src/settings-snapshots/document';
+import {
+  assertSettingsCurrent,
+  parseSettingsDocument,
+} from '../../src/settings-snapshots/document';
+import { SettingsSnapshotService, settingsChangeID } from '../../src/settings-snapshots/service';
 import { saveMinerUToken } from '../../src/platform/document-credentials';
 import { changeReferenceKey } from '../../src/platform/reference-credentials';
 import { changeAICredential } from '../../src/platform/ai-credentials';
@@ -159,6 +163,75 @@ describe('standalone built-in settings adapters at the native OS boundary', () =
     expect(entries['modules.translation.enabled']).toEqual({ kind: 'set', value: false });
     expect(entries['ai.configuration']).toEqual({ kind: 'set', value: JSON.stringify(config) });
     expect(JSON.stringify(captured)).not.toMatch(/private-groups|private-marks|private-trace/);
+  });
+
+  it('restores live Neo settings and shortcuts without writing or backing up retired preferences', async () => {
+    const t = settingsSnapshotHostFixture();
+    const definitions = 'itemAttributes.fields.v1';
+    const moduleFlag = 'modules.item-attributes.enabled';
+    const prefix = 'extensions.zotero-neo.';
+    t.user.set(prefix + definitions, '{"version":1,"fields":[]}');
+    t.user.set(prefix + moduleFlag, true);
+    const adapter = createSettingsAdapters(() => 'neo-target')[1]!;
+    const service = new SettingsSnapshotService([adapter], () => ({
+      neo: 'neo-target',
+      zotero: '8',
+    }));
+    const operation = { ...context(), container: 'json' as const, window: {} as Window };
+    const document = parseSettingsDocument(
+      JSON.stringify({
+        format: 'zotero-neo-settings',
+        schemaVersion: 1,
+        createdAt: '2026-11-17T00:00:00.000Z',
+        producer: { name: 'Zotero Neo', version: 'source-old' },
+        zoteroVersion: '8',
+        sections: [
+          section('zotero-neo', [
+            set(definitions, '{"version":999,"fields":null}'),
+            reset(moduleFlag),
+            set('language', 'zh-CN'),
+            set('bindings', {
+              schemaVersion: 22,
+              overrides: JSON.stringify({
+                'reader-normal:x': 'scrollDown',
+                'main-normal:<Space>pa': 'manageItemAttributes',
+                'main-normal:<Space>ia': 'editItemAttributes',
+              }),
+            }),
+          ]),
+        ],
+      }),
+    );
+    const plan = await service.plan(document, operation);
+    expect(plan.plans.flatMap(({ changes }) => changes.map(({ key }) => key))).toEqual([
+      'language',
+      'bindings',
+    ]);
+    const receipt = await service.apply(
+      plan,
+      new Set(
+        ['language', 'bindings', definitions, moduleFlag].map((key) =>
+          settingsChangeID(adapter.id, key),
+        ),
+      ),
+      operation,
+      async () => {},
+    );
+    expect(receipt.entries).toMatchObject([
+      { key: 'language', status: 'applied' },
+      { key: 'bindings', status: 'applied' },
+    ]);
+    expect(t.mutations).not.toContain(prefix + definitions);
+    expect(t.mutations).not.toContain(prefix + moduleFlag);
+    expect(t.user.get(prefix + definitions)).toBe('{"version":1,"fields":[]}');
+    expect(t.user.get(prefix + moduleFlag)).toBe(true);
+    expect(t.user.get(prefix + 'language')).toBe('zh-CN');
+    expect(JSON.parse(String(t.user.get(prefix + 'bindings')))).toEqual({
+      'reader-normal:x': 'scrollDown',
+    });
+    const captured = await adapter.capture(captureContext());
+    expect(captured.section.entries.map(({ key }) => key).sort()).toEqual(['bindings', 'language']);
+    expect(captured.issues.map(({ code }) => code)).not.toContain('excluded-or-unknown');
   });
 
   it('plans target versions, defaults conflicts unselected, preserves false/zero/empty/reset, and imports idempotently', async () => {

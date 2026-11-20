@@ -49,7 +49,6 @@ export type BuiltinModuleId =
   | 'document-preparation'
   | 'settings-snapshots'
   | 'extensions'
-  | 'item-attributes'
   | 'tab-enhancements';
 
 export const OPTIONAL_MODULE_IDS = [
@@ -59,7 +58,6 @@ export const OPTIONAL_MODULE_IDS = [
   'ai-qa',
   'references',
   'tab-enhancements',
-  'item-attributes',
 ] as const;
 export type OptionalModuleId = (typeof OPTIONAL_MODULE_IDS)[number];
 export const OPTIONAL_MODULE_DEFAULTS: Readonly<Record<OptionalModuleId, boolean>> = {
@@ -69,7 +67,6 @@ export const OPTIONAL_MODULE_DEFAULTS: Readonly<Record<OptionalModuleId, boolean
   'ai-qa': false,
   references: true,
   'tab-enhancements': false,
-  'item-attributes': false,
 };
 const OPTIONAL_MODULE_ID_SET = new Set<BuiltinModuleId>(OPTIONAL_MODULE_IDS);
 
@@ -427,24 +424,6 @@ export const BUILTIN_MODULES: readonly BuiltinModuleDescriptor[] = [
     ],
     selectionActions: [],
     ui: ['Plugin manager'],
-  },
-  {
-    id: 'item-attributes',
-    names: { en: 'Item Attributes', 'zh-CN': '条目自定义属性' },
-    hosts: ['main'],
-    scopes: ['Application attribute definitions', 'Main window', 'Explicit item targets'],
-    requires: [],
-    optional: [],
-    contributions: [
-      {
-        host: 'main',
-        context: 'main-normal',
-        actions: ['manageItemAttributes', 'editItemAttributes'],
-      },
-      { host: 'main', context: 'main-select', actions: ['editItemAttributes'] },
-    ],
-    selectionActions: [],
-    ui: ['Native item columns', 'Native Info rows', 'Attribute manager', 'Bulk attribute editor'],
   },
   {
     id: 'tab-enhancements',

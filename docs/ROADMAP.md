@@ -12,6 +12,8 @@ Neo 提供可按需使用的 Zotero 增强工具，不要求按一套固定流�
 
 这些功能以 `main` 分支的当前代码为准。想安装对应版本，可以从[安装指南](GETTING_STARTED.md#获取-xpi-安装包)获取构建包。
 
+文献表格和自定义属性由独立插件 [Zotero Bases](https://github.com/zhongyangchuwu/Zotero-Bases) 提供。在 Neo 中按 `<Space>pp`、`i`，用键盘选中 Zotero Bases 并按 `Enter` 安装。
+
 ## 目前不支持的范围
 
 Neo 不是完整的 Vim 移植，目前不支持宏、Ex 命令或全部 Vim 操作。对 EPUB 和网页快照的支持也没有覆盖 PDF 中的所有功能。

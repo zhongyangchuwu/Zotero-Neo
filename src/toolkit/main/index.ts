@@ -1,6 +1,5 @@
 /** Main host capabilities. Native pane/tree/tab/editor objects remain internal. */
-export { registerLiteratureMenus } from './literature-menus';
-export { createLiteratureTableHost } from './literature-table';
+export { registerMetadataReviewMenu } from './metadata-menu';
 export {
   selectedMainTabID,
   selectedMainTabInfo,
@@ -132,6 +131,3 @@ export type {
   TabRailLayout,
   TabRailLayoutOptions,
 } from './tab-enhancements-types';
-export { createItemAttributeNativeHost, assertCustomExtraKey } from './item-attributes';
-export type { NativeItemAttribute, ItemAttributeNativeHost } from './item-attributes-types';
-export { captureItemExtraRecovery, type ItemExtraRecovery } from './item-attribute-recovery';

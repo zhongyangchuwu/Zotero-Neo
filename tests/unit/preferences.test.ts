@@ -305,6 +305,27 @@ describe('binding preferences', () => {
     );
   });
 
+  it('drops retired item attribute actions from schema 22 without losing other overrides', () => {
+    const retained = {
+      'main-normal:<Space>pa': 'openNeoSettings',
+      'main-normal:<Space>ps': null,
+      'reader-normal:j': 'scrollUp',
+    };
+    const preferences = new TestPreferences({
+      'bindings.schemaVersion': 22,
+      bindings: JSON.stringify({
+        'main-normal:<F9>': 'manageItemAttributes',
+        'main-select:<Space>ia': 'editItemAttributes',
+        ...retained,
+      }),
+    });
+
+    migrateBindingPreferences(preferences);
+
+    expect(JSON.parse(preferences.get('bindings', ''))).toEqual(retained);
+    expect(preferences.get('bindings.schemaVersion', 0)).toBe(BINDING_SCHEMA_VERSION);
+  });
+
   it.each([7, 16])('removes only inactive Reader Insert rows upgrading schema %s', (version) => {
     const retained = {
       'reader-normal:j': 'scrollUp',

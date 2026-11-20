@@ -1,6 +1,10 @@
 import { afterEach, expect, it, vi } from 'vitest';
 import { ZOTERO_NEO_PLUGIN_ID } from '../../src/modules/extensions/host';
-import { CURATED_EXTENSIONS, type ExtensionSource } from '../../src/modules/extensions/sources';
+import {
+  CURATED_EXTENSIONS,
+  resolveCuratedExtension,
+  type ExtensionSource,
+} from '../../src/modules/extensions/sources';
 import {
   applyWorkspaceExtensions,
   captureWorkspaceExtensions,
@@ -152,7 +156,7 @@ function host(...plugins: NativeAddon[]) {
 afterEach(() => vi.unstubAllGlobals());
 
 it('captures all manageable third-party extensions, reading local sources once without copying signed links', async () => {
-  const curated = CURATED_EXTENSIONS[0]!.candidate;
+  const curated = await resolveCuratedExtension(CURATED_EXTENSIONS[0]!, context().signal);
   const github = {
     kind: 'github',
     owner: 'PubLisher',
@@ -261,13 +265,14 @@ it('previews install, repair, state, same and protected rows without proposing d
 });
 
 it('binds explicit replacements to the selected ID, preserves exact curated pinning, and labels sources without secrets', async () => {
-  const { label, candidate } = CURATED_EXTENSIONS[0]!;
+  const translate = CURATED_EXTENSIONS[0]!;
   const signal = context().signal;
+  const candidate = await resolveCuratedExtension(translate, signal);
   await expect(resolveWorkspaceExtensionInput('other', candidate.url, signal)).resolves.toEqual([]);
   await expect(
     resolveWorkspaceExtensionInput(candidate.expectedID!, candidate.url, signal),
   ).resolves.toEqual([candidate]);
-  expect(workspaceExtensionCandidateLabel(candidate)).toBe(label);
+  expect(workspaceExtensionCandidateLabel(candidate)).toBe(translate.label);
   const [directCandidate] = await resolveWorkspaceExtensionInput(
     'other',
     `${url('other')}?signature=local-only`,
@@ -275,6 +280,40 @@ it('binds explicit replacements to the selected ID, preserves exact curated pinn
   );
   expect(directCandidate?.expectedID).toBe('other');
   expect(workspaceExtensionCandidateLabel(directCandidate!)).toBe('packages.example.org');
+});
+
+it('reinstalls Zotero Bases from portable provenance without requesting another source', async () => {
+  const id = 'zotero-bases@zhongyangchuwu.github.io';
+  const source = {
+    kind: 'github',
+    owner: 'zhongyangchuwu',
+    repo: 'zotero-bases',
+    assetName: 'zotero-bases.xpi',
+  } as const;
+  const publisher = host(addon(id));
+  publisher.prefs.set(sourcePref, JSON.stringify({ version: 1, sources: { [id]: source } }));
+  const ctx = context();
+  const backup = await captureWorkspaceExtensions(ctx, new Map());
+  expect(backup.addons).toMatchObject([{ addonId: id, source }]);
+
+  const receiver = host();
+  const download =
+    'https://github.com/zhongyangchuwu/Zotero-Bases/releases/download/v2.0/zotero-bases.xpi';
+  receiver.download(download, addon(id));
+  vi.stubGlobal('fetch', async () =>
+    Response.json({
+      tag_name: 'v2.0',
+      assets: [{ name: source.assetName, state: 'uploaded', browser_download_url: download }],
+    }),
+  );
+  const plan = await inspectWorkspaceExtensions(backup, ctx);
+  expect(plan.rows).toMatchObject([{ status: 'install' }]);
+  const result = await applyWorkspaceExtensions(plan, new Set([id]), new Map(), ctx, verify);
+  expect(result).toEqual({ installed: 1, aligned: 0, pendingRestart: false, skipped: [] });
+  expect(receiver.installed.get(id)?.isActive).toBe(true);
+  expect(receiver.prefs.get(sourcePref)).toBe(
+    JSON.stringify({ version: 1, sources: { [id]: source } }),
+  );
 });
 
 it('installs before changing any states, isolates refusal and storage failure, and never mutates Neo or device-only add-ons', async () => {

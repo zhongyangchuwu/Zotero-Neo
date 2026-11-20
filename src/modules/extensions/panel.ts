@@ -29,7 +29,12 @@ import {
   updateExtension,
   type ExtensionTransport,
 } from './operations';
-import { CURATED_EXTENSIONS, resolveExtensionCandidates, type ExtensionCandidate } from './sources';
+import {
+  CURATED_EXTENSIONS,
+  resolveCuratedExtension,
+  resolveExtensionCandidates,
+  type ExtensionCandidate,
+} from './sources';
 import {
   installedPlugins,
   openPluginInfoURL,
@@ -46,7 +51,12 @@ import type {
 } from './runtime';
 
 const H = 'http://www.w3.org/1999/xhtml';
-const CURATED_LABELS = CURATED_EXTENSIONS.map(({ label }) => label);
+const CURATED_OPTIONS = ([0, 1] as const).map((language) =>
+  CURATED_EXTENSIONS.map((entry) => ({
+    label: entry.label,
+    description: 'description' in entry ? entry.description[language] : undefined,
+  })),
+);
 
 export interface PluginManagerPanelHost {
   readonly window: MainWindow;
@@ -499,6 +509,27 @@ export class PluginManagerPanel {
       if (!event.repeat) this.dismissInline();
       return;
     }
+    if (
+      inline.kind === 'source' &&
+      !state.busy &&
+      (event.key === 'ArrowDown' || event.key === 'ArrowUp') &&
+      target &&
+      ((target === state.sourceInput && !state.sourceInput?.value.trim()) ||
+        target.hasAttribute('data-neo-curated-index'))
+    ) {
+      const index =
+        target === state.sourceInput ? -1 : Number(target.getAttribute('data-neo-curated-index'));
+      const next = index + (event.key === 'ArrowDown' ? 1 : -1);
+      const focus =
+        next < 0
+          ? state.sourceInput
+          : state.overlay?.querySelector<HTMLElement>(`[data-neo-curated-index="${next}"]`);
+      if (focus && focus !== target) {
+        event.preventDefault();
+        focus.focus();
+      }
+      return;
+    }
     if (inline.kind === 'choose' && (event.key === 'ArrowDown' || event.key === 'ArrowUp')) {
       event.preventDefault();
       const selected = Math.max(
@@ -575,6 +606,40 @@ export class PluginManagerPanel {
     if (candidate) this.setInline({ kind: 'install', candidate });
   }
 
+  private chooseCurated(index: number): void {
+    const entry = Number.isInteger(index) ? CURATED_EXTENSIONS[index] : undefined;
+    if (!entry) return;
+    if ('candidate' in entry) this.setInline({ kind: 'install', candidate: entry.candidate });
+    else this.lookupInstall(async (signal) => [await resolveCuratedExtension(entry, signal)]);
+  }
+
+  private lookupInstall(
+    lookup: (signal: AbortSignal) => Promise<readonly ExtensionCandidate[]>,
+  ): void {
+    const state = this.#host.state;
+    const inline = state.inline;
+    state.sourceInput?.focus();
+    if (state.inline !== inline) return;
+    void this.run(
+      this.text('Finding install files…', '正在查找安装文件…'),
+      async ({ signal, isCurrent }) => {
+        const candidates = await lookup(signal);
+        if (!isCurrent()) return;
+        if (!candidates.length) {
+          state.notice = this.text('No XPI files found.', '未找到 XPI 文件。');
+          return;
+        }
+        state.notice = '';
+        this.setInline(
+          candidates.length === 1
+            ? { kind: 'install', candidate: candidates[0] }
+            : { kind: 'choose', candidates, selected: 0 },
+        );
+      },
+      { stoppable: true },
+    );
+  }
+
   private submitInline(): void {
     const state = this.#host.state;
     const inline = state.inline;
@@ -584,31 +649,8 @@ export class PluginManagerPanel {
         const input = state.sourceInput;
         if (!input || state.sourceComposition.active) return;
         const value = input.value.trim();
-        if (!value) {
-          const curated = CURATED_EXTENSIONS[0];
-          if (curated) this.setInline({ kind: 'install', candidate: curated.candidate });
-          return;
-        }
-        input.focus();
-        if (state.inline !== inline) return;
-        void this.run(
-          this.text('Finding install files…', '正在查找安装文件…'),
-          async (transport) => {
-            const candidates = await resolveExtensionCandidates(value, transport.signal);
-            if (!transport.isCurrent()) return;
-            if (!candidates.length) {
-              state.notice = this.text('No XPI files found.', '未找到 XPI 文件。');
-              return;
-            }
-            state.notice = '';
-            this.setInline(
-              candidates.length === 1
-                ? { kind: 'install', candidate: candidates[0] }
-                : { kind: 'choose', candidates, selected: 0 },
-            );
-          },
-          { stoppable: true },
-        );
+        if (value) this.lookupInstall((signal) => resolveExtensionCandidates(value, signal));
+        else this.chooseCurated(0);
         return;
       }
       case 'choose':
@@ -1021,10 +1063,7 @@ export class PluginManagerPanel {
         return;
       case 'curated': {
         if (state.inline?.kind !== 'source' || state.busy || state.sourceComposition.active) return;
-        const curated = Number.isInteger(command.index)
-          ? CURATED_EXTENSIONS[command.index]
-          : undefined;
-        if (curated) this.setInline({ kind: 'install', candidate: curated.candidate });
+        this.chooseCurated(command.index);
         return;
       }
       case 'select':
@@ -1110,7 +1149,7 @@ export class PluginManagerPanel {
         inlineModel = {
           kind: 'source',
           resolving: state.busy,
-          curated: CURATED_LABELS,
+          curated: CURATED_OPTIONS[this.#host.language() === 'zh-CN' ? 1 : 0],
         };
         break;
       case 'choose':

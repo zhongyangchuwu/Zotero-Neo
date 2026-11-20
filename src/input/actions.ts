@@ -94,8 +94,6 @@ const BASE_ACTION_IDS = [
   'openCommandPalette',
   'openNeoSettings',
   'openSettingsSnapshots',
-  'manageItemAttributes',
-  'editItemAttributes',
   'prepareDocuments',
   'inspectMetadata',
   'inspectCollectionMetadata',

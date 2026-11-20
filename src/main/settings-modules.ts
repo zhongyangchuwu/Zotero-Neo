@@ -36,10 +36,6 @@ const MODULE_DESCRIPTIONS: Record<OptionalModuleId, { en: string; 'zh-CN': strin
     en: 'Use a tab sidebar and save groups of reading tabs.',
     'zh-CN': '使用标签页侧栏，并保存阅读标签页分组。',
   },
-  'item-attributes': {
-    en: 'Define and edit custom attributes for items.',
-    'zh-CN': '为条目定义和编辑自定义属性。',
-  },
 };
 
 /** Saves feature requests immediately while retaining startup-applied state. */

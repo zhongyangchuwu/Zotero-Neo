@@ -274,8 +274,6 @@
   "action.mainAddByIdentifier": "Add Item by Identifier",
   "action.openSettingsSnapshots": "Workspace Sync & Backup",
   "actionAlias.openSettingsSnapshots": "Settings snapshots 设置快照",
-  "action.manageItemAttributes": "Manage custom bibliographic item attributes",
-  "action.editItemAttributes": "Set or clear custom attributes on selected items",
   "action.inspectMetadata": "Check paper details for selected items",
   "action.inspectCollectionMetadata": "Check paper details in the current collection",
   "action.mainOpenPDF": "Open the Main Cursor or Note-context item",

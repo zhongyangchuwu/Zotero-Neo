@@ -67,10 +67,11 @@ const MAX_SOURCE_URL = 4096;
 const CONTROL = /[\u0000-\u001f\u007f]/u;
 const CREDENTIAL_SEGMENT =
   /(?:^|[;?&])(?:access[-_]?token|api[-_]?key|auth(?:entication|orization)?|credentials?|expires|password|private[-_]?key|secret|signature|signed|token|x-amz-[a-z-]+|x-goog-[a-z-]+)(?:$|[=;:])/i;
+const PINNED_EXTENSIONS = CURATED_EXTENSIONS.filter((entry) => 'candidate' in entry);
 
 function curatedSource(addonId: string | undefined, source: ExtensionSource) {
   if (source.kind !== 'xpi') return undefined;
-  return CURATED_EXTENSIONS.find(({ candidate }) => {
+  return PINNED_EXTENSIONS.find(({ candidate }) => {
     const pinned = candidate.source;
     return (
       candidate.expectedID === addonId &&
@@ -259,7 +260,7 @@ function bindCandidate(
   addonId: string,
   candidate: ExtensionCandidate,
 ): ExtensionCandidate | undefined {
-  const pinned = CURATED_EXTENSIONS.find((item) => item.candidate.url === candidate.url)?.candidate;
+  const pinned = PINNED_EXTENSIONS.find((item) => item.candidate.url === candidate.url)?.candidate;
   if (
     (candidate.expectedID !== undefined && candidate.expectedID !== addonId) ||
     (pinned && pinned.expectedID !== addonId)
