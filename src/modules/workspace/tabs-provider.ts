@@ -1,11 +1,15 @@
 import type { MainWindow } from '../../core/contracts';
+import { t, type AppLanguage } from '../../i18n';
 import { mainTabList, selectedMainTabID } from '../../toolkit/main';
 import type { PickerProvider } from '../../main/picker/types';
 
-export function createTabsProvider(window: MainWindow): PickerProvider {
+export function createTabsProvider(
+  window: MainWindow,
+  language: AppLanguage = 'en',
+): PickerProvider {
   return {
-    title: 'Tabs',
-    placeholder: '> Search tab titles…',
+    title: t('picker.tabs', language),
+    placeholder: t('picker.searchTabs', language),
     async load() {
       const selected = selectedMainTabID(window);
       return mainTabList(window).flatMap((tab) => {
@@ -24,6 +28,16 @@ export function createTabsProvider(window: MainWindow): PickerProvider {
       });
     },
     rowText: (item) => item.title,
-    preview: (item) => ({ title: item.title, body: item.kind ?? 'tab' }),
+    preview: (item) => ({
+      title: item.title,
+      body: t(
+        item.kind?.startsWith('reader')
+          ? 'picker.readerTab'
+          : item.kind === 'library'
+            ? 'picker.libraryTab'
+            : 'picker.tab',
+        language,
+      ),
+    }),
   };
 }

@@ -1,2 +1,2 @@
-export { FuzzyPicker, fuzzyPickerRowText } from './shell';
+export { FuzzyPicker } from './shell';
 export { fuzzyMatchScore } from '../../ui/fuzzy';

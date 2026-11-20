@@ -1,5 +1,6 @@
 import { suggestTagPaths } from '../../tag-path';
 import { isSourceNoteIdentity } from '../../../platform/note-relations';
+import { t, type AppLanguage } from '../../../i18n';
 import type { PickerItem } from '../model';
 import type { PickerProvider } from '../types';
 
@@ -12,6 +13,7 @@ export interface TagCandidateSourceOptions {
   readonly allowCreate?: boolean;
   readonly loadTags: () => Promise<readonly TagRecord[]>;
   readonly describe?: (tag: string) => string | undefined;
+  readonly language?: AppLanguage;
 }
 
 function sameTag(left: string, right: string): boolean {
@@ -29,25 +31,33 @@ function tagItem(record: TagRecord, meta?: string): PickerItem {
   };
 }
 
-function namespaceItem(label: string, insertText: string, count: number): PickerItem {
+function namespaceItem(
+  label: string,
+  insertText: string,
+  count: number,
+  language: AppLanguage,
+): PickerItem {
   return {
     id: `namespace:${insertText}`,
     title: label,
     search: insertText,
     tagName: insertText,
     tagCandidate: 'namespace',
-    meta: `${count} tag${count === 1 ? '' : 's'}`,
+    meta: t(count === 1 ? 'picker.oneTag' : 'picker.tagCount', language).replace(
+      '{count}',
+      String(count),
+    ),
   };
 }
 
-function createItem(name: string): PickerItem {
+function createItem(name: string, language: AppLanguage): PickerItem {
   return {
     id: `create:${name}`,
-    title: `+ Create “${name}”`,
+    title: t('picker.createTag', language).replace('{tag}', () => name),
     search: name,
     tagName: name,
     tagCandidate: 'create',
-    meta: 'New tag',
+    meta: t('picker.newTag', language),
   };
 }
 
@@ -56,6 +66,7 @@ function createItem(name: string): PickerItem {
  * candidate, but it never mutates filters or item tags.
  */
 export function createTagCandidateProvider(options: TagCandidateSourceOptions): PickerProvider {
+  const language = options.language ?? 'en';
   return {
     title: options.title,
     placeholder: options.placeholder,
@@ -82,7 +93,7 @@ export function createTagCandidateProvider(options: TagCandidateSourceOptions): 
       const suggestions = suggestTagPaths(names, query, options.separator);
       const projected = suggestions.map((suggestion) => {
         if (suggestion.kind === 'namespace')
-          return namespaceItem(suggestion.label, suggestion.insertText, suggestion.count);
+          return namespaceItem(suggestion.label, suggestion.insertText, suggestion.count, language);
         return byName.get(suggestion.insertText) ?? tagItem({ tag: suggestion.insertText });
       });
       const trimmed = query.trim();
@@ -93,7 +104,7 @@ export function createTagCandidateProvider(options: TagCandidateSourceOptions): 
         !exact &&
         !isSourceNoteIdentity(trimmed) &&
         (!options.separator || !trimmed.endsWith(options.separator));
-      return canCreate ? [createItem(trimmed), ...projected] : projected;
+      return canCreate ? [createItem(trimmed, language), ...projected] : projected;
     },
     refineQuery(item) {
       return item.tagCandidate === 'namespace' ? (item.tagName ?? null) : null;
@@ -107,18 +118,28 @@ export function createTagCandidateProvider(options: TagCandidateSourceOptions): 
       if (item.tagCandidate === 'namespace') {
         return {
           title: item.title,
-          body: ['Tag namespace', item.meta, 'Confirm to narrow the query']
+          body: [
+            t('picker.tagNamespace', language),
+            item.meta,
+            t('picker.narrowTagQuery', language),
+          ]
             .filter(Boolean)
             .join('\n'),
         };
       }
       return {
         title: item.tagName ?? item.title,
-        body: [item.tagCandidate === 'create' ? 'New tag' : 'Existing tag', item.meta ?? '']
+        body: [
+          t(item.tagCandidate === 'create' ? 'picker.newTag' : 'picker.existingTag', language),
+          item.meta ?? '',
+        ]
           .filter(Boolean)
           .join('\n'),
       };
     },
-    emptyText: (query) => (query ? `No tags match “${query}”` : 'No tags available'),
+    emptyText: (query) =>
+      query
+        ? t('picker.noMatchingTags', language).replace('{query}', () => query)
+        : t('picker.noTags', language),
   };
 }

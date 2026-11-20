@@ -20,6 +20,13 @@ import {
   type CustomInteractionTheme,
   type InteractionAppearanceManager,
 } from './interaction-appearance';
+import {
+  PICKER_CUSTOM_CSS_PREFERENCE_KEY,
+  PICKER_THEME_PREFERENCE_KEY,
+  normalizePickerTheme,
+  pickerCustomCss,
+  pickerTheme,
+} from './picker/appearance';
 import { settingsText, type SettingsLanguage, type SettingsMessage } from './settings-i18n';
 import type {
   AppearanceColor,
@@ -95,6 +102,10 @@ export class SettingsAppearance {
       const cleanup = preferences.observe?.(key, () => this.#refresh());
       if (cleanup) this.#cleanups.push(cleanup);
     }
+    for (const key of [PICKER_THEME_PREFERENCE_KEY, PICKER_CUSTOM_CSS_PREFERENCE_KEY]) {
+      const cleanup = preferences.observe?.(key, () => this.#notify());
+      if (cleanup) this.#cleanups.push(cleanup);
+    }
     if (state.view === 'editor' && state.editingThemeId) {
       const theme = findCustomInteractionTheme(this.#store(), state.editingThemeId);
       if (theme) this.#setEditor(theme, false);
@@ -154,6 +165,8 @@ export class SettingsAppearance {
       view: this.#state.view,
       markerWidth: appearance.marker.width,
       statusStyle: appearance.statusStyle,
+      pickerTheme: pickerTheme(this.#preferences),
+      pickerCustomCss: pickerCustomCss(this.#preferences),
       themes,
       confirmedDelete: this.#confirmedDelete,
       status: this.#status,
@@ -173,6 +186,14 @@ export class SettingsAppearance {
       case 'status-style':
         if (library && (command.value === 'neutral' || command.value === 'tinted'))
           this.#setAppearance(INTERACTION_STATUS_STYLE_PREFERENCE_KEY, command.value);
+        break;
+      case 'picker-theme':
+        if (library && command.value === normalizePickerTheme(command.value))
+          this.#setPickerPreference(PICKER_THEME_PREFERENCE_KEY, command.value);
+        break;
+      case 'picker-custom-css':
+        if (library && typeof command.value === 'string')
+          this.#setPickerPreference(PICKER_CUSTOM_CSS_PREFERENCE_KEY, command.value);
         break;
       case 'select':
         if (library && ids.includes(command.id)) this.#select(command.id);
@@ -339,6 +360,14 @@ export class SettingsAppearance {
         this.#preferences.set(key, value);
         this.#appearance.refresh();
       });
+      this.#status = '';
+    } catch {
+      this.#status = this.#t('Could not update appearance.');
+    }
+  }
+  #setPickerPreference(key: string, value: string): void {
+    try {
+      this.#write(() => this.#preferences.set(key, value));
       this.#status = '';
     } catch {
       this.#status = this.#t('Could not update appearance.');

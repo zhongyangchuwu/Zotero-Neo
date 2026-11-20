@@ -1,113 +1,237 @@
 import { React } from '../runtime';
 import { createReactView } from '../view';
 import type { ReactView } from '../types';
-import type { PickerReactCommand, PickerReactModel } from '../../../main/picker/react-model';
+import type {
+  PickerReactCommand,
+  PickerReactModel,
+  PickerRowCells,
+} from '../../../main/picker/react-model';
 
-export const PICKER_REACT_CSS = `
-.neo-picker { height:100%; color:var(--zotero-neo-text); font:menu; line-height:1.45; }
-.neo-picker .picker-content { display:grid; grid-template-columns:minmax(360px,48%) minmax(0,1fr); height:100%; min-height:0; }
-.neo-picker .picker-content.single { grid-template-columns:1fr; grid-template-rows:minmax(280px,1fr) minmax(180px,.65fr); }
-.neo-picker section { display:flex; flex-direction:column; min-width:0; min-height:0; }
-.neo-picker .picker-left { border-right:1px solid var(--zotero-neo-border); }
-.neo-picker .single .picker-left { border-right:0; border-bottom:1px solid var(--zotero-neo-border); }
-.neo-picker header { padding:4px 12px; color:var(--zotero-neo-text); background:var(--zotero-neo-elevated); border-bottom:1px solid var(--zotero-neo-border); font-weight:700; }
-.neo-picker .picker-header { display:grid; grid-template-columns:1fr auto 1fr; align-items:center; }
-.neo-picker .picker-source { grid-column:1; grid-row:1; justify-self:start; font:inherit; color:inherit; background:var(--zotero-neo-input); border:1px solid var(--zotero-neo-border); border-radius:3px; padding:2px 6px; }
-.neo-picker .picker-title { grid-column:2; }
-.neo-picker .picker-count { grid-column:3; justify-self:end; color:var(--zotero-neo-muted); }
-.neo-picker input { margin:8px 10px; background:var(--zotero-neo-input); color:inherit; border:1px solid var(--zotero-neo-border); outline:2px solid var(--zotero-neo-focus-ring); outline-offset:1px; border-radius:3px; padding:7px 10px; font:inherit; }
-.neo-picker .picker-help { flex:0 0 auto; min-height:18px; padding:0 10px 6px; color:var(--zotero-neo-muted); font-size:11px; white-space:nowrap; overflow:hidden; text-overflow:ellipsis; }
-.neo-picker .picker-results { overflow:auto; flex:1; min-height:0; outline:none; padding:2px 0; }
-.neo-picker .picker-row { padding:6px 12px; border-left:3px solid transparent; }
-.neo-picker .picker-row.boundary { border-top:1px solid var(--zotero-neo-border); }
-.neo-picker .picker-row.selected { color:var(--zotero-neo-selected-text); border-left-color:var(--zotero-neo-accent); background:var(--zotero-neo-selected); }
-.neo-picker .picker-status { padding:0 10px 6px; font-size:12px; }
-.neo-picker .picker-preview-header { text-align:center; white-space:nowrap; overflow:hidden; text-overflow:ellipsis; }
-.neo-picker .picker-preview { overflow:auto; flex:1; min-height:0; outline:none; padding:14px 16px; white-space:pre-wrap; background:var(--zotero-neo-elevated); }
-.neo-picker .focused { box-shadow:inset 0 0 0 2px var(--zotero-neo-focus-ring); }
-`;
+export { PICKER_REACT_CSS } from './picker-styles';
+
+/** Match offsets are UTF-16 indices; keep contiguous matches and surrogate pairs intact. */
+function titleWithMatches(title: string, matches: readonly number[] | undefined): React.ReactNode {
+  if (!matches?.length) return title;
+
+  const parts: React.ReactNode[] = [];
+  let cursor = 0;
+  let start = -1;
+  let end = 0;
+  const appendMatch = (): void => {
+    if (cursor < start) parts.push(title.slice(cursor, start));
+    parts.push(
+      <mark className="picker-match" key={start}>
+        {title.slice(start, end)}
+      </mark>,
+    );
+    cursor = end;
+  };
+
+  const indexes = matches
+    .filter((index) => Number.isInteger(index) && index >= 0 && index < title.length)
+    .sort((a, b) => a - b);
+  for (const index of indexes) {
+    const code = title.charCodeAt(index);
+    const beginsPair =
+      code >= 0xdc00 && code <= 0xdfff && (title.codePointAt(index - 1) ?? 0) > 0xffff;
+    const left = beginsPair ? index - 1 : index;
+    const right = left + ((title.codePointAt(left) ?? 0) > 0xffff ? 2 : 1);
+    if (start < 0 || left > end) {
+      if (start >= 0) appendMatch();
+      start = left;
+    }
+    end = Math.max(end, right);
+  }
+  if (start < 0) return title;
+  appendMatch();
+  if (cursor < title.length) parts.push(title.slice(cursor));
+  return parts;
+}
+
+// React's option-only `selected` property is not the attribute on a result div.
+function markSelected(row: HTMLDivElement | null): (() => void) | void {
+  if (!row) return;
+  row.setAttribute('selected', '');
+  return () => row.removeAttribute('selected');
+}
+
+function BibliographicCells({ cells }: { cells: PickerRowCells }): React.ReactNode {
+  const citekey = cells.citekey ? `@${cells.citekey}` : undefined;
+  return (
+    <>
+      <span className="picker-cell-title">
+        {cells.icon ? (
+          <img className="picker-item-icon" src={cells.icon} alt="" draggable={false} />
+        ) : (
+          <span className="picker-item-icon" aria-hidden="true" />
+        )}
+        <span className="picker-cell-title-text" title={cells.title}>
+          {titleWithMatches(cells.title, cells.matches)}
+        </span>
+      </span>
+      <span className="picker-cell-meta">
+        <span className="picker-cell-author" title={cells.author}>
+          {cells.author}
+        </span>
+        <span className="picker-cell-year">{cells.year}</span>
+        <span className="picker-cell-detail" title={cells.detail}>
+          {cells.detail}
+        </span>
+      </span>
+      <span className="picker-cell-citekey" title={citekey}>
+        {citekey}
+      </span>
+    </>
+  );
+}
+
+function PickerSurface({ model }: { model: PickerReactModel }): React.ReactNode {
+  const id = React.useId();
+  const resultsID = `${id}-results`;
+  const previewTitleID = `${id}-preview-title`;
+  const hasRows = !model.loading && model.rows.length > 0;
+  const hasStructuredPreview =
+    model.previewSections !== undefined || model.previewMeta !== undefined;
+
+  return (
+    <div className="picker-container">
+      <div className="picker-input-wrapper">
+        <span className="picker-prompt" aria-hidden="true" title={model.title}>
+          {'>'}
+        </span>
+        <button
+          type="button"
+          className="picker-source"
+          data-neo-ui-part="source"
+          hidden={model.sourceLabel === null}
+          disabled={model.sourceDisabled}
+          title={model.sourceLabel ?? undefined}
+        >
+          {model.sourceLabel}
+        </button>
+        <input
+          className="picker-query"
+          no-native=""
+          type="text"
+          data-neo-ui-part="query"
+          aria-label={model.title}
+          aria-controls={resultsID}
+          placeholder={model.placeholder}
+        />
+        {model.title && (
+          <span className="picker-scope" title={model.title}>
+            {model.title}
+          </span>
+        )}
+        <span className="picker-count" data-neo-ui-part="count" title={model.count}>
+          {model.count}
+        </span>
+      </div>
+      <div className="picker-content">
+        <div
+          id={resultsID}
+          className="picker-list-container"
+          data-neo-ui-part="results"
+          data-picker-focused={model.focusPane === 'list' ? '' : undefined}
+          role={hasRows ? 'listbox' : 'region'}
+          tabIndex={-1}
+          aria-label={model.title}
+          aria-busy={model.loading}
+          aria-activedescendant={
+            hasRows && model.rows[model.selected] ? `${resultsID}-${model.selected}` : undefined
+          }
+        >
+          {hasRows ? (
+            model.rows.map((row, index) => (
+              <div
+                key={index}
+                id={`${resultsID}-${index}`}
+                data-zv-picker-row="1"
+                data-zv-picker-index={index}
+                className={`picker-row${row.boundary ? ' boundary' : ''}${row.cells ? ' picker-row-bibliographic' : ''}`}
+                role="option"
+                aria-selected={index === model.selected}
+                ref={index === model.selected ? markSelected : undefined}
+                data-picker-clickable={model.mouseEnabled ? '' : undefined}
+              >
+                {row.cells ? (
+                  <BibliographicCells cells={row.cells} />
+                ) : (
+                  <span className="picker-cell-title picker-row-text" title={row.text}>
+                    {row.text}
+                  </span>
+                )}
+              </div>
+            ))
+          ) : (
+            <div className="picker-empty">{model.empty}</div>
+          )}
+        </div>
+        <section
+          className={`picker-preview-panel${hasStructuredPreview ? ' picker-preview-bibliographic' : ''}`}
+          data-neo-ui-part="preview"
+          data-picker-focused={model.focusPane === 'preview' ? '' : undefined}
+          tabIndex={-1}
+          aria-labelledby={previewTitleID}
+        >
+          <h2 className="picker-preview-title" data-neo-ui-part="preview-title" id={previewTitleID}>
+            {model.previewTitle}
+          </h2>
+          {model.previewMeta && <p className="picker-preview-meta">{model.previewMeta}</p>}
+          {model.previewCitekey && (
+            <p className="picker-preview-citekey">@{model.previewCitekey}</p>
+          )}
+          {hasStructuredPreview ? (
+            <>
+              {model.previewSections?.map((section, index) => (
+                <div className="picker-preview-card" key={index}>
+                  <h3 className="picker-preview-card-title">
+                    {section.title}{' '}
+                    <span className="picker-preview-card-count">{section.count}</span>
+                  </h3>
+                  {section.names.length > 0 && (
+                    <ul className="picker-preview-names">
+                      {section.names.map((name, index) => (
+                        <li className="picker-preview-name" key={index}>
+                          {name}
+                        </li>
+                      ))}
+                    </ul>
+                  )}
+                  {section.more && <p className="picker-preview-more">{section.more}</p>}
+                </div>
+              ))}
+            </>
+          ) : (
+            <div className="picker-preview-body">{model.previewBody}</div>
+          )}
+        </section>
+      </div>
+      <footer className="picker-status-bar" hidden={!model.status && !model.shortcutHelp}>
+        <div
+          className="picker-status"
+          data-neo-ui-part="status"
+          role="status"
+          aria-live="polite"
+          aria-atomic="true"
+          title={model.status || undefined}
+        >
+          {model.status}
+        </div>
+        {model.shortcutHelp && (
+          <div className="picker-shortcut-help" title={model.shortcutHelp}>
+            {model.shortcutHelp}
+          </div>
+        )}
+      </footer>
+    </div>
+  );
+}
 
 export function mountPickerReactView(
   root: HTMLElement,
   initialModel: PickerReactModel,
   _dispatch: (command: PickerReactCommand) => void,
 ): ReactView<PickerReactModel> {
-  return createReactView(
-    root,
-    (model) => (
-      <div className="neo-ui neo-picker">
-        <div className={`picker-content${model.single ? ' single' : ''}`}>
-          <section className="picker-left">
-            <header className="picker-header">
-              <button
-                type="button"
-                className="picker-source"
-                data-neo-ui-part="source"
-                hidden={model.sourceLabel === null}
-                disabled={model.sourceDisabled}
-              >
-                {model.sourceLabel}
-              </button>
-              <span className="picker-title">{model.title}</span>
-              <span className="picker-count" data-neo-ui-part="count">
-                {model.count}
-              </span>
-            </header>
-            <input type="text" data-neo-ui-part="query" placeholder={model.placeholder} />
-            <div className="picker-help" data-neo-ui-part="query-help">
-              {model.queryHelp}
-            </div>
-            <div
-              className={`picker-results${model.focusPane === 'list' ? ' focused' : ''}`}
-              data-neo-ui-part="results"
-              tabIndex={-1}
-              aria-busy={model.loading}
-            >
-              {model.loading || !model.rows.length
-                ? model.empty
-                : model.rows.map((row, index) => (
-                    <div
-                      key={index}
-                      data-zv-picker-row="1"
-                      data-zv-picker-index={index}
-                      className={`picker-row${row.boundary ? ' boundary' : ''}${index === model.selected ? ' selected' : ''}`}
-                      style={{ cursor: model.mouseEnabled ? 'pointer' : 'default' }}
-                    >
-                      <span>{row.text}</span>
-                    </div>
-                  ))}
-            </div>
-            {model.listHelp !== null && (
-              <div className="picker-help" data-neo-ui-part="list-help">
-                {model.listHelp}
-              </div>
-            )}
-            <div
-              className="picker-status"
-              data-neo-ui-part="status"
-              role="status"
-              aria-live="polite"
-              aria-atomic="true"
-              hidden={!model.status}
-            >
-              {model.status}
-            </div>
-          </section>
-          <section>
-            <header className="picker-preview-header" data-neo-ui-part="preview-title">
-              {model.previewTitle}
-            </header>
-            <div
-              className={`picker-preview${model.focusPane === 'preview' ? ' focused' : ''}`}
-              data-neo-ui-part="preview"
-              tabIndex={-1}
-            >
-              {model.previewBody}
-            </div>
-          </section>
-        </div>
-      </div>
-    ),
-    initialModel,
-  );
+  return createReactView(root, (model) => <PickerSurface model={model} />, initialModel);
 }

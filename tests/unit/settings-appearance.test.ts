@@ -109,6 +109,26 @@ function themes(preferences: Preferences): readonly CustomInteractionTheme[] {
 }
 
 describe('Settings Appearance consumer contracts', () => {
+  it('autosaves each Picker setting and reflects updates from a different view', () => {
+    const test = mount();
+    const css = '.picker-root { --picker-row-height: 27px; }';
+    test.appearance.dispatch({ type: 'picker-theme', value: 'terminal' });
+    test.appearance.dispatch({ type: 'picker-custom-css', value: css });
+    expect(test.preferences.writes).toEqual([
+      ['picker.theme', 'terminal'],
+      ['picker.customCss', css],
+    ]);
+    expect(test.appearance.model()).toMatchObject({
+      pickerTheme: 'terminal',
+      pickerCustomCss: css,
+    });
+    test.preferences.set('picker.theme', 'modern');
+    test.preferences.clear('picker.customCss');
+    expect(test.appearance.model()).toMatchObject({ pickerTheme: 'modern', pickerCustomCss: '' });
+    test.appearance.dispose();
+    test.manager.dispose();
+  });
+
   it('exposes built-in and custom themes with the active theme and current-mode palette', () => {
     const test = mount({ [CUSTOM]: stored, [PRESET]: custom.id }, undefined, 'dark');
     const model = test.appearance.model();

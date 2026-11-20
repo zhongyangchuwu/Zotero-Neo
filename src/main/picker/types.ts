@@ -6,6 +6,15 @@ export type PickerPane = 'search' | 'list' | 'preview';
 export interface PickerPreview {
   readonly title: string;
   readonly body: string;
+  readonly meta?: string;
+  readonly sections?: readonly PickerPreviewSection[];
+}
+
+export interface PickerPreviewSection {
+  readonly title: string;
+  readonly count: number;
+  readonly names: readonly string[];
+  readonly more?: string;
 }
 
 export interface PickerContinuation {

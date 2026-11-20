@@ -1,4 +1,5 @@
 import { React } from '../runtime';
+import { PICKER_THEMES, type PickerTheme } from '../../../main/picker/appearance';
 import { settingsText, type SettingsMessage } from '../../../main/settings-i18n';
 import type {
   AppearanceColor,
@@ -17,6 +18,11 @@ const COLORS: readonly [AppearanceColor, SettingsMessage][] = [
   ['white', 'White'],
 ];
 const HEX = /^#[0-9a-fA-F]{6}$/;
+const PICKER_THEME_LABELS: Record<PickerTheme, SettingsMessage> = {
+  classic: 'Classic',
+  terminal: 'Terminal',
+  modern: 'Modern',
+};
 
 export function AppearancePage({
   model,
@@ -32,10 +38,37 @@ export function AppearancePage({
     <div className="neo-settings-appearance">
       {model.view === 'library' ? (
         <>
+          <section className="appearance-picker" aria-labelledby="neo-settings-picker-appearance">
+            <h3 id="neo-settings-picker-appearance">{t('Picker appearance')}</h3>
+            <label>
+              {t('Picker theme')}
+              <select
+                value={model.pickerTheme}
+                onChange={(event) =>
+                  dispatch({ type: 'picker-theme', value: event.currentTarget.value })
+                }
+              >
+                {PICKER_THEMES.map((theme) => (
+                  <option key={theme} value={theme}>
+                    {t(PICKER_THEME_LABELS[theme])}
+                  </option>
+                ))}
+              </select>
+            </label>
+            <label>
+              {t('Custom Picker CSS')}
+              <textarea
+                rows={6}
+                spellCheck={false}
+                value={model.pickerCustomCss}
+                onChange={(event) =>
+                  dispatch({ type: 'picker-custom-css', value: event.currentTarget.value })
+                }
+              />
+            </label>
+          </section>
           <p className="neo-muted">
-            {t(
-              'Panel colors follow Zotero. These presets only change interaction markers and status colors.',
-            )}
+            {t('The following presets only change Neo interaction markers and status colors.')}
           </p>
           <section className="appearance-controls">
             <div>
@@ -257,6 +290,13 @@ export const APPEARANCE_REACT_CSS = `
 .neo-settings-appearance button:disabled { opacity:.5; cursor:default; }
 .neo-settings-appearance button:focus-visible, .neo-settings-appearance input:focus-visible { outline:2px solid var(--zotero-neo-focus-ring); outline-offset:1px; }
 .neo-settings-appearance .appearance-controls { display:flex; flex-wrap:wrap; gap:18px; align-items:center; margin:0 0 18px; }
+.neo-settings-appearance .appearance-picker { display:grid; gap:10px; margin-bottom:20px; }
+.neo-settings-appearance .appearance-picker h3 { margin:0; }
+.neo-settings-appearance .appearance-picker label { display:grid; gap:4px; }
+.neo-settings-appearance .appearance-picker select { justify-self:start; }
+.neo-settings-appearance .appearance-picker select, .neo-settings-appearance .appearance-picker textarea { color:var(--zotero-neo-text); background:var(--zotero-neo-input); border:1px solid var(--zotero-neo-border); border-radius:4px; padding:.4em; }
+.neo-settings-appearance .appearance-picker textarea { font:inherit; font-family:monospace; resize:vertical; }
+.neo-settings-appearance .appearance-picker :is(select, textarea):focus-visible { outline:2px solid var(--zotero-neo-focus-ring); outline-offset:1px; }
 .neo-settings-appearance .appearance-grid { display:grid; grid-template-columns:repeat(auto-fit,minmax(min(100%,280px),1fr)); gap:12px; }
 .neo-settings-appearance .appearance-card { padding:12px; border:2px solid var(--zotero-neo-border); border-radius:7px; background:var(--zotero-neo-elevated); }
 .neo-settings-appearance .appearance-card[aria-current="true"] { border-color:var(--zotero-neo-accent); background:var(--zotero-neo-selected); }

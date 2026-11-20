@@ -2,6 +2,7 @@ import type { Logger } from '../../core/logging';
 import type { MainWindow } from '../../core/contracts';
 import { currentMainItem, mainItem } from '../../toolkit/main';
 import { noteOwnerKey } from '../../platform/zotero-items';
+import { t, type AppLanguage } from '../../i18n';
 import type { PickerItem } from '../../main/picker/model';
 import type { PickerProvider } from '../../main/picker/types';
 
@@ -85,12 +86,12 @@ interface NoteSource {
   readonly label: string;
 }
 
-function sourceForNote(note: Zotero.Item): NoteSource {
+function sourceForNote(note: Zotero.Item, language: AppLanguage): NoteSource {
   const ownerID = parentID(note);
   if (ownerID === undefined) {
     return {
       group: noteOwnerKey(note),
-      label: 'Standalone note',
+      label: t('picker.standaloneNote', language),
     };
   }
 
@@ -98,14 +99,17 @@ function sourceForNote(note: Zotero.Item): NoteSource {
   try {
     const parent = mainItem(ownerID);
     if (!parent || parent.libraryID !== note.libraryID) {
-      return { group, label: 'Source unavailable' };
+      return { group, label: t('picker.noteSourceUnavailable', language) };
     }
     return {
       group,
-      label: `Parent: ${parent.getDisplayTitle?.().trim() || 'Untitled item'}`,
+      label: t('picker.noteParent', language).replace(
+        '{title}',
+        () => parent.getDisplayTitle?.().trim() || t('picker.untitled', language),
+      ),
     };
   } catch {
-    return { group, label: 'Source unavailable' };
+    return { group, label: t('picker.noteSourceUnavailable', language) };
   }
 }
 
@@ -148,6 +152,7 @@ export interface NotesProviderContext {
   readonly baseItem?: Zotero.Item | null;
   readonly libraryID?: number;
   readonly scope?: NotesScope;
+  readonly language?: AppLanguage;
 }
 
 export function createNotesProvider(
@@ -155,6 +160,7 @@ export function createNotesProvider(
   logger: Logger,
   context: NotesProviderContext = {},
 ): PickerProvider {
+  const language = context.language ?? 'en';
   const selected = context.baseItem === undefined ? currentMainItem(window) : context.baseItem;
   const base = resolveBaseItem(selected);
   const libraryID =
@@ -163,10 +169,10 @@ export function createNotesProvider(
 
   function forScope(scope: NotesScope): PickerProvider {
     return {
-      title: 'Notes',
-      placeholder: '> Search note names…',
+      title: t(scope === 'item' ? 'picker.notesOnItem' : 'picker.notesInLibrary', language),
+      placeholder: t('picker.searchNotes', language),
       alternateSource: {
-        label: scope === 'item' ? 'Browse library' : 'Current item',
+        label: t(scope === 'item' ? 'picker.browseLibrary' : 'picker.currentItem', language),
         provider: () => forScope(scope === 'item' ? 'library' : 'item'),
       },
       async load() {
@@ -177,14 +183,13 @@ export function createNotesProvider(
         for (const note of notes) {
           try {
             if (note.deleted || note.libraryID !== libraryID || !note.isNote()) continue;
-            const owner = sourceForNote(note);
-            const title =
-              note.getDisplayTitle?.().trim() || note.getNoteTitle?.().trim() || 'Untitled note';
+            const owner = sourceForNote(note, language);
+            const title = note.getDisplayTitle?.().trim() || note.getNoteTitle?.().trim();
             const preview = text(window.document, note.getNote());
             const item: PickerItem = {
               id: note.id,
-              title,
-              search: `${title}\n${preview}`.toLowerCase(),
+              title: title || t('picker.untitledNote', language),
+              search: `${title || 'Untitled note'}\n${preview}`.toLowerCase(),
               preview,
               meta: owner.label,
               group: owner.group,
@@ -212,12 +217,13 @@ export function createNotesProvider(
       }),
       emptyText: (query) => {
         if (scope === 'item') {
-          if (!base) return 'No current item is available.';
-          return query.trim()
-            ? 'No current-item notes match this search.'
-            : 'No notes on the current item.';
+          if (!base) return t('picker.noCurrentItem', language);
+          return t(query.trim() ? 'picker.noMatchingItemNotes' : 'picker.noItemNotes', language);
         }
-        return query.trim() ? 'No library notes match this search.' : 'No notes in this library.';
+        return t(
+          query.trim() ? 'picker.noMatchingLibraryNotes' : 'picker.noLibraryNotes',
+          language,
+        );
       },
     };
   }

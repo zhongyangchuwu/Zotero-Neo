@@ -9,7 +9,7 @@ import { isWritableTagItem, setItemTag } from '../../operations/item-tags';
 import type { PickerOpenOptions } from '../../main/picker/types';
 import { createTagCandidateProvider, type TagRecord } from '../../main/picker/providers/tags';
 import { isSourceNoteIdentity } from '../../platform/note-relations';
-import { t } from '../../i18n';
+import { t, type AppLanguage } from '../../i18n';
 import { batchStatus, type BatchOutcome } from '../../i18n/batch-result';
 
 function sameTag(left: string, right: string): boolean {
@@ -65,9 +65,15 @@ function candidateName(item: {
   return isSourceNoteIdentity(name) ? '' : name;
 }
 
-function presenceLabel(count: number | undefined, total: number): string | undefined {
+function presenceLabel(
+  count: number | undefined,
+  total: number,
+  language: AppLanguage,
+): string | undefined {
   if (!count) return undefined;
-  return count === total ? `Assigned to all ${total}` : `Assigned to ${count}/${total}`;
+  return t(count === total ? 'picker.tagAssignedAll' : 'picker.tagAssignedSome', language)
+    .replace('{count}', String(count))
+    .replace('{total}', String(total));
 }
 
 export interface TagActionHost {
@@ -102,12 +108,14 @@ export class TagActions {
   }
 
   toggleFilter(): void {
+    const language = neoCommandLanguage(this.#host.preferences, Zotero.locale ?? 'en');
     const active = this.#host.readFilter();
     const activeSet = new Set(active);
     const getTags = this.#host.captureScopeTags();
     const source = createTagCandidateProvider({
-      title: 'Toggle Tag Filter',
-      placeholder: '> Search tags to toggle…',
+      title: t('action.toggleTagFilter', language),
+      placeholder: t('picker.searchTagFilters', language),
+      language,
       separator: tagSeparatorFromPreferences(this.#host.preferences),
       loadTags: async () => {
         const scoped = await getTags();
@@ -116,7 +124,7 @@ export class TagActions {
           active.map((tag) => ({ tag })),
         );
       },
-      describe: (tag) => (activeSet.has(tag) ? 'Active filter' : undefined),
+      describe: (tag) => (activeSet.has(tag) ? t('picker.activeTagFilter', language) : undefined),
     });
     this.#host.choose({
       source,
@@ -192,7 +200,8 @@ export class TagActions {
         '{target}',
         targetLabel(targets, language),
       ),
-      placeholder: present ? '> Search or create a tag…' : '> Search assigned tags…',
+      placeholder: t(present ? 'picker.searchOrCreateTag' : 'picker.searchAssignedTags', language),
+      language,
       separator: tagSeparatorFromPreferences(this.#host.preferences),
       allowCreate: present,
       loadTags: present
@@ -213,7 +222,9 @@ export class TagActions {
             return mergeTags(...libraries, tags);
           }
         : async () => tags,
-      describe: present ? (tag) => presenceLabel(assigned.get(tag), items.length) : undefined,
+      describe: present
+        ? (tag) => presenceLabel(assigned.get(tag), items.length, language)
+        : undefined,
     });
     this.#host.choose({
       source,

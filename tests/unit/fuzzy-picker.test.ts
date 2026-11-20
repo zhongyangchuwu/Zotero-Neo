@@ -6,7 +6,8 @@ import { MAIN_EXECUTABLE_ACTIONS } from '../../src/main/action-capabilities';
 import { READER_NORMAL_ACTIONS } from '../../src/reader/action-capabilities';
 import type { CommandPaletteContext, MainWindow } from '../../src/core/contracts';
 import type { MainWindowSession } from '../../src/main/session';
-import { FuzzyPicker, fuzzyMatchScore, fuzzyPickerRowText } from '../../src/main/picker';
+import { FuzzyPicker, fuzzyMatchScore } from '../../src/main/picker';
+import { itemRowCells } from '../../src/main/picker/item-row';
 import { MainNavigation } from '../../src/main/navigation';
 import type { PickerOpenOptions, PickerProvider } from '../../src/main/picker/types';
 import type { PickerItem } from '../../src/main/picker/model';
@@ -141,19 +142,25 @@ describe('fuzzy picker bibliographic items', () => {
     const { window } = createPickerHarness();
     Object.assign(window, { ZoteroPane: { getSelectedItems: () => [] } });
 
-    await createItemsProvider(window, 'collection').load();
+    const provider = createItemsProvider(window, 'collection');
+    await provider.load();
 
     expect(getAll).toHaveBeenCalledWith(7, true, false);
+    expect(provider.title).toBe('All items');
+    expect(provider.placeholder).toBe('Search all items…');
   });
 
-  it('shows the title directly when an item genuinely has no citation key', () => {
-    expect(
-      fuzzyPickerRowText(
-        { id: 1, title: 'A searchable paper', search: 'a searchable paper' },
-        0,
-        'collection',
-      ),
-    ).toBe('A searchable paper');
+  it('keeps a long citation key out of the highlighted title cell', () => {
+    const title = 'Memory-Augmented Agents';
+    const citekey = 'VeryLongCitationKeyThatMustNotDisplaceTheTitle2026';
+    expect(itemRowCells({ id: 1, title, citekey, search: '' }, 'maa', 'Untitled')).toMatchObject({
+      title,
+      citekey,
+      matches: [0, 7, 17],
+    });
+    const noKey = itemRowCells({ id: 2, title, search: '' }, '', 'Untitled');
+    expect(noKey.title).toBe(title);
+    expect(noKey.citekey).toBeUndefined();
   });
 });
 
@@ -241,30 +248,34 @@ describe('bibliographic picker previews', () => {
       getDisplayTitle: () => 'Methods note',
       getField: () => '',
     } as unknown as Zotero.Item;
+    const citekey = 'Author2026ABibliographicCitationKeyTooLongForTheResultsColumn';
     const item = {
       id: 1,
       isRegularItem: () => true,
-      getField: (field: string) => ({ title: 'Preview item', year: '2026' })[field] ?? '',
+      getField: (field: string) =>
+        ({ title: 'Preview item', year: '2026', citationKey: citekey })[field] ?? '',
+      getItemTypeIconName: () => 'journalArticle',
       getCreators: () => [{ lastName: 'Author' }],
       getAttachments: () => [attachment.id],
-      getNotes: () => [note.id],
+      getNotes: () => [note.id, 4, 5, 6, 7, 8, 9],
     } as unknown as Zotero.Item;
     const byID = new Map([
       [item.id, item],
       [attachment.id, attachment],
       [note.id, note],
+      ...[4, 5, 6, 7, 8, 9].map((id): [number, Zotero.Item] => [
+        id,
+        { getDisplayTitle: () => `Note ${id}`, getField: () => '' } as unknown as Zotero.Item,
+      ]),
     ]);
     const excludedItem = { isRegularItem: () => false } as unknown as Zotero.Item;
     const getAll = vi.fn(async () => [item, excludedItem]);
+    const get = vi.fn((id: number) => byID.get(id) ?? false);
+    const icon = 'chrome://zotero/skin/item-type/journalArticle.svg';
     vi.stubGlobal('Services', { focus: { focusedWindow: null } });
     vi.stubGlobal('Zotero', {
-      Items: {
-        get: (id: number | number[]) =>
-          Array.isArray(id)
-            ? id.flatMap((value) => byID.get(value) ?? [])
-            : (byID.get(id) ?? false),
-        getAll,
-      },
+      Items: { get, getAll },
+      ItemTypes: { getImageSrc: () => icon },
       Libraries: { userLibraryID: 1 },
     });
     const { window, session } = createPickerHarness();
@@ -278,11 +289,25 @@ describe('bibliographic picker previews', () => {
     expect(getAll).toHaveBeenCalledWith(1, true, false);
     expect(session.picker.items.map((candidate) => candidate.id)).toEqual([item.id]);
 
-    expect(pickerModel(session).previewBody).toContain('Author, 2026');
-    expect(pickerModel(session).previewBody).toContain('Attachments: 1');
-    expect(pickerModel(session).previewBody).toContain('paper.pdf');
-    expect(pickerModel(session).previewBody).toContain('Child notes: 1');
-    expect(pickerModel(session).previewBody).toContain('Methods note');
+    expect(pickerModel(session)).toMatchObject({
+      rows: [{ cells: { title: 'Preview item', author: 'Author', year: '2026', icon } }],
+      previewTitle: 'Preview item',
+      previewMeta: 'Author · 2026',
+      previewCitekey: citekey,
+      previewBody: '',
+      previewSections: [
+        { title: 'Attachments', count: 1, names: ['paper.pdf'] },
+        {
+          title: 'Child notes',
+          count: 7,
+          names: ['Methods note', 'Note 4', 'Note 5', 'Note 6', 'Note 7', 'Note 8'],
+          more: '+1 more',
+        },
+      ],
+    });
+    picker.onKeyDown(pickerKey('ArrowDown', session.picker.results), window, session);
+    expect(get).toHaveBeenCalledTimes(7);
+    expect(get).not.toHaveBeenCalledWith(9);
   });
 });
 
@@ -605,6 +630,10 @@ describe('command palette provider', () => {
     const find = mainItems.find((item) => item.id === 'findAllItems');
     if (!find) throw new Error('Expected bound Find Action');
     expect(find.meta).toBe('<Space>ff');
+    expect(main.preview(find).body).toContain('Action: findAllItems');
+    expect(createCommandsProvider({ ...context, language: 'zh-CN' }).preview(find).body).toContain(
+      '操作: findAllItems',
+    );
     expect(mainItems.find((item) => item.id === 'openNeoSettings')?.meta).toBe('Unbound');
 
     const readerItems = await createCommandsProvider({
@@ -1031,7 +1060,7 @@ describe('tab picker activation', () => {
     expect(session.picker.selected).toBe(0);
     row.emit('click');
     expect(session.picker.selected).toBe(1);
-    expect(pickerModel(session).previewBody).toContain('reader');
+    expect(pickerModel(session).previewTitle).toBe(tabs._tabs[1]!.title);
     expect(selected).toEqual([]);
     row.emit('dblclick');
     await vi.waitFor(() => expect(selected).toEqual(['reader-tab']));
@@ -1231,38 +1260,6 @@ describe('unified Notes picker', () => {
     await vi.waitFor(() => expect(openNote).toHaveBeenCalledWith(note.id, { openInWindow: false }));
     expect(openNote).toHaveBeenCalledOnce();
     expect(session.picker.open).toBe(false);
-  });
-  it('uses a stacked single-column fallback on narrow windows', async () => {
-    vi.useFakeTimers();
-    class Search {
-      addCondition() {}
-      async search(): Promise<number[]> {
-        return [];
-      }
-    }
-    vi.stubGlobal('Services', { focus: { focusedWindow: null } });
-    vi.stubGlobal('Zotero', {
-      Items: { get: () => false, getAll: vi.fn(), trashTx: vi.fn() },
-      Reader: { getByTabID: () => null },
-      Libraries: { userLibraryID: 1 },
-      Schema: { schemaUpdatePromise: Promise.resolve() },
-      Search,
-    });
-    const { window, session } = createPickerHarness(720);
-    Object.assign(window, { ZoteroPane: { getSelectedItems: () => [] } });
-    const picker = createFuzzyPicker(
-      { debug: vi.fn(), diagnostic: vi.fn() },
-      new MainNavigation({ debug: vi.fn(), diagnostic: vi.fn() }, () => {}),
-    );
-
-    await picker.open(window, session, 'notes', {
-      source: createNotesProvider(window, { debug: vi.fn() } as never),
-    });
-    vi.advanceTimersByTime(30);
-
-    expect(pickerModel(session).single).toBe(true);
-    expect(session.picker.results).not.toBeNull();
-    expect(session.picker.preview).not.toBeNull();
   });
 });
 
@@ -1793,8 +1790,8 @@ describe('configurable picker contexts', () => {
     expect(session.picker.selected).toBe(0);
     picker.onKeyDown(pickerKey('l', input, { ctrl: true }), window, session);
     expect(session.picker.selected).toBe(1);
-    expect(pickerModel(session).queryHelp).toContain('<C-l>');
-    expect(pickerModel(session).queryHelp).not.toContain('<C-j>');
+    expect(pickerModel(session).shortcutHelp).toContain('<C-l>');
+    expect(pickerModel(session).shortcutHelp).not.toContain('<C-j>');
     bindings = {
       ...bindings,
       'picker-input:j': 'uiNext',
@@ -1835,7 +1832,7 @@ describe('configurable picker contexts', () => {
     picker.onKeyDown(pickerKey('k', session.picker.results), window, session);
     picker.onKeyDown(pickerKey('n', session.picker.results), window, session);
     expect(session.picker.selected).toBe(1);
-    expect(pickerModel(session).queryHelp).toContain('<C-Enter>');
+    expect(pickerModel(session).shortcutHelp).toContain('<C-Enter>');
     const oldConfirm = pickerKey('Enter', session.picker.results);
     picker.onKeyDown(oldConfirm, window, session);
     expect(oldConfirm.preventDefault).not.toHaveBeenCalled();
