@@ -12,6 +12,12 @@ import {
   type SettingsChange,
   type SettingsOperationContext,
 } from '../../src/settings-snapshots/contracts';
+import type { ExtensionCandidate } from '../../src/modules/extensions/sources';
+import type {
+  WorkspaceExtensionManifest,
+  WorkspaceExtensionPlan,
+  workspaceExtensionEngine,
+} from '../../src/modules/extensions/workspace';
 import type { SettingsSnapshotFiles } from '../../src/platform/settings-snapshots-files';
 import type {
   ManagedSettingsSnapshotsPort,
@@ -93,6 +99,7 @@ function setup(
   dependencies: {
     catalog?: SettingsTemplateCatalogPort;
     managed?: ManagedSettingsSnapshotsPort;
+    extensions?: typeof workspaceExtensionEngine;
   } = {},
 ) {
   const otherAdapterID = 'zotero';
@@ -168,6 +175,7 @@ function setup(
         },
       ],
       () => ({ neo: '2', zotero: '10' }),
+      dependencies.extensions?.capture,
     ),
     codec,
     files,
@@ -483,6 +491,110 @@ function managedFixture(overrides: Partial<ManagedSnapshotTarget> = {}) {
   };
   return { managed, source, target };
 }
+
+it('restores selected extensions before preferences from the direct workspace entry', async () => {
+  const { managed } = managedFixture();
+  const workspace = { libraryID: 1, itemKey: 'WORK06', title: '[Zotero-Neo] 工作区同步' };
+  managed.sources = vi.fn(async () => [workspace]);
+  const direct = { kind: 'xpi', url: 'https://plugins.example/auto.xpi' } as const;
+  const manifest: WorkspaceExtensionManifest = {
+    version: 1,
+    addons: [
+      { addonId: 'auto@test', name: 'Auto', version: '1', enabled: true, source: direct },
+      { addonId: 'manual@test', name: 'Manual', version: '1', enabled: true, source: null },
+      { addonId: 'state@test', name: 'State', version: '1', enabled: false, source: null },
+      { addonId: 'same@test', name: 'Same', version: '1', enabled: true, source: null },
+    ],
+  };
+  const extensionPlan: WorkspaceExtensionPlan = {
+    rows: [
+      { entry: manifest.addons[0]!, status: 'install', sourceLabel: 'plugins.example' },
+      { entry: manifest.addons[1]!, status: 'missing' },
+      { entry: manifest.addons[2]!, status: 'state', currentEnabled: true },
+      { entry: manifest.addons[3]!, status: 'same', currentEnabled: true },
+    ],
+  };
+  const candidate: ExtensionCandidate = {
+    name: 'manual.xpi',
+    source: { kind: 'xpi', url: 'https://repair.example/manual.xpi' },
+    url: 'https://repair.example/manual.xpi',
+    expectedID: 'manual@test',
+  };
+  const mutationOrder: string[] = [];
+  const applyExtensions = vi.fn<typeof workspaceExtensionEngine.apply>(
+    async (_plan, _selected, _sources, _context, verify) => {
+      await verify();
+      mutationOrder.push('extensions');
+      return {
+        installed: 1,
+        aligned: 1,
+        skipped: [{ addonId: 'auto@test', name: 'Auto', reason: 'Zotero rejected the package' }],
+        pendingRestart: true,
+      };
+    },
+  );
+  const resolveInput = vi.fn(async () => [candidate]);
+  const { open, apply, seal } = setup({
+    managed,
+    extensions: {
+      capture: async () => manifest,
+      inspect: async () => extensionPlan,
+      resolveInput,
+      apply: applyExtensions,
+    },
+  });
+  open.mockResolvedValue({ ...source, extensions: manifest });
+  apply.mockImplementation(async ([change]) => {
+    mutationOrder.push('preferences');
+    return [{ adapterID: change!.adapterID, key: change!.key, status: 'applied' }];
+  });
+  await idle();
+  expect(ui.view!.model.preferredLibrarySource).toEqual(workspace);
+  dispatch({ type: 'mode', value: 'import' });
+  dispatch({ type: 'source', libraryID: workspace.libraryID, itemKey: workspace.itemKey });
+  await idle();
+  ui.view!.inputs.get('import-password')!.value = password;
+  dispatch({ type: 'inspect' });
+  await idle();
+  expect(ui.view!.model.extensionDiff).toMatchObject({
+    sameCount: 1,
+    rows: [
+      { id: 'auto@test', status: 'install', checked: true, source: 'plugins.example' },
+      { id: 'manual@test', status: 'missing', checked: false },
+      { id: 'state@test', status: 'state', checked: true, fromEnabled: true, toEnabled: false },
+    ],
+  });
+  expect(ui.view!.model.selectedCount).toBe(2);
+  dispatch({ type: 'extension-source-open', id: 'manual@test' });
+  dispatch({ type: 'extension-source-lookup', id: 'manual@test', value: candidate.url });
+  await idle();
+  expect(resolveInput).toHaveBeenCalledWith('manual@test', candidate.url, expect.any(AbortSignal));
+  expect(ui.view!.model.extensionDiff?.rows[1]).toMatchObject({
+    status: 'install',
+    checked: false,
+    source: 'repair.example',
+  });
+  dispatch({ type: 'extension-toggle', id: 'manual@test', checked: true });
+  dispatch({ type: 'field', id: 'zotero-neo:secret:api', checked: true });
+  expect(ui.view!.model.selectedCount).toBe(4);
+  dispatch({ type: 'apply' });
+  await idle();
+  expect(applyExtensions.mock.calls[0]?.[1]).toEqual(
+    new Set(['auto@test', 'manual@test', 'state@test']),
+  );
+  expect(applyExtensions.mock.calls[0]?.[2]).toEqual(new Map([['manual@test', candidate]]));
+  expect(mutationOrder).toEqual(['extensions', 'preferences']);
+  expect(ui.view!.model).toMatchObject({
+    extensionRestart: true,
+    status: expect.stringContaining(
+      'Installed 1 add-ons, aligned 1 states, and restored 1 settings.',
+    ),
+    issues: expect.arrayContaining(['Auto · Zotero rejected the package']),
+    needsDiffRefresh: true,
+  });
+  expect(seal).not.toHaveBeenCalled();
+  expectRedacted();
+});
 
 it('reads attachment sources through the same authenticated preview and rechecks them before restoring', async () => {
   const { managed, source } = managedFixture();

@@ -12,6 +12,17 @@ const RESERVED = /^extensions\.zotero-neo(?:\.|$)/u;
 const UNSAFE =
   /path|directory|datadir|file|script|code|css|html|template|command|executable|launcher/iu;
 const SENSITIVE = /password|passwd|token|secret|credential|apikey|api[._-]key|authorization/iu;
+
+/** Key-only screening for preview; ownership and binding still require a local declaration. */
+export function pluginPreferenceKeySafety(key: string): 'reserved' | 'unsafe' | 'candidate' {
+  if (!KEY.test(key) || RESERVED.test(key) || key === 'extensions.zotero') return 'reserved';
+  return UNSAFE.test(key) ? 'unsafe' : 'candidate';
+}
+
+export function isCredentialPreferenceKey(key: string): boolean {
+  return SENSITIVE.test(key);
+}
+
 /** Only complete literal statements count. Comments are skipped only outside strings. */
 function declaredDefaults(
   plugin: MainTemplatePlugin,
@@ -398,22 +409,19 @@ export function discoverPluginTemplates(
           !!short && !owners.has(key) && host.defaultPreferenceType?.(key) === short;
         const type = full ?? short ?? host.preferenceType(key) ?? 'string';
         const inputType = (attrs.get('type') ?? 'text').toLowerCase();
-        const nativeTarget =
-          key === 'extensions.zotero' ||
-          nativeKeys?.has(key) ||
-          (!nativeKeys && key.startsWith(nativePrefix));
+        const nativeTarget = nativeKeys?.has(key) || (!nativeKeys && key.startsWith(nativePrefix));
+        const keySafety = pluginPreferenceKeySafety(key);
         let reason: string | undefined;
         if (!plugin.available || !plugin.version)
           reason = 'The installed plugin version is unavailable or incompatible';
         else if (
-          !KEY.test(key) ||
-          RESERVED.test(key) ||
+          keySafety === 'reserved' ||
           nativeTarget ||
           !(full ? owners.get(key)?.size === 1 : requiresLiveBinding)
         )
           reason =
             'This target is reserved, shared, or not uniquely declared by this installed plugin';
-        else if (UNSAFE.test(key))
+        else if (keySafety === 'unsafe')
           reason =
             'Device paths, executable/code-bearing or complex settings require a dedicated trusted adapter';
         else if (
@@ -460,7 +468,8 @@ export function discoverPluginTemplates(
             label: key,
             type,
             ...declaredConstraints,
-            secret: SENSITIVE.test(key) || inputType === 'password' || !!previous?.secret,
+            secret:
+              isCredentialPreferenceKey(key) || inputType === 'password' || !!previous?.secret,
             requiresRestart: true,
             supported: !reason,
             ...(requiresLiveBinding && !reason ? { requiresLiveBinding: true as const } : {}),

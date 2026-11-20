@@ -1,6 +1,10 @@
 import { afterEach, beforeEach, expect, it, vi } from 'vitest';
 import { createHash } from 'node:crypto';
 import type {
+  WorkspaceExtension,
+  WorkspaceExtensionManifest,
+} from '../../src/modules/extensions/workspace';
+import type {
   SettingsAdapter,
   SettingsCaptureContext,
   SettingsCryptoContext,
@@ -67,7 +71,7 @@ const context = (): SettingsCryptoContext => ({
   isCurrent: () => true,
   window: { setTimeout, clearTimeout, AbortController } as unknown as Window,
 });
-function fixture() {
+function fixture(extensions?: () => Promise<WorkspaceExtensionManifest>) {
   let value = 1;
   const capture = vi.fn(async (ctx?: SettingsCaptureContext) => ({
     section: {
@@ -144,7 +148,11 @@ function fixture() {
     open: vi.fn(),
     dispose: vi.fn(),
   };
-  const service = new SettingsSnapshotService([adapter, neo], () => ({ neo: '1', zotero: '10' }));
+  const service = new SettingsSnapshotService(
+    [adapter, neo],
+    () => ({ neo: '1', zotero: '10' }),
+    extensions,
+  );
   const managed = createManagedSettingsSnapshots(service, codec, catalog);
   return {
     managed,
@@ -354,7 +362,8 @@ it('extends an existing workspace only with explicit selected scope and rejects 
 });
 
 it('normalizes an old persisted single-plugin binding without changing its scope or replacing its attachment', async () => {
-  const { managed, template } = fixture();
+  const extensions = vi.fn(async () => ({ version: 1 as const, addons: [] }));
+  const { managed, template } = fixture(extensions);
   const { adapterIDs: _adapterIDs, libraryID: _libraryID, ...oldPolicy } = request;
   host.readBindings.mockReturnValue([
     {
@@ -387,6 +396,8 @@ it('normalizes an old persisted single-plugin binding without changing its scope
   expect(JSON.parse(host.attachments.publish.mock.lastCall![2]).sections).toMatchObject([
     { adapterID: pluginID },
   ]);
+  expect(JSON.parse(host.attachments.publish.mock.lastCall![2])).not.toHaveProperty('extensions');
+  expect(extensions).not.toHaveBeenCalled();
   expect(JSON.stringify(host.writeBindings.mock.lastCall![0])).not.toContain('never retained');
   Object.assign(template, { revision: 'different-legacy-template' });
   expect((await managed.list(context()))[0]).toMatchObject({ status: 'paused' });
@@ -624,6 +635,59 @@ it('keeps idle windows quiet and schedules only while auto-update is enabled', a
   expect(vi.getTimerCount()).toBe(0);
   await vi.advanceTimersByTimeAsync(600_000);
   expect(host.attachments.publish).not.toHaveBeenCalled();
+  managed.dispose();
+});
+
+it('publishes workspace inventory by default and detects change without treating order as a change', async () => {
+  const manual: WorkspaceExtension = {
+    addonId: 'manual@test',
+    name: 'Manual',
+    enabled: true,
+    version: '1',
+    source: null,
+  };
+  const github: WorkspaceExtension = {
+    addonId: 'github@test',
+    name: 'GitHub',
+    enabled: false,
+    version: '1',
+    source: { kind: 'github', owner: 'publisher', repo: 'add-on', assetName: 'add-on.xpi' },
+    sensitiveKeys: ['otherSecret', 'apiToken'],
+  };
+  let addons = [manual, github];
+  const { managed } = fixture(async () => ({ version: 1, addons }));
+  await managed.create({ ...request, autoUpdate: true }, '', context());
+  expect(JSON.parse(host.attachments.create.mock.lastCall![1]).extensions).toEqual({
+    version: 1,
+    addons: [{ ...github, sensitiveKeys: ['apiToken', 'otherSecret'] }, manual],
+  });
+  managed.start(context().window);
+  addons = [{ ...github, sensitiveKeys: ['apiToken', 'otherSecret'] }, manual];
+  await vi.advanceTimersByTimeAsync(300_000);
+  expect(host.attachments.publish).not.toHaveBeenCalled();
+
+  const altered = [
+    { ...manual, enabled: false },
+    {
+      ...manual,
+      enabled: false,
+      source: { kind: 'xpi' as const, url: 'https://example.org/add-on.xpi' },
+    },
+    { ...manual, version: '2' },
+    { ...manual, version: '2', name: 'Renamed' },
+    { ...manual, version: '2', name: 'Renamed', sensitiveKeys: ['apiToken'] },
+  ];
+  for (const [index, changed] of altered.entries()) {
+    addons = [github, changed];
+    await vi.advanceTimersByTimeAsync(300_000);
+    expect(host.attachments.publish).toHaveBeenCalledTimes(index + 1);
+    expect(JSON.parse(host.attachments.publish.mock.lastCall![2]).extensions.addons[1]).toEqual(
+      changed,
+    );
+  }
+  addons = [github];
+  await vi.advanceTimersByTimeAsync(300_000);
+  expect(JSON.parse(host.attachments.publish.mock.lastCall![2]).extensions.addons).toHaveLength(1);
   managed.dispose();
 });
 

@@ -1,3 +1,5 @@
+import type { WorkspaceExtensionManifest } from '../modules/extensions/workspace';
+
 export type SettingsValue =
   | null
   | boolean
@@ -25,6 +27,7 @@ export interface SettingsDocument {
   readonly producer: { readonly name: 'Zotero Neo'; readonly version: string };
   readonly zoteroVersion: string;
   readonly sections: readonly SettingsSection[];
+  readonly extensions?: WorkspaceExtensionManifest;
 }
 export interface SettingsIssue {
   readonly severity: 'warning' | 'error';
@@ -121,4 +124,9 @@ export class SettingsSnapshotError extends Error {
     super(message);
     this.name = 'SettingsSnapshotError';
   }
+}
+
+export function assertSettingsCurrent(context: SettingsOperationContext): void {
+  if (context.signal.aborted || !context.isCurrent())
+    throw new SettingsSnapshotError('cancelled', 'The settings operation was cancelled');
 }

@@ -1,11 +1,13 @@
+import { validateWorkspaceExtensionManifest } from '../modules/extensions/workspace';
 import {
   SettingsSnapshotError,
   type SettingsDocument,
-  type SettingsOperationContext,
   type SettingsSection,
   type SettingsValue,
   type SettingState,
 } from './contracts';
+
+export { assertSettingsCurrent } from './contracts';
 
 /** Resource admission limit, not a product promise that exports fit in one megabyte. */
 export const MAX_SETTINGS_BYTES = 32 * 1024 * 1024;
@@ -48,10 +50,6 @@ function validateValue(
     validateValue(entry, depth + 1, budget);
   }
 }
-export function assertSettingsCurrent(context: SettingsOperationContext): void {
-  if (context.signal.aborted || !context.isCurrent())
-    throw new SettingsSnapshotError('cancelled', 'The settings operation was cancelled');
-}
 export function validateSettingsSection(value: unknown): asserts value is SettingsSection {
   if (
     !object(value) ||
@@ -82,7 +80,7 @@ export function validateSettingsSection(value: unknown): asserts value is Settin
     else if (entry.state.kind !== 'reset') invalid('Unknown settings operation');
   }
 }
-export function validateSettingsDocument(value: unknown): asserts value is SettingsDocument {
+export function validateSettingsDocument(value: unknown): SettingsDocument {
   if (!object(value) || value.format !== 'zotero-neo-settings')
     invalid('This is not a Neo settings file');
   if (value.schemaVersion !== 1)
@@ -109,6 +107,10 @@ export function validateSettingsDocument(value: unknown): asserts value is Setti
       invalid('Duplicate adapters or too many settings');
     adapters.add(section.adapterID);
   }
+  const document = value as unknown as SettingsDocument;
+  return value.extensions === undefined
+    ? document
+    : { ...document, extensions: validateWorkspaceExtensionManifest(value.extensions) };
 }
 /** Check UTF-8 size without requiring DOM constructors in the Bootstrap compartment. */
 export function assertSettingsTextSize(text: string, maximum = MAX_SETTINGS_BYTES): void {
@@ -140,12 +142,10 @@ export function parseSettingsDocument(text: string): SettingsDocument {
   } catch {
     return invalid('Settings file does not contain valid JSON');
   }
-  validateSettingsDocument(value);
-  return value;
+  return validateSettingsDocument(value);
 }
 export function serializeSettingsDocument(document: SettingsDocument): string {
-  validateSettingsDocument(document);
-  const text = JSON.stringify(document);
+  const text = JSON.stringify(validateSettingsDocument(document));
   assertSettingsTextSize(text);
   return text;
 }
