@@ -1,3 +1,5 @@
+import type { PickerPreviewSection } from './types';
+
 export type PickerScope =
   | 'all'
   | 'collection'
@@ -14,6 +16,7 @@ export interface PickerItem {
   citekey?: string;
   author?: string;
   year?: string;
+  bibliography?: { icon?: string; sections?: readonly PickerPreviewSection[] };
   kind?: string;
   selected?: boolean;
   preview?: string;

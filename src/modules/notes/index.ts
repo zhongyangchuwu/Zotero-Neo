@@ -4,6 +4,7 @@ import type { Logger } from '../../core/logging';
 import { ModuleHost } from '../../core/module-host';
 import type { ActionId } from '../../input/actions';
 import { NOTE_ACTION_IDS } from '../../input/note-actions';
+import type { AppLanguage } from '../../i18n';
 import type { PickerOpenOptions } from '../../main/picker/types';
 import type { NavigationResult, NavigationSurface } from '../../navigation/types';
 import { openMainNote } from '../../toolkit/main';
@@ -17,6 +18,7 @@ export type { NoteEditingPort, NoteMode } from './editor';
 export interface NotesModuleHost {
   readonly window: MainWindow;
   readonly logger: Logger;
+  readonly language: () => AppLanguage;
   status(message: string, milliseconds?: number): void;
   choose(options: PickerOpenOptions): Cleanup | null;
   selectNote(
@@ -102,7 +104,10 @@ export function createNotesModule(host: ModuleHost, ports: NotesModuleHost): Not
         const isCurrent = (): boolean =>
           scope.isCurrent() && !closed && chooserRevision === revision;
         const release = ports.choose({
-          source: createNotesProvider(ports.window, ports.logger, { baseItem }),
+          source: createNotesProvider(ports.window, ports.logger, {
+            baseItem,
+            language: ports.language(),
+          }),
           onClose: () => {
             closed = true;
             if (chooserRevision === revision) releaseChooser = null;

@@ -21,16 +21,9 @@ export class PickerRuntime {
   sourceRevision = 0;
   queryRevision = 0;
   confirming = false;
-  sourceTitle: HTMLElement | null = null;
   sourceButton: HTMLButtonElement | null = null;
-  operationStatus: HTMLElement | null = null;
   results: HTMLElement | null = null;
   preview: HTMLElement | null = null;
-  count: HTMLElement | null = null;
-  previewTitle: HTMLElement | null = null;
-  help: HTMLElement | null = null;
-  queryHelp: HTMLElement | null = null;
-  listHelp: HTMLElement | null = null;
   items: PickerItem[] = [];
   filtered: PickerItem[] = [];
   selected = 0;
@@ -44,8 +37,8 @@ export class PickerRuntime {
   queue: Promise<void> = Promise.resolve();
   inputCleanup: (() => void) | null = null;
   localBindings: LocalBindingRuntime | null = null;
-  layout: 'dual' | 'single' = 'dual';
   previousElement: Element | null = null;
   previousWindow: Window | null = null;
   themeCleanup: (() => void) | null = null;
+  appearanceCleanup: (() => void) | null = null;
 }

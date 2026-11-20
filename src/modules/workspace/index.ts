@@ -74,7 +74,7 @@ export function createWorkspaceModule(
           chooserRevision === revision &&
           workflowRevision === workflow;
         const release = ports.choose({
-          source: createTabsProvider(ports.window),
+          source: createTabsProvider(ports.window, ports.language()),
           onClose: () => {
             closed = true;
             if (chooserRevision === revision) releaseChooser = null;

@@ -2,7 +2,8 @@ import { CleanupFailure } from '../../core/cleanup';
 
 import type { Logger } from '../../core/logging';
 import type { CommandPaletteContext, MainWindow } from '../../core/contracts';
-import { PICKER_MODAL_STYLE, PICKER_OVERLAY_STYLE } from '../../ui/react/shells/main';
+import type { PreferenceStore } from '../../core/preference-store';
+import { PICKER_OVERLAY_STYLE } from '../../ui/react/shells/main';
 import { asElement } from '../../platform/dom';
 import {
   bindCompositionState,
@@ -14,11 +15,12 @@ import { MainNavigation } from '../navigation';
 import type { PickerItem, PickerScope } from './model';
 import type { PickerCloseReason, PickerOpenOptions, PickerPane, PickerProvider } from './types';
 import { fuzzyMatchScore } from '../../ui/fuzzy';
-import { itemRowText } from './item-row';
+import { itemRowCells } from './item-row';
+import { attachPickerAppearance } from './appearance';
 import { mountNativeReactView } from '../../platform/native-ui';
-import type { PickerReactCommand, PickerReactModel } from './react-model';
+import type { PickerReactCommand, PickerReactModel, PickerReactRow } from './react-model';
 import { createCommandsProvider } from './providers/commands';
-import { actionText, t, type AppLanguage } from '../../i18n';
+import { t, type AppLanguage } from '../../i18n';
 import type { ActionId } from '../../input/actions';
 
 import { DEFAULT_BINDINGS, type BindingContext, type BindingMap } from '../../input/bindings';
@@ -91,10 +93,6 @@ function isPrimaryMouseEvent(event: Event): boolean {
   return typeof button !== 'number' || button === 0;
 }
 
-export function fuzzyPickerRowText(item: PickerItem, _index: number, _scope: PickerScope): string {
-  return itemRowText(item);
-}
-
 export class FuzzyPicker {
   readonly #logger: Logger;
   readonly #navigation: MainNavigation;
@@ -102,6 +100,8 @@ export class FuzzyPicker {
   readonly #bindings: () => BindingMap;
   readonly #isSessionCurrent: (session: MainWindowSession) => boolean;
   readonly #language: () => AppLanguage;
+  readonly #preferences?: PreferenceStore;
+  readonly #projectedRows = new WeakMap<PickerItem[], readonly PickerReactRow[]>();
   readonly #sessions = new WeakSet<MainWindowSession>();
 
   constructor(
@@ -111,6 +111,7 @@ export class FuzzyPicker {
     bindings: () => BindingMap = () => DEFAULT_BINDINGS,
     isSessionCurrent: (session: MainWindowSession) => boolean,
     language: () => AppLanguage = () => 'en',
+    preferences?: PreferenceStore,
   ) {
     this.#logger = logger;
     this.#navigation = navigation;
@@ -118,6 +119,7 @@ export class FuzzyPicker {
     this.#bindings = bindings;
     this.#isSessionCurrent = isSessionCurrent;
     this.#language = language;
+    this.#preferences = preferences;
   }
 
   async open(
@@ -150,11 +152,11 @@ export class FuzzyPicker {
       const create = (tag: string): HTMLElement => doc.createElementNS(H, tag);
       const overlay = create('div');
       overlay.id = 'zv-picker-overlay';
+      overlay.className = 'picker-backdrop';
       orphanOverlay = overlay;
       overlay.style.cssText = PICKER_OVERLAY_STYLE;
       const modal = create('div');
-      modal.style.cssText = PICKER_MODAL_STYLE;
-      const single = (window.innerWidth || 1024) < 900;
+      modal.className = 'picker-root';
       overlay.append(modal);
       (doc.body ?? doc.documentElement).append(overlay);
       const themeCleanup = session.theme.add(overlay);
@@ -174,7 +176,6 @@ export class FuzzyPicker {
         filtered: [],
         items: [],
         focusPane: provider.initialFocusPane ?? 'search',
-        layout: single ? 'single' : 'dual',
         previousElement,
         previousWindow: focusedWindow,
         themeCleanup,
@@ -194,23 +195,20 @@ export class FuzzyPicker {
       session.picker.view = view;
       await view.ready;
       if (!this.isCurrent(session, generation)) return;
+      if (this.#preferences) {
+        session.picker.appearanceCleanup = attachPickerAppearance(
+          modal,
+          this.#preferences,
+          (error) => this.failure('picker appearance', error),
+        );
+      }
       const input = view.getElement('query') as HTMLInputElement | null;
       const results = view.getElement('results');
       const preview = view.getElement('preview');
       const sourceButton = view.getElement('source') as HTMLButtonElement | null;
       if (!input || !results || !preview || !sourceButton)
         throw new Error('Picker view is missing required parts');
-      Object.assign(session.picker, {
-        input,
-        results,
-        preview,
-        sourceButton,
-        count: view.getElement('count'),
-        operationStatus: view.getElement('status'),
-        previewTitle: view.getElement('preview-title'),
-        queryHelp: view.getElement('query-help'),
-        listHelp: view.getElement('list-help'),
-      });
+      Object.assign(session.picker, { input, results, preview, sourceButton });
       session.picker.localBindings = new LocalBindingRuntime({
         bindings: this.#bindings,
         execute: (action, event) =>
@@ -218,7 +216,7 @@ export class FuzzyPicker {
         schedule: (callback, delay) => window.setTimeout(callback, delay),
         clearTimer: (timer) => window.clearTimeout(timer),
       });
-      this.trace(`picker mounted scope=${scope} layout=${single ? 'single' : 'dual'}`);
+      this.trace(`picker mounted scope=${scope}`);
       this.refreshSource(session);
       const compositionCleanup = bindCompositionState(input, session.picker.composition);
       const localBindings = session.picker.localBindings;
@@ -362,6 +360,7 @@ export class FuzzyPicker {
       localBindings,
       inputCleanup,
       view,
+      appearanceCleanup,
       themeCleanup,
       onClose,
     } = picker;
@@ -381,6 +380,7 @@ export class FuzzyPicker {
     cleanup.run(() => localBindings?.dispose());
     cleanup.run(() => inputCleanup?.());
     cleanup.run(() => view?.dispose());
+    cleanup.run(() => appearanceCleanup?.());
     cleanup.run(() => themeCleanup?.());
     cleanup.run(() => overlay?.remove());
     let focusBeforeClose: PickerFocusSnapshot | null = null;
@@ -632,13 +632,34 @@ export class FuzzyPicker {
     this.render(session);
   }
 
+  /** Format and highlight once per result set, not once per cursor movement. */
+  private projectRows(session: MainWindowSession): readonly PickerReactRow[] {
+    const { filtered, committedQuery, provider } = session.picker;
+    const cached = this.#projectedRows.get(filtered);
+    if (cached) return cached;
+    const query = committedQuery.trim();
+    const untitled = this.text('untitled');
+    const rows = filtered.map((row, index) => {
+      const cells = row.bibliography ? itemRowCells(row, query, untitled) : undefined;
+      const previous = filtered[index - 1];
+      return {
+        text: cells?.title ?? (provider?.rowText(row, index) || row.title || untitled),
+        cells,
+        boundary: Boolean(row.group && previous?.group && row.group !== previous.group),
+      };
+    });
+    this.#projectedRows.set(filtered, rows);
+    return rows;
+  }
+
   private viewModel(session: MainWindowSession): PickerReactModel {
     const picker = session.picker;
     const provider = picker.provider;
     const item = picker.filtered[picker.selected];
     const preview = item ? provider?.preview(item) : undefined;
-    const queryHelp = this.shortcutReference('picker-input');
-    const listHelp = this.shortcutReference('picker-list');
+    const searching = picker.focusPane === 'search';
+    const sourceHelp = searching ? provider?.help?.query : provider?.help?.list;
+    const shortcuts = this.shortcutReference(searching ? 'picker-input' : 'picker-list');
     return {
       title: provider?.title ?? '',
       placeholder: provider?.placeholder ?? '',
@@ -650,14 +671,7 @@ export class FuzzyPicker {
           ? '—'
           : (provider?.countText?.(picker.filtered.length, picker.items.length) ??
             `${picker.filtered.length}/${picker.items.length}`),
-      rows: (picker.loadError ? [] : picker.filtered).map((row, index) => ({
-        text: provider?.rowText(row, index) ?? fuzzyPickerRowText(row, index, picker.scope),
-        boundary: Boolean(
-          row.group &&
-            picker.filtered[index - 1]?.group &&
-            row.group !== picker.filtered[index - 1]?.group,
-        ),
-      })),
+      rows: picker.loadError ? [] : this.projectRows(session),
       selected: picker.selected,
       empty:
         picker.loadingText ||
@@ -669,16 +683,12 @@ export class FuzzyPicker {
         ? (preview?.title ?? item.title) || this.text('untitled')
         : this.text('preview'),
       previewBody: item ? (preview?.body ?? item.title) : this.text('noSelection'),
-      queryHelp: provider?.help
-        ? [provider.help.query, queryHelp].filter(Boolean).join(' · ')
-        : picker.focusPane === 'search'
-          ? queryHelp
-          : listHelp,
-      listHelp: provider?.help ? [provider.help.list, listHelp].filter(Boolean).join(' · ') : null,
+      previewMeta: preview?.meta,
+      previewSections: preview?.sections,
+      shortcutHelp: sourceHelp ? `${shortcuts} · ${sourceHelp}` : shortcuts,
       status: picker.status,
       focusPane: picker.focusPane,
       mouseEnabled: this.#mouseEnabled(),
-      single: picker.layout === 'single',
     };
   }
 
@@ -995,16 +1005,9 @@ export class FuzzyPicker {
     picker.composition.active = false;
     picker.committedQuery = '';
     picker.confirming = false;
-    picker.sourceTitle = null;
     picker.sourceButton = null;
-    picker.operationStatus = null;
     picker.results = null;
     picker.preview = null;
-    picker.count = null;
-    picker.previewTitle = null;
-    picker.help = null;
-    picker.queryHelp = null;
-    picker.listHelp = null;
     picker.items = [];
     picker.filtered = [];
     picker.selected = 0;
@@ -1019,6 +1022,7 @@ export class FuzzyPicker {
     picker.previousElement = null;
     picker.previousWindow = null;
     picker.themeCleanup = null;
+    picker.appearanceCleanup = null;
   }
 
   private reportCleanupFailure(context: string, cleanup: CleanupFailure): void {
@@ -1034,13 +1038,31 @@ export class FuzzyPicker {
   }
 
   private shortcutReference(context: BindingContext): string {
-    const actions = context === 'picker-input' ? PICKER_INPUT_ACTIONS : PICKER_LIST_ACTIONS;
     const bindings = this.#bindings();
-    return actions
-      .flatMap((action) => {
-        const keys = shortcutsForAction(bindings, context, action);
-        return keys.length ? [`${keys.join('/')} ${actionText(action, this.#language())}`] : [];
-      })
+    const key = (action: ActionId, preferred: string): string => {
+      const sequence =
+        bindings[`${context}:${preferred}`] === action
+          ? preferred
+          : shortcutsForAction(bindings, context, action)[0];
+      if (sequence === '<Down>') return '↓';
+      if (sequence === '<Up>') return '↑';
+      if (sequence === '<Enter>') return 'Enter';
+      if (sequence === '<Esc>') return 'Esc';
+      return sequence ?? '';
+    };
+    const previous = key('uiPrevious', '<Up>');
+    const next = key('uiNext', '<Down>');
+    const move =
+      previous === '↑' && next === '↓' ? '↑↓' : [previous, next].filter(Boolean).join('/');
+    const confirm = key('uiConfirm', '<Enter>');
+    const close = key('uiCancel', '<Esc>');
+    return [
+      move && `${move} ${this.text('shortcutMove')}`,
+      confirm && `${confirm} ${this.text('shortcutConfirm')}`,
+      `Tab ${this.text('shortcutFocus')}`,
+      close && `${close} ${this.text('shortcutClose')}`,
+    ]
+      .filter(Boolean)
       .join(' · ');
   }
 }

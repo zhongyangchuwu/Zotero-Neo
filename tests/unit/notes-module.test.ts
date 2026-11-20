@@ -25,6 +25,7 @@ function harness() {
   const notes = createNotesModule(host, {
     window,
     logger,
+    language: () => 'en',
     status: () => {},
     choose: (options) => {
       if (chooser?.open) return null;

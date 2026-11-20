@@ -242,6 +242,7 @@ export class CollectionMembershipActions {
           locale,
         ),
         libraryName,
+        language: locale,
         memberships: matching,
         present,
         includeCreate: present,
@@ -260,8 +261,9 @@ export class CollectionMembershipActions {
             keepOpen: true,
             query: '',
             source: createCollectionCandidateProvider(libraryID, {
-              title: scopeTitle('New collection · choose parent', libraryName, locale),
+              title: scopeTitle(t('picker.chooseCollectionParent', locale), libraryName, locale),
               libraryName,
+              language: locale,
               includeRoot: true,
             }),
           };
@@ -312,8 +314,10 @@ export class CollectionMembershipActions {
     this.start(() => {
       const scope = mainCollectionLibrary(window);
       if (!scope) throw new CollectionWorkflowError('chooseLibrary');
+      const language = this.#host.language();
       const source = createCollectionCandidateProvider(scope.libraryID, {
-        title: `Find collections · ${scope.name}`,
+        title: `${t('picker.findCollections', language)} · ${scope.name}`,
+        language,
         libraryName: scope.name,
       });
       this.openPicker(source, async (candidate, isCurrent) => {
@@ -333,7 +337,9 @@ export class CollectionMembershipActions {
       if (!collection) throw new CollectionWorkflowError('chooseCollection');
       writable(collection.libraryID);
       const original = Zotero.Collections.get(collection.id);
-      this.openPicker(createCollectionItemsProvider(collection), async (candidate, isCurrent) => {
+      const language = this.#host.language();
+      const source = createCollectionItemsProvider(collection, language);
+      this.openPicker(source, async (candidate, isCurrent) => {
         currentCollection(collection.id, collection.libraryID);
         const item = await prepareMainCollectionItem(Number(candidate.id), collection.libraryID);
         if (Zotero.Collections.get(collection.id) !== original)
@@ -343,7 +349,7 @@ export class CollectionMembershipActions {
         return {
           keepOpen: true,
           message: result.done
-            ? `${summary} · Current filters remain unchanged; the item may be hidden. Esc ends; saved additions remain.`
+            ? `${summary} · ${t('picker.collectionItemSaved', language)}`
             : summary,
         };
       });
@@ -386,6 +392,7 @@ export class CollectionMembershipActions {
             locale,
           ),
           libraryName,
+          language: locale,
           excludeIDs: new Set([source.id]),
         }),
         async (candidate, isCurrent) => {
@@ -408,6 +415,7 @@ export class CollectionMembershipActions {
     const { window } = this.#host;
     this.start(() => {
       const target = this.target(window);
+      const language = this.#host.language();
       const excluded = new Set([target.id]);
       const refs = mainCollectionRefs(target.libraryID);
       let changed = true;
@@ -422,7 +430,8 @@ export class CollectionMembershipActions {
       }
       this.openPicker(
         createCollectionCandidateProvider(target.libraryID, {
-          title: `Move collection · ${target.path}`,
+          title: `${t('picker.moveCollection', language)} · ${target.path}`,
+          language,
           includeRoot: true,
           excludeIDs: excluded,
         }),
@@ -452,7 +461,8 @@ export class CollectionMembershipActions {
       let name = '';
       this.openPicker(
         createCollectionCandidateProvider(libraryID, {
-          title: 'Create collection · choose parent',
+          title: t('picker.chooseCollectionParent', this.#host.language()),
+          language: this.#host.language(),
           libraryName: scope?.name,
           includeRoot: true,
           preferredID: cursor?.id ?? mainActiveCollection(window)?.id,

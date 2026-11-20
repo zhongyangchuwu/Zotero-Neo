@@ -1,4 +1,5 @@
 import { mainCollectionRefs } from '../../../toolkit/main';
+import { t, type AppLanguage } from '../../../i18n';
 import { fuzzyMatchScore } from '../../../ui/fuzzy';
 import type { PickerItem } from '../../../main/picker/model';
 import type { PickerProvider } from '../../../main/picker/types';
@@ -12,6 +13,7 @@ export interface CollectionCandidateOptions {
   readonly includeRoot?: boolean;
   readonly excludeIDs?: ReadonlySet<number>;
   readonly preferredID?: number;
+  readonly language?: AppLanguage;
 }
 
 /** Same-library identities only; coverage always means direct membership, never recursive visibility. */
@@ -19,9 +21,12 @@ export function createCollectionCandidateProvider(
   libraryID: number,
   options: CollectionCandidateOptions = {},
 ): PickerProvider {
+  const language = options.language ?? 'en';
+  const text = (key: string): string => t(`picker.${key}`, language);
+  const library = options.libraryName ?? text('libraryName').replace('{id}', String(libraryID));
   return {
-    title: options.title ?? `Collections · ${options.libraryName ?? `Library ${libraryID}`}`,
-    placeholder: 'Search collection names or full paths…',
+    title: options.title ?? `${text('collections')} · ${library}`,
+    placeholder: text('searchCollections'),
     async load() {
       const coverage = new Map<number, number>();
       const itemCount = options.memberships?.length;
@@ -35,7 +40,7 @@ export function createCollectionCandidateProvider(
           const count = coverage.get(collection.id) ?? 0;
           const membership =
             itemCount !== undefined
-              ? `${count}/${itemCount} direct${count === itemCount ? ' · Already assigned' : ''}`
+              ? `${text('directMembership').replace('{count}', String(count)).replace('{total}', String(itemCount))}${count === itemCount ? ` · ${text('alreadyAssigned')}` : ''}`
               : '';
           return {
             id: collection.id,
@@ -47,7 +52,11 @@ export function createCollectionCandidateProvider(
               [collection.path === collection.name ? '' : collection.path, membership]
                 .filter(Boolean)
                 .join(' · ') || undefined,
-            preview: [collection.path, membership, `Library: ${options.libraryName ?? libraryID}`]
+            preview: [
+              collection.path,
+              membership,
+              text('libraryLabel').replace('{library}', () => library),
+            ]
               .filter(Boolean)
               .join('\n'),
           };
@@ -59,18 +68,18 @@ export function createCollectionCandidateProvider(
       if (options.includeRoot)
         candidates.unshift({
           id: 'root',
-          title: `${options.libraryName ?? `Library ${libraryID}`} / (root)`,
+          title: `${library} / ${text('libraryRoot')}`,
           search: 'root',
           collectionCandidate: 'root',
-          preview: 'Create or move directly under this library root.',
+          preview: text('useLibraryRoot'),
         });
       if (options.includeCreate)
         candidates.push({
           id: 'create',
-          title: 'New collection…',
+          title: text('newCollection'),
           search: '',
           collectionCandidate: 'create',
-          preview: `Choose a parent, name the collection, then confirm creating and adding ${itemCount ?? 0} items.`,
+          preview: text('newCollectionSteps').replace('{count}', String(itemCount ?? 0)),
         });
       return candidates;
     },
@@ -93,16 +102,19 @@ export function createCollectionCandidateProvider(
     preview(item) {
       return {
         title: item.title,
-        body: [item.preview ?? item.title, `Collection ID: ${item.id}`].join('\n'),
+        body: [
+          item.preview ?? item.title,
+          text('collectionId').replace('{id}', String(item.id)),
+        ].join('\n'),
       };
     },
     emptyText: (query) =>
       options.present === false
         ? query
-          ? `No assigned collections match “${query}”`
-          : 'These items have no direct collection memberships'
+          ? text('noMatchingAssignedCollections').replace('{query}', () => query)
+          : text('noAssignedCollections')
         : query
-          ? `No collections match “${query}”`
-          : 'No collections available',
+          ? text('noMatchingCollections').replace('{query}', () => query)
+          : text('noCollections'),
   };
 }

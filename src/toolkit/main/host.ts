@@ -740,6 +740,12 @@ export function mainItem(id: number): Zotero.Item | undefined {
   return item === false ? undefined : item;
 }
 
+/** The host supplies the icon used in its own item tree for this item type. */
+export function mainItemTypeIcon(item: Zotero.Item): string | undefined {
+  const type = item.getItemTypeIconName?.();
+  return type ? Zotero.ItemTypes?.getImageSrc(type) : undefined;
+}
+
 export function mainSelectedItems(window: MainWindow): Zotero.Item[] {
   return mainPane(window)?.getSelectedItems?.() ?? [];
 }

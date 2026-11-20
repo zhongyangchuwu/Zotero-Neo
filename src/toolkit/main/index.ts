@@ -37,6 +37,7 @@ export {
   moveMainItemCursor,
   restoreMainItemCursorAnchor,
   mainItem,
+  mainItemTypeIcon,
   mainSelectedItems,
   mainSelectedItemRefs,
   mainReaderForTab,

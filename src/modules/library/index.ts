@@ -211,7 +211,7 @@ export function createLibraryModule(host: ModuleHost, ports: LibraryModuleHost):
             action: kind === 'all' ? 'findAllItems' : 'findCollectionItems',
           } as const;
           const release = ports.choose(kind, {
-            source: createItemsProvider(ports.window, kind),
+            source: createItemsProvider(ports.window, kind, ports.language()),
             confirm: async (candidate) => {
               if (!scope.isCurrent()) return;
               const result = await ports.selectItem(Number(candidate.id), cause, surface, () =>

@@ -978,6 +978,7 @@ function createHistorySession(
     createNotesModule(mainScope.host, {
       window: ownerWindow,
       logger,
+      language: () => 'en',
       status: () => {},
       choose: () => null,
       selectNote: unavailable,
