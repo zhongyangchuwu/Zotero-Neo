@@ -17,7 +17,7 @@ import { SettingsExtras } from './settings-extras';
 import { SettingsAppearance, type SettingsAppearanceState } from './settings-appearance';
 import { SettingsInteraction } from './settings-interaction';
 import { settingsLanguage, settingsText, type SettingsLanguage } from './settings-i18n';
-import { SettingsKeybindings, type SettingsKeybindingsState } from './settings-keybindings';
+import { SettingsKeybindings } from './settings-keybindings';
 import { SettingsModules } from './settings-modules';
 import { SettingsReader } from './settings-reader';
 import type {
@@ -73,7 +73,6 @@ export class SettingsCenter {
     editingThemeId: null,
     paletteMode: 'light',
   };
-  readonly #keybindingsState: SettingsKeybindingsState = { editor: null };
 
   constructor(
     window: MainWindow,
@@ -228,7 +227,7 @@ export class SettingsCenter {
     const panel = this.#panel;
     if (!panel || compositionOwnsKey(event, this.#composing)) return;
     const target = asElement(event.target);
-    if (target?.closest('[data-neo-ui-key-scope="recorder"]')) return;
+    if (event.key === 'Escape' && target?.closest('[data-neo-ui-key-scope="recorder"]')) return;
     if (event.key === 'Escape') {
       event.preventDefault();
       event.stopPropagation();
@@ -338,13 +337,7 @@ export class SettingsCenter {
         case 'Keybindings':
           this.#activePage = {
             section: 'Keybindings',
-            controller: new SettingsKeybindings(
-              this.#window,
-              this.#preferences,
-              this.#keybindingsState,
-              language,
-              changed,
-            ),
+            controller: new SettingsKeybindings(this.#preferences, language, changed),
           };
           break;
         case 'Modules':

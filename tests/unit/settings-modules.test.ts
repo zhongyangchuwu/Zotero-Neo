@@ -1,3 +1,4 @@
+// @vitest-environment jsdom
 import { describe, expect, it, vi } from 'vitest';
 import type { MainWindow } from '../../src/core/contracts';
 import { BuiltinModuleRuntime, modulePreferenceKey } from '../../src/core/module-runtime';
@@ -8,6 +9,8 @@ import {
   TAB_GROUP_STATE_PREFERENCE,
 } from '../../src/modules/tab-enhancements/config';
 import { SettingsModules } from '../../src/main/settings-modules';
+import { mountSettingsReactView } from '../../src/ui/react/surfaces/settings';
+import type { SettingsReactModel } from '../../src/main/settings-react-model';
 
 class Preferences implements PreferenceStore {
   readonly values = new Map<string, boolean | number | string>();
@@ -66,9 +69,10 @@ function mount(initial: Record<string, boolean | number | string> = {}, owner = 
   return { owner, preferences, modules, changed, page };
 }
 function field(page: SettingsModules, id: string) {
-  const result = page
-    .model()
-    .groups.flatMap((group) => group.fields)
+  const groups = page.model().groups;
+  const result = groups
+    .flatMap((group) => [group, ...(group.groups ?? [])])
+    .flatMap((group) => group.fields)
     .find((entry) => entry.id === id);
   if (!result) throw new Error(`Missing field ${id}`);
   return result;
@@ -78,11 +82,14 @@ function request(page: SettingsModules, id: OptionalModuleId, value: boolean): v
 }
 
 describe('headless module settings', () => {
-  it('retains independent drafts and reports requested versus startup-applied state', () => {
+  it('saves each request immediately and shows restart notice until all requests match startup', () => {
     const test = mount({ 'modules.library.enabled': false, 'noteEditor.enabled': false });
+    expect(test.page.model().notice).toBeUndefined();
     request(test.page, 'reader-hints', false);
+    expect(test.preferences.values.get(modulePreferenceKey('reader-hints'))).toBe(false);
+    expect(field(test.page, 'modules.request.reader-hints')).toMatchObject({ value: false });
+    expect(test.page.model().notice).toBe('Some changes will take effect after restarting Zotero.');
     request(test.page, 'extensions', false);
-    test.page.dispatch({ type: 'action', id: 'modules.save' });
     expect(test.preferences.writes).toEqual([
       [modulePreferenceKey('reader-hints'), false],
       [modulePreferenceKey('extensions'), false],
@@ -92,27 +99,76 @@ describe('headless module settings', () => {
       requested: false,
       pendingRestart: true,
     });
-    expect(field(test.page, 'modules.request.reader-hints')).toMatchObject({ value: false });
-    expect(field(test.page, 'modules.save').disabled).toBe(true);
+    request(test.page, 'reader-hints', true);
+    expect(test.page.model().notice).toBe('Some changes will take effect after restarting Zotero.');
+    test.page.dispose();
+    const reopened = new SettingsModules(test.owner, test.preferences, test.modules, 'en', vi.fn());
+    expect(reopened.model().notice).toBe('Some changes will take effect after restarting Zotero.');
+    request(reopened, 'extensions', true);
+    expect(reopened.model().notice).toBeUndefined();
     expect(test.preferences.values.get('modules.library.enabled')).toBe(false);
     expect(test.preferences.values.get('noteEditor.enabled')).toBe(false);
+    reopened.dispose();
+  });
+
+  it('reads external changes and restores the saved value after a write fails', () => {
+    const test = mount();
+    test.preferences.set(modulePreferenceKey('references'), false);
+    expect(field(test.page, 'modules.request.references')).toMatchObject({ value: false });
+    test.preferences.failSetKey = modulePreferenceKey('extensions');
+    request(test.page, 'extensions', false);
+    expect(test.modules.requested().extensions).toBe(true);
+    expect(field(test.page, 'modules.request.extensions')).toMatchObject({ value: true });
+    expect(test.page.model().status?.error).toBe(true);
+    expect(test.page.model().status?.text).not.toContain('Preference write failed');
     test.page.dispose();
   });
 
-  it('preserves dirty drafts across external preference notifications and partial saves', () => {
+  it('keeps experimental switches in a closed-by-default disclosure without losing other switches', () => {
     const test = mount();
-    request(test.page, 'reader-hints', false);
-    request(test.page, 'extensions', false);
-    test.preferences.set(modulePreferenceKey('references'), false);
-    expect(field(test.page, 'modules.request.reader-hints')).toMatchObject({ value: false });
-    expect(field(test.page, 'modules.request.references')).toMatchObject({ value: false });
-    test.preferences.failSetKey = modulePreferenceKey('extensions');
-    test.page.dispatch({ type: 'action', id: 'modules.save' });
-    expect(test.modules.requested()['reader-hints']).toBe(false);
-    expect(test.modules.requested().extensions).toBe(true);
-    expect(field(test.page, 'modules.request.extensions')).toMatchObject({ value: false });
-    expect(field(test.page, 'modules.save').disabled).toBe(false);
-    expect(test.page.model().status?.error).toBe(true);
+    const groups = test.page.model().groups;
+    const extras = groups.find((group) => group.id === 'module-extras');
+    expect(extras).toMatchObject({ disclosure: true, title: 'Experimental and optional extras' });
+    expect(extras?.groups?.map((group) => group.id).sort()).toEqual([
+      'module.ai-qa',
+      'module.translation',
+    ]);
+    for (const { id } of OPTIONAL_MODULES)
+      expect(field(test.page, `modules.request.${id}`).kind).toBe('boolean');
+    expect(JSON.stringify(extras)).not.toContain('Install Translate for Zotero');
+    test.page.dispose();
+  });
+
+  it('renders a native closed disclosure and retains its open state on updates', () => {
+    const test = mount();
+    const root = document.createElement('div');
+    const model: SettingsReactModel = {
+      generation: 1,
+      language: 'en',
+      title: 'Settings',
+      closeLabel: 'Close',
+      navigationLabel: 'Settings',
+      helpLabel: 'Help',
+      section: 'Modules',
+      sections: [{ id: 'Modules', label: 'Modules' }],
+      page: { kind: 'form', model: test.page.model() },
+    };
+    const view = mountSettingsReactView(root, model, vi.fn());
+    const disclosure = root.querySelector('details');
+    expect(disclosure?.open).toBe(false);
+    expect(disclosure?.querySelector('summary')?.textContent).toBe(
+      'Experimental and optional extras',
+    );
+    if (!disclosure) throw new Error('Missing disclosure');
+    disclosure.open = true;
+    request(test.page, 'translation', true);
+    view.update({ ...model, page: { kind: 'form', model: test.page.model() } });
+    expect(root.querySelector('details')).toBe(disclosure);
+    expect(disclosure.open).toBe(true);
+    expect(root.querySelector('.neo-settings-form > [role="status"]')?.textContent).toBe(
+      'Some changes will take effect after restarting Zotero.',
+    );
+    view.dispose();
     test.page.dispose();
   });
 
@@ -128,8 +184,10 @@ describe('headless module settings', () => {
     expect(test.modules.applied['reader-hints']).toBe(false);
     expect(test.modules.requested()['reader-hints']).toBe(true);
     expect(test.modules.requested().extensions).toBe(false);
-    expect(field(test.page, 'modules.request.extensions')).toMatchObject({ value: true });
+    expect(field(test.page, 'modules.request.extensions')).toMatchObject({ value: false });
     expect(test.page.model().status?.error).toBe(true);
+    expect(test.modules.requested().translation).toBe(false);
+    expect(test.preferences.clears).toContain(modulePreferenceKey('item-attributes'));
     expect(test.preferences.values.get('modules.library.enabled')).toBe(false);
     test.preferences.failClearKey = null;
     test.page.dispatch({ type: 'action', id: 'modules.restore' });
@@ -142,6 +200,21 @@ describe('headless module settings', () => {
     test.page.dispose();
   });
 
+  it('continues restoring other switches when the translation reset fails', () => {
+    const test = mount({
+      [modulePreferenceKey('translation')]: true,
+      [modulePreferenceKey('ai-qa')]: true,
+      [modulePreferenceKey('item-attributes')]: true,
+    });
+    test.preferences.failSetKey = modulePreferenceKey('translation');
+    test.page.dispatch({ type: 'action', id: 'modules.restore' });
+    expect(field(test.page, 'modules.request.translation')).toMatchObject({ value: true });
+    expect(test.preferences.has(modulePreferenceKey('ai-qa'))).toBe(false);
+    expect(test.preferences.has(modulePreferenceKey('item-attributes'))).toBe(false);
+    expect(test.page.model().status?.error).toBe(true);
+    test.page.dispose();
+  });
+
   it('isolates scoped runtime failures and releases all observers', () => {
     const test = mount();
     const other = {} as MainWindow;
@@ -150,8 +223,11 @@ describe('headless module settings', () => {
     scope.activate('extensions', () => {
       throw new Error('Only window A failed');
     });
-    expect(field(test.page, 'modules.request.extensions').note).toContain('Only window A failed');
-    expect(field(pageB, 'modules.request.extensions').note).not.toContain('Only window A failed');
+    expect(field(test.page, 'modules.request.extensions').note).toBe(
+      'This feature could not start in this window.',
+    );
+    expect(field(pageB, 'modules.request.extensions').note).toBeUndefined();
+    expect(JSON.stringify(test.page.model())).not.toContain('Only window A failed');
     expect(test.modules.inspect(other).find(({ id }) => id === 'extensions')?.status).toBe(
       'pending',
     );
@@ -219,7 +295,7 @@ describe('headless module settings', () => {
 it('saves automatic translation without enabling selection translation or requiring Plugin Manager', () => {
   const test = mount({ [modulePreferenceKey('extensions')]: false });
   request(test.page, 'translation', true);
-  test.page.dispatch({ type: 'action', id: 'modules.save' });
+  expect(field(test.page, 'modules.request.translation')).toMatchObject({ value: true });
   expect(test.preferences.writes).toEqual([[modulePreferenceKey('translation'), true]]);
   expect(test.modules.inspect(test.owner).find(({ id }) => id === 'translation')).toMatchObject({
     applied: false,

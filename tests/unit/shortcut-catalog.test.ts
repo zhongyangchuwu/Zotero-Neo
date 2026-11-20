@@ -15,15 +15,7 @@ import {
   nativeReservation,
 } from '../../src/input/shortcut-catalog';
 import { guideEntries } from '../../src/input/key-guide';
-import {
-  addActionBinding,
-  createBindingEditor,
-  deriveBindingEditor,
-  resetAction,
-  resetContext,
-  unbindAction,
-  validateBindingDraft,
-} from '../../src/input/binding-editor';
+import { inspectShortcut } from '../../src/input/binding-editor';
 import {
   PICKER_INPUT_ACTIONS,
   PICKER_LIST_ACTIONS,
@@ -114,57 +106,15 @@ describe('unified shortcut catalog consumers', () => {
     ).toMatchObject({ group: 'reader', keys: ['y'], defaultKeys: ['y'], source: 'default' });
   });
 
-  it('drives local guides from edited settings bindings and removes guides when actions are unbound', () => {
-    let state = createBindingEditor();
-    state = unbindAction(state, 'reader-marks', 'uiFirst');
-    state = addActionBinding(state, 'reader-marks', 'uiFirst', 'zx');
-    const derived = deriveBindingEditor(state);
-    expect(derived.validation.valid).toBe(true);
-    const entry = derived.catalog.find(
+  it('drives local guides from saved shortcut overrides', () => {
+    const modified = resolveBindings('{"reader-marks:gg":null,"reader-marks:zx":"uiFirst"}');
+    const entry = shortcutCatalog(modified, 'en').find(
       (candidate) => candidate.context === 'reader-marks' && candidate.action === 'uiFirst',
     );
-    expect(guideEntries(derived.effectiveMap!, 'reader-marks', 'z', 'en')).toEqual([
+    expect(guideEntries(modified, 'reader-marks', 'z', 'en')).toEqual([
       { key: 'x', label: entry?.label, isGroup: false },
     ]);
-    expect(guideEntries(derived.effectiveMap!, 'reader-marks', 'g', 'en')).toEqual([]);
-    state = unbindAction(state, 'reader-marks', 'uiFirst');
-    expect(
-      guideEntries(deriveBindingEditor(state).effectiveMap!, 'reader-marks', 'z', 'en'),
-    ).toEqual([]);
-  });
-
-  it('resets action and context drafts without applying them or changing other contexts', () => {
-    let state = createBindingEditor(
-      resolveBindings(
-        '{"reader-marks:j":null,"reader-marks:z":"uiNext","picker-list:j":"uiPrevious"}',
-      ),
-    );
-    const baseline = state.baseline;
-    state = resetAction(state, 'reader-marks', 'uiNext');
-    expect(deriveBindingEditor(state).effectiveMap?.['reader-marks:j']).toBe('uiNext');
-    expect(deriveBindingEditor(state).effectiveMap?.['picker-list:j']).toBe('uiPrevious');
-    expect(state.baseline).toBe(baseline);
-    expect(deriveBindingEditor(state).dirty).toBe(true);
-    state = resetContext(state, 'picker-list');
-    expect(deriveBindingEditor(state).effectiveMap?.['picker-list:j']).toBe('uiNext');
-    expect(state.baseline).toBe(baseline);
-  });
-  it('preserves another action occupying a reset default and exposes the duplicate in the draft catalog', () => {
-    const initial = createBindingEditor(resolveBindings('{"reader-marks:j":"uiPrevious"}'));
-    const reset = resetAction(initial, 'reader-marks', 'uiNext');
-    const derived = deriveBindingEditor(reset);
-    expect(derived.validation.valid).toBe(false);
-    expect(derived.validation.errors.filter((issue) => issue.kind === 'duplicate')).toHaveLength(2);
-    expect(
-      derived.catalog.find((entry) => entry.context === 'reader-marks' && entry.action === 'uiNext')
-        ?.keys,
-    ).toEqual(['j']);
-    expect(
-      derived.catalog.find(
-        (entry) => entry.context === 'reader-marks' && entry.action === 'uiPrevious',
-      )?.keys,
-    ).toEqual(['j', 'k']);
-    expect(reset.baseline).toBe(initial.baseline);
+    expect(guideEntries(modified, 'reader-marks', 'g', 'en')).toEqual([]);
   });
 
   it('keeps native read-only controls outside the editable map', () => {
@@ -182,17 +132,6 @@ describe('unified shortcut catalog consumers', () => {
     expect(nativeReservation('picker-input', '<C-v>')).toBe('exclusive');
     expect(nativeReservation('picker-input', '<Down>')).toBeNull();
     expect(nativeReservation('picker-list', 'xy')).toBeNull();
-    const draft = validateBindingDraft([
-      { id: 1, mode: 'reader-outline', key: '<Down>', action: 'uiNext' },
-      { id: 2, mode: 'picker-input', key: 'x', action: 'uiNext' },
-      { id: 3, mode: 'reader-outline', key: '<Enter>', action: 'uiConfirm' },
-    ]);
-    expect(draft.errors).toEqual([
-      { rowId: 1, kind: 'native' },
-      { rowId: 2, kind: 'native' },
-      { rowId: 3, kind: 'native' },
-    ]);
-    expect(draft.warnings).toEqual([]);
   });
   it('rejects native continuation tokens while accepting configurable multi-key controls', () => {
     for (const key of [
@@ -205,37 +144,38 @@ describe('unified shortcut catalog consumers', () => {
       '<F1><C-Insert>',
       '<F1><S-Insert>',
     ]) {
-      const draft = validateBindingDraft([
-        { id: 1, mode: 'picker-input', key, action: 'uiConfirm' },
-        { id: 2, mode: 'plugins-input', key, action: 'uiFocusList' },
-      ]);
-      expect(draft.errors).toEqual([
-        { rowId: 1, kind: 'native' },
-        { rowId: 2, kind: 'native' },
-      ]);
-      expect(draft.valid).toBe(false);
+      expect(
+        inspectShortcut({}, { context: 'picker-input', action: 'uiConfirm', previous: null }, key),
+      ).toEqual({ problem: 'native' });
+      expect(
+        inspectShortcut(
+          {},
+          { context: 'plugins-input', action: 'uiFocusList', previous: null },
+          key,
+        ),
+      ).toEqual({ problem: 'native' });
     }
-    const executable = validateBindingDraft([
-      { id: 1, mode: 'picker-input', key: '<F1><F2>', action: 'uiConfirm' },
-      { id: 2, mode: 'plugins-input', key: '<F1><F2>', action: 'uiFocusList' },
-    ]);
-    expect(executable.errors).toEqual([]);
-    expect(executable.effectiveMap).toEqual({
-      'picker-input:<F1><F2>': 'uiConfirm',
-      'plugins-input:<F1><F2>': 'uiFocusList',
-    });
+    expect(
+      inspectShortcut(
+        {},
+        { context: 'picker-input', action: 'uiConfirm', previous: null },
+        '<F1><F2>',
+      ),
+    ).toMatchObject({ sequence: '<F1><F2>' });
   });
   it('rejects native Outline Enter overrides and prefixes while keeping alternate confirmation keys available', () => {
     for (const key of ['<Enter>', '<Enter>x', '<F1><Enter>', '<C-Enter>']) {
-      const draft = validateBindingDraft([
-        { id: 1, mode: 'reader-outline', key, action: 'uiCancel' },
-      ]);
-      expect(draft.errors).toEqual([{ rowId: 1, kind: 'native' }]);
+      expect(
+        inspectShortcut({}, { context: 'reader-outline', action: 'uiCancel', previous: null }, key),
+      ).toEqual({ problem: 'native' });
     }
-    const alternate = validateBindingDraft([
-      { id: 1, mode: 'reader-outline', key: '<F2>', action: 'uiConfirm' },
-    ]);
-    expect(alternate.effectiveMap).toEqual({ 'reader-outline:<F2>': 'uiConfirm' });
+    expect(
+      inspectShortcut(
+        {},
+        { context: 'reader-outline', action: 'uiConfirm', previous: null },
+        '<F2>',
+      ),
+    ).toMatchObject({ sequence: '<F2>' });
     expect(
       shortcutCatalog(DEFAULT_BINDINGS, 'en').find(
         (entry) => entry.context === 'reader-outline' && entry.action === 'uiConfirm',

@@ -5,6 +5,7 @@ import type { ReactView } from '../types';
 import type {
   SettingsFormCommand,
   SettingsFormField,
+  SettingsFormGroup,
   SettingsFormModel,
 } from '../../../main/settings-form-model';
 import type { SettingsReactCommand, SettingsReactModel } from '../../../main/settings-react-model';
@@ -119,6 +120,51 @@ function FormControl({
   );
 }
 
+function FormGroup({
+  group,
+  dispatch,
+}: {
+  group: SettingsFormGroup;
+  dispatch: (command: SettingsFormCommand) => void;
+}) {
+  if (group.disclosure) {
+    return (
+      <details className="neo-settings-group neo-settings-disclosure">
+        <summary>{group.title}</summary>
+        {group.groups?.map((child) => (
+          <FormGroup key={child.id} group={child} dispatch={dispatch} />
+        ))}
+      </details>
+    );
+  }
+  return (
+    <section className="neo-settings-group">
+      <div className="neo-settings-group-heading">
+        <h3>{group.title}</h3>
+        {group.description && <p className="neo-muted">{group.description}</p>}
+      </div>
+      <div className="neo-settings-fields">
+        {group.fields.map((field) =>
+          field.kind === 'action' ? (
+            <div key={field.id} className="neo-settings-action">
+              <FormControl field={field} dispatch={dispatch} />
+              {field.description && <p className="neo-muted">{field.description}</p>}
+              {field.note && <p className="neo-muted">{field.note}</p>}
+            </div>
+          ) : (
+            <Field key={field.id} label={field.label} description={field.description}>
+              <div className="neo-settings-field-body">
+                <FormControl field={field} dispatch={dispatch} />
+                {field.note && <span className="neo-muted">{field.note}</span>}
+              </div>
+            </Field>
+          ),
+        )}
+      </div>
+    </section>
+  );
+}
+
 function SettingsForm({
   model,
   dispatch,
@@ -128,32 +174,10 @@ function SettingsForm({
 }) {
   return (
     <div className="neo-settings-form">
+      {model.notice && <Status>{model.notice}</Status>}
       {model.description && <p className="neo-muted">{model.description}</p>}
       {model.groups.map((group) => (
-        <section key={group.id} className="neo-settings-group">
-          <div className="neo-settings-group-heading">
-            <h3>{group.title}</h3>
-            {group.description && <p className="neo-muted">{group.description}</p>}
-          </div>
-          <div className="neo-settings-fields">
-            {group.fields.map((field) =>
-              field.kind === 'action' ? (
-                <div key={field.id} className="neo-settings-action">
-                  <FormControl field={field} dispatch={dispatch} />
-                  {field.description && <p className="neo-muted">{field.description}</p>}
-                  {field.note && <p className="neo-muted">{field.note}</p>}
-                </div>
-              ) : (
-                <Field key={field.id} label={field.label} description={field.description}>
-                  <div className="neo-settings-field-body">
-                    <FormControl field={field} dispatch={dispatch} />
-                    {field.note && <span className="neo-muted">{field.note}</span>}
-                  </div>
-                </Field>
-              ),
-            )}
-          </div>
-        </section>
+        <FormGroup key={group.id} group={group} dispatch={dispatch} />
       ))}
       {model.status?.text && <Status error={model.status.error}>{model.status.text}</Status>}
     </div>
@@ -175,6 +199,9 @@ export const SETTINGS_REACT_CSS = `
 .neo-settings-header button { display:flex; gap:9px; align-items:center; }
 .neo-settings-page { flex:1; min-height:0; min-width:0; overflow:auto; overscroll-behavior:contain; padding:20px; }
 .neo-settings-group { margin-bottom:20px; }
+.neo-settings-disclosure > summary { cursor:pointer; }
+/* Gecko can report rectangles for closed details descendants; exclude them from modal Tab. */
+.neo-settings-disclosure:not([open]) > :not(summary) { display:none; }
 .neo-settings-group-heading h3 { margin-bottom:5px; }
 .neo-settings-fields { border:1px solid var(--zotero-neo-border); border-radius:6px; overflow:hidden; }
 .neo-settings-field-body { display:flex; flex-direction:column; gap:5px; min-width:0; max-width:420px; }

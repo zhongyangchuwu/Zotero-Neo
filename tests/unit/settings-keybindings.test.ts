@@ -1,5 +1,4 @@
 import { describe, expect, it } from 'vitest';
-import type { MainWindow } from '../../src/core/contracts';
 import type { PreferenceStore } from '../../src/core/preference-store';
 import {
   BINDINGS_PREFERENCE_KEY,
@@ -7,12 +6,13 @@ import {
   LANGUAGE_PREFERENCE_KEY,
   bindingsFromPreferences,
 } from '../../src/core/preferences';
-import { DEFAULT_BINDINGS, encodeBindingOverrides } from '../../src/input/bindings';
-import { shortcutsForAction } from '../../src/input/shortcut-catalog';
 import {
-  SettingsKeybindings,
-  type SettingsKeybindingsState,
-} from '../../src/main/settings-keybindings';
+  DEFAULT_BINDINGS,
+  encodeBindingOverrides,
+  type BindingMap,
+} from '../../src/input/bindings';
+import { shortcutsForAction } from '../../src/input/shortcut-catalog';
+import { SettingsKeybindings } from '../../src/main/settings-keybindings';
 
 class MemoryPreferences implements PreferenceStore {
   readonly values = new Map<string, boolean | number | string>();
@@ -46,148 +46,141 @@ class MemoryPreferences implements PreferenceStore {
   }
 }
 
-function setup(state: SettingsKeybindingsState = { editor: null }) {
+function setup(bindings: BindingMap = DEFAULT_BINDINGS) {
   const preferences = new MemoryPreferences();
   preferences.set(LANGUAGE_PREFERENCE_KEY, 'en');
-  preferences.set(BINDINGS_PREFERENCE_KEY, encodeBindingOverrides(DEFAULT_BINDINGS));
-  const page = new SettingsKeybindings({} as MainWindow, preferences, state, 'en', () => {});
-  return { page, preferences, state };
+  preferences.set(BINDINGS_PREFERENCE_KEY, encodeBindingOverrides(bindings));
+  const page = new SettingsKeybindings(preferences, 'en', () => {});
+  return { page, preferences };
 }
 
+const SCROLL = { context: 'reader-normal', action: 'scrollDown' } as const;
+
 describe('Settings keybindings controller', () => {
-  it('records an edit in the draft and persists only on Apply', () => {
-    const { page, preferences } = setup();
-    const row = page
-      .model()
-      .rows.find((item) => item.mode === 'reader-normal' && item.action === 'scrollDown')!;
-    const before = bindingsFromPreferences(preferences);
-    page.dispatch({
-      type: 'record',
-      context: 'reader-normal',
-      action: 'scrollDown',
-      rowId: row.id,
+  it('replaces one shortcut on confirmation without touching the same key in another context', () => {
+    const { page, preferences } = setup({
+      ...DEFAULT_BINDINGS,
+      'main-normal:<S-Space>ff': 'mainNavDown',
     });
+    page.dispatch({ type: 'record', ...SCROLL, previous: 'j' });
+    page.dispatch({ type: 'record-key', event: { key: ' ', shiftKey: true } });
     page.dispatch({ type: 'record-key', event: { key: 'F8', ctrlKey: true } });
-    expect(page.model().recording?.sequence).toBe('<C-F8>');
-    page.dispatch({ type: 'finish-recording' });
-    expect(page.model().dirty).toBe(true);
-    expect(bindingsFromPreferences(preferences)).toEqual(before);
-    page.dispatch({ type: 'apply' });
-    expect(
-      shortcutsForAction(bindingsFromPreferences(preferences), 'reader-normal', 'scrollDown'),
-    ).toContain('<C-F8>');
-    expect(page.model().dirty).toBe(false);
-    expect(page.model().saveOutcome).toBe('saved');
+    page.dispatch({ type: 'pop-key' });
+    page.dispatch({ type: 'record-key', event: { key: 'f' } });
+    page.dispatch({ type: 'record-key', event: { key: 'f' } });
+    expect(page.model().edit?.sequence).toBe('<S-Space>ff');
+    expect(bindingsFromPreferences(preferences)['reader-normal:j']).toBe('scrollDown');
+    page.dispatch({ type: 'save-edit' });
+    expect(bindingsFromPreferences(preferences)).toMatchObject({
+      'reader-normal:<S-Space>ff': 'scrollDown',
+      'main-normal:<S-Space>ff': 'mainNavDown',
+    });
+    expect(bindingsFromPreferences(preferences)['reader-normal:j']).toBeUndefined();
+    expect(page.model().edit).toBeNull();
     page.dispose();
   });
 
-  it('preserves a dirty draft across language and external binding updates', () => {
-    const { page, preferences, state } = setup();
-    page.dispatch({ type: 'unbind', context: 'reader-normal', action: 'scrollDown' });
-    expect(page.model().dirty).toBe(true);
-    preferences.set(LANGUAGE_PREFERENCE_KEY, 'zh-CN');
-    preferences.set(BINDINGS_PREFERENCE_KEY, encodeBindingOverrides(DEFAULT_BINDINGS));
-    expect(
-      page
-        .model()
-        .catalog.find((entry) => entry.context === 'reader-normal' && entry.action === 'scrollDown')
-        ?.keys,
-    ).toEqual([]);
+  it('names an exact conflict immediately and does not block unrelated changes', () => {
+    const { page, preferences } = setup();
+    page.dispatch({ type: 'record', ...SCROLL, previous: 'j' });
+    page.dispatch({ type: 'record-key', event: { key: 'k' } });
+    expect(page.model().edit?.error).toContain('Scroll up');
+    page.dispatch({ type: 'save-edit' });
+    expect(bindingsFromPreferences(preferences)).toMatchObject({
+      'reader-normal:j': 'scrollDown',
+      'reader-normal:k': 'scrollUp',
+    });
+    page.dispatch({
+      type: 'delete-row',
+      context: 'reader-normal',
+      action: 'lastPage',
+      previous: 'G',
+    });
+    expect(bindingsFromPreferences(preferences)['reader-normal:G']).toBeUndefined();
+    page.dispatch({ type: 'save-edit', overwrite: 'scrollUp' });
+    const saved = bindingsFromPreferences(preferences);
+    expect(saved['reader-normal:k']).toBe('scrollDown');
+    expect(saved['reader-normal:j']).toBeUndefined();
+    expect(saved['reader-normal:G']).toBeUndefined();
     page.dispose();
-    const reopened = new SettingsKeybindings(
-      {} as MainWindow,
-      preferences,
-      state,
-      'zh-CN',
-      () => {},
+  });
+
+  it('rechecks current conflict ownership before allowing overwrite', () => {
+    const { page, preferences } = setup();
+    page.dispatch({ type: 'record', ...SCROLL, previous: 'j' });
+    page.dispatch({ type: 'record-key', event: { key: 'k' } });
+    preferences.set(
+      BINDINGS_PREFERENCE_KEY,
+      encodeBindingOverrides({
+        ...DEFAULT_BINDINGS,
+        'reader-normal:k': 'firstPage',
+      }),
     );
-    expect(reopened.model().dirty).toBe(true);
-    expect(
-      reopened
-        .model()
-        .catalog.find((entry) => entry.context === 'reader-normal' && entry.action === 'scrollDown')
-        ?.keys,
-    ).toEqual([]);
-    reopened.dispose();
+    page.dispatch({ type: 'save-edit', overwrite: 'scrollUp' });
+    expect(bindingsFromPreferences(preferences)['reader-normal:k']).toBe('firstPage');
+    expect(page.model().edit?.exact).toBe('firstPage');
+    page.dispose();
   });
 
-  it('reports invalid duplicate recordings and permits reset without persisting', () => {
+  it('saves literal control keys in an expression and keeps native reservations', () => {
     const { page, preferences } = setup();
-    const rows = page.model().rows.filter((row) => row.mode === 'reader-normal');
-    const first = rows.find((row) => row.action === 'scrollDown')!;
-    const second = rows.find((row) => row.action !== first.action && row.key.length === 1)!;
+    page.dispatch({ type: 'record', ...SCROLL, previous: 'j' });
+    page.dispatch({ type: 'toggle-expression' });
+    page.dispatch({ type: 'expression', value: '<F8><Enter><Esc><BS>' });
+    page.dispatch({ type: 'save-edit' });
+    expect(bindingsFromPreferences(preferences)['reader-normal:<F8><Enter><Esc><BS>']).toBe(
+      'scrollDown',
+    );
     page.dispatch({
       type: 'record',
-      context: 'reader-normal',
-      action: 'scrollDown',
-      rowId: first.id,
+      context: 'reader-outline',
+      action: 'uiConfirm',
+      previous: null,
     });
-    page.dispatch({ type: 'record-key', event: { key: second.key } });
-    page.dispatch({ type: 'finish-recording' });
-    expect(page.model().errors.length).toBeGreaterThan(0);
-    expect(page.model().canApply).toBe(false);
-    page.dispatch({ type: 'apply' });
+    page.dispatch({ type: 'toggle-expression' });
+    page.dispatch({ type: 'expression', value: '<Enter>' });
+    expect(page.model().edit?.error).toContain('reserved');
+    page.dispatch({ type: 'save-edit' });
+    expect(bindingsFromPreferences(preferences)['reader-outline:<Enter>']).toBeUndefined();
+    page.dispose();
+  });
+
+  it('leaves the old binding on cancel and reports write failures in the editing row', () => {
+    const { page, preferences } = setup();
+    page.dispatch({ type: 'record', ...SCROLL, previous: 'j' });
+    page.dispatch({ type: 'record-key', event: { key: 'F8', altKey: true } });
+    preferences.fail = true;
+    page.dispatch({ type: 'save-edit' });
+    expect(page.model().edit).toMatchObject({
+      sequence: '<M-F8>',
+      error: 'Could not save bindings.',
+    });
+    page.dispatch({ type: 'cancel-edit' });
     expect(bindingsFromPreferences(preferences)).toEqual(DEFAULT_BINDINGS);
-    page.dispatch({ type: 'reset-action', context: 'reader-normal', action: 'scrollDown' });
-    expect(page.model().errors).toEqual([]);
     page.dispose();
   });
 
-  it('cancels recordings, adds and removes a shortcut, and ignores stale row commands', () => {
-    const { page } = setup();
-    const initial = page.model().rows;
-    page.dispatch({ type: 'record', context: 'reader-normal', action: 'scrollDown', rowId: null });
-    page.dispatch({ type: 'record-key', event: { key: 'F8', altKey: true } });
-    page.dispatch({ type: 'cancel-recording' });
-    expect(page.model().rows).toEqual(initial);
-    page.dispatch({ type: 'record', context: 'reader-normal', action: 'scrollDown', rowId: null });
-    page.dispatch({ type: 'record-key', event: { key: 'F8', altKey: true } });
-    page.dispatch({ type: 'finish-recording' });
-    const added = page
-      .model()
-      .rows.find(
-        (row) =>
-          row.mode === 'reader-normal' && row.action === 'scrollDown' && row.key === '<M-F8>',
-      );
-    expect(added).toBeDefined();
-    page.dispatch({ type: 'delete-row', rowId: added!.id });
-    expect(page.model().dirty).toBe(false);
-    page.dispatch({
-      type: 'record',
-      context: 'reader-normal',
-      action: 'scrollDown',
-      rowId: added!.id,
-    });
-    expect(page.model().recording).toBeNull();
-    page.dispose();
-  });
-
-  it('refreshes a clean draft on external changes and exposes native reservations', () => {
-    const { page, preferences } = setup();
-    const bindings = { ...DEFAULT_BINDINGS, 'reader-normal:<C-F8>': 'scrollDown' as const };
-    preferences.set(BINDINGS_PREFERENCE_KEY, encodeBindingOverrides(bindings));
+  it('resets and unbinds immediately without taking defaults owned by another action', () => {
+    const { page, preferences } = setup({ ...DEFAULT_BINDINGS, 'reader-normal:j': 'scrollUp' });
+    page.dispatch({ type: 'reset-action', ...SCROLL });
+    expect(page.model().notice?.text).toContain('Scroll up');
+    expect(bindingsFromPreferences(preferences)['reader-normal:j']).toBe('scrollUp');
+    page.dispatch({ type: 'unbind', context: 'reader-normal', action: 'scrollUp' });
     expect(
-      page
-        .model()
-        .catalog.find((entry) => entry.context === 'reader-normal' && entry.action === 'scrollDown')
-        ?.keys,
-    ).toContain('<C-F8>');
-    expect(page.model().dirty).toBe(false);
-    expect(page.model().native.length).toBeGreaterThan(0);
+      shortcutsForAction(bindingsFromPreferences(preferences), 'reader-normal', 'scrollUp'),
+    ).toEqual([]);
+    page.dispatch({ type: 'reset-action', ...SCROLL });
+    expect(bindingsFromPreferences(preferences)['reader-normal:j']).toBe('scrollDown');
     page.dispose();
   });
 
-  it('exposes failed writes and clamps Prefix Guide values', () => {
+  it('reports failed Prefix Guide writes and clamps numeric values', () => {
     const { page, preferences } = setup();
     page.dispatch({ type: 'guide-number', setting: 'delayMs', value: -50 });
     expect(preferences.get(KEY_GUIDE_DELAY_PREFERENCE_KEY, 1)).toBe(0);
     preferences.fail = true;
     page.dispatch({ type: 'guide-enabled', value: false });
     expect(page.model().guide.error).not.toBe('');
-    page.dispatch({ type: 'unbind', context: 'reader-normal', action: 'scrollDown' });
-    page.dispatch({ type: 'apply' });
-    expect(page.model().saveOutcome).toBe('save-failed');
-    expect(page.model().dirty).toBe(true);
     page.dispose();
   });
 });

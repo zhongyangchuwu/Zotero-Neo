@@ -2206,31 +2206,36 @@ describe('Main Settings Center shell', () => {
     }
   });
 
-  it('rejects stale page commands and retains a keybinding draft across navigation and language changes', () => {
+  it('rejects stale shortcut saves and keeps confirmed changes across navigation and language changes', () => {
     const host = settingsMainHost();
     try {
       host.controller.openSettings(host.window);
       host.dispatch({ type: 'section', section: 'Keybindings' });
-      const stale = host.model().generation;
       host.dispatch({
         type: 'keybindings',
-        command: { type: 'unbind', context: 'main-normal', action: 'mainNavDown' },
+        command: { type: 'record', context: 'main-normal', action: 'mainNavDown', previous: 'j' },
       });
-      let page = host.model().page;
-      expect(page.kind === 'keybindings' && page.model.dirty).toBe(true);
+      const stale = host.model().generation;
+      host.dispatch({ type: 'keybindings', command: { type: 'record-key', event: { key: 'F8' } } });
       host
         .native()
-        .dispatch({ generation: stale, type: 'keybindings', command: { type: 'apply' } });
+        .dispatch({ generation: stale, type: 'keybindings', command: { type: 'save-edit' } });
       expect(host.values.has('bindings')).toBe(false);
+      host.dispatch({ type: 'keybindings', command: { type: 'save-edit' } });
+      expect(JSON.parse(String(host.values.get('bindings')))).toMatchObject({
+        'main-normal:j': null,
+        'main-normal:<F8>': 'mainNavDown',
+      });
       host.dispatch({ type: 'section', section: 'Advanced' });
       host.dispatch({ type: 'form', command: { type: 'value', id: 'language', value: 'zh-CN' } });
       host.dispatch({ type: 'section', section: 'Keybindings' });
-      page = host.model().page;
-      expect(page.kind === 'keybindings' && page.model.dirty).toBe(true);
-      host.dispatch({ type: 'keybindings', command: { type: 'apply' } });
-      expect(host.values.has('bindings')).toBe(true);
-      page = host.model().page;
-      expect(page.kind === 'keybindings' && page.model.dirty).toBe(false);
+      const page = host.model().page;
+      if (page.kind !== 'keybindings') throw new Error('Expected Keybindings');
+      expect(
+        page.model.catalog.find(
+          ({ context, action }) => context === 'main-normal' && action === 'mainNavDown',
+        ),
+      ).toMatchObject({ keys: ['<F8>'] });
       const retired = host.native();
       const generation = host.model().generation;
       host.dispatch({ type: 'close' });
@@ -2242,7 +2247,7 @@ describe('Main Settings Center shell', () => {
     }
   });
 
-  it('saves module requests only on explicit save', () => {
+  it('saves module requests immediately', () => {
     const host = settingsMainHost();
     try {
       host.controller.openSettings(host.window);
@@ -2251,8 +2256,6 @@ describe('Main Settings Center shell', () => {
         type: 'form',
         command: { type: 'value', id: 'modules.request.reader-hints', value: false },
       });
-      expect(host.values.has('modules.reader-hints.enabled')).toBe(false);
-      host.dispatch({ type: 'form', command: { type: 'action', id: 'modules.save' } });
       expect(host.values.get('modules.reader-hints.enabled')).toBe(false);
     } finally {
       host.controller.shutdown();

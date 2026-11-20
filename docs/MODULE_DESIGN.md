@@ -237,19 +237,19 @@ Neo 标签页增强界面默认以 `{title}` 显示标题，模板支持 `{title
 
 ## 可选增强与设置语义
 
-模块偏好沿用 `extensions.zotero-neo.modules.<id>.enabled` 键形，仅六项可选增强具有用户开关，规范默认值和依赖见[设置参考](SETTINGS_REFERENCE.md#模块)。核心分区固定启用，已有 `extensions.zotero-neo.modules.<core>.enabled=false` 值被忽略。旧版 `reader-ai` 启用偏好不会自动启用 `ai-qa`；翻译模块键缺失时的一次迁移保留已有 provider 用户，但不覆盖明确关闭值。
+模块偏好沿用 `extensions.zotero-neo.modules.<id>.enabled` 键形，七项可选增强具有用户开关，规范默认值和依赖见[设置参考](SETTINGS_REFERENCE.md#模块)。核心分区固定启用，已有 `extensions.zotero-neo.modules.<core>.enabled=false` 值被忽略。旧版 `reader-ai` 启用偏好不会自动启用 `ai-qa`；翻译模块键缺失时的一次迁移保留已有 provider 用户，但不覆盖明确关闭值。
 
-可选请求只在**真正重启 Zotero**后应用；关闭设置、重新打开 Reader 或 Neo 热重载都不切换当前运行时图。保存只改动可选请求；恢复默认恢复六项规范值，并显式写入 `translation=false`，不改核心配置、快捷键、行为偏好、marks 或 Zotero 数据。旧启动快照缺少字段时，当前进程按关闭处理。`noteEditor.enabled` 仍只控制 Vim 风格笔记编辑，不关闭笔记查找；`annotationCommentEditor.enabled`、`marks.persist`、`mode.visual.enabled`、`keyGuide.enabled` 与 `picker.mouse.enabled` 也保留各自原义。
+可选开关立即保存，只在**真正重启 Zotero**后应用；关闭设置、重新打开 Reader 或 Neo 热重载都不切换当前运行时图。恢复默认恢复七项规范值，并显式写入 `translation=false`，不改核心配置、快捷键、行为偏好、marks 或 Zotero 数据。旧启动快照缺少字段时，当前进程按关闭处理。`noteEditor.enabled` 仍只控制 Vim 风格笔记编辑，不关闭笔记查找；`annotationCommentEditor.enabled`、`marks.persist`、`mode.visual.enabled`、`keyGuide.enabled` 与 `picker.mouse.enabled` 也保留各自原义。
 
-| 状态 | Settings 展示 | 当前会话行为 |
-| --- | --- | --- |
-| 已开启且激活成功 | Enabled | 安装该可选模块在当前 scope 支持的贡献。 |
-| 已关闭且未运行 | Disabled | 仅适用于可选增强；不创建对应实例，其贡献不参与匹配或前缀等待。 |
-| 用户修改可选开关，尚未重启 | 当前状态 + Pending restart；分别显示请求值与已应用值 | 继续使用当前启动时的应用图，不提前删除处理器或假装已经停止。 |
-| 依赖或实际宿主未就绪 | Blocked 或 Pending host，并说明原因 | 不运行受影响的可选贡献；不自动修改其他设置。 |
-| 激活失败 | Failed，显示可读原因并记录详细日志 | 退休该宿主实例的入口并清理已获取资源；该实例不循环重试，新宿主实例或重启 Zotero 可重新激活。 |
+| 状态 | 当前会话行为 |
+| --- | --- |
+| 已开启且激活成功 | 安装该可选模块在当前 scope 支持的贡献。 |
+| 已关闭且未运行 | 仅适用于可选增强；不创建对应实例，其贡献不参与匹配或前缀等待。 |
+| 用户修改可选开关，尚未重启 | 设置显示统一重启提示，继续使用当前启动时的应用图，不提前删除处理器。 |
+| 依赖或实际宿主未就绪 | 不运行受影响的可选贡献；不自动修改其他设置。 |
+| 激活失败 | 记录详细日志，退休该宿主实例的入口并清理已获取资源；该实例不循环重试，新宿主实例或重启 Zotero 可重新激活。 |
 
-Settings 的模块区域只管理六项可选增强。核心分区始终开启，原生偏好页中的 **Open Neo Settings** 与 `Zotero.Neo.openSettings` 始终可用。翻译依赖准备不要求启用扩展管理面板；AI 问答（实验）的服务参数在其面板配置；共享 Picker 属于核心交互基座，没有独立开关。
+Settings 的模块区域只管理七项可选增强。核心分区始终开启，原生偏好页中的 **Open Neo Settings** 与 `Zotero.Neo.openSettings` 始终可用。翻译依赖准备不要求启用扩展管理面板；AI 问答（实验）的服务参数在其面板配置；共享 Picker 属于核心交互基座，没有独立开关。
 
 ### 异步写入与可用性
 
@@ -312,6 +312,6 @@ src/
 - 在双 MainWindow、Reader 分屏、独立 Reader 和 Note editor 替换场景中，状态、历史、焦点与退出都归实际宿主；隐藏/已退休 PDF 视图不能确认提示或写入。
 - Picker 排队期间候选改变、分类展开来源改变或交互被替换时，不写错目标；已提交写入仍有真实回执，不被当作取消或重复提交。
 - 每个原生桥接只有一个有效所有者；重复打开/关闭窗口或视图后无重复菜单、监听、定时器、patch 和回调。部分激活/释放失败可诊断，不污染下一次实例。
-- 关闭可选增强后，其按键不参与匹配、count/前缀等待或 Guide；配置仍保留。仅当可选请求改变时显示 Pending restart，重启前继续使用当前应用图。
+- 关闭可选增强并重启后，其按键不参与匹配、count/前缀等待或 Guide；配置仍保留。保存值与当前运行状态不同时显示统一重启提示，重启前继续使用当前应用图。
 - 七项可选增强均关闭时，核心模块仍提供 Main、Reader、Note 与 Workspace 工作流；仍可从 Zotero 原生偏好页进入 Neo Settings，Zotero 数据与原生扩展管理不受影响。
 - 现有 `getSelection()` / `registerSelectionAction()` 消费方无需改调用签名；核心选择实例当前不可用时 `getSelection()` 返回 `null`，不执行已退休的旧选择回调，恢复后不重复注册。

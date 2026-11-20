@@ -1,4 +1,3 @@
-import type { MainWindow } from '../core/contracts';
 import type { PreferenceStore } from '../core/preference-store';
 import {
   BINDINGS_PREFERENCE_KEY,
@@ -6,36 +5,47 @@ import {
   KEY_GUIDE_ENABLED_PREFERENCE_KEY,
   KEY_GUIDE_FONT_SIZE_PREFERENCE_KEY,
   KEY_GUIDE_NUMBER_SPECS,
-  LANGUAGE_PREFERENCE_KEY,
   bindingsFromPreferences,
   keyGuideConfig,
-  neoCommandLanguage,
   normalizeKeyGuideNumber,
 } from '../core/preferences';
+import { ACTION_LABELS, type ActionId } from '../input/actions';
+import { actionsForBindingMode } from '../input/binding-capabilities';
+import { inspectShortcut, type BindingEditTarget } from '../input/binding-editor';
 import {
-  addActionBinding,
-  createBindingEditor,
-  deriveBindingEditor,
-  resetAction,
-  transition,
-  unbindAction,
-  type BindingEditorLanguage,
-  type BindingEditorState,
-} from '../input/binding-editor';
-import { BINDING_CONTEXTS, encodeBindingOverrides } from '../input/bindings';
+  BINDING_CONTEXTS,
+  DEFAULT_BINDINGS,
+  encodeBindingOverrides,
+  parseBindingKey,
+  type BindingMap,
+} from '../input/bindings';
 import {
   ACTION_GROUPS,
   contextLabel,
   groupLabel,
   nativeShortcutCatalog,
+  shortcutCatalog,
+  shortcutsForAction,
 } from '../input/shortcut-catalog';
 import { keyString } from '../input/keys';
-import { serializeBindingTokens } from '../input/key-sequence';
+import { bindingSequenceTokens, serializeBindingTokens } from '../input/key-sequence';
 import { settingsText, type SettingsLanguage, type SettingsMessage } from './settings-i18n';
 import type { KeybindingsPageCommand, KeybindingsPageModel } from './settings-keybindings-model';
 
-export interface SettingsKeybindingsState {
-  editor: BindingEditorState | null;
+type ShortcutEdit = BindingEditTarget &
+  (
+    | { readonly mode: 'recording'; readonly tokens: readonly string[] }
+    | { readonly mode: 'expression'; readonly value: string }
+  );
+
+function expression(edit: ShortcutEdit): string {
+  return edit.mode === 'recording' ? serializeBindingTokens(edit.tokens) : edit.value;
+}
+
+function currentTarget(bindings: BindingMap, target: BindingEditTarget): boolean {
+  return (
+    target.previous === null || bindings[`${target.context}:${target.previous}`] === target.action
+  );
 }
 
 const MESSAGES = [
@@ -50,12 +60,9 @@ const MESSAGES = [
   'Unbound actions',
   'Search results',
   'No matching actions.',
-  'Apply bindings',
-  'Fix invalid rows before applying.',
-  'Prefix conflicts detected; Apply is allowed.',
-  'Unsaved changes',
-  'Saved.',
   'Could not save bindings.',
+  'Unavailable shortcuts',
+  'Could not restore shortcuts used by: {actions}.',
   'Current shortcuts',
   'Default shortcuts',
   'No shortcut is assigned in this context.',
@@ -68,18 +75,18 @@ const MESSAGES = [
   'Unbind this action',
   'Reset this action',
   'Delete binding',
-  'Recording keys — press keys in order, then choose Done',
-  'Shortcut recorded; choose Done to keep it.',
-  'Shortcut recording cancelled.',
-  'Done',
+  'Type the shortcut. Backspace removes a key; Enter saves; Esc cancels.',
+  'Edit expression',
+  'Type a key sequence such as <Space>ff. Enter saves; Esc cancels.',
+  'Save shortcut',
+  'Overwrite existing shortcut',
   'Cancel',
   'Native shortcuts',
   'Read-only; Zotero or the operating system owns these keys.',
-  'Enter a key sequence and action.',
-  'Invalid mode, key sequence, or action.',
-  'Action is not supported in this mode.',
-  'Duplicate mode and key sequence.',
-  'Strict prefix of another sequence.',
+  'Enter a key sequence.',
+  'Invalid key sequence.',
+  'Conflicts with “{action}”.',
+  'Shares a shortcut prefix with: {shortcuts}.',
   'Native key is reserved by Zotero or text editing.',
   'Prefix Guide',
   'Show valid continuations while a multi-key command prefix is pending.',
@@ -87,32 +94,28 @@ const MESSAGES = [
   'Display delay (ms)',
   'Font size (px)',
   'Could not update Prefix Guide settings.',
-] as const;
+] as const satisfies readonly SettingsMessage[];
 
-/** Owns Prefix Guide configuration and one explicit-Apply keybinding draft. */
+/** Keeps just the open row's input; all other values come from saved preferences. */
 export class SettingsKeybindings {
   readonly #preferences: PreferenceStore;
-  readonly #state: SettingsKeybindingsState;
   readonly #language: SettingsLanguage;
   readonly #changed: () => void;
   readonly #cleanups: Array<() => void> = [];
-  #recording: KeybindingsPageModel['recording'] = null;
-  #status = '';
+  readonly #labels: Readonly<Record<(typeof MESSAGES)[number], string>>;
+  #edit: ShortcutEdit | null = null;
+  #editError = '';
+  #notice: KeybindingsPageModel['notice'] = null;
   #guideError = '';
   #disposed = false;
 
-  constructor(
-    _window: MainWindow,
-    preferences: PreferenceStore,
-    state: SettingsKeybindingsState,
-    language: SettingsLanguage,
-    changed: () => void,
-  ) {
+  constructor(preferences: PreferenceStore, language: SettingsLanguage, changed: () => void) {
     this.#preferences = preferences;
-    this.#state = state;
+    this.#labels = Object.fromEntries(
+      MESSAGES.map((message) => [message, settingsText(language, message)]),
+    ) as Record<(typeof MESSAGES)[number], string>;
     this.#language = language;
     this.#changed = changed;
-    this.#prepareDraft();
     for (const key of [
       KEY_GUIDE_ENABLED_PREFERENCE_KEY,
       KEY_GUIDE_DELAY_PREFERENCE_KEY,
@@ -125,78 +128,86 @@ export class SettingsKeybindings {
       if (cleanup) this.#cleanups.push(cleanup);
     }
     const bindingsCleanup = preferences.observe?.(BINDINGS_PREFERENCE_KEY, () => {
-      const draft = this.#state.editor;
-      if (draft && deriveBindingEditor(draft).dirty) return;
-      this.#state.editor = createBindingEditor(
-        bindingsFromPreferences(preferences),
-        this.#editorLanguage(),
-      );
+      if (this.#edit && !currentTarget(bindingsFromPreferences(preferences), this.#edit))
+        this.#edit = null;
+      this.#notice = null;
       this.#publish();
     });
     if (bindingsCleanup) this.#cleanups.push(bindingsCleanup);
-    const languageCleanup = preferences.observe?.(LANGUAGE_PREFERENCE_KEY, () => {
-      const editor = this.#state.editor;
-      if (!editor) return;
-      const language = this.#editorLanguage();
-      if (editor.language !== language) {
-        this.#state.editor = transition(editor, { type: 'set-language', language });
-        this.#publish();
-      }
-    });
-    if (languageCleanup) this.#cleanups.push(languageCleanup);
   }
 
-  #editorLanguage(): BindingEditorLanguage {
-    return neoCommandLanguage(
-      this.#preferences,
-      typeof Zotero === 'undefined' ? '' : (Zotero.locale ?? ''),
-    );
-  }
-  #prepareDraft(): void {
-    const language = this.#editorLanguage();
-    const editor = this.#state.editor;
-    this.#state.editor =
-      !editor || !deriveBindingEditor(editor).dirty
-        ? createBindingEditor(bindingsFromPreferences(this.#preferences), language)
-        : editor.language === language
-          ? editor
-          : transition(editor, { type: 'set-language', language });
-  }
   #publish(): void {
     if (!this.#disposed) this.#changed();
   }
   model(): KeybindingsPageModel {
-    const editor = this.#state.editor!;
-    const derived = deriveBindingEditor(editor);
-    const labels: Record<string, string> = {};
-    for (const message of MESSAGES)
-      labels[message] = settingsText(editor.language, message as SettingsMessage);
+    const language = this.#language;
+    const bindings = bindingsFromPreferences(this.#preferences);
     const guide = keyGuideConfig(this.#preferences);
     return {
-      labels,
-      contexts: BINDING_CONTEXTS.map((value) => ({
-        value,
-        label: contextLabel(value, editor.language),
-      })),
-      groups: ACTION_GROUPS.map((value) => ({ value, label: groupLabel(value, editor.language) })),
-      catalog: derived.catalog,
-      native: nativeShortcutCatalog(undefined, editor.language),
-      rows: editor.rows,
-      errors: derived.validation.errors,
-      warnings: derived.validation.warnings,
-      dirty: derived.dirty,
-      canApply: derived.dirty && derived.validation.valid && !!derived.effectiveMap,
-      saveOutcome: editor.saveOutcome,
-      recording: this.#recording,
-      status: this.#status,
+      labels: this.#labels,
+      contexts: BINDING_CONTEXTS.map((value) => ({ value, label: contextLabel(value, language) })),
+      groups: ACTION_GROUPS.map((value) => ({ value, label: groupLabel(value, language) })),
+      catalog: shortcutCatalog(bindings, language),
+      native: nativeShortcutCatalog(undefined, language),
+      unavailable: Object.entries(bindings).flatMap(([key, action]) => {
+        const parsed = parseBindingKey(key);
+        return parsed && !actionsForBindingMode(parsed.mode).includes(action)
+          ? [{ context: parsed.mode, previous: parsed.sequence, action }]
+          : [];
+      }),
+      edit: this.#editModel(bindings),
+      notice: this.#notice,
       guide: { ...guide, error: this.#guideError },
+    };
+  }
+
+  #editModel(bindings: BindingMap): KeybindingsPageModel['edit'] {
+    const edit = this.#edit;
+    if (!edit) return null;
+    const sequence = expression(edit);
+    const check = inspectShortcut(bindings, edit, sequence);
+    let error = this.#editError;
+    let warning = '';
+    let exact: ActionId | undefined;
+    if ('problem' in check) {
+      if (check.problem === 'native')
+        error = this.#labels['Native key is reserved by Zotero or text editing.'];
+      if (check.problem === 'malformed') error = this.#labels['Invalid key sequence.'];
+    } else {
+      const owner = check.exact;
+      exact = owner;
+      if (owner) {
+        const conflict = this.#labels['Conflicts with “{action}”.'].replace(
+          '{action}',
+          () => ACTION_LABELS[owner][this.#language],
+        );
+        error = error ? `${conflict} ${error}` : conflict;
+      }
+      if (check.prefixes.length)
+        warning = this.#labels['Shares a shortcut prefix with: {shortcuts}.'].replace(
+          '{shortcuts}',
+          () =>
+            check.prefixes
+              .map(
+                ({ action, sequence }) => `${ACTION_LABELS[action][this.#language]} (${sequence})`,
+              )
+              .join(', '),
+        );
+    }
+    return {
+      context: edit.context,
+      action: edit.action,
+      previous: edit.previous,
+      mode: edit.mode,
+      sequence,
+      error,
+      warning,
+      exact,
+      canSave: !('problem' in check) && !exact,
     };
   }
   dispatch(command: KeybindingsPageCommand): void {
     if (this.#disposed || !command || typeof command !== 'object') return;
-    let editor = this.#state.editor;
-    if (!editor) return;
-    const derived = deriveBindingEditor(editor);
     if (command.type === 'guide-enabled' || command.type === 'guide-number') {
       let key: string;
       let value: boolean | number;
@@ -223,110 +234,150 @@ export class SettingsKeybindings {
       this.#publish();
       return;
     }
-    if (command.type === 'record') {
-      if (
-        !derived.catalog.some(
-          (entry) => entry.context === command.context && entry.action === command.action,
+    const bindings = bindingsFromPreferences(this.#preferences);
+    const edit = this.#edit;
+    switch (command.type) {
+      case 'record': {
+        if (
+          !actionsForBindingMode(command.context).includes(command.action) ||
+          !currentTarget(bindings, command)
         )
-      )
-        return;
-      if (
-        command.rowId !== null &&
-        !editor.rows.some(
-          (row) =>
-            row.id === command.rowId &&
-            row.mode === command.context &&
-            row.action === command.action,
-        )
-      )
-        return;
-      this.#recording = {
-        context: command.context,
-        action: command.action,
-        rowId: command.rowId,
-        tokens: [],
-        sequence: '',
-      };
-      this.#status = '';
-    } else if (command.type === 'record-key') {
-      if (!this.#recording || !command.event || typeof command.event.key !== 'string') return;
-      const key = keyString(command.event);
-      if (!key) return;
-      const tokens = [...this.#recording.tokens, key];
-      const sequence = serializeBindingTokens(tokens);
-      if (!sequence) return;
-      this.#recording = { ...this.#recording, tokens, sequence };
-    } else if (command.type === 'cancel-recording') {
-      if (!this.#recording) return;
-      this.#recording = null;
-      this.#status = settingsText(editor.language, 'Shortcut recording cancelled.');
-    } else if (command.type === 'finish-recording') {
-      const recording = this.#recording;
-      if (!recording?.sequence) return;
-      if (
-        !derived.catalog.some(
-          (entry) => entry.context === recording.context && entry.action === recording.action,
-        )
-      )
-        return;
-      if (
-        recording.rowId !== null &&
-        !editor.rows.some(
-          (row) =>
-            row.id === recording.rowId &&
-            row.mode === recording.context &&
-            row.action === recording.action,
-        )
-      )
-        return;
-      editor =
-        recording.rowId === null
-          ? addActionBinding(editor, recording.context, recording.action, recording.sequence)
-          : transition(editor, {
-              type: 'update-row',
-              rowId: recording.rowId,
-              patch: { key: recording.sequence },
-            });
-      this.#recording = null;
-      this.#status = '';
-    } else if (command.type === 'apply') {
-      if (!derived.dirty || !derived.validation.valid || !derived.effectiveMap) return;
-      try {
-        this.#preferences.set(
-          BINDINGS_PREFERENCE_KEY,
-          encodeBindingOverrides(derived.effectiveMap),
-        );
-        editor = transition(editor, { type: 'save-success', bindings: derived.effectiveMap });
-      } catch {
-        editor = transition(editor, { type: 'save-failure' });
+          return;
+        const { context, action, previous } = command;
+        this.#edit = { context, action, previous, mode: 'recording', tokens: [] };
+        this.#notice = null;
+        break;
       }
-      this.#recording = null;
-      this.#status = '';
-    } else if (command.type === 'delete-row') {
-      if (!editor.rows.some((row) => row.id === command.rowId)) return;
-      editor = transition(editor, { type: 'delete-row', rowId: command.rowId });
-      this.#recording = null;
-      this.#status = '';
-    } else if (command.type === 'unbind' || command.type === 'reset-action') {
-      if (
-        !derived.catalog.some(
-          (entry) => entry.context === command.context && entry.action === command.action,
-        )
-      )
+      case 'record-key': {
+        if (edit?.mode !== 'recording') return;
+        const key = keyString(command.event);
+        if (!key || !serializeBindingTokens([key])) return;
+        this.#edit = { ...edit, tokens: [...edit.tokens, key] };
+        break;
+      }
+      case 'pop-key':
+        if (edit?.mode !== 'recording' || !edit.tokens.length) return;
+        this.#edit = { ...edit, tokens: edit.tokens.slice(0, -1) };
+        break;
+      case 'toggle-expression': {
+        if (!edit) return;
+        const { context, action, previous } = edit;
+        this.#edit =
+          edit.mode === 'recording'
+            ? {
+                context,
+                action,
+                previous,
+                mode: 'expression',
+                value: expression(edit) || previous || '',
+              }
+            : {
+                context,
+                action,
+                previous,
+                mode: 'recording',
+                tokens: bindingSequenceTokens(edit.value) ?? [],
+              };
+        break;
+      }
+      case 'expression':
+        if (edit?.mode !== 'expression') return;
+        this.#edit = { ...edit, value: command.value };
+        break;
+      case 'cancel-edit':
+        if (!edit) return;
+        this.#edit = null;
+        break;
+      case 'save-edit':
+        if (!edit || !currentTarget(bindings, edit)) return;
+        this.#saveEdit(bindings, edit, command.overwrite);
+        this.#publish();
         return;
-      editor =
-        command.type === 'unbind'
-          ? unbindAction(editor, command.context, command.action)
-          : resetAction(editor, command.context, command.action);
-      this.#recording = null;
-      this.#status = '';
-    } else return;
-    this.#state.editor = editor;
+      case 'delete-row': {
+        if (!currentTarget(bindings, command)) return;
+        const next = { ...bindings };
+        delete next[`${command.context}:${command.previous}`];
+        this.#saveAction(next, command);
+        return;
+      }
+      case 'unbind':
+      case 'reset-action':
+        if (!actionsForBindingMode(command.context).includes(command.action)) return;
+        this.#updateAction(bindings, command);
+        return;
+    }
+    this.#editError = '';
+    this.#publish();
+  }
+
+  #saveEdit(bindings: BindingMap, edit: ShortcutEdit, overwrite: ActionId | undefined): void {
+    const check = inspectShortcut(bindings, edit, expression(edit));
+    if ('problem' in check) {
+      if (check.problem === 'empty') this.#editError = this.#labels['Enter a key sequence.'];
+      return;
+    }
+    if (check.exact !== overwrite) return;
+    this.#edit = null;
+    this.#editError = '';
+    if (check.sequence === edit.previous) return;
+    const next = { ...bindings };
+    if (edit.previous !== null) delete next[`${edit.context}:${edit.previous}`];
+    next[`${edit.context}:${check.sequence}`] = edit.action;
+    try {
+      this.#preferences.set(BINDINGS_PREFERENCE_KEY, encodeBindingOverrides(next));
+    } catch {
+      this.#edit = edit;
+      this.#editError = this.#labels['Could not save bindings.'];
+    }
+  }
+
+  #updateAction(
+    bindings: BindingMap,
+    command: Extract<KeybindingsPageCommand, { type: 'reset-action' | 'unbind' }>,
+  ): void {
+    const { context, action } = command;
+    const next = { ...bindings };
+    const defaults =
+      command.type === 'reset-action' ? shortcutsForAction(DEFAULT_BINDINGS, context, action) : [];
+    const occupied = new Set<string>();
+    const available = defaults.filter((key) => {
+      const owner = bindings[`${context}:${key}`];
+      if (!owner || owner === action) return true;
+      occupied.add(ACTION_LABELS[owner][this.#language]);
+      return false;
+    });
+    if (!defaults.length || available.length) {
+      for (const key of shortcutsForAction(bindings, context, action))
+        delete next[`${context}:${key}`];
+      for (const key of available) next[`${context}:${key}`] = action;
+    }
+    this.#saveAction(
+      next,
+      command,
+      occupied.size
+        ? this.#labels['Could not restore shortcuts used by: {actions}.'].replace('{actions}', () =>
+            [...occupied].join(', '),
+          )
+        : '',
+    );
+  }
+
+  #saveAction(
+    next: BindingMap,
+    { context, action }: Pick<BindingEditTarget, 'context' | 'action'>,
+    text = '',
+  ): void {
+    try {
+      this.#preferences.set(BINDINGS_PREFERENCE_KEY, encodeBindingOverrides(next));
+    } catch {
+      text = this.#labels['Could not save bindings.'];
+    }
+    this.#notice = text ? { context, action, text } : null;
     this.#publish();
   }
   dispose(): void {
     this.#disposed = true;
-    this.#recording = null;
+    this.#edit = null;
     for (const cleanup of this.#cleanups.splice(0)) cleanup();
   }
 }
