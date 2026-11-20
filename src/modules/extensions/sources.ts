@@ -39,7 +39,16 @@ export interface ExtensionCandidate {
   readonly expectedVersion?: string;
 }
 
-export const CURATED_EXTENSIONS: readonly { label: string; candidate: ExtensionCandidate }[] = [
+type CuratedExtension = { readonly label: string } & (
+  | { readonly candidate: ExtensionCandidate }
+  | {
+      readonly description: readonly [english: string, chinese: string];
+      readonly source: GitHubSource & { readonly assetName: string };
+      readonly expectedID: string;
+    }
+);
+
+export const CURATED_EXTENSIONS: readonly CuratedExtension[] = [
   {
     label: 'Translate Extra',
     candidate: {
@@ -56,6 +65,20 @@ export const CURATED_EXTENSIONS: readonly { label: string; candidate: ExtensionC
       expectedID: TRANSLATE_PLUGIN_ID,
       expectedVersion: TRANSLATE_SUPPORTED_VERSION,
     },
+  },
+  {
+    label: 'Zotero Bases',
+    description: [
+      'Standalone literature tables with saved views, plain-text properties, and grouping',
+      '独立多视图文献表格、纯文本自定义属性与按列分组',
+    ],
+    source: {
+      kind: 'github',
+      owner: 'zhongyangchuwu',
+      repo: 'zotero-bases',
+      assetName: 'zotero-bases.xpi',
+    },
+    expectedID: 'zotero-bases@zhongyangchuwu.github.io',
   },
 ];
 
@@ -395,4 +418,19 @@ export async function resolveExtensionCandidates(
   signal.throwIfAborted();
   const parsed = parseExtensionInput(input);
   return 'kind' in parsed ? latestGitHubRelease(parsed, signal) : [parsed];
+}
+
+export async function resolveCuratedExtension(
+  entry: CuratedExtension,
+  signal: AbortSignal,
+): Promise<ExtensionCandidate> {
+  signal.throwIfAborted();
+  if ('candidate' in entry) return entry.candidate;
+  const candidates = await latestGitHubRelease(entry.source, signal);
+  const matches = candidates.filter(({ name }) => name === entry.source.assetName);
+  if (!matches.length) throw new ExtensionSourceError('release-assets');
+  if (matches.length > 1) throw new ExtensionSourceError('ambiguous-asset');
+  const [candidate] = matches;
+  if (!candidate.version) throw new ExtensionSourceError('release-version');
+  return { ...candidate, expectedID: entry.expectedID, expectedVersion: candidate.version };
 }

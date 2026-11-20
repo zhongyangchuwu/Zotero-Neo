@@ -8,6 +8,7 @@ import {
 } from '../../src/modules/extensions/operations';
 import {
   CURATED_EXTENSIONS,
+  resolveCuratedExtension,
   resolveExtensionCandidates,
   type ExtensionSource,
 } from '../../src/modules/extensions/sources';
@@ -117,7 +118,7 @@ describe('extension provenance', () => {
   });
 
   it('passes and retains the curated ID, version and hash', async () => {
-    const { candidate } = CURATED_EXTENSIONS[0];
+    const candidate = await resolveCuratedExtension(CURATED_EXTENSIONS[0], transport().signal);
     native.install.mockImplementationOnce(async (source, options) => {
       expect(options.id).toBe(candidate.expectedID);
       expect(options.hash).toBe(candidate.hash);
@@ -136,7 +137,7 @@ describe('extension provenance', () => {
   });
 
   it('vetoes stale, changed URL and wrong pinned version without recording success', async () => {
-    const { candidate } = CURATED_EXTENSIONS[0];
+    const candidate = await resolveCuratedExtension(CURATED_EXTENSIONS[0], transport().signal);
     const controller = new AbortController();
     native.install.mockImplementationOnce(async (source, options) => {
       expect(() => options.confirm({ name: 'Translate Extra', source, version: '99' })).toThrow(
@@ -158,6 +159,54 @@ describe('extension provenance', () => {
 
     await expect(installExtension(candidate, transport(controller.signal))).resolves.toBeNull();
     expect(prefs.set).not.toHaveBeenCalled();
+  });
+
+  it('installs the selected Zotero Bases release through the native identity, hash and version checks', async () => {
+    const bases = CURATED_EXTENSIONS.find(({ label }) => label === 'Zotero Bases')!;
+    const id = 'zotero-bases@zhongyangchuwu.github.io';
+    const source = {
+      kind: 'github',
+      owner: 'zhongyangchuwu',
+      repo: 'zotero-bases',
+      assetName: 'zotero-bases.xpi',
+    };
+    const version = '0.2.0';
+    const url =
+      'https://github.com/zhongyangchuwu/Zotero-Bases/releases/download/v0.2.0/zotero-bases.xpi';
+    fetch.mockResolvedValueOnce(
+      Response.json({
+        tag_name: `v${version}`,
+        assets: [
+          {
+            name: 'another.xpi',
+            state: 'uploaded',
+            browser_download_url: url.replace(source.assetName, 'another.xpi'),
+          },
+          { name: source.assetName, state: 'uploaded', browser_download_url: url, digest },
+        ],
+      }),
+    );
+    const ctx = transport();
+    const candidate = await resolveCuratedExtension(bases, ctx.signal);
+    native.install.mockImplementationOnce(async (packageURL, options) => {
+      expect(packageURL).toBe(url);
+      expect(options.id).toBe(id);
+      expect(options.hash).toBe(digest);
+      expect(options.confirm({ name: 'Zotero Bases', source: url, version })).toBe(true);
+      return { id, version, pendingRestart: false };
+    });
+    await expect(installExtension(candidate, ctx)).resolves.toEqual({ pendingRestart: false });
+    expect(fetch).toHaveBeenCalledExactlyOnceWith(
+      'https://api.github.com/repos/zhongyangchuwu/zotero-bases/releases/latest',
+      expect.objectContaining({ credentials: 'omit' }),
+    );
+    expect(prefs.set).toHaveBeenCalledExactlyOnceWith(
+      SOURCE_PREF,
+      JSON.stringify({ version: 1, sources: { [id]: source } }),
+    );
+    native.update.mockResolvedValueOnce('no-update');
+    await expect(updateExtension({ id, version }, ctx)).resolves.toBe('current');
+    expect(fetch).toHaveBeenCalledOnce(); // Native feed, not GitHub fallback.
   });
 
   it('distinguishes a post-install storage failure from an install failure and keeps the restart flag', async () => {

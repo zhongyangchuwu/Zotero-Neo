@@ -11,7 +11,6 @@ import type { AIQAController } from '../ai-qa/controller';
 import type { ScholarlyMetadataService } from '../scholarly/contracts';
 import type { MetadataReviewPort } from '../metadata-review/controller';
 import type { SettingsSnapshotPort } from '../settings-snapshots/controller';
-import type { ItemAttributesPort } from '../item-attributes/contracts';
 
 /** Business owners use standard DOM windows; native Zotero fields stay in Toolkit. */
 export type MainWindow = Window;
@@ -124,7 +123,6 @@ export interface ReaderControllerApi extends ReaderSelectionApi {
 
 export interface MainWindowControllerApi extends ReaderMainOperations {
   openSettings(owner?: Window | null): boolean;
-  openItemAttributes(window: MainWindow, selectedItems?: readonly Zotero.Item[]): boolean;
   openMetadataReview(window: MainWindow, items: readonly Zotero.Item[]): Cleanup | null;
   addWindow(window: MainWindow): void;
   removeWindow(window: MainWindow): void;
@@ -144,7 +142,6 @@ export interface ReaderControllerDependencies {
 export interface MainWindowControllerDependencies {
   readonly metadataReview?: MetadataReviewPort;
   readonly settingsSnapshots?: SettingsSnapshotPort;
-  readonly itemAttributes?: ItemAttributesPort;
   readonly documentPreparation?: DocumentPreparationPort;
   readonly aiQA?: () => AIQAController | null;
   readonly modules: BuiltinModuleRuntime;

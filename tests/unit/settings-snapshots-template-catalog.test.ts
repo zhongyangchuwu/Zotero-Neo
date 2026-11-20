@@ -16,7 +16,6 @@ const state = vi.hoisted(() => ({
   invalidate: undefined as (() => void) | undefined,
   liveKeys: new Set<string>(),
 }));
-vi.mock('../../src/toolkit/main', () => ({ assertCustomExtraKey: () => {} }));
 vi.mock('../../src/settings-snapshots/registry', () => ({
   createSettingsAdapters: () => [
     { id: 'zotero', label: 'Zotero', sourceVersion: '9.0', schemaVersion: 1 },
@@ -140,6 +139,16 @@ describe('local template field selection', () => {
     expect(draft.status).toBe('draft');
     expect(state.reads).toBe(0);
     expect(catalog.adapters).toHaveLength(2);
+    catalog.dispose();
+  });
+
+  it('excludes retired ItemAttributes controls from the built-in Neo template', async () => {
+    const catalog = createSettingsTemplateCatalog(() => '1.0');
+    const neo = (await catalog.list(context())).find(({ adapterID }) => adapterID === 'zotero-neo');
+    const keys = neo?.fields.map(({ key }) => key);
+    expect(keys).toContain('language');
+    expect(keys).not.toContain('itemAttributes.fields.v1');
+    expect(keys).not.toContain('modules.item-attributes.enabled');
     catalog.dispose();
   });
 

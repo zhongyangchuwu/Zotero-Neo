@@ -84,7 +84,7 @@ function InlineExtensionAction({
           </div>
           <div className="neo-extensions-inline-line">
             <span>{chinese ? '精选扩展：' : 'Curated:'}</span>
-            {inline.curated.map((label, index) => (
+            {inline.curated.map(({ label, description }, index) => (
               <button
                 key={label}
                 type="button"
@@ -93,6 +93,9 @@ function InlineExtensionAction({
                 onClick={() => dispatch({ type: 'curated', index })}
               >
                 {label}
+                {description && (
+                  <span className="neo-extensions-inline-file"> · {description}</span>
+                )}
               </button>
             ))}
           </div>

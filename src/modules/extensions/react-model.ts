@@ -1,7 +1,11 @@
 import type { InstalledPlugin } from './host';
 
 export type ExtensionsInlineModel =
-  | { readonly kind: 'source'; readonly resolving: boolean; readonly curated: readonly string[] }
+  | {
+      readonly kind: 'source';
+      readonly resolving: boolean;
+      readonly curated: readonly { readonly label: string; readonly description?: string }[];
+    }
   | {
       readonly kind: 'choose';
       readonly candidates: readonly { name: string; version?: string }[];

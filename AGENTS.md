@@ -4,6 +4,8 @@
 
 Zotero Neo 是面向最新稳定版 Zotero 的插件。它通过 Firefox/Gecko Bootstrap API，为 Zotero 阅读器和主窗口提供受 Neovim/LazyVim 启发、以键盘操作为主的交互层。运行时源码使用严格 TypeScript，由 esbuild 打包为普通 JavaScript，再直接打入 XPI。
 
+文献表格与自定义属性由独立插件 [Zotero Bases](https://github.com/zhongyangchuwu/Zotero-Bases) 提供，不属于 Neo 内置模块。在 Neo 中按 `<Space>pp`、`i`，用键盘选择 Zotero Bases 并按 `Enter` 安装。
+
 ## 构建、安装与测试
 
 ### 构建插件

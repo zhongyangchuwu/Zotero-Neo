@@ -27,7 +27,6 @@ const host = vi.hoisted(() => ({
   refused: new Set<string>(),
   invalidate: undefined as (() => void) | undefined,
 }));
-vi.mock('../../src/toolkit/main', () => ({ assertCustomExtraKey: () => {} }));
 vi.mock('../../src/settings-snapshots/registry', () => ({ createSettingsAdapters: () => [] }));
 vi.mock('../../src/platform/settings-snapshot-templates', async () => {
   // Vitest hoists the mock factory above ordinary static bindings.

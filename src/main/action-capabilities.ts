@@ -20,8 +20,6 @@ export const MAIN_NORMAL_ACTIONS = Object.freeze([
   ...TAB_ENHANCEMENT_MAIN_ACTIONS,
   'openNeoSettings',
   'openSettingsSnapshots',
-  'manageItemAttributes',
-  'editItemAttributes',
   'prepareDocuments',
   'inspectMetadata',
   'inspectCollectionMetadata',
@@ -67,10 +65,7 @@ export const MAIN_NORMAL_ACTIONS = Object.freeze([
 ] as const satisfies readonly ActionId[]);
 
 /** Actions available while editing a transient Main Visual range. */
-export const MAIN_SELECT_ACTIONS = Object.freeze([
-  ...WORKSETS_SELECT_ACTIONS,
-  'editItemAttributes',
-] as const satisfies readonly ActionId[]);
+export const MAIN_SELECT_ACTIONS = WORKSETS_SELECT_ACTIONS;
 
 export const MAIN_EXECUTABLE_ACTIONS = Object.freeze([
   ...MAIN_NORMAL_ACTIONS,

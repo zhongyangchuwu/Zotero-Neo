@@ -178,6 +178,7 @@ describe('headless module settings', () => {
       [modulePreferenceKey('extensions')]: false,
       [modulePreferenceKey('translation')]: true,
       'modules.library.enabled': false,
+      'modules.item-attributes.enabled': true,
     });
     test.preferences.failClearKey = modulePreferenceKey('extensions');
     test.page.dispatch({ type: 'action', id: 'modules.restore' });
@@ -187,7 +188,8 @@ describe('headless module settings', () => {
     expect(field(test.page, 'modules.request.extensions')).toMatchObject({ value: false });
     expect(test.page.model().status?.error).toBe(true);
     expect(test.modules.requested().translation).toBe(false);
-    expect(test.preferences.clears).toContain(modulePreferenceKey('item-attributes'));
+    expect(test.preferences.clears).not.toContain('modules.item-attributes.enabled');
+    expect(test.preferences.values.get('modules.item-attributes.enabled')).toBe(true);
     expect(test.preferences.values.get('modules.library.enabled')).toBe(false);
     test.preferences.failClearKey = null;
     test.page.dispatch({ type: 'action', id: 'modules.restore' });
@@ -204,13 +206,13 @@ describe('headless module settings', () => {
     const test = mount({
       [modulePreferenceKey('translation')]: true,
       [modulePreferenceKey('ai-qa')]: true,
-      [modulePreferenceKey('item-attributes')]: true,
+      [modulePreferenceKey('tab-enhancements')]: true,
     });
     test.preferences.failSetKey = modulePreferenceKey('translation');
     test.page.dispatch({ type: 'action', id: 'modules.restore' });
     expect(field(test.page, 'modules.request.translation')).toMatchObject({ value: true });
     expect(test.preferences.has(modulePreferenceKey('ai-qa'))).toBe(false);
-    expect(test.preferences.has(modulePreferenceKey('item-attributes'))).toBe(false);
+    expect(test.preferences.has(modulePreferenceKey('tab-enhancements'))).toBe(false);
     expect(test.page.model().status?.error).toBe(true);
     test.page.dispose();
   });

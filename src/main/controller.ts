@@ -66,7 +66,6 @@ import {
   createSettingsSnapshotModule,
   type SettingsSnapshotModule,
 } from '../modules/settings-snapshots';
-import { createItemAttributesModule, type ItemAttributesModule } from '../modules/item-attributes';
 import type { PickerOpenOptions } from './picker/types';
 import {
   mainLibrarySelection,
@@ -136,7 +135,6 @@ export class MainWindowController implements MainWindowControllerApi {
       readonly workspace: WorkspaceModule | null;
       readonly preparation: DocumentPreparationModule | null;
       readonly settingsSnapshots: SettingsSnapshotModule | null;
-      readonly itemAttributes: ItemAttributesModule | null;
       tabEnhancements: TabEnhancementsModule | null;
     }
   >();
@@ -219,12 +217,6 @@ export class MainWindowController implements MainWindowControllerApi {
       const settingsSnapshots = settingsSnapshotsService
         ? scope.activate('settings-snapshots', () =>
             createSettingsSnapshotModule(host, settingsSnapshotsService),
-          )
-        : null;
-      const itemAttributesService = this.#dependencies.itemAttributes;
-      const itemAttributes = itemAttributesService
-        ? scope.activate('item-attributes', () =>
-            createItemAttributesModule(host, itemAttributesService, window),
           )
         : null;
       const tags = scope.activate('tags', () =>
@@ -483,7 +475,6 @@ export class MainWindowController implements MainWindowControllerApi {
         workspace,
         preparation,
         settingsSnapshots,
-        itemAttributes,
         tabEnhancements: null,
       });
       if (this.#dependencies.modules.applied['tab-enhancements']) {
@@ -797,24 +788,6 @@ export class MainWindowController implements MainWindowControllerApi {
       resolved.settings.close();
       return false;
     }
-  }
-
-  /** Menu selections are explicit; only keyboard dispatch resolves Neo EffectiveSelection. */
-  openItemAttributes(window: MainWindow, selectedItems?: readonly Zotero.Item[]): boolean {
-    const session = this.#sessions.get(window);
-    const module = session && this.#modules.get(session)?.itemAttributes;
-    if (!session || !module || session.cleanup.disposed) return false;
-    const presentation = {
-      window,
-      mode: selectedItems ? ('values' as const) : ('definitions' as const),
-      items: selectedItems ?? [],
-      language: () => this.keyGuideLanguage(),
-      themeRoot: (root: HTMLElement) => session.theme.add(root),
-      isCurrent: () => this.#sessions.get(window) === session && !session.cleanup.disposed,
-    };
-    return selectedItems
-      ? module.edit(presentation, this.bindingMode(window))
-      : module.manage(presentation);
   }
 
   /** Menu entries supply Zotero's own selection; keyboard actions resolve their own targets. */
@@ -1146,7 +1119,6 @@ export class MainWindowController implements MainWindowControllerApi {
     }
     if (this.#dependencies.documentPreparation?.handleKey(event)) return;
     if (this.#dependencies.settingsSnapshots?.handleKey(event)) return;
-    if (this.#dependencies.itemAttributes?.handleKey(event)) return;
     if (mainIdentifierLookupOwnsInput(window)) {
       this.resetMainInput(window, session);
       return;
@@ -1590,32 +1562,6 @@ export class MainWindowController implements MainWindowControllerApi {
               this.execute(nextAction, window, session, nextCount);
           },
         });
-        break;
-      }
-      case 'manageItemAttributes':
-      case 'editItemAttributes': {
-        const module = this.#modules.get(session)?.itemAttributes;
-        if (!module) break;
-        const targets =
-          action === 'editItemAttributes'
-            ? MAIN_ITEM_TARGET.resolve(
-                window,
-                this.worksetsModule(session)?.selection ?? null,
-                this.worksetsModule(session)?.isVisual
-                  ? this.worksetsModule(session)?.currentTarget()
-                  : undefined,
-              )
-            : null;
-        if (targets?.missing) {
-          this.#navigation.status(
-            session,
-            this.keyGuideLanguage() === 'zh-CN'
-              ? '部分所选条目已不可用，请重新选择'
-              : 'Some selected items are unavailable; select the targets again',
-          );
-          break;
-        }
-        this.openItemAttributes(window, targets?.items);
         break;
       }
       case 'openSettingsSnapshots': {

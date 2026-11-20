@@ -174,18 +174,7 @@ describe('0.1.0 default keymap freeze', () => {
       kind: 'execute',
       action: 'mainSelectFinish',
     });
-    expect(
-      advanceInput(
-        {
-          mode: 'main-select',
-          keyBuffer: ' i',
-          countBuffer: '',
-          bindings: visualBindings,
-          allowCountPrefix: false,
-        },
-        'a',
-      ),
-    ).toMatchObject({ kind: 'execute', action: 'editItemAttributes' });
+    expect(visualBindings['main-select:<Space>ia']).toBeUndefined();
   });
 
   it('does not confuse named keys with printable prefixes', () => {

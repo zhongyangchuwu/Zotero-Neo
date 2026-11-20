@@ -61,8 +61,6 @@ export interface SettingsChange {
   readonly after: SettingState;
   readonly selected: boolean;
   readonly requiresRestart: boolean;
-  /** Display strategy comes only from the local trusted template, never the snapshot. */
-  readonly presentation?: 'item-attributes';
   readonly blocked?: string;
   readonly mapping?: { readonly kind: 'file' | 'directory'; readonly source: string };
 }

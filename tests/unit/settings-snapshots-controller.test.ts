@@ -492,7 +492,7 @@ function managedFixture(overrides: Partial<ManagedSnapshotTarget> = {}) {
   return { managed, source, target };
 }
 
-it('restores selected extensions before preferences from the direct workspace entry', async () => {
+it('ignores retired settings in a library workspace and restores selected extensions before live preferences', async () => {
   const { managed } = managedFixture();
   const workspace = { libraryID: 1, itemKey: 'WORK06', title: '[Zotero-Neo] 工作区同步' };
   managed.sources = vi.fn(async () => [workspace]);
@@ -534,7 +534,7 @@ it('restores selected extensions before preferences from the direct workspace en
     },
   );
   const resolveInput = vi.fn(async () => [candidate]);
-  const { open, apply, seal } = setup({
+  const { open, apply, plan, seal } = setup({
     managed,
     extensions: {
       capture: async () => manifest,
@@ -543,7 +543,22 @@ it('restores selected extensions before preferences from the direct workspace en
       apply: applyExtensions,
     },
   });
-  open.mockResolvedValue({ ...source, extensions: manifest });
+  const neo = source.sections[0]!;
+  open.mockResolvedValue({
+    ...source,
+    extensions: manifest,
+    sections: [
+      { adapterID: 'itemAttributes', schemaVersion: 99, sourceVersion: '1', entries: [] },
+      {
+        ...neo,
+        entries: [
+          ...neo.entries,
+          { key: 'itemAttributes.fields.v1', state: { kind: 'set', value: 'old-definitions' } },
+          { key: 'modules.item-attributes.enabled', state: { kind: 'reset' } },
+        ],
+      },
+    ],
+  });
   apply.mockImplementation(async ([change]) => {
     mutationOrder.push('preferences');
     return [{ adapterID: change!.adapterID, key: change!.key, status: 'applied' }];
@@ -556,6 +571,8 @@ it('restores selected extensions before preferences from the direct workspace en
   ui.view!.inputs.get('import-password')!.value = password;
   dispatch({ type: 'inspect' });
   await idle();
+  expect(plan.mock.calls[0]?.[0]).toEqual(neo);
+  expect(ui.view!.model.issues).toEqual([]);
   expect(ui.view!.model.extensionDiff).toMatchObject({
     sameCount: 1,
     rows: [

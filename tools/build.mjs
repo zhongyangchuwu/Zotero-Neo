@@ -17,7 +17,7 @@ cpSync(resolve(root, 'LICENSE'), resolve(buildRoot, 'LICENSE'));
 const licenseDirectory = resolve(buildRoot, 'licenses');
 mkdirSync(licenseDirectory, { recursive: true });
 cpSync(resolve(root, 'vendor/fuzzysort/LICENSE'), resolve(licenseDirectory, 'fuzzysort-LICENSE'));
-for (const name of ['ai-sdk', 'react', 'age-encryption', 'base-ui']) {
+for (const name of ['ai-sdk', 'react', 'age-encryption']) {
   cpSync(resolve(root, `vendor/${name}/NOTICE`), resolve(licenseDirectory, `${name}-NOTICE`));
   cpSync(
     resolve(root, `vendor/${name}/provenance.json`),
@@ -42,10 +42,6 @@ const nativeReactBinding = {
   setup(builder) {
     const binding = { path: 'native-react', namespace: 'neo-native-react' };
     builder.onResolve({ filter: /vendor[\\/]react[\\/]index\.js$/ }, () => binding);
-    // The generated Base UI closure imports the same React owner via its sibling path.
-    builder.onResolve({ filter: /^\.\.\/react\/index\.js$/ }, ({ resolveDir }) => {
-      if (resolveDir === resolve(root, 'vendor/base-ui')) return binding;
-    });
     builder.onLoad({ filter: /.*/, namespace: 'neo-native-react' }, () => ({
       contents: `const library = globalThis.NeoReactRuntime;
 if (!library) throw new Error('Native React library has not been loaded in this window');
@@ -89,13 +85,9 @@ for (const [entry, output] of [
   ['src/ai-qa/ui/index.tsx', 'content/ai-qa-ui.js'],
   ['src/ui/react/library.ts', 'content/react-runtime.js'],
   ['src/ui/react/index.ts', 'content/native-ui.js'],
-  ['src/ui/react/literature-runtime.ts', 'content/literature-ui.js'],
   ['src/settings-snapshots/crypto-worker.ts', 'content/settings-snapshots-crypto.js'],
 ]) {
-  const usesOwnerReact =
-    output === 'content/native-ui.js' ||
-    output === 'content/ai-qa-ui.js' ||
-    output === 'content/literature-ui.js';
+  const usesOwnerReact = output === 'content/native-ui.js' || output === 'content/ai-qa-ui.js';
   const result = await build({
     ...common,
     entryPoints: [resolve(root, entry)],

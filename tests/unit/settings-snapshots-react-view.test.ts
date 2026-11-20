@@ -77,6 +77,8 @@ function setup(overrides: Partial<SettingsSnapshotModel> = {}) {
 it('offers ordinary backup without a password, then reveals one uncontrolled password only on demand', async () => {
   const { root, view, dispatch, button } = setup();
   expect(root.querySelector('h2')?.textContent).toBe('工作区同步与备份');
+  expect(root.textContent).toContain('Neo 备份包含快捷键和偏好设置');
+  expect(root.textContent).not.toContain('自定义属性定义');
   expect(root.querySelector('[data-neo-ui-part$="password"]')).toBeNull();
   const secrets = Array.from<HTMLLabelElement>(
     root.querySelectorAll<HTMLLabelElement>('label'),

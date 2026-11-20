@@ -80,8 +80,8 @@ export function mountSettingsSnapshotsView(
           {(model.mode === 'export' || model.mode === 'managed') && (
             <p>
               {text(
-                'Neo 备份包含快捷键、偏好设置和自定义属性定义，不包含条目中的属性值或其他文库数据。',
-                'Neo backups include shortcuts, preferences, and custom attribute definitions, not item attribute values or other library data.',
+                'Neo 备份包含快捷键和偏好设置，不包含文献条目或其他文库内容。',
+                'Neo backups include shortcuts and preferences, not items or other library content.',
               )}
             </p>
           )}

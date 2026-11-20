@@ -193,6 +193,77 @@ it('round-trips plaintext snapshots without a password or DOM worker and still v
   });
 });
 
+it.each(['json', 'age'] as const)(
+  'opens old %s backups without carrying retired ItemAttributes data into the workspace',
+  async (container) => {
+    const files = codec();
+    const { context } = operation();
+    const definitions = [
+      JSON.stringify({
+        version: 1,
+        fields: [{ id: 'score', key: 'Research Score', label: 'Score', type: 'text' }],
+      }),
+      JSON.stringify({
+        version: 2,
+        fields: [
+          {
+            id: 'stage',
+            key: 'Research Stage',
+            label: 'Stage',
+            type: 'single-select',
+            options: [{ id: 'in-progress', label: 'In progress' }],
+          },
+        ],
+      }),
+    ];
+    const open = async (fixture: unknown) => {
+      const text = JSON.stringify(fixture);
+      return container === 'age'
+        ? files.open(await encryptFixture(text), password, context)
+        : files.open(text, '', context);
+    };
+    const neo = portableWorkspace.sections[0]!;
+    for (const value of definitions) {
+      const legacy = {
+        ...portableWorkspace,
+        sections: [
+          {
+            ...neo,
+            entries: [
+              ...neo.entries,
+              { key: 'itemAttributes.fields.v1', state: { kind: 'set', value } },
+              { key: 'modules.item-attributes.enabled', state: { kind: 'set', value: true } },
+            ],
+          },
+        ],
+      };
+      expect(await open(legacy)).toEqual(portableWorkspace);
+    }
+
+    const unsupported = {
+      ...portableWorkspace,
+      itemAttributes: { version: 99, definitions: null },
+      sections: [
+        { adapterID: 'itemAttributes', schemaVersion: 99, entries: null },
+        {
+          ...neo,
+          entries: [
+            ...neo.entries,
+            { key: 'itemAttributes.fields.v1', state: { kind: 'unknown-operation' } },
+          ],
+        },
+      ],
+    };
+    expect(await open(unsupported)).toEqual(portableWorkspace);
+    await expect(
+      open({
+        ...unsupported,
+        sections: [...unsupported.sections, { ...neo, adapterID: 'zotero', entries: null }],
+      }),
+    ).rejects.toMatchObject({ code: 'invalid-file' });
+  },
+);
+
 it('round-trips a version 1 workspace, sanitizing unavailable sources without losing settings', async () => {
   const files = codec();
   const { context } = operation();
