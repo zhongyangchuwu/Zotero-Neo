@@ -360,6 +360,8 @@ export const DEFAULT_BINDINGS = {
   'plugins-list:r': 'pluginsRefresh',
   'plugins-list:i': 'pluginsInstall',
   'plugins-list:u': 'pluginsUpdate',
+  'plugins-list:U': 'pluginsUpdateAll',
+  'plugins-list:x': 'pluginsUninstall',
   'plugins-list:e': 'pluginsEnable',
   'plugins-list:d': 'pluginsDisable',
   'plugins-list:p': 'pluginsPreferences',

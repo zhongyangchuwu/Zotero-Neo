@@ -255,7 +255,7 @@ export class MainWindowController implements MainWindowControllerApi {
           logger: this.#dependencies.logger,
           bindings: () => this.bindings(),
           themeRoot: (root) => session.theme.add(root),
-          openExtras: () => this.openSettings(window, 'Extras'),
+          language: () => this.keyGuideLanguage(),
         }),
       );
       if (this.#sessions.get(window) !== session || session.cleanup.disposed) return;
