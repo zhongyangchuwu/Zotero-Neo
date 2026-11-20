@@ -70,17 +70,17 @@ export function createSettingsSnapshotFiles(): SettingsSnapshotFiles {
   return {
     async chooseOpen(window) {
       const dialog = picker();
-      dialog.init(window, 'Open Neo snapshot / 打开设置快照', dialog.modeOpen);
-      dialog.appendFilter('Neo snapshots and templates / 设置快照与模板', '*.age;*.json');
+      dialog.init(window, 'Open Workspace Backup / 打开工作区备份', dialog.modeOpen);
+      dialog.appendFilter('Workspace backups and templates / 工作区备份与模板', '*.age;*.json');
       return (await dialog.show()) === dialog.returnOK ? dialog.file : null;
     },
     async chooseSave(window, name) {
       const dialog = picker();
-      dialog.init(window, 'Save Neo snapshot / 保存设置快照', dialog.modeSave);
+      dialog.init(window, 'Save Workspace Backup / 保存工作区备份', dialog.modeSave);
       dialog.appendFilter(
         name.toLowerCase().endsWith('.json')
-          ? 'JSON settings / JSON 配置'
-          : 'Encrypted settings / 加密配置',
+          ? 'Standard backup / 普通备份'
+          : 'Encrypted backup / 加密备份',
         name.toLowerCase().endsWith('.json') ? '*.json' : '*.age',
       );
       dialog.defaultString = name;

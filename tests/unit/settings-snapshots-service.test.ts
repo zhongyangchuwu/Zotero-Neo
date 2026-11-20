@@ -327,3 +327,88 @@ it('rejects credentials in plaintext capture and restore independently of file c
   expect(verifySource).not.toHaveBeenCalled();
   expect(source.apply).not.toHaveBeenCalled();
 });
+
+it('captures valid selections once while omitting unavailable, failed, and malformed adapter sections', async () => {
+  const neo = fixture();
+  const plugin = fixture('plugin-reviewed');
+  const failing = fixture('plugin-failing');
+  const foreign = fixture('plugin-foreign');
+  const unsafe = fixture('plugin-unsafe');
+  const capture = vi.spyOn(plugin.adapter, 'capture');
+  vi.spyOn(failing.adapter, 'capture').mockRejectedValue(new Error('private error detail'));
+  vi.spyOn(foreign.adapter, 'capture').mockResolvedValue({
+    section: documentFor(neo.adapter.id, {}).sections[0]!,
+    issues: [],
+  });
+  vi.spyOn(unsafe.adapter, 'capture').mockResolvedValue({
+    section: documentFor(unsafe.adapter.id, { constructor: set('unsafe') }).sections[0]!,
+    issues: [],
+  });
+  const service = serviceFor(
+    neo.adapter,
+    plugin.adapter,
+    failing.adapter,
+    foreign.adapter,
+    unsafe.adapter,
+  );
+  const ctx = {
+    ...context(),
+    container: 'json' as const,
+    includeSecrets: false,
+    includeLibrarySettings: false,
+  };
+  const options = { skipFailedAdapters: true } as const;
+  const lost = ['plugin-unavailable', failing.adapter.id, foreign.adapter.id, unsafe.adapter.id];
+  const result = await service.capture(
+    new Set([neo.adapter.id, ...lost, plugin.adapter.id]),
+    ctx,
+    options,
+  );
+  expect(result.document.sections.map((section) => section.adapterID)).toEqual([
+    neo.adapter.id,
+    plugin.adapter.id,
+  ]);
+  expect(capture).toHaveBeenCalledTimes(1);
+  expect(result.issues).toMatchObject(
+    lost.map((adapterID) => ({ adapterID, code: 'adapter-skipped' })),
+  );
+  expect(JSON.stringify(result.issues)).not.toContain('private error detail');
+  await expect(service.capture(new Set(lost), ctx, options)).rejects.toMatchObject({
+    code: 'capture-failed',
+  });
+  await expect(service.capture(new Set([foreign.adapter.id]), ctx)).rejects.toMatchObject({
+    code: 'invalid-adapter',
+  });
+});
+
+it('fails closed on plaintext credentials or cancellation during an otherwise partial capture', async () => {
+  const neo = fixture();
+  const plugin = fixture('plugin-reviewed');
+  const capture = vi.spyOn(plugin.adapter, 'capture');
+  const abort = new AbortController();
+  const ctx = {
+    ...context(abort),
+    container: 'json' as const,
+    includeSecrets: false,
+    includeLibrarySettings: false,
+  };
+  const options = { skipFailedAdapters: true } as const;
+  const selected = new Set([neo.adapter.id, plugin.adapter.id]);
+  const captureNeo = vi.spyOn(neo.adapter, 'capture');
+  await expect(
+    serviceFor(neo.adapter, plugin.adapter).capture(
+      selected,
+      { ...ctx, includeSecrets: true },
+      options,
+    ),
+  ).rejects.toMatchObject({ code: 'plaintext-secrets' });
+  expect(captureNeo).not.toHaveBeenCalled();
+  captureNeo.mockImplementationOnce(async () => {
+    abort.abort();
+    throw new Error('Adapter stopped');
+  });
+  await expect(
+    serviceFor(neo.adapter, plugin.adapter).capture(selected, ctx, options),
+  ).rejects.toMatchObject({ code: 'cancelled' });
+  expect(capture).not.toHaveBeenCalled();
+});

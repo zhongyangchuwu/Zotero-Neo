@@ -340,6 +340,23 @@ describe('standalone built-in settings adapters at the native OS boundary', () =
     expect(t.user.has('extensions.zotero.annotations.noteTemplates.highlight')).toBe(false);
   });
 
+  it('does not report a matching manual-only data directory as an unresolved difference', async () => {
+    const t = settingsSnapshotHostFixture();
+    t.user.set('extensions.zotero.dataDir', '/this-device/zotero-data');
+    const native = createSettingsAdapters(() => 'neo-target')[0]!;
+    const input = (value: string) =>
+      section('zotero', [set('dataDir', value), set('fileHandler.epub', 'system')]);
+
+    const matching = await native.plan(input('/this-device/zotero-data'), context());
+    expect(matching.changes.map(({ key }) => key)).toEqual(['fileHandler.epub']);
+    expect(matching.issues).toEqual([]);
+
+    const different = await native.plan(input('/another-device/zotero-data'), context());
+    expect(different.issues).toContainEqual(
+      expect.objectContaining({ key: 'dataDir', code: 'manual-required' }),
+    );
+  });
+
   it('does not apply unchecked or forged preview changes, stale baselines, or retired contexts', async () => {
     const t = settingsSnapshotHostFixture();
     const adapter = createSettingsAdapters(() => 'neo-target')[0]!;

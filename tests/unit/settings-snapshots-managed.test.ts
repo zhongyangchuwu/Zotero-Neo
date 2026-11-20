@@ -1,6 +1,8 @@
 import { afterEach, beforeEach, expect, it, vi } from 'vitest';
+import { createHash } from 'node:crypto';
 import type {
   SettingsAdapter,
+  SettingsCaptureContext,
   SettingsCryptoContext,
   SettingsFileCodec,
 } from '../../src/settings-snapshots/contracts';
@@ -34,14 +36,17 @@ vi.mock('../../src/platform/settings-snapshot-managed-profile', () => ({
   readManagedSnapshotBindings: host.readBindings,
   writeManagedSnapshotBindings: host.writeBindings,
   // The native digest is an implementation detail; deterministic identity is enough at this boundary.
-  managedSnapshotSemanticIdentity: (text: string) => text,
+  managedSnapshotSemanticIdentity: (text: string) =>
+    createHash('sha256').update(text).digest('hex'),
   reportManagedSnapshotFailure: host.report,
 }));
 vi.mock('../../src/platform/settings-snapshot-attachments', () => ({
   createSnapshotAttachments: () => host.attachments,
 }));
+const pluginID = 'test-plugin';
+const neoID = 'zotero-neo';
 const request: CreateManagedSnapshot = {
-  adapterID: 'test-plugin',
+  adapterIDs: [pluginID],
   libraryID: 2,
   collectionID: null,
   title: 'Plugin settings',
@@ -49,7 +54,6 @@ const request: CreateManagedSnapshot = {
   autoUpdate: false,
   includeSecrets: false,
   includeLibrarySettings: false,
-  consent: true,
 };
 const source = { libraryID: 2, itemKey: 'ABCD1234', title: request.title };
 const identity = {
@@ -65,17 +69,22 @@ const context = (): SettingsCryptoContext => ({
 });
 function fixture() {
   let value = 1;
-  const capture = vi.fn(async () => ({
+  const capture = vi.fn(async (ctx?: SettingsCaptureContext) => ({
     section: {
-      adapterID: request.adapterID,
+      adapterID: pluginID,
       schemaVersion: 1,
       sourceVersion: '1',
-      entries: [{ key: 'flag', state: { kind: 'set' as const, value } }],
+      entries: [
+        { key: 'flag', state: { kind: 'set' as const, value } },
+        ...(ctx?.container === 'age' && ctx.includeSecrets
+          ? [{ key: 'secret', state: { kind: 'set' as const, value: 'local credential' } }]
+          : []),
+      ],
     },
     issues: [],
   }));
   const adapter: SettingsAdapter = {
-    id: request.adapterID,
+    id: pluginID,
     label: 'Plugin',
     schemaVersion: 1,
     sourceVersion: '1',
@@ -94,9 +103,31 @@ function fixture() {
     reviewedKeys: ['flag'],
     issues: [],
   };
-  const list = vi.fn(async () => [template]);
+  const neo: SettingsAdapter = {
+    ...adapter,
+    id: neoID,
+    label: 'Zotero Neo',
+    capture: vi.fn(async () => ({
+      section: {
+        adapterID: neoID,
+        schemaVersion: 1,
+        sourceVersion: '1',
+        entries: [{ key: 'reader.zoom', state: { kind: 'set' as const, value: 2 } }],
+      },
+      issues: [],
+    })),
+  };
+  const neoTemplate: SnapshotPluginTemplate = {
+    ...template,
+    pluginID: 'neo@test',
+    adapterID: neoID,
+    label: neo.label,
+    status: 'builtin',
+    reviewedKeys: [],
+  };
+  const list = vi.fn(async () => [template, neoTemplate]);
   const catalog: SettingsTemplateCatalogPort = {
-    adapters: [adapter],
+    adapters: [adapter, neo],
     list,
     scan: vi.fn(),
     review: vi.fn(),
@@ -105,11 +136,15 @@ function fixture() {
     dispose: vi.fn(),
   };
   const codec: SettingsFileCodec = {
-    seal: vi.fn(async (document) => serializeSettingsDocument(document)),
+    seal: vi.fn(async (document, _password, _context, container) =>
+      container === 'age'
+        ? 'simulated armor from codec boundary'
+        : serializeSettingsDocument(document),
+    ),
     open: vi.fn(),
     dispose: vi.fn(),
   };
-  const service = new SettingsSnapshotService([adapter], () => ({ neo: '1', zotero: '10' }));
+  const service = new SettingsSnapshotService([adapter, neo], () => ({ neo: '1', zotero: '10' }));
   const managed = createManagedSettingsSnapshots(service, codec, catalog);
   return {
     managed,
@@ -117,9 +152,25 @@ function fixture() {
     capture,
     list,
     template,
+    neoTemplate,
+    service,
     value: (next: number) => {
       value = next;
     },
+  };
+}
+function changeStoredFile(initialText: string, initialRevision: string) {
+  let current = { source, identity: { ...identity, digest: initialRevision }, text: initialText };
+  host.attachments.inspect.mockImplementation(async () => current);
+  host.attachments.read.mockImplementation(async () => current);
+  host.attachments.publish.mockImplementation(async (_source, expected, text) => {
+    if (expected.digest !== current.identity.digest)
+      throw new SettingsSnapshotError('external-change', 'The file changed before publication.');
+    current = { ...current, identity: { ...current.identity, digest: 'our-publication' }, text };
+    return current;
+  });
+  return (text: string, digest: string) => {
+    current = { ...current, identity: { ...current.identity, digest }, text };
   };
 }
 beforeEach(() => {
@@ -154,10 +205,9 @@ afterEach(() => {
   vi.useRealTimers();
 });
 
-it('requires consent and rejects encrypted auto-update or plaintext secrets before capture/publication', async () => {
+it('rejects encrypted auto-update or plaintext secrets before capture/publication', async () => {
   const { managed, capture, codec } = fixture();
   for (const [change, code] of [
-    [{ consent: false }, 'consent-required'],
     [{ container: 'age', autoUpdate: true }, 'encrypted-auto-update'],
     [{ includeSecrets: true }, 'plaintext-secrets'],
   ] as const)
@@ -179,13 +229,23 @@ it('hydrates reviewed templates before common capture, passes the actual codec c
   );
   expect(list.mock.invocationCallOrder[0]).toBeLessThan(capture.mock.invocationCallOrder[0]!);
   expect(codec.seal).toHaveBeenCalledWith(
-    expect.any(Object),
+    expect.objectContaining({
+      sections: [
+        expect.objectContaining({
+          entries: expect.arrayContaining([
+            { key: 'secret', state: { kind: 'set', value: 'local credential' } },
+          ]),
+        }),
+      ],
+    }),
     'ephemeral-password',
     expect.any(Object),
     'age',
   );
   expect(JSON.stringify(host.writeBindings.mock.calls)).not.toContain('ephemeral-password');
+  expect(JSON.stringify(host.writeBindings.mock.calls)).not.toContain('local credential');
   expect(JSON.stringify(host.writeBindings.mock.calls)).not.toContain('"sections"');
+  expect(host.attachments.create.mock.lastCall?.[1]).not.toContain('local credential');
   await expect(
     managed.configure(
       target.id,
@@ -193,6 +253,143 @@ it('hydrates reviewed templates before common capture, passes the actual codec c
       context(),
     ),
   ).rejects.toMatchObject({ code: 'encrypted-auto-update' });
+  managed.dispose();
+});
+
+it('creates one workspace and common JSON snapshot for Neo and a locally reviewed plugin', async () => {
+  const { managed, service } = fixture();
+  const capture = vi.spyOn(service, 'capture');
+  const target = await managed.create({ ...request, adapterIDs: [neoID, pluginID] }, '', context());
+  expect(target).toMatchObject({
+    kind: 'workspace',
+    status: 'ready',
+    adapterIDs: [neoID, pluginID],
+  });
+  expect(capture).toHaveBeenCalledTimes(1);
+  expect(host.attachments.create).toHaveBeenCalledTimes(1);
+  expect(JSON.parse(host.attachments.create.mock.lastCall![1])).toMatchObject({
+    sections: [
+      { adapterID: neoID, entries: [{ key: 'reader.zoom', state: { kind: 'set', value: 2 } }] },
+      { adapterID: pluginID, entries: [{ key: 'flag', state: { kind: 'set', value: 1 } }] },
+    ],
+  });
+  managed.dispose();
+});
+
+it('keeps valid sections when some selected plugins were unavailable or failed during creation', async () => {
+  const { managed, capture } = fixture();
+  capture.mockRejectedValueOnce(new Error('private details not suitable for display'));
+  const target = await managed.create(
+    { ...request, adapterIDs: [neoID, pluginID, 'missing-plugin'] },
+    '',
+    context(),
+  );
+  expect(target).toMatchObject({
+    status: 'ready',
+    adapterIDs: [neoID, pluginID, 'missing-plugin'],
+  });
+  expect(target.message).toContain('Not captured: Plugin, missing-plugin.');
+  expect(target.message).not.toContain('private details');
+  const document = JSON.parse(host.attachments.create.mock.lastCall![1]);
+  expect(document.sections.map((section: { adapterID: string }) => section.adapterID)).toEqual([
+    neoID,
+  ]);
+  managed.dispose();
+});
+
+it.each(['missing-template', 'capture-failed'] as const)(
+  'preserves prior sections after %s until a deliberate scope edit',
+  async (cause) => {
+    const { managed, capture, list, neoTemplate } = fixture();
+    const target = await managed.create(
+      { ...request, adapterIDs: [neoID, pluginID], autoUpdate: true },
+      '',
+      context(),
+    );
+    if (cause === 'missing-template') list.mockResolvedValue([neoTemplate]);
+    else capture.mockRejectedValue(new Error('Transient adapter failure'));
+    managed.start(context().window);
+    await vi.advanceTimersByTimeAsync(300_000);
+    expect(host.attachments.publish).not.toHaveBeenCalled();
+    const paused = (await managed.list(context()))[0]!;
+    expect(paused).toMatchObject({ id: target.id, status: 'paused' });
+    expect(paused.message).toMatch(/stored file was not overwritten/);
+    expect(vi.getTimerCount()).toBe(1); // Auto-update retries safely without publishing a partial replacement.
+
+    const saved = await managed.configure(
+      target.id,
+      { ...paused, expected: paused, adapterIDs: [neoID] },
+      context(),
+    );
+    expect(saved).toMatchObject({ status: 'ready', adapterIDs: [neoID] });
+    expect(host.attachments.publish).not.toHaveBeenCalled();
+    await vi.advanceTimersByTimeAsync(300_000);
+    expect(JSON.parse(host.attachments.publish.mock.lastCall![2]).sections).toMatchObject([
+      { adapterID: neoID },
+    ]);
+    managed.dispose();
+  },
+);
+
+it('extends an existing workspace only with explicit selected scope and rejects a stale scope editor', async () => {
+  const { managed } = fixture();
+  const one = await managed.create({ ...request, adapterIDs: [neoID] }, '', context());
+  const scope = [neoID, pluginID];
+  const both = await managed.configure(
+    one.id,
+    { ...one, adapterIDs: scope, expected: one },
+    context(),
+  );
+  expect(both.adapterIDs).toEqual(scope);
+  await expect(
+    managed.configure(one.id, { ...one, expected: one }, context()),
+  ).rejects.toMatchObject({ code: 'stale-target' });
+  expect(host.attachments.publish).not.toHaveBeenCalled();
+  await managed.update(one.id, '', context());
+  expect(JSON.parse(host.attachments.publish.mock.lastCall![2]).sections).toMatchObject([
+    { adapterID: neoID },
+    { adapterID: pluginID },
+  ]);
+  managed.dispose();
+});
+
+it('normalizes an old persisted single-plugin binding without changing its scope or replacing its attachment', async () => {
+  const { managed, template } = fixture();
+  const { adapterIDs: _adapterIDs, libraryID: _libraryID, ...oldPolicy } = request;
+  host.readBindings.mockReturnValue([
+    {
+      target: {
+        ...oldPolicy,
+        id: `${source.libraryID}:${source.itemKey}`,
+        source,
+        adapterID: pluginID,
+        updatedAt: new Date().toISOString(),
+        message: 'Stored locally',
+        status: 'ready',
+        password: 'never retained',
+      },
+      expected: identity,
+      semantic: null,
+      template: template.revision,
+    },
+  ]);
+  const legacy = (await managed.list(context()))[0]!;
+  expect(legacy).toMatchObject({ kind: 'legacy', adapterIDs: [pluginID], source });
+  await expect(
+    managed.configure(
+      legacy.id,
+      { ...legacy, adapterIDs: [neoID, pluginID], expected: legacy },
+      context(),
+    ),
+  ).rejects.toMatchObject({ code: 'immutable-scope' });
+  await managed.update(legacy.id, '', context());
+  expect(host.attachments.create).not.toHaveBeenCalled();
+  expect(JSON.parse(host.attachments.publish.mock.lastCall![2]).sections).toMatchObject([
+    { adapterID: pluginID },
+  ]);
+  expect(JSON.stringify(host.writeBindings.mock.lastCall![0])).not.toContain('never retained');
+  Object.assign(template, { revision: 'different-legacy-template' });
+  expect((await managed.list(context()))[0]).toMatchObject({ status: 'paused' });
   managed.dispose();
 });
 
@@ -205,6 +402,170 @@ it('discovers and reads a library source with no local binding and forgets only 
   expect(await managed.list(context())).toEqual([]);
   expect(host.attachments.publish).not.toHaveBeenCalled();
   expect(host.attachments.configure).not.toHaveBeenCalled();
+  managed.dispose();
+});
+
+it('records observed conflict without rebasing the original file and publishes only after exact reviewed overwrite', async () => {
+  const { managed, value } = fixture();
+  const target = await managed.create({ ...request, autoUpdate: true }, '', context());
+  managed.start(context().window);
+  changeStoredFile('reviewable cloud bytes\r\n', 'cloud-a');
+  await vi.advanceTimersByTimeAsync(300_000);
+  const conflicted = (await managed.list(context()))[0]!;
+  expect(conflicted).toMatchObject({ status: 'conflict', conflictRevision: 'cloud-a' });
+  expect(await managed.read(conflicted.source, context())).toBe('reviewable cloud bytes\r\n');
+  expect(host.writeBindings.mock.lastCall![0][0].expected.digest).toBe('content-1');
+  expect(vi.getTimerCount()).toBe(0);
+  await expect(managed.update(target.id, '', context())).rejects.toMatchObject({
+    code: 'paused-target',
+  });
+  await expect(managed.overwrite(target.id, 'unseen', '', context())).rejects.toMatchObject({
+    code: 'stale-conflict',
+  });
+  expect(host.attachments.publish).not.toHaveBeenCalled();
+
+  value(2);
+  const saved = await managed.overwrite(target.id, conflicted.conflictRevision!, '', context());
+  expect(saved.status).toBe('ready');
+  expect(saved.conflictRevision).toBeUndefined();
+  expect(host.attachments.publish).toHaveBeenCalledExactlyOnceWith(
+    source,
+    { ...identity, digest: 'cloud-a' },
+    expect.any(String),
+    expect.any(Object),
+  );
+  expect(host.writeBindings.mock.lastCall![0][0].expected.digest).toBe('our-publication');
+  expect(vi.getTimerCount()).toBe(1);
+  managed.dispose();
+});
+
+it.each(['before overwrite', 'during sealing'] as const)(
+  'preserves a newer external version arriving %s',
+  async (timing) => {
+    const { managed, codec } = fixture();
+    const target = await managed.create(request, '', context());
+    const change = changeStoredFile('first cloud bytes', 'cloud-a');
+    const opened = (await managed.list(context()))[0]!;
+    if (timing === 'before overwrite') change('the next external bytes', 'cloud-b');
+    else
+      vi.mocked(codec.seal).mockImplementationOnce(async (document) => {
+        change('the next external bytes', 'cloud-b');
+        return serializeSettingsDocument(document);
+      });
+
+    await expect(
+      managed.overwrite(target.id, opened.conflictRevision!, '', context()),
+    ).rejects.toMatchObject({ code: 'external-change' });
+    expect(host.attachments.publish).toHaveBeenCalledTimes(timing === 'before overwrite' ? 0 : 1);
+    expect(host.writeBindings.mock.lastCall![0][0].expected.digest).toBe('content-1');
+    const current = (await managed.list(context()))[0]!;
+    expect(current).toMatchObject({ status: 'conflict', conflictRevision: 'cloud-b' });
+    expect(await managed.read(current.source, context())).toBe('the next external bytes');
+    managed.dispose();
+  },
+);
+
+it('does not recreate a conflicting snapshot removed between review and overwrite', async () => {
+  const { managed } = fixture();
+  const target = await managed.create(request, '', context());
+  changeStoredFile('first cloud bytes', 'cloud-a');
+  const opened = (await managed.list(context()))[0]!;
+  host.attachments.inspect.mockRejectedValue(
+    new SettingsSnapshotError(
+      'missing-attachment',
+      'The snapshot attachment was deleted. It will not be recreated.',
+    ),
+  );
+  await expect(
+    managed.overwrite(target.id, opened.conflictRevision!, '', context()),
+  ).rejects.toMatchObject({ code: 'missing-attachment' });
+  expect(host.attachments.create).toHaveBeenCalledTimes(1);
+  expect(host.attachments.publish).not.toHaveBeenCalled();
+  const current = (await managed.list(context()))[0]!;
+  expect(current.status).toBe('paused');
+  expect(current.conflictRevision).toBeUndefined();
+  managed.dispose();
+});
+
+it.each([false, true])(
+  'rechecks the original baseline after a native sync block (changed: %s)',
+  async (changed) => {
+    const { managed } = fixture();
+    const target = await managed.create({ ...request, autoUpdate: true }, '', context());
+    managed.start(context().window);
+    host.attachments.inspect.mockRejectedValue(
+      new SettingsSnapshotError(
+        'download-pending',
+        'Resolve native sync before reading the backup.',
+      ),
+    );
+    expect((await managed.list(context()))[0]).toMatchObject({ status: 'paused' });
+    await vi.advanceTimersByTimeAsync(300_000);
+    expect(host.attachments.publish).not.toHaveBeenCalled();
+
+    changeStoredFile(
+      changed ? 'new bytes after native sync' : host.attachments.create.mock.lastCall![1],
+      changed ? 'new-external-content' : 'content-1',
+    );
+    const current = (await managed.list(context()))[0]!;
+    expect(current.id).toBe(target.id);
+    expect(current.status).toBe(changed ? 'conflict' : 'ready');
+    expect(current.conflictRevision).toBe(changed ? 'new-external-content' : undefined);
+    expect(host.writeBindings.mock.lastCall![0][0].expected.digest).toBe('content-1');
+    await vi.advanceTimersByTimeAsync(300_000);
+    expect(host.attachments.publish).not.toHaveBeenCalled();
+    managed.dispose();
+  },
+);
+
+it('adopts only the exact restored cloud bytes and resumes only after a real local change', async () => {
+  const { managed, value } = fixture();
+  const target = await managed.create({ ...request, autoUpdate: true }, '', context());
+  managed.start(context().window);
+  const cloud = 'externally stored snapshot\r\n';
+  changeStoredFile(cloud, 'cloud-a');
+  expect((await managed.list(context()))[0]).toMatchObject({ status: 'conflict' });
+  value(7); // Local state after the separately verified restore.
+  await expect(managed.adoptCloud(target.id, cloud.trimEnd(), context())).rejects.toMatchObject({
+    code: 'stale-conflict',
+  });
+  expect(host.writeBindings.mock.lastCall![0][0].expected.digest).toBe('content-1');
+
+  const adopted = await managed.adoptCloud(target.id, cloud, context());
+  expect(adopted.status).toBe('ready');
+  expect(adopted.conflictRevision).toBeUndefined();
+  expect(host.writeBindings.mock.lastCall![0][0].expected.digest).toBe('cloud-a');
+  expect(await managed.read(adopted.source, context())).toBe(cloud);
+  await vi.advanceTimersByTimeAsync(300_000);
+  expect(host.attachments.publish).not.toHaveBeenCalled();
+  value(8);
+  await vi.advanceTimersByTimeAsync(300_000);
+  expect(host.attachments.publish).toHaveBeenCalledExactlyOnceWith(
+    source,
+    { ...identity, digest: 'cloud-a' },
+    expect.any(String),
+    expect.any(Object),
+  );
+  managed.dispose();
+});
+
+it('cannot adopt a cloud version displaced while the restored local baseline is being captured', async () => {
+  const { managed, list, template, neoTemplate } = fixture();
+  const target = await managed.create(request, '', context());
+  const change = changeStoredFile('reviewed and restored', 'cloud-a');
+  expect((await managed.list(context()))[0]).toMatchObject({ status: 'conflict' });
+  list.mockImplementationOnce(async () => {
+    change('new cloud version', 'cloud-b');
+    return [template, neoTemplate];
+  });
+  await expect(
+    managed.adoptCloud(target.id, 'reviewed and restored', context()),
+  ).rejects.toMatchObject({ code: 'external-change' });
+  expect(host.writeBindings.mock.lastCall![0][0]).toMatchObject({
+    expected: { digest: 'content-1' },
+    target: { status: 'conflict', conflictRevision: 'cloud-b' },
+  });
+  expect(host.attachments.publish).not.toHaveBeenCalled();
   managed.dispose();
 });
 
@@ -392,16 +753,26 @@ it('updates a changed snapshot after five minutes, preserving its timestamp on u
   managed.dispose();
 });
 
-it('pauses automatic publication when the reviewed template changes and reports the failure', async () => {
-  const { managed, template } = fixture();
+it('keeps the existing workspace unchanged until a new plugin revision is locally reviewed', async () => {
+  const { managed, template, value } = fixture();
   const target = await managed.create({ ...request, autoUpdate: true }, '', context());
-  Object.assign(template, { revision: 'review-2' });
+  Object.assign(template, { revision: 'review-2', status: 'needs-review' });
   managed.start(context().window);
   await vi.advanceTimersByTimeAsync(300_000);
   expect((await managed.list(context()))[0]).toMatchObject({ id: target.id, status: 'paused' });
   expect(host.report).toHaveBeenCalled();
   expect(host.attachments.publish).not.toHaveBeenCalled();
-  expect(vi.getTimerCount()).toBe(0);
+  expect(vi.getTimerCount()).toBe(1);
+
+  Object.assign(template, { status: 'reviewed' });
+  value(7);
+  await vi.advanceTimersByTimeAsync(300_000);
+  expect((await managed.list(context()))[0]).toMatchObject({
+    id: target.id,
+    status: 'ready',
+    adapterIDs: [pluginID],
+  });
+  expect(host.attachments.publish).toHaveBeenCalledTimes(1);
   managed.dispose();
 });
 
@@ -688,5 +1059,24 @@ it('keeps an encrypted target ready after an empty password and permits a later 
     status: 'ready',
   });
   expect(host.writeBindings.mock.lastCall![0][0].expected.digest).toBe('content-2');
+  managed.dispose();
+});
+
+it('adopts an exact restored encrypted backup without recapturing or storing credentials', async () => {
+  const { managed, capture } = fixture();
+  const target = await managed.create(
+    { ...request, container: 'age', includeSecrets: true },
+    'ephemeral password',
+    context(),
+  );
+  changeStoredFile('new externally encrypted bytes', 'cloud-age');
+  await managed.list(context());
+  const adopted = await managed.adoptCloud(target.id, 'new externally encrypted bytes', context());
+  expect(adopted).toMatchObject({ status: 'ready', container: 'age', autoUpdate: false });
+  expect(capture).toHaveBeenCalledTimes(1);
+  expect(host.attachments.publish).not.toHaveBeenCalled();
+  const saved = host.writeBindings.mock.lastCall![0][0];
+  expect(saved).toMatchObject({ expected: { digest: 'cloud-age' }, semantic: null });
+  expect(JSON.stringify(saved)).not.toMatch(/ephemeral password|local credential/);
   managed.dispose();
 });

@@ -37,10 +37,7 @@ export function settingsContainerFor(contents: string): SettingsContainer {
     );
   if (contents.startsWith('-----BEGIN AGE ENCRYPTED FILE-----')) return 'age';
   if (/^\s*\{/u.test(contents)) return 'json';
-  throw new SettingsSnapshotError(
-    'invalid-file',
-    'The file is not a JSON or age settings snapshot',
-  );
+  throw new SettingsSnapshotError('invalid-file', 'This file is not a Zotero Neo backup');
 }
 
 /** JSON and standard age containers decode to the same versioned semantic document. */

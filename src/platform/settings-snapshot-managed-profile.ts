@@ -9,14 +9,14 @@ export function readManagedSnapshotBindings(): unknown {
   if (typeof text !== 'string')
     throw new SettingsSnapshotError(
       'binding-storage',
-      'Local snapshot bindings are unreadable. No attachments were changed.',
+      'Local backup sync links are unreadable. No attachments were changed.',
     );
   try {
     return JSON.parse(text) as unknown;
   } catch {
     throw new SettingsSnapshotError(
       'binding-storage',
-      'Local snapshot bindings are unreadable. No attachments were changed.',
+      'Local backup sync links are unreadable. No attachments were changed.',
     );
   }
 }
@@ -26,7 +26,7 @@ export function writeManagedSnapshotBindings(value: unknown): void {
   } catch {
     throw new SettingsSnapshotError(
       'binding-storage',
-      'Local snapshot binding state could not be saved. Inspect any published attachment before retrying.',
+      'The local sync link could not be saved. Inspect the library backup before retrying.',
     );
   }
 }
@@ -39,7 +39,7 @@ export async function initializeManagedSnapshots(): Promise<void> {
 export function reportManagedSnapshotFailure(): void {
   Zotero.logError(
     new Error(
-      'Settings snapshot background update failed. Open Settings Snapshots to inspect the paused target.',
+      'Library backup auto-update could not complete. Open Workspace Sync & Backup to inspect the local sync link.',
     ),
   );
 }

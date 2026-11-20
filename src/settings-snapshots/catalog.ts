@@ -30,7 +30,7 @@ interface TemplateFile {
   }[];
   readonly status: 'draft' | 'reviewed' | 'needs-review';
 }
-/** Sticky field keys are profile-local metadata, independent of portable selection and review. */
+/** Sticky field keys are profile-local metadata, independent of portable selection. */
 interface TemplateRecord extends TemplateFile {
   readonly sensitiveKeys: readonly string[];
 }
@@ -127,10 +127,16 @@ function parse(text: string, local = false): TemplateRecord {
 }
 function mergeSensitiveKeys(
   record: TemplateRecord | undefined,
-  fields: readonly { readonly key: string; readonly secret: boolean }[],
+  fields: readonly {
+    readonly key: string;
+    readonly secret: boolean;
+    readonly supported?: boolean;
+  }[],
+  knownKeys?: ReadonlySet<string>,
 ): readonly string[] {
   const keys = new Set(record?.sensitiveKeys);
-  for (const field of fields) if (field.secret) keys.add(field.key);
+  for (const field of fields)
+    if (field.secret || (field.supported && knownKeys?.has(field.key))) keys.add(field.key);
   return record && keys.size === record.sensitiveKeys.length ? record.sensitiveKeys : [...keys];
 }
 function frozen(template: SnapshotPluginTemplate): SnapshotPluginTemplate {
@@ -191,7 +197,8 @@ export function createSettingsTemplateCatalog(
         scans.clear();
         adapters.clear();
         for (const [id, record] of records)
-          if (record.status === 'reviewed') records.set(id, { ...record, status: 'needs-review' });
+          if (record.status === 'reviewed' && record.fields.length)
+            records.set(id, { ...record, status: 'needs-review' });
       });
     }
     const plugins = await settingsTemplateHost.plugins();
@@ -201,6 +208,13 @@ export function createSettingsTemplateCatalog(
         template.pluginID !== ZOTERO_NEO_PLUGIN_ID &&
         !builtins.some((adapter) => adapter.id === template.pluginID),
     );
+    // Zotero stores values by preference key, not by plugin ID. Local sensitivity still
+    // applies if a different installed plugin later becomes the sole owner of that key.
+    const knownSensitiveKeys = new Set<string>();
+    for (const record of records.values())
+      for (const key of record.sensitiveKeys) knownSensitiveKeys.add(key);
+    for (const draft of discovered)
+      for (const field of draft.fields) if (field.secret) knownSensitiveKeys.add(field.key);
     templates.clear();
     const present = new Set<string>();
     for (const draft of discovered) {
@@ -208,14 +222,14 @@ export function createSettingsTemplateCatalog(
       let record = records.get(draft.pluginID);
       const scan = scans.get(draft.pluginID);
       const verified = scan?.revision === draft.revision ? scan.keys : undefined;
-      const previouslyReviewed =
+      const previouslySelected =
         record?.status === 'reviewed' &&
         record.version === draft.version &&
         record.revision === draft.revision
           ? new Set(record.fields.map((field) => field.key))
           : undefined;
       const fields = draft.fields.map((field) =>
-        field.requiresLiveBinding && !(verified ?? previouslyReviewed)?.has(field.key)
+        field.requiresLiveBinding && !(verified ?? previouslySelected)?.has(field.key)
           ? {
               ...field,
               supported: false,
@@ -223,7 +237,7 @@ export function createSettingsTemplateCatalog(
             }
           : field,
       );
-      const sensitiveKeys = mergeSensitiveKeys(record, draft.fields);
+      const sensitiveKeys = mergeSensitiveKeys(record, draft.fields, knownSensitiveKeys);
       if (sensitiveKeys.length && sensitiveKeys !== record?.sensitiveKeys) {
         adapters.delete(draft.pluginID);
         record = {
@@ -253,11 +267,11 @@ export function createSettingsTemplateCatalog(
               field.key === selected.key && field.supported && field.type === selected.type,
           ),
         );
-      if (record?.status === 'reviewed' && !compatible) {
+      if (record?.status === 'reviewed' && record.fields.length && !compatible) {
         record = { ...record, status: 'needs-review' };
         await save(record, context);
       }
-      const reviewed = compatible && record?.status === 'reviewed';
+      const reviewed = compatible && record?.status === 'reviewed' && record.fields.length > 0;
       const template = frozen({
         ...draft,
         status:
@@ -265,7 +279,7 @@ export function createSettingsTemplateCatalog(
             ? 'unavailable'
             : reviewed
               ? 'reviewed'
-              : record?.status === 'needs-review'
+              : record?.status === 'needs-review' && record.fields.length
                 ? 'needs-review'
                 : 'draft',
         fields: fields.map((field) => ({
@@ -281,25 +295,26 @@ export function createSettingsTemplateCatalog(
       }
       if (!adapters.has(template.pluginID)) {
         let adapter: SettingsAdapter;
-        const review = record;
+        const selection = record;
         adapter = new ReviewedPreferenceAdapter(
           template,
           settingsTemplateHost,
-          async (operation) => {
-            await refresh(operation);
-            if (
-              adapters.get(template.pluginID) !== adapter ||
-              records.get(template.pluginID) !== review
-            )
-              throw new SettingsSnapshotError(
-                'stale-template',
-                'Plugin template requires fresh local review',
-              );
-          },
+          (operation) =>
+            serial(operation, async () => {
+              await refresh(operation);
+              if (
+                adapters.get(template.pluginID) !== adapter ||
+                records.get(template.pluginID) !== selection
+              )
+                throw new SettingsSnapshotError(
+                  'stale-template',
+                  'Plugin settings have changed; choose the settings to back up again',
+                );
+            }),
           () =>
             !disposed &&
             adapters.get(template.pluginID) === adapter &&
-            records.get(template.pluginID) === review,
+            records.get(template.pluginID) === selection,
         );
         adapters.set(template.pluginID, adapter);
       }
@@ -416,21 +431,26 @@ export function createSettingsTemplateCatalog(
         if (template.revision !== revision)
           throw new SettingsSnapshotError(
             'stale-template',
-            'Plugin source changed; scan and review again',
+            'Plugin settings have changed; choose the settings to back up again',
           );
         if (!Array.isArray(fields) || fields.length > 2048) invalid();
-        const selected: TemplateFile['fields'][number][] = [],
-          seen = new Set<string>();
+        const selected: TemplateFile['fields'][number][] = [];
+        const sensitiveKeys = new Set(records.get(pluginID)?.sensitiveKeys);
+        const seen = new Set<string>();
         for (const request of fields) {
           const field = template.fields.find((candidate) => candidate.key === request.key);
-          if (!field?.supported || seen.has(request.key) || typeof request.secret !== 'boolean')
+          if (
+            !field?.supported ||
+            seen.has(request.key) ||
+            typeof request.secret !== 'boolean' ||
+            (request.portable !== undefined && typeof request.portable !== 'boolean')
+          )
             invalid();
           seen.add(request.key);
-          selected.push({
-            key: field.key,
-            type: field.type,
-            secret: field.secret || request.secret,
-          });
+          const secret = field.secret || request.secret;
+          if (secret) sensitiveKeys.add(field.key);
+          if (request.portable !== false)
+            selected.push({ key: field.key, type: field.type, secret });
         }
         adapters.delete(pluginID);
         await save(
@@ -441,8 +461,8 @@ export function createSettingsTemplateCatalog(
             version: template.version,
             revision,
             fields: selected,
-            status: 'reviewed',
-            sensitiveKeys: mergeSensitiveKeys(records.get(pluginID), selected),
+            status: selected.length ? 'reviewed' : 'draft',
+            sensitiveKeys: [...sensitiveKeys],
           },
           context,
         );

@@ -413,9 +413,11 @@ export class BuiltinSettingsAdapter implements SettingsAdapter {
         else blocked = blocked || 'Choose a target-device path before importing this setting';
       }
       let before: SettingState;
+      let readCurrent = true;
       try {
         before = await this.#read(entry.key);
       } catch {
+        readCurrent = false;
         before = RESET;
         blocked = blocked || 'The target setting cannot be read safely';
       }
@@ -471,6 +473,8 @@ export class BuiltinSettingsAdapter implements SettingsAdapter {
       }
       assertSettingsCurrent(context);
       const unchanged = sameSettingState(before, after);
+      // A matching manual-only value needs no action; a fallback after a failed read is not a match.
+      if (readCurrent && unchanged && field.manual && blocked === field.manual) continue;
       const change: SettingsChange = {
         adapterID: this.id,
         key: entry.key,

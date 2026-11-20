@@ -37,11 +37,15 @@ function commandItems(context: CommandPaletteContext): PickerItem[] {
       const keys = shortcutsForAction(context.bindings, context.bindingMode, action);
       const keyHint = keys.length ? keys.join(', ') : t('common.unbound', context.language);
       const group = groupLabel(actionGroup(action), context.language);
+      const alias =
+        action === 'openSettingsSnapshots'
+          ? t('actionAlias.openSettingsSnapshots', context.language)
+          : '';
       return {
         id: action,
         title,
         search:
-          `${action} ${title} ${keyHint} ${owner} ${context.bindingMode} ${group}`.toLowerCase(),
+          `${action} ${title} ${keyHint} ${owner} ${context.bindingMode} ${group} ${alias}`.toLowerCase(),
         kind: 'command',
         meta: keyHint,
       };
