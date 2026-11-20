@@ -41,7 +41,11 @@ export interface SettingsTemplateCatalogPort {
   review(
     pluginID: string,
     revision: string,
-    fields: readonly { readonly key: string; readonly secret: boolean }[],
+    fields: readonly {
+      readonly key: string;
+      readonly secret: boolean;
+      readonly portable?: boolean;
+    }[],
     context: SettingsOperationContext,
   ): Promise<SnapshotPluginTemplate>;
   exportTemplate(pluginID: string, context: SettingsOperationContext): Promise<string>;
@@ -51,6 +55,7 @@ export interface SettingsTemplateCatalogPort {
 export interface SnapshotLibraryLocation {
   readonly libraryID: number;
   readonly label: string;
+  readonly personal?: boolean;
   readonly writable: boolean;
   readonly collections: readonly { readonly id: number; readonly label: string }[];
 }
@@ -61,7 +66,8 @@ export interface SnapshotAttachmentSource {
 }
 export interface ManagedSnapshotTarget {
   readonly id: string;
-  readonly adapterID: string;
+  readonly kind: 'workspace' | 'legacy';
+  readonly adapterIDs: readonly string[];
   readonly source: SnapshotAttachmentSource;
   readonly title: string;
   readonly collectionID: number | null;
@@ -69,12 +75,14 @@ export interface ManagedSnapshotTarget {
   readonly autoUpdate: boolean;
   readonly includeSecrets: boolean;
   readonly includeLibrarySettings: boolean;
-  readonly status: 'ready' | 'paused' | 'error';
+  readonly status: 'ready' | 'conflict' | 'paused' | 'error';
+  /** The observed version of the cloud file, required for an explicit overwrite. */
+  readonly conflictRevision?: string;
   readonly message: string;
   readonly updatedAt: string;
 }
 export interface CreateManagedSnapshot {
-  readonly adapterID: string;
+  readonly adapterIDs: readonly string[];
   readonly libraryID: number;
   readonly collectionID: number | null;
   readonly title: string;
@@ -82,8 +90,6 @@ export interface CreateManagedSnapshot {
   readonly autoUpdate: boolean;
   readonly includeSecrets: boolean;
   readonly includeLibrarySettings: boolean;
-  /** Explicit acknowledgement of attachment visibility and native data/file sync dependencies. */
-  readonly consent: boolean;
 }
 /** Attachments and files share the same document/codec; bindings and scheduling remain profile-local. */
 export interface ManagedSettingsSnapshotsPort {
@@ -105,13 +111,28 @@ export interface ManagedSettingsSnapshotsPort {
     password: string,
     context: SettingsCryptoContext,
   ): Promise<ManagedSnapshotTarget>;
+  overwrite(
+    id: string,
+    expectedRevision: string,
+    password: string,
+    context: SettingsCryptoContext,
+  ): Promise<ManagedSnapshotTarget>;
+  adoptCloud(
+    id: string,
+    sourceContents: string,
+    context: SettingsCryptoContext,
+  ): Promise<ManagedSnapshotTarget>;
   configure(
     id: string,
     options: {
       readonly title: string;
       readonly collectionID: number | null;
       readonly autoUpdate: boolean;
-      readonly expected: Pick<ManagedSnapshotTarget, 'title' | 'collectionID' | 'autoUpdate'>;
+      readonly adapterIDs?: readonly string[];
+      readonly expected: Pick<
+        ManagedSnapshotTarget,
+        'title' | 'collectionID' | 'autoUpdate' | 'adapterIDs'
+      >;
     },
     context: SettingsOperationContext,
   ): Promise<ManagedSnapshotTarget>;

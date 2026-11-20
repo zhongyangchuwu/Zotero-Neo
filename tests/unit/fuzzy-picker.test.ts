@@ -761,6 +761,43 @@ describe('command palette provider', () => {
     expect(session.picker.filtered.map((candidate) => candidate.id)).toEqual(['mainOpenPDF']);
   });
 
+  it.each([
+    ['zh-CN', '设置快照', '工作区同步与备份'],
+    ['en', 'Settings snapshots', 'Workspace Sync & Backup'],
+  ] as const)(
+    'finds Workspace Sync & Backup through the old %s name',
+    async (language, alias, title) => {
+      vi.stubGlobal('Services', { focus: { focusedWindow: null } });
+      const { window, session } = createPickerHarness();
+      const picker = createFuzzyPicker(
+        { debug: vi.fn(), diagnostic: vi.fn() },
+        new MainNavigation({ debug: vi.fn(), diagnostic: vi.fn() }, () => {}),
+      );
+      const execute = vi.fn<CommandPaletteContext['execute']>();
+      await picker.open(
+        window,
+        session,
+        'commands',
+        commandPickerOptions({
+          mode: 'main',
+          bindingMode: 'main-normal',
+          actions: ['findAllItems', 'openSettingsSnapshots'],
+          language,
+          bindings: {},
+          execute,
+        }),
+      );
+      const input = session.picker.input as HTMLInputElement & { emit(type: string): void };
+      input.value = alias;
+      input.emit('input');
+      expect(session.picker.filtered.map((item) => item.title)).toEqual([title]);
+      picker.onKeyDown(pickerKey('Enter', session.picker.results), window, session);
+      await vi.waitFor(() =>
+        expect(execute).toHaveBeenCalledExactlyOnceWith('openSettingsSnapshots', 0),
+      );
+    },
+  );
+
   it('keeps Reader and Main command catalogs context-specific', async () => {
     vi.stubGlobal('Services', { focus: { focusedWindow: null } });
     const { window, session } = createPickerHarness();

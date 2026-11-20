@@ -357,14 +357,14 @@ export const BUILTIN_MODULES: readonly BuiltinModuleDescriptor[] = [
   },
   {
     id: 'settings-snapshots',
-    names: { en: 'Settings Snapshots', 'zh-CN': '设置快照' },
+    names: { en: 'Workspace Sync & Backup', 'zh-CN': '工作区同步与备份' },
     hosts: ['main'],
     scopes: ['Application configuration', 'Main window', 'Snapshot operation'],
     requires: [],
     optional: [],
     contributions: [{ host: 'main', context: 'main-normal', actions: ['openSettingsSnapshots'] }],
     selectionActions: [],
-    ui: ['Per-plugin settings snapshots', 'Settings restore preview'],
+    ui: ['Workspace backup', 'Library sync', 'Settings restore preview'],
   },
   {
     id: 'ai-qa',

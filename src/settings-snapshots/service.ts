@@ -13,7 +13,12 @@ import {
   type SettingsRestoreReceipt,
   type SettingsSection,
 } from './contracts';
-import { assertSettingsCurrent, sameSettingState, validateSettingsDocument } from './document';
+import {
+  assertSettingsCurrent,
+  sameSettingState,
+  validateSettingsDocument,
+  validateSettingsSection,
+} from './document';
 
 export interface SettingsSnapshotPlan {
   readonly plans: readonly AdapterRestorePlan[];
@@ -78,6 +83,7 @@ export class SettingsSnapshotService {
   capture(
     adapterIDs: ReadonlySet<string>,
     context: SettingsCaptureContext,
+    options?: { readonly skipFailedAdapters: true },
   ): Promise<{ readonly document: SettingsDocument; readonly issues: readonly SettingsIssue[] }> {
     return this.#exclusive(context, async () => {
       if (context.container === 'json' && context.includeSecrets)
@@ -89,23 +95,49 @@ export class SettingsSnapshotService {
       const sections: SettingsSection[] = [],
         issues: SettingsIssue[] = [];
       for (const id of adapterIDs) {
-        const adapter = registry.get(id);
-        if (!adapter)
-          throw new SettingsSnapshotError(
-            'unsupported-adapter',
-            'A selected settings adapter is not available',
-          );
         assertSettingsCurrent(context);
-        const captured = await adapter.capture(context);
-        assertSettingsCurrent(context);
-        if (captured.section.adapterID !== id)
-          throw new SettingsSnapshotError(
-            'invalid-adapter',
-            'Settings adapter returned a section owned by another adapter',
-          );
-        sections.push(captured.section);
-        issues.push(...captured.issues);
+        try {
+          const adapter = registry.get(id);
+          if (!adapter)
+            throw new SettingsSnapshotError(
+              'unsupported-adapter',
+              'A selected settings adapter is not available',
+            );
+          const captured = await adapter.capture(context);
+          assertSettingsCurrent(context);
+          if (captured.section.adapterID !== id)
+            throw new SettingsSnapshotError(
+              'invalid-adapter',
+              'Settings adapter returned a section owned by another adapter',
+            );
+          if (options?.skipFailedAdapters) {
+            validateSettingsSection(captured.section);
+            if (captured.issues.some((issue) => issue.severity === 'error'))
+              throw new SettingsSnapshotError('capture-failed', 'Adapter capture was incomplete');
+          }
+          issues.push(...captured.issues);
+          sections.push(captured.section);
+        } catch (error) {
+          assertSettingsCurrent(context);
+          if (
+            !options?.skipFailedAdapters ||
+            (error instanceof SettingsSnapshotError &&
+              ['cancelled', 'plaintext-secrets'].includes(error.code))
+          )
+            throw error;
+          issues.push({
+            severity: 'warning',
+            code: 'adapter-skipped',
+            adapterID: id,
+            message: 'A selected plugin was unavailable or could not be captured safely.',
+          });
+        }
       }
+      if (adapterIDs.size && !sections.length)
+        throw new SettingsSnapshotError(
+          'capture-failed',
+          'None of the selected plugin settings could be captured safely.',
+        );
       if (!sections.length)
         throw new SettingsSnapshotError('empty-selection', 'Choose at least one settings adapter');
       return { document: this.#document(sections), issues };

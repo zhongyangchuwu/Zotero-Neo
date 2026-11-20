@@ -40,11 +40,11 @@ function normalize(
   )
     throw new SettingsSnapshotError(
       'invalid-field',
-      'Preference value does not match its locally reviewed type or control constraints',
+      'Preference value does not match its installed type or control constraints',
     );
   return Object.freeze({ kind: 'set', value });
 }
-/** Each instance is bound to one immutable local review, never to imported authority. */
+/** Each instance is bound to one immutable local field selection, never to imported authority. */
 export class ReviewedPreferenceAdapter implements SettingsAdapter {
   readonly schemaVersion = 1;
   readonly id: string;
@@ -78,7 +78,7 @@ export class ReviewedPreferenceAdapter implements SettingsAdapter {
     if (!this.current())
       throw new SettingsSnapshotError(
         'stale-template',
-        'Plugin settings template requires fresh local review',
+        'Plugin settings have changed; choose the settings to back up again',
       );
   }
   #read(field: SnapshotTemplateField): SettingState {
@@ -89,7 +89,7 @@ export class ReviewedPreferenceAdapter implements SettingsAdapter {
     return {
       severity: 'warning',
       code,
-      message: 'An unsupported or unreviewed preference was omitted',
+      message: 'An unsupported or unselected preference was omitted',
       adapterID: this.id,
     };
   }
@@ -130,9 +130,17 @@ export class ReviewedPreferenceAdapter implements SettingsAdapter {
     )
       throw new SettingsSnapshotError(
         'unsupported-version',
-        'Plugin snapshot requires the exact locally reviewed plugin version',
+        'The snapshot does not match the installed plugin version',
       );
     this.#planned.clear();
+    if (
+      context.container === 'json' &&
+      section.entries.some(({ key }) => this.#fields.get(key)?.secret)
+    )
+      throw new SettingsSnapshotError(
+        'plaintext-secrets',
+        'Secret fields cannot be restored from plain JSON',
+      );
     const changes: SettingsChange[] = [],
       issues: SettingsIssue[] = [];
     for (const entry of section.entries) {
@@ -144,10 +152,6 @@ export class ReviewedPreferenceAdapter implements SettingsAdapter {
       try {
         const before = this.#read(field),
           after = normalize(field, entry.state);
-        const blocked =
-          field.secret && context.container === 'json'
-            ? 'Secret fields cannot be restored from plain JSON'
-            : undefined;
         if (sameSettingState(before, after)) continue;
         const change: SettingsChange = Object.freeze({
           adapterID: this.id,
@@ -157,9 +161,8 @@ export class ReviewedPreferenceAdapter implements SettingsAdapter {
           secret: field.secret,
           before,
           after,
-          selected: !blocked,
+          selected: true,
           requiresRestart: field.requiresRestart,
-          ...(blocked ? { blocked } : {}),
         });
         changes.push(change);
         this.#planned.set(field.key, change);

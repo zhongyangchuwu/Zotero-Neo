@@ -61,7 +61,6 @@ vi.mock('../../src/platform/settings-snapshot-templates', async () => {
 import { createSettingsTemplateCatalog } from '../../src/settings-snapshots/catalog';
 import { settingsTemplateHost } from '../../src/platform/settings-snapshot-templates';
 import { SettingsSnapshotService, settingsChangeID } from '../../src/settings-snapshots/service';
-import { settingStateText } from '../../src/settings-snapshots/document';
 
 const context = (): SettingsOperationContext => ({
   signal: new AbortController().signal,
@@ -130,7 +129,7 @@ beforeEach(() => {
   state.liveKeys.clear();
 });
 
-describe('locally reviewed template catalog', () => {
+describe('local template field selection', () => {
   it('constructs builtins without touching the host and discovers without reading user preferences', async () => {
     const catalog = createSettingsTemplateCatalog(() => {
       throw new Error('Not initialized');
@@ -142,6 +141,86 @@ describe('locally reviewed template catalog', () => {
     expect(state.reads).toBe(0);
     expect(catalog.adapters).toHaveLength(2);
     catalog.dispose();
+  });
+
+  it('admits a directly selected field, then revokes access when the last field is cleared', async () => {
+    state.preferences.set(key, set(true));
+    const catalog = createSettingsTemplateCatalog(() => '1.0');
+    const draft = await catalog.scan('sample@test', context());
+    expect(catalog.adapters).toHaveLength(2);
+    const selected = await catalog.review(
+      draft.pluginID,
+      draft.revision,
+      [{ key, secret: false }],
+      context(),
+    );
+    expect(selected.reviewedKeys).toEqual([key]);
+    expect(state.reads).toBe(0);
+    expect(state.writes).toEqual([]);
+
+    const adapter = catalog.adapters.find((entry) => entry.id === selected.adapterID)!;
+    const captureContext = { ...context(), includeSecrets: true, includeLibrarySettings: false };
+    expect((await adapter.capture(captureContext)).section.entries).toEqual([
+      { key, state: set(true) },
+    ]);
+    const section = {
+      adapterID: adapter.id,
+      schemaVersion: 1,
+      sourceVersion: '1.0',
+      entries: [
+        { key, state: set(false) },
+        { key: token, state: set('not-authorized') },
+      ],
+    };
+    const plan = await adapter.plan(section, context());
+    expect(plan.changes.map((change) => change.key)).toEqual([key]);
+    expect(plan.issues).toMatchObject([{ code: 'unreviewed-field' }]);
+    expect(await adapter.apply(plan.changes, context())).toMatchObject([{ status: 'applied' }]);
+    expect(state.preferences.get(key)).toEqual(set(false));
+    const stale = await adapter.plan(
+      { ...section, entries: [{ key, state: set(true) }] },
+      context(),
+    );
+
+    const cleared = await catalog.review(draft.pluginID, draft.revision, [], context());
+    expect(cleared).toMatchObject({ status: 'draft', reviewedKeys: [] });
+    expect(catalog.adapters).toHaveLength(2);
+    await expect(adapter.capture(captureContext)).rejects.toMatchObject({ code: 'stale-template' });
+    expect(await adapter.apply(stale.changes, context())).toMatchObject([{ status: 'conflict' }]);
+    expect(state.writes).toEqual([key]);
+    catalog.dispose();
+
+    const hydrated = createSettingsTemplateCatalog(() => '1.0');
+    await hydrated.list(context());
+    expect(hydrated.adapters).toHaveLength(2);
+    hydrated.dispose();
+  });
+
+  it('does not admit an adapter from a legacy local record with no selected fields', async () => {
+    const catalog = createSettingsTemplateCatalog(() => '1.0');
+    const draft = await catalog.scan('sample@test', context());
+    catalog.dispose();
+    const filename = `plugin-${settingsTemplateHost.digest(draft.pluginID)}.json`;
+    state.files.set(
+      filename,
+      JSON.stringify({
+        format: 'zotero-neo-settings-template',
+        schemaVersion: 1,
+        pluginID: draft.pluginID,
+        version: draft.version,
+        revision: draft.revision,
+        status: 'reviewed',
+        fields: [],
+      }),
+    );
+
+    const hydrated = createSettingsTemplateCatalog(() => '1.0');
+    expect(await hydrated.scan(draft.pluginID, context())).toMatchObject({
+      status: 'draft',
+      reviewedKeys: [],
+    });
+    expect(hydrated.adapters).toHaveLength(2);
+    hydrated.dispose();
   });
 
   it('requires a local native binding before review and revokes it when rescanning no longer finds it', async () => {
@@ -160,6 +239,8 @@ describe('locally reviewed template catalog', () => {
     ).rejects.toThrow();
     state.liveKeys.add(key);
     const scanned = await catalog.scan(pending.pluginID, context());
+    expect(scanned.reviewedKeys).toEqual([]);
+    expect(catalog.adapters).toHaveLength(2);
     await catalog.review(scanned.pluginID, scanned.revision, selection, context());
     const exported = await catalog.exportTemplate(scanned.pluginID, context());
     catalog.dispose();
@@ -264,18 +345,53 @@ describe('locally reviewed template catalog', () => {
     catalog.dispose();
   });
 
-  it('imports data only as a freshly validated draft, never imported write authority', async () => {
-    const catalog = await reviewedCatalog();
-    const text = await catalog.exportTemplate('sample@test', context());
-    const source = JSON.parse(text);
+  it('never authorizes capture or restore from imported selection claims, even after hydration', async () => {
+    let catalog = createSettingsTemplateCatalog(() => '1.0');
+    const draft = await catalog.scan('sample@test', context());
+    const source = JSON.parse(await catalog.exportTemplate(draft.pluginID, context()));
     expect(source.format).toBe('zotero-neo-settings-template');
+    expect(source.fields).toContainEqual({ key, type: 'boolean', secret: false });
     source.status = 'reviewed';
     const imported = await catalog.importTemplate(JSON.stringify(source), context());
     expect(imported).toMatchObject({ status: 'draft', reviewedKeys: [] });
     expect(catalog.adapters).toHaveLength(2);
-    expect([...state.files.values()].every((file) => JSON.parse(file).status === 'draft')).toBe(
-      true,
+    catalog.dispose();
+
+    catalog = createSettingsTemplateCatalog(() => '1.0');
+    await catalog.scan(draft.pluginID, context());
+    const service = new SettingsSnapshotService(
+      () => catalog.adapters,
+      () => ({ neo: '1.0', zotero: '9.0' }),
     );
+    await expect(
+      service.capture(new Set([draft.adapterID]), {
+        ...context(),
+        includeSecrets: false,
+        includeLibrarySettings: false,
+      }),
+    ).rejects.toMatchObject({ code: 'unsupported-adapter' });
+    const plan = await service.plan(
+      {
+        format: 'zotero-neo-settings',
+        schemaVersion: 1,
+        createdAt: '2026-01-01T00:00:00.000Z',
+        producer: { name: 'Zotero Neo', version: '1.0' },
+        zoteroVersion: '9.0',
+        sections: [
+          {
+            adapterID: draft.adapterID,
+            schemaVersion: 1,
+            sourceVersion: '1.0',
+            entries: [{ key, state: set(false) }],
+          },
+        ],
+      },
+      context(),
+    );
+    expect(plan.plans).toEqual([]);
+    expect(plan.issues).toMatchObject([{ code: 'unsupported-adapter' }]);
+    expect(state.reads).toBe(0);
+    expect(state.writes).toEqual([]);
     catalog.dispose();
   });
 
@@ -366,12 +482,11 @@ describe('consumer-visible reviewed preference behavior', () => {
     expect(receipts.map((receipt) => receipt.status)).toEqual(['applied', 'skipped']);
     expect(state.preferences.get(key)).toEqual({ kind: 'reset' });
     expect(state.preferences.get(token)).toEqual(set('private-credential'));
-    const jsonPlan = await adapter.plan(section, { ...context(), container: 'json' });
-    expect(jsonPlan.changes.find((change) => change.key === token)).toMatchObject({
-      secret: true,
-      selected: false,
-      blocked: expect.any(String),
+    const reads = state.reads;
+    await expect(adapter.plan(section, { ...context(), container: 'json' })).rejects.toMatchObject({
+      code: 'plaintext-secrets',
     });
+    expect(state.reads).toBe(reads);
     catalog.dispose();
   });
 
@@ -401,11 +516,33 @@ describe('consumer-visible reviewed preference behavior', () => {
     catalog.dispose();
   });
 
-  it('honors explicitly reviewed secret flags even when the field name is not sensitive', async () => {
-    state.preferences.set(key, set(true));
-    const catalog = createSettingsTemplateCatalog(() => '1.0');
+  it('persists sensitivity without granting access until the same field is selected separately', async () => {
+    state.plugins = [blandPlugin()];
+    state.preferences.set(bland, set('unmarked-private-value'));
+    let catalog = createSettingsTemplateCatalog(() => '1.0');
     const draft = await catalog.scan('sample@test', context());
-    await catalog.review(draft.pluginID, draft.revision, [{ key, secret: true }], context());
+    const classified = await catalog.review(
+      draft.pluginID,
+      draft.revision,
+      [{ key: bland, secret: true, portable: false }],
+      context(),
+    );
+    expect(classified.reviewedKeys).toEqual([]);
+    expect(classified.fields[0]!.secret).toBe(true);
+    expect(catalog.adapters).toHaveLength(2);
+    expect(state.reads).toBe(0);
+    catalog.dispose();
+
+    catalog = createSettingsTemplateCatalog(() => '1.0');
+    const reloaded = await catalog.scan(draft.pluginID, context());
+    expect(reloaded.fields[0]!.secret).toBe(true);
+    expect(reloaded.reviewedKeys).toEqual([]);
+    await catalog.review(
+      reloaded.pluginID,
+      reloaded.revision,
+      [{ key: bland, secret: false, portable: true }],
+      context(),
+    );
     const adapter = catalog.adapters[2]!;
     const plain = await adapter.capture({
       ...context(),
@@ -419,7 +556,44 @@ describe('consumer-visible reviewed preference behavior', () => {
       includeSecrets: true,
       includeLibrarySettings: false,
     });
-    expect(encrypted.section.entries).toEqual([{ key, state: set(true) }]);
+    expect(encrypted.section.entries).toEqual([
+      { key: bland, state: set('unmarked-private-value') },
+    ]);
+    catalog.dispose();
+  });
+
+  it('keeps a previously marked preference sensitive when another installed plugin owns its key', async () => {
+    state.plugins = [blandPlugin()];
+    state.preferences.set(bland, set('previous-plugin-secret'));
+    const catalog = createSettingsTemplateCatalog(() => '1.0');
+    const first = await catalog.scan('sample@test', context());
+    await catalog.review(
+      first.pluginID,
+      first.revision,
+      [{ key: bland, secret: true, portable: false }],
+      context(),
+    );
+    state.plugins = [{ ...blandPlugin(), id: 'replacement@test' }];
+    state.invalidate!();
+    const replacement = await catalog.scan('replacement@test', context());
+    expect(replacement.fields[0]).toMatchObject({ supported: true, secret: true });
+    expect(replacement.reviewedKeys).toEqual([]);
+    expect(catalog.adapters).toHaveLength(2);
+    await catalog.review(
+      replacement.pluginID,
+      replacement.revision,
+      [{ key: bland, secret: false }],
+      context(),
+    );
+    const adapter = catalog.adapters.find((entry) => entry.id === replacement.adapterID)!;
+    const plain = await adapter.capture({
+      ...context(),
+      container: 'json',
+      includeSecrets: false,
+      includeLibrarySettings: false,
+    });
+    expect(plain.section.entries).toEqual([]);
+    expect(state.reads).toBe(0);
     catalog.dispose();
   });
 
@@ -483,24 +657,19 @@ describe('consumer-visible reviewed preference behavior', () => {
         });
         expect(captured.document.sections[0]!.entries).toEqual([]);
         expect(JSON.stringify(captured.document)).not.toContain('actual-private-value');
-        const plan = await adapter.plan(
-          {
-            adapterID: adapter.id,
-            schemaVersion: 1,
-            sourceVersion: '1.0',
-            entries: [{ key: bland, state: set('replacement-private-value') }],
-          },
-          { ...context(), container: 'json' },
-        );
-        expect(plan.changes).toHaveLength(1);
-        const change = plan.changes[0]!;
-        expect(change).toMatchObject({
-          secret: true,
-          selected: false,
-          blocked: expect.any(String),
-        });
-        expect(settingStateText(change.before, change.secret)).toBe('⟨set / 已设置⟩');
-        expect(settingStateText(change.after, change.secret)).toBe('⟨set / 已设置⟩');
+        const reads = state.reads;
+        await expect(
+          adapter.plan(
+            {
+              adapterID: adapter.id,
+              schemaVersion: 1,
+              sourceVersion: '1.0',
+              entries: [{ key: bland, state: set('replacement-private-value') }],
+            },
+            { ...context(), container: 'json' },
+          ),
+        ).rejects.toMatchObject({ code: 'plaintext-secrets' });
+        expect(state.reads).toBe(reads);
       };
       await expectProtectedConsumer();
       catalog.dispose();

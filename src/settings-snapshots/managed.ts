@@ -2,6 +2,7 @@ import type { Cleanup } from '../core/cleanup';
 import {
   createSnapshotAttachments,
   type SnapshotAttachmentIdentity,
+  type SnapshotAttachmentContents,
 } from '../platform/settings-snapshot-attachments';
 import {
   initializeManagedSnapshots,
@@ -32,7 +33,16 @@ interface Binding {
   readonly target: ManagedSnapshotTarget;
   readonly expected: SnapshotAttachmentIdentity;
   readonly semantic: string | null;
-  readonly template: string;
+  readonly legacyTemplate?: string;
+  readonly retryReason?: 'incompatible-template' | 'capture-failed' | 'download-pending';
+  /** Last successful scope baseline; a metadata-only edit does not change published sections. */
+  readonly capturedAdapterIDs: readonly string[];
+}
+interface ProjectedSnapshot {
+  readonly document: SettingsDocument;
+  readonly capturedAdapterIDs: readonly string[];
+  readonly semantic: string | null;
+  readonly message: string;
 }
 interface SnapshotScheduler {
   readonly window: Window;
@@ -42,6 +52,14 @@ interface SnapshotScheduler {
 }
 const SYNC_NOTICE =
   'Stored locally; cross-device availability depends on Zotero data and attachment file sync.';
+const CONFLICT_NOTICE =
+  'The stored snapshot changed outside this binding. Review the current file before choosing which version to keep.';
+const OBSERVE_CONTENT_CHANGE = { observeContentChange: true } as const;
+class ObservedConflict extends SettingsSnapshotError {
+  constructor(readonly revision: string) {
+    super('external-change', CONFLICT_NOTICE);
+  }
+}
 const POLL_MS = 5 * 60_000;
 function reject(code: string, message: string): never {
   throw new SettingsSnapshotError(code, message);
@@ -84,30 +102,60 @@ function semantic(document: SettingsDocument): string {
     }),
   );
 }
+function isScope(value: unknown): value is readonly string[] {
+  return (
+    Array.isArray(value) &&
+    value.length > 0 &&
+    value.length <= 64 &&
+    value.every((id) => typeof id === 'string' && /^[a-z][a-z0-9.-]{0,127}$/u.test(id)) &&
+    new Set(value).size === value.length
+  );
+}
+function scope(value: readonly string[]): readonly string[] {
+  if (!isScope(value)) reject('invalid-scope', 'Choose at least one valid settings adapter.');
+  return [...value];
+}
+function sameScope(left: readonly string[], right: readonly string[]): boolean {
+  return left.length === right.length && left.every((id) => right.includes(id));
+}
+function invalidBindings(): never {
+  return reject(
+    'binding-storage',
+    'Local backup sync links are invalid. No attachments were changed.',
+  );
+}
 function loadBindings(value: unknown): Binding[] {
-  if (!Array.isArray(value))
-    reject('binding-storage', 'Local snapshot bindings are invalid. No attachments were changed.');
+  if (!Array.isArray(value)) invalidBindings();
   const ids = new Set<string>();
-  for (const entry of value) {
-    const binding = entry as Partial<Binding> | null;
+  return value.map((entry: unknown) => {
+    const binding = entry as
+      | (Partial<Omit<Binding, 'target'>> & {
+          readonly target?: ManagedSnapshotTarget & { readonly adapterID?: unknown };
+          readonly template?: unknown;
+        })
+      | null;
     const target = binding?.target;
     const expected = binding?.expected;
     if (
+      !binding ||
       !target ||
       !expected ||
       typeof target.id !== 'string' ||
       ids.has(target.id) ||
-      typeof target.adapterID !== 'string' ||
       !target.source ||
       !Number.isInteger(target.source.libraryID) ||
       typeof target.source.itemKey !== 'string' ||
+      typeof target.source.title !== 'string' ||
       target.id !== `${target.source.libraryID}:${target.source.itemKey}` ||
       typeof target.title !== 'string' ||
       (target.collectionID !== null && !Number.isInteger(target.collectionID)) ||
       typeof target.autoUpdate !== 'boolean' ||
       typeof target.includeSecrets !== 'boolean' ||
       typeof target.includeLibrarySettings !== 'boolean' ||
-      !['ready', 'paused', 'error'].includes(target.status) ||
+      !['ready', 'conflict', 'paused', 'error'].includes(target.status) ||
+      (target.status === 'conflict'
+        ? typeof target.conflictRevision !== 'string' || !target.conflictRevision
+        : target.conflictRevision !== undefined) ||
       typeof target.message !== 'string' ||
       typeof target.updatedAt !== 'string' ||
       typeof expected.path !== 'string' ||
@@ -115,49 +163,73 @@ function loadBindings(value: unknown): Binding[] {
       typeof expected.title !== 'string' ||
       !Array.isArray(expected.collections) ||
       !expected.collections.every(Number.isInteger) ||
-      typeof binding?.template !== 'string' ||
       !(binding.semantic === null || typeof binding.semantic === 'string')
     )
-      reject(
-        'binding-storage',
-        'Local snapshot bindings are invalid. No attachments were changed.',
-      );
+      invalidBindings();
     validatePolicy(target);
     ids.add(target.id);
-  }
-  // Copy only the known profile schema. Unknown persisted keys (including credentials) are never re-saved.
-  return value.map((binding: Binding) => ({
-    target: {
-      id: binding.target.id,
-      adapterID: binding.target.adapterID,
-      source: {
-        libraryID: binding.target.source.libraryID,
-        itemKey: binding.target.source.itemKey,
-        title: binding.target.source.title,
+    const old = target.kind === undefined && target.adapterIDs === undefined;
+    const kind = old ? 'legacy' : target.kind;
+    const adapterIDs = old ? [target.adapterID] : target.adapterIDs;
+    const legacyTemplate = old ? binding.template : binding.legacyTemplate;
+    const retryReason = binding.retryReason;
+    const capturedAdapterIDs = old ? adapterIDs : binding.capturedAdapterIDs;
+    if (
+      !['workspace', 'legacy'].includes(kind) ||
+      !isScope(adapterIDs) ||
+      !isScope(capturedAdapterIDs) ||
+      (kind === 'legacy'
+        ? typeof legacyTemplate !== 'string' ||
+          adapterIDs.length !== 1 ||
+          !sameScope(adapterIDs, capturedAdapterIDs)
+        : legacyTemplate !== undefined) ||
+      (retryReason !== undefined &&
+        (target.status !== 'paused' ||
+          (retryReason !== 'download-pending' &&
+            (kind !== 'workspace' ||
+              !['incompatible-template', 'capture-failed'].includes(retryReason)))))
+    )
+      invalidBindings();
+    // Copy only the known profile schema. Unknown persisted keys (including credentials) are never re-saved.
+    return {
+      target: {
+        id: target.id,
+        kind,
+        adapterIDs: [...adapterIDs],
+        source: {
+          libraryID: target.source.libraryID,
+          itemKey: target.source.itemKey,
+          title: target.source.title,
+        },
+        title: target.title,
+        collectionID: target.collectionID,
+        container: target.container,
+        autoUpdate: target.autoUpdate,
+        includeSecrets: target.includeSecrets,
+        includeLibrarySettings: target.includeLibrarySettings,
+        status: target.status,
+        ...(target.conflictRevision === undefined
+          ? {}
+          : { conflictRevision: target.conflictRevision }),
+        message: target.message,
+        updatedAt: target.updatedAt,
       },
-      title: binding.target.title,
-      collectionID: binding.target.collectionID,
-      container: binding.target.container,
-      autoUpdate: binding.target.autoUpdate,
-      includeSecrets: binding.target.includeSecrets,
-      includeLibrarySettings: binding.target.includeLibrarySettings,
-      status: binding.target.status,
-      message: binding.target.message,
-      updatedAt: binding.target.updatedAt,
-    },
-    expected: {
-      path: binding.expected.path,
-      digest: binding.expected.digest,
-      title: binding.expected.title,
-      collections: [...binding.expected.collections],
-    },
-    semantic: binding.semantic,
-    template: binding.template,
-  }));
+      expected: {
+        path: expected.path,
+        digest: expected.digest,
+        title: expected.title,
+        collections: [...expected.collections],
+      },
+      semantic: binding.semantic,
+      ...(typeof legacyTemplate === 'string' ? { legacyTemplate } : {}),
+      ...(retryReason === undefined ? {} : { retryReason }),
+      capturedAdapterIDs: [...capturedAdapterIDs],
+    };
+  });
 }
 
-function shouldAutoUpdate({ target }: Binding): boolean {
-  return target.status === 'ready' && target.autoUpdate;
+function shouldAutoUpdate({ target, retryReason }: Binding): boolean {
+  return target.autoUpdate && (target.status === 'ready' || retryReason !== undefined);
 }
 
 /** One application-owned scheduler; attachments are carriers, never automatic restore inputs. */
@@ -212,128 +284,304 @@ export function createManagedSettingsSnapshots(
   }
   function get(id: string): Binding {
     const binding = bindings?.find((entry) => entry.target.id === id);
-    if (!binding) reject('missing-binding', 'This device has no binding for the snapshot.');
+    if (!binding)
+      reject('missing-binding', 'This device has no local sync link for the library backup.');
     return binding;
   }
   function visible(target: ManagedSnapshotTarget): ManagedSnapshotTarget {
-    return { ...target, source: { ...target.source } };
+    return { ...target, adapterIDs: [...target.adapterIDs], source: { ...target.source } };
   }
-  async function template(
-    adapterID: string,
+  async function availableTemplates(
     context: SettingsOperationContext,
-  ): Promise<SnapshotPluginTemplate> {
+  ): Promise<ReadonlyMap<string, SnapshotPluginTemplate>> {
     const templates = await catalog.list(context);
     assertSettingsCurrent(context);
-    const current = templates.find(
-      (entry) =>
-        entry.adapterID === adapterID &&
-        (entry.status === 'builtin' || entry.status === 'reviewed'),
+    const installed = new Set(catalog.adapters.map((adapter) => adapter.id));
+    return new Map(
+      templates
+        .filter(
+          (template) =>
+            (template.status === 'builtin' || template.status === 'reviewed') &&
+            installed.has(template.adapterID),
+        )
+        .map((template) => [template.adapterID, template]),
     );
-    if (!current || !catalog.adapters.some((adapter) => adapter.id === adapterID))
+  }
+  function candidates(
+    adapterIDs: readonly string[],
+    available: ReadonlyMap<string, SnapshotPluginTemplate>,
+    previouslyCaptured: readonly string[],
+    legacyTemplate?: string,
+  ): string[] {
+    // Workspace membership is locally configured; eligibility and fields come only from
+    // the current local review. Legacy bindings retain their frozen single-template revision.
+    const ids = adapterIDs.filter((id) => {
+      const template = available.get(id);
+      return template && (legacyTemplate === undefined || template.revision === legacyTemplate);
+    });
+    const unavailable = previouslyCaptured.filter(
+      (id) => adapterIDs.includes(id) && !ids.includes(id),
+    );
+    if (unavailable.length)
       reject(
         'incompatible-template',
-        'The plugin or its locally reviewed field template is unavailable. Create a new snapshot after reviewing the current template.',
+        `Previously backed up plugin settings are unavailable or need fresh local review (${unavailable.join(', ')}). The stored file was not overwritten.`,
       );
-    return current;
+    if (!ids.length)
+      reject(
+        'capture-failed',
+        'None of the selected plugins has an available, locally approved settings template.',
+      );
+    return ids;
   }
-  function paused(binding: Binding, error: unknown): void {
+  async function project(
+    target: Pick<
+      ManagedSnapshotTarget,
+      'kind' | 'adapterIDs' | 'container' | 'includeSecrets' | 'includeLibrarySettings'
+    >,
+    available: ReadonlyMap<string, SnapshotPluginTemplate>,
+    previouslyCaptured: readonly string[],
+    context: SettingsCryptoContext,
+    legacyTemplate?: string,
+  ): Promise<ProjectedSnapshot> {
+    const ids = candidates(target.adapterIDs, available, previouslyCaptured, legacyTemplate);
+    const captured = await service.capture(
+      new Set(ids),
+      {
+        ...context,
+        container: target.container,
+        includeSecrets: target.includeSecrets,
+        includeLibrarySettings: target.includeLibrarySettings,
+      },
+      target.kind === 'workspace' ? { skipFailedAdapters: true } : undefined,
+    );
+    assertSettingsCurrent(context);
+    const capturedAdapterIDs = captured.document.sections.map((section) => section.adapterID);
+    const missing = previouslyCaptured.filter(
+      (id) => target.adapterIDs.includes(id) && !capturedAdapterIDs.includes(id),
+    );
+    if (missing.length || captured.issues.some((issue) => issue.severity === 'error'))
+      reject(
+        'capture-failed',
+        'Previously backed up plugin settings could not be captured completely. The stored file was not overwritten.',
+      );
+    const skipped = target.adapterIDs.filter((id) => !capturedAdapterIDs.includes(id));
+    return {
+      document: captured.document,
+      capturedAdapterIDs,
+      semantic: target.container === 'json' ? semantic(captured.document) : null,
+      message: skipped.length
+        ? `${SYNC_NOTICE} Not captured: ${skipped.map((id) => available.get(id)?.label ?? id).join(', ')}. Review the selected plugins to retry.`
+        : SYNC_NOTICE,
+    };
+  }
+  function withIdentity(binding: Binding, observed: SnapshotAttachmentContents): Binding {
+    const { identity, source } = observed;
+    const { collectionID } = binding.target;
+    return {
+      ...binding,
+      expected: identity,
+      target: {
+        ...binding.target,
+        source,
+        title: identity.title,
+        collectionID:
+          collectionID !== null && identity.collections.includes(collectionID)
+            ? collectionID
+            : (identity.collections[0] ?? null),
+      },
+    };
+  }
+  function markConflict(binding: Binding, revision: string): void {
+    if (binding.target.conflictRevision === revision) return;
+    const { retryReason: _retryReason, ...confirmed } = binding;
+    replace({
+      ...confirmed,
+      target: {
+        ...binding.target,
+        status: 'conflict',
+        conflictRevision: revision,
+        message: CONFLICT_NOTICE,
+      },
+    });
+  }
+  async function observe(binding: Binding, context: SettingsOperationContext) {
+    const observed = await carrier.inspect(
+      binding.target.source,
+      binding.expected,
+      context,
+      OBSERVE_CONTENT_CHANGE,
+    );
+    assertSettingsCurrent(context);
+    return observed;
+  }
+  async function reviewed(
+    binding: Binding,
+    revision: string,
+    context: SettingsOperationContext,
+  ): Promise<SnapshotAttachmentContents> {
+    const observed = await observe(binding, context);
+    if (observed.identity.digest !== revision) throw new ObservedConflict(observed.identity.digest);
+    return observed;
+  }
+  async function refresh(binding: Binding, context: SettingsOperationContext): Promise<Binding> {
+    const observed = await reviewed(binding, binding.expected.digest, context);
+    if (JSON.stringify(observed.identity) === JSON.stringify(binding.expected)) return binding;
+    const next = withIdentity(binding, observed);
+    replace(next);
+    return next;
+  }
+  async function recordFailure(
+    binding: Binding,
+    error: unknown,
+    context: SettingsOperationContext,
+    automatic = false,
+  ): Promise<unknown> {
+    if (context.signal.aborted || !context.isCurrent()) return error;
+    if (error instanceof ObservedConflict) {
+      markConflict(binding, error.revision);
+      return error;
+    }
+    if (error instanceof SettingsSnapshotError && error.code === 'external-change') {
+      try {
+        // Native compare-and-swap may have caught a newer file after the first review.
+        const observed = await observe(binding, context);
+        if (
+          binding.target.status === 'conflict' ||
+          observed.identity.digest !== binding.expected.digest
+        ) {
+          markConflict(binding, observed.identity.digest);
+          return error;
+        }
+      } catch (observingError) {
+        if (context.signal.aborted || !context.isCurrent()) return error;
+        error = observingError;
+      }
+    }
     const known =
       error instanceof SettingsSnapshotError
         ? error
         : new SettingsSnapshotError(
             'managed-operation-failed',
-            'The managed snapshot operation failed. Existing attachment data was retained; inspect it before creating a new binding.',
+            'The snapshot operation could not be confirmed. Inspect the stored attachment before retrying.',
           );
-    replace({
-      ...binding,
-      target: { ...binding.target, status: 'paused', message: known.message },
-    });
-  }
-  async function refresh(binding: Binding, context: SettingsOperationContext): Promise<Binding> {
-    const current = await carrier.inspect(binding.target.source, binding.expected, context);
-    assertSettingsCurrent(context);
-    if (JSON.stringify(current.identity) === JSON.stringify(binding.expected)) return binding;
-    const collectionID =
-      binding.target.collectionID !== null &&
-      current.identity.collections.includes(binding.target.collectionID)
-        ? binding.target.collectionID
-        : (current.identity.collections[0] ?? null);
-    const next: Binding = {
-      ...binding,
-      expected: current.identity,
-      target: {
+    if (['cancelled', 'binding-storage', 'stale-target', 'stale-conflict'].includes(known.code))
+      return known;
+    const { conflictRevision: _conflictRevision, ...target } = binding.target;
+    let next: ManagedSnapshotTarget = { ...target, status: 'paused', message: known.message };
+    if (automatic && known.code === 'busy')
+      next = {
         ...binding.target,
-        source: current.source,
-        title: current.identity.title,
-        collectionID,
+        message: 'Auto-update deferred while another settings operation is running.',
+      };
+    else if (
+      target.status === 'conflict' &&
+      ['busy', 'capture-failed', 'incompatible-template'].includes(known.code)
+    )
+      next = { ...binding.target, message: known.message };
+    let retryReason: Binding['retryReason'];
+    if (automatic && known.code === 'busy') retryReason = binding.retryReason;
+    else if (
+      next.status === 'paused' &&
+      (known.code === 'download-pending' ||
+        (target.kind === 'workspace' &&
+          (known.code === 'incompatible-template' || known.code === 'capture-failed')))
+    )
+      retryReason = known.code;
+    if (
+      next.status !== binding.target.status ||
+      next.message !== binding.target.message ||
+      retryReason !== binding.retryReason
+    ) {
+      const { retryReason: _retryReason, ...confirmed } = binding;
+      replace({
+        ...confirmed,
+        target: next,
+        ...(retryReason === undefined ? {} : { retryReason }),
+      });
+    }
+    return known;
+  }
+  function settle(
+    binding: Binding,
+    observed: SnapshotAttachmentContents,
+    captured: Pick<ProjectedSnapshot, 'semantic' | 'capturedAdapterIDs' | 'message'>,
+  ): ManagedSnapshotTarget {
+    const { conflictRevision: _conflictRevision, ...target } = binding.target;
+    const { retryReason: _retryReason, ...confirmed } = binding;
+    const next = withIdentity(
+      {
+        ...confirmed,
+        semantic: captured.semantic,
+        capturedAdapterIDs: captured.capturedAdapterIDs,
+        target: {
+          ...target,
+          status: 'ready',
+          updatedAt: new Date().toISOString(),
+          message: captured.message,
+        },
       },
-    };
+      observed,
+    );
     replace(next);
-    return next;
+    return visible(next.target);
   }
   async function publish(
     binding: Binding,
     password: string,
     context: SettingsCryptoContext,
     automatic: boolean,
+    expectedRevision?: string,
   ): Promise<ManagedSnapshotTarget> {
     validatePolicy(binding.target);
-    if (binding.target.status !== 'ready')
+    if (expectedRevision !== undefined) {
+      if (
+        binding.target.status !== 'conflict' ||
+        binding.target.conflictRevision !== expectedRevision
+      )
+        reject(
+          'stale-conflict',
+          'The conflicting snapshot changed. Review its current contents before overwriting.',
+        );
+    } else if (binding.target.status !== 'ready' && binding.retryReason === undefined) {
       reject(
         'paused-target',
-        'This target is paused. Preserve or inspect the attachment, then explicitly create a new snapshot to resume.',
+        'This snapshot is not ready to update. Inspect its status before continuing.',
       );
+    }
     if (SETTINGS_CONTAINERS[binding.target.container].requiresPassword && !password)
       reject('invalid-password', 'A non-empty password is required');
     try {
-      const current = await template(binding.target.adapterID, context);
-      if (current.revision !== binding.template)
-        reject(
-          'incompatible-template',
-          'The reviewed template changed. Existing snapshot data is preserved; create a new snapshot using the current template.',
-        );
-      binding = await refresh(binding, context);
-      const captured = await service.capture(new Set([binding.target.adapterID]), {
-        ...context,
-        container: binding.target.container,
-        includeSecrets: binding.target.includeSecrets,
-        includeLibrarySettings: binding.target.includeLibrarySettings,
-      });
-      assertSettingsCurrent(context);
-      if (captured.issues.some((issue) => issue.severity === 'error'))
-        reject('capture-failed', 'The selected plugin settings could not be captured completely.');
-      const identity = binding.target.container === 'json' ? semantic(captured.document) : null;
-      if (automatic && identity === binding.semantic) return visible(binding.target);
+      const available = await availableTemplates(context);
+      const conflict =
+        expectedRevision === undefined ? null : await reviewed(binding, expectedRevision, context);
+      if (!conflict) binding = await refresh(binding, context);
+      const captured = await project(
+        binding.target,
+        available,
+        binding.capturedAdapterIDs,
+        context,
+        binding.legacyTemplate,
+      );
+      if (automatic && captured.semantic === binding.semantic) {
+        const target = { ...binding.target, status: 'ready' as const, message: captured.message };
+        const { retryReason, ...confirmed } = binding;
+        if (retryReason || target.message !== binding.target.message)
+          replace({ ...confirmed, target });
+        return visible(target);
+      }
       const text = await codec.seal(captured.document, password, context, binding.target.container);
       assertSettingsCurrent(context);
-      const stored = await carrier.publish(binding.target.source, binding.expected, text, context);
+      const stored = await carrier.publish(
+        binding.target.source,
+        conflict?.identity ?? binding.expected,
+        text,
+        context,
+      );
       assertSettingsCurrent(context);
-      const next: Binding = {
-        ...binding,
-        expected: stored.identity,
-        semantic: identity,
-        target: {
-          ...binding.target,
-          source: stored.source,
-          updatedAt: new Date().toISOString(),
-          message: SYNC_NOTICE,
-        },
-      };
-      replace(next);
-      return visible(next.target);
+      return settle(binding, stored, captured);
     } catch (error) {
-      if (!disposed && !context.signal.aborted && context.isCurrent()) {
-        if (automatic && error instanceof SettingsSnapshotError && error.code === 'busy') {
-          replace({
-            ...binding,
-            target: {
-              ...binding.target,
-              message: 'Auto-update deferred while another settings operation is running.',
-            },
-          });
-        } else paused(binding, error);
-      }
-      throw error;
+      throw await recordFailure(binding, error, context, automatic);
     }
   }
   function stopScheduler(): void {
@@ -374,11 +622,12 @@ export function createManagedSettingsSnapshots(
         await publish(binding, '', context, true);
       } catch (error) {
         if (context.signal.aborted || !context.isCurrent()) return;
+        if (error instanceof SettingsSnapshotError && error.code === binding.retryReason) continue;
         reportManagedSnapshotFailure();
         if (!(error instanceof SettingsSnapshotError) || error.code === 'binding-storage')
           backgroundFailure = new SettingsSnapshotError(
             'scheduler-failed',
-            'Snapshot auto-update failed and local status could not be confirmed; inspect the attachment and profile binding storage.',
+            'Auto-update could not confirm the local sync link. Inspect the library backup in Workspace Sync & Backup.',
           );
       }
     }
@@ -405,7 +654,7 @@ export function createManagedSettingsSnapshots(
           if (!context.isCurrent() || controller.signal.aborted) return;
           backgroundFailure = new SettingsSnapshotError(
             'scheduler-failed',
-            'Snapshot auto-update failed. No attachment was automatically restored.',
+            'Library backup auto-update failed. No attachment was automatically restored.',
           );
           reportManagedSnapshotFailure();
         })
@@ -436,7 +685,7 @@ export function createManagedSettingsSnapshots(
             if (!context.isCurrent() || bindings !== null) return;
             backgroundFailure = new SettingsSnapshotError(
               'scheduler-initialization',
-              'Snapshot auto-update initialization failed. Open Settings Snapshots to inspect local state.',
+              'Library backup auto-update could not start. Open Workspace Sync & Backup to inspect the local sync links.',
             );
             reportManagedSnapshotFailure();
           })
@@ -452,19 +701,39 @@ export function createManagedSettingsSnapshots(
       const current = fence(context);
       return serialized(current, async () => {
         if (backgroundFailure) throw backgroundFailure;
-        for (const binding of [...(bindings ?? [])]) {
-          if (binding.target.status !== 'ready') continue;
+        let available: ReadonlyMap<string, SnapshotPluginTemplate> | undefined;
+        for (let binding of bindings ?? []) {
           try {
-            const currentTemplate = await template(binding.target.adapterID, current);
-            if (currentTemplate.revision !== binding.template)
-              reject(
-                'incompatible-template',
-                'The reviewed template changed. Create a new snapshot to use it.',
-              );
-            await refresh(binding, current);
+            if (binding.target.status === 'conflict') {
+              const observed = await observe(binding, current);
+              markConflict(binding, observed.identity.digest);
+            } else {
+              binding = await refresh(binding, current);
+              const canResume =
+                binding.retryReason === 'incompatible-template' ||
+                binding.retryReason === 'download-pending';
+              if (binding.target.status === 'ready' || canResume) {
+                available ??= await availableTemplates(current);
+                candidates(
+                  binding.target.adapterIDs,
+                  available,
+                  binding.capturedAdapterIDs,
+                  binding.legacyTemplate,
+                );
+                if (canResume) {
+                  const { retryReason: _retryReason, ...confirmed } = binding;
+                  replace({
+                    ...confirmed,
+                    target: { ...confirmed.target, status: 'ready', message: SYNC_NOTICE },
+                  });
+                }
+              }
+            }
           } catch (error) {
             assertSettingsCurrent(current);
-            paused(binding, error);
+            const failure = await recordFailure(binding, error, current);
+            if (failure instanceof SettingsSnapshotError && failure.code === 'binding-storage')
+              throw failure;
           }
         }
         return (bindings ?? []).map((binding) => visible(binding.target));
@@ -480,47 +749,40 @@ export function createManagedSettingsSnapshots(
     },
     read(source, context) {
       const current = fence(context);
-      return serialized(current, async () => (await carrier.read(source, current)).text);
+      return serialized(current, async () => {
+        const observed = await carrier.read(source, current);
+        assertSettingsCurrent(current);
+        return observed.text;
+      });
     },
     create(request, password, context) {
       const current = fence(context);
       return serialized(current, async () => {
-        if (request.consent !== true)
-          reject(
-            'consent-required',
-            'Explicit consent is required: this creates a visible library attachment containing selected settings, and availability on other devices requires both Zotero data sync and attachment file sync.',
-          );
         validatePolicy(request);
         title(request.title);
-        const currentTemplate = await template(request.adapterID, current);
-        const captured = await service.capture(new Set([request.adapterID]), {
-          ...current,
-          container: request.container,
-          includeSecrets: request.includeSecrets,
-          includeLibrarySettings: request.includeLibrarySettings,
-        });
-        assertSettingsCurrent(current);
-        if (captured.issues.some((issue) => issue.severity === 'error'))
-          reject(
-            'capture-failed',
-            'The selected plugin settings could not be captured completely.',
-          );
+        const adapterIDs = scope(request.adapterIDs);
+        if (SETTINGS_CONTAINERS[request.container].requiresPassword && !password)
+          reject('invalid-password', 'A non-empty password is required');
+        const available = await availableTemplates(current);
+        const kind = 'workspace' as const;
+        const captured = await project({ ...request, kind, adapterIDs }, available, [], current);
         const text = await codec.seal(captured.document, password, current, request.container);
         assertSettingsCurrent(current);
         const stored = await carrier.create(request, text, current);
         assertSettingsCurrent(current);
         const target: ManagedSnapshotTarget = {
           id: `${stored.source.libraryID}:${stored.source.itemKey}`,
-          adapterID: request.adapterID,
+          kind,
+          adapterIDs,
           source: stored.source,
-          title: request.title,
+          title: stored.identity.title,
           collectionID: request.collectionID,
           container: request.container,
           autoUpdate: request.autoUpdate,
           includeSecrets: request.includeSecrets,
           includeLibrarySettings: request.includeLibrarySettings,
           status: 'ready',
-          message: SYNC_NOTICE,
+          message: captured.message,
           updatedAt: new Date().toISOString(),
         };
         save([
@@ -528,8 +790,8 @@ export function createManagedSettingsSnapshots(
           {
             target,
             expected: stored.identity,
-            semantic: request.container === 'json' ? semantic(captured.document) : null,
-            template: currentTemplate.revision,
+            semantic: captured.semantic,
+            capturedAdapterIDs: captured.capturedAdapterIDs,
           },
         ]);
         return visible(target);
@@ -539,38 +801,96 @@ export function createManagedSettingsSnapshots(
       const current = fence(context);
       return serialized(current, () => publish(get(id), password, current, false));
     },
+    overwrite(id, expectedRevision, password, context) {
+      const current = fence(context);
+      return serialized(current, () => {
+        if (!expectedRevision)
+          reject('stale-conflict', 'Review the current conflicting version before overwriting.');
+        return publish(get(id), password, current, false, expectedRevision);
+      });
+    },
+    adoptCloud(id, sourceContents, context) {
+      const current = fence(context);
+      return serialized(current, async () => {
+        const binding = get(id);
+        const revision = binding.target.conflictRevision;
+        if (binding.target.status !== 'conflict' || !revision)
+          reject(
+            'stale-conflict',
+            'There is no conflicting version to adopt. Refresh the snapshot.',
+          );
+        const verifySource = async () => {
+          const observed = await reviewed(binding, revision, current);
+          if (observed.text !== sourceContents)
+            reject(
+              'stale-conflict',
+              'The stored file no longer matches the restored snapshot. Review its current contents before continuing.',
+            );
+          return observed;
+        };
+        try {
+          const restored = await verifySource();
+          if (binding.target.container === 'age')
+            return settle(binding, restored, {
+              semantic: null,
+              capturedAdapterIDs: binding.capturedAdapterIDs,
+              message: SYNC_NOTICE,
+            });
+          const available = await availableTemplates(current);
+          // Only capture locally authorized state for the baseline. Never adopt template permissions
+          // or use remote settings as input to the next automatic publication.
+          const captured = await project(
+            binding.target,
+            available,
+            binding.capturedAdapterIDs,
+            current,
+            binding.legacyTemplate,
+          );
+          const observed = await verifySource();
+          return settle(binding, observed, captured);
+        } catch (error) {
+          throw await recordFailure(binding, error, current);
+        }
+      });
+    },
     configure(id, options, context) {
       const current = fence(context);
       return serialized(current, async () => {
         let binding = get(id);
         validatePolicy({ ...binding.target, autoUpdate: options.autoUpdate });
         title(options.title);
+        const adapterIDs =
+          options.adapterIDs === undefined ? binding.target.adapterIDs : scope(options.adapterIDs);
+        if (binding.target.kind === 'legacy' && !sameScope(adapterIDs, binding.target.adapterIDs))
+          reject('immutable-scope', 'The plugin scope of a legacy snapshot cannot be changed.');
+        const editingScope =
+          binding.target.kind === 'workspace' && options.adapterIDs !== undefined;
+        if (
+          binding.target.status !== 'ready' &&
+          (binding.target.status === 'conflict' || !editingScope)
+        )
+          reject(
+            'paused-target',
+            'This binding is not ready to configure. Inspect its status first.',
+          );
+        const assertBaseline = () => {
+          if (
+            binding.target.title !== options.expected.title ||
+            binding.target.collectionID !== options.expected.collectionID ||
+            binding.target.autoUpdate !== options.expected.autoUpdate ||
+            !sameScope(binding.target.adapterIDs, options.expected.adapterIDs)
+          )
+            reject(
+              'stale-target',
+              'The target changed after configuration was opened. Existing metadata was preserved; refresh and reopen the configuration.',
+            );
+        };
         try {
-          if (binding.target.status !== 'ready')
-            reject(
-              'paused-target',
-              'This binding is paused. Create a new snapshot rather than overwriting recovery data.',
-            );
-          const assertBaseline = () => {
-            if (
-              binding.target.title !== options.expected.title ||
-              binding.target.collectionID !== options.expected.collectionID ||
-              binding.target.autoUpdate !== options.expected.autoUpdate
-            )
-              reject(
-                'stale-target',
-                'The target changed after configuration was opened. Existing metadata was preserved; refresh and reopen the configuration.',
-              );
-          };
           assertBaseline();
-          const currentTemplate = await template(binding.target.adapterID, current);
-          if (currentTemplate.revision !== binding.template)
-            reject(
-              'incompatible-template',
-              'The reviewed template changed. Create a new snapshot using the current template.',
-            );
           binding = await refresh(binding, current);
           assertBaseline();
+          const available = await availableTemplates(current);
+          candidates(adapterIDs, available, binding.capturedAdapterIDs, binding.legacyTemplate);
           const stored = await carrier.configure(
             binding.target.source,
             binding.expected,
@@ -584,11 +904,17 @@ export function createManagedSettingsSnapshots(
             current,
           );
           assertSettingsCurrent(current);
+          const { retryReason: _retryReason, ...confirmed } = binding;
           const next: Binding = {
-            ...binding,
+            ...confirmed,
             expected: stored.identity,
             target: {
               ...binding.target,
+              adapterIDs,
+              status: 'ready',
+              message: editingScope
+                ? `${SYNC_NOTICE} Update the snapshot to back up the newly selected scope.`
+                : binding.target.message,
               title: options.title,
               collectionID: options.collectionID,
               autoUpdate: options.autoUpdate,
@@ -599,12 +925,12 @@ export function createManagedSettingsSnapshots(
           return visible(next.target);
         } catch (error) {
           if (
-            current.isCurrent() &&
-            !current.signal.aborted &&
-            !(error instanceof SettingsSnapshotError && error.code === 'stale-target')
+            editingScope &&
+            error instanceof SettingsSnapshotError &&
+            ['incompatible-template', 'capture-failed'].includes(error.code)
           )
-            paused(binding, error);
-          throw error;
+            throw error;
+          throw await recordFailure(binding, error, current);
         }
       });
     },

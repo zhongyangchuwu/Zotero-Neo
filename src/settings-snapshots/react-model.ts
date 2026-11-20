@@ -7,7 +7,7 @@ import type {
 } from './ports';
 
 export interface SnapshotTargetForm {
-  readonly adapterID: string;
+  readonly adapterIDs: readonly string[];
   readonly libraryID: number;
   readonly collectionID: number | null;
   readonly title: string;
@@ -15,9 +15,12 @@ export interface SnapshotTargetForm {
   readonly autoUpdate: boolean;
   readonly includeSecrets: boolean;
   readonly includeLibrarySettings: boolean;
-  readonly consent: boolean;
   readonly editingID: string | null;
 }
+type TargetWrite =
+  | { readonly type: 'target-update'; readonly id: string }
+  | { readonly type: 'target-overwrite'; readonly id: string; readonly revision: string };
+
 export interface SettingsSnapshotField {
   readonly id: string;
   readonly label: string;
@@ -32,8 +35,8 @@ export interface SettingsSnapshotField {
 /** Passwords and unredacted secret values must never cross the React model boundary. */
 export interface SettingsSnapshotModel {
   readonly chinese: boolean;
+  readonly title: string;
   readonly container: SettingsContainer;
-  readonly sourceContainer?: SettingsContainer;
   readonly plugins: readonly (SnapshotPluginTemplate & {
     readonly review: readonly {
       readonly key: string;
@@ -50,7 +53,11 @@ export interface SettingsSnapshotModel {
   readonly targetForm: SnapshotTargetForm;
   readonly mode: 'export' | 'import' | 'managed';
   readonly exportFromReview: boolean;
-  readonly confirmingRestore: boolean;
+  readonly needsDiffRefresh: boolean;
+  readonly awaitingUnlock: boolean;
+  readonly reviewingConflict: boolean;
+  readonly canAdoptUnchanged: boolean;
+  readonly targetPasswordAction?: TargetWrite;
   readonly adapters: readonly {
     readonly id: string;
     readonly label: string;
@@ -85,13 +92,12 @@ export type SettingsSnapshotCommand =
         | 'inspect'
         | 'export-current'
         | 'return-to-preview'
-        | 'review-restore'
-        | 'cancel-restore'
+        | 'refresh-diff'
         | 'apply';
     }
   | { readonly type: 'mode'; readonly value: SettingsSnapshotModel['mode'] }
   | {
-      readonly type: 'adapter' | 'field' | 'category';
+      readonly type: 'adapter' | 'target-adapter' | 'field' | 'category';
       readonly id: string;
       readonly checked: boolean;
     }
@@ -104,15 +110,16 @@ export type SettingsSnapshotCommand =
         | 'template-import'
         | 'target-create'
         | 'target-save'
+        | 'target-password-cancel'
         | 'target-cancel';
     }
+  | TargetWrite
   | {
       readonly type:
         | 'scan'
-        | 'review'
+        | 'target-preview'
         | 'template-export'
         | 'plugin-export'
-        | 'target-update'
         | 'target-edit'
         | 'target-forget';
       readonly id: string;

@@ -18,7 +18,7 @@ features:
     link: /docs/READER_GUIDE#从一段文字开始
     linkText: 阅读和批注 PDF
   - title: 标签页不打结，换设备不用重配
-    details: 把正在读的论文收进侧栏分组，集中管理已装扩展，用设置快照备份配置或借 Zotero 同步带到另一台设备。
+    details: 把正在读的论文收进侧栏分组，集中管理已装扩展，用工作区同步与备份把配置带到另一台设备。
     link: /docs/MAIN_GUIDE#用标签页增强管理阅读分组
     linkText: 管理标签页与工作区
 ---

@@ -8,6 +8,7 @@ import { compositionOwnsKey } from '../input/composition';
 import { asElement } from '../platform/dom';
 import { mountNativeReactView } from '../platform/native-ui';
 import { openSettingsHelp } from '../platform/settings-help';
+import { actionText } from '../i18n';
 import type { ThemeManager } from '../ui/theme';
 import { SETTINGS_BACKDROP_STYLE, SETTINGS_PANEL_STYLE } from '../ui/react/shells/main';
 import type { NativeReactView } from '../ui/react/types';
@@ -394,9 +395,7 @@ export class SettingsCenter {
       navigationLabel: settingsText(language, 'Settings sections'),
       helpLabel: language === 'zh-CN' ? '使用指南' : 'User guide',
       snapshotsLabel: this.#openSettingsSnapshots
-        ? language === 'zh-CN'
-          ? '设置快照'
-          : 'Settings snapshots'
+        ? actionText('openSettingsSnapshots', language)
         : undefined,
       section: this.#section,
       sections: SECTIONS.map((id) => ({ id, label: settingsText(language, id) })),

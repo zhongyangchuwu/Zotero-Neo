@@ -112,7 +112,7 @@ const context = (): SettingsOperationContext => ({
   isCurrent: () => true,
 });
 const request: CreateManagedSnapshot = {
-  adapterID: 'plugin',
+  adapterIDs: ['plugin'],
   libraryID: 2,
   collectionID: null,
   title: 'Settings',
@@ -120,7 +120,6 @@ const request: CreateManagedSnapshot = {
   autoUpdate: false,
   includeSecrets: false,
   includeLibrarySettings: false,
-  consent: true,
 };
 beforeEach(() => {
   root = mkdtempSync(join(tmpdir(), 'neo-managed-owned-'));
@@ -133,7 +132,8 @@ beforeEach(() => {
   items.clear();
   vi.stubGlobal('IOUtils', {
     stat: async (path: string) => ({ size: statSync(path).size }),
-    readUTF8: async (path: string) => readFileSync(path, 'utf8'),
+    read: async (path: string, options?: { maxBytes?: number }) =>
+      readFileSync(path).subarray(0, options?.maxBytes),
     computeHexDigest: async (path: string) =>
       createHash('sha256').update(readFileSync(path)).digest('hex'),
     writeUTF8: async (path: string, text: string) => {
@@ -156,6 +156,25 @@ beforeEach(() => {
       unlinkSync(from);
     },
   });
+  vi.stubGlobal('Components', {
+    interfaces: { nsICryptoHash: {} },
+    classes: {
+      '@mozilla.org/security/hash;1': {
+        createInstance: () => {
+          let hash: ReturnType<typeof createHash>;
+          return {
+            initWithString: (algorithm: string) => {
+              hash = createHash(algorithm);
+            },
+            update: (bytes: Uint8Array, length: number) => {
+              hash.update(bytes.subarray(0, length));
+            },
+            finish: () => hash.digest().toString('latin1'),
+          };
+        },
+      },
+    },
+  });
   vi.stubGlobal('Zotero', {
     DB: {
       executeTransaction: async (operation: () => Promise<unknown>) => {
@@ -172,6 +191,7 @@ beforeEach(() => {
       }),
       getAll: () => [
         { editable: writable, filesEditable: writable, libraryID: 2, libraryType: 'group' },
+        { editable: true, filesEditable: true, libraryID: 1, libraryType: 'user' },
       ],
       getName: () => 'Test library',
     },
@@ -182,6 +202,7 @@ beforeEach(() => {
       loadDataTypes: async () => undefined,
     },
     File: { pathToFile: file },
+    getMainWindow: () => ({ TextDecoder }),
     getTempDirectory: () => file(root),
     Attachments: {
       LINK_MODE_IMPORTED_FILE: 0,
@@ -198,6 +219,14 @@ beforeEach(() => {
 afterEach(() => {
   vi.unstubAllGlobals();
   rmSync(root, { recursive: true, force: true });
+});
+
+it('puts the personal library first even when native enumeration returns a group first', async () => {
+  const carrier = createSnapshotAttachments();
+  expect(await carrier.locations(context())).toMatchObject([
+    { libraryID: 1, personal: true, writable: true },
+    { libraryID: 2, personal: false, writable: true },
+  ]);
 });
 
 it.each([
@@ -230,6 +259,30 @@ it('discovers unbound remote files in a chosen library and reports pending/missi
   item.attachmentSyncState = 'in_sync';
   await expect(carrier.read(source, context())).rejects.toMatchObject({ code: 'missing-file' });
   expect(items.size).toBe(1);
+});
+
+it('can observe changed bytes without rebasing the caller or bypassing native sync readiness', async () => {
+  const carrier = createSnapshotAttachments();
+  const stored = await carrier.create(request, 'original', context());
+  const item = items.get(stored.source.itemKey)!;
+  const text = '\uFEFFnew UTF-8 bytes: résumé\r\n';
+  writeFileSync(item.path, text);
+  const options = { observeContentChange: true } as const;
+  const current = await carrier.inspect(stored.source, stored.identity, context(), options);
+  expect(current.text).toBe(text);
+  expect(current.identity.digest).toBe(createHash('sha256').update(text).digest('hex'));
+  expect(current.identity.digest).not.toBe(stored.identity.digest);
+  await expect(
+    carrier.publish(stored.source, stored.identity, 'replacement', context()),
+  ).rejects.toMatchObject({ code: 'external-change' });
+  item.attachmentSyncState = 'in_conflict';
+  await expect(
+    carrier.inspect(stored.source, stored.identity, context(), options),
+  ).rejects.toMatchObject({ code: 'download-pending' });
+  await expect(
+    carrier.publish(stored.source, current.identity, 'replacement', context()),
+  ).rejects.toMatchObject({ code: 'download-pending' });
+  expect(readFileSync(item.path, 'utf8')).toBe(text);
 });
 
 it.each(['external', 'deleted', 'read-only'])(

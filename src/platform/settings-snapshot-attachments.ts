@@ -48,6 +48,13 @@ function pending(item: Zotero.Item): boolean {
     item.attachmentSyncState,
   );
 }
+function assertSyncReady(item: Zotero.Item): void {
+  if (pending(item))
+    fail(
+      'download-pending',
+      'Native file sync has a pending download or conflict. Download or resolve it in Zotero before reading or updating.',
+    );
+}
 function assertCleanAttachment(item: Zotero.Item): void {
   if (item.hasChanged())
     fail(
@@ -90,12 +97,24 @@ async function resolve(
     writable(value.libraryID);
     assertCleanAttachment(item);
   }
-  if (pending(item))
-    fail(
-      'download-pending',
-      'Native file sync has a pending download or conflict. Download or resolve it in Zotero before reading or updating.',
-    );
+  assertSyncReady(item);
   return item;
+}
+function digestBytes(bytes: Uint8Array): string {
+  const classes = Components.classes as unknown as Record<
+    string,
+    { createInstance(iid: unknown): unknown }
+  >;
+  const hash = classes['@mozilla.org/security/hash;1'].createInstance(
+    Components.interfaces.nsICryptoHash,
+  ) as nsICryptoHash;
+  hash.initWithString('sha256');
+  hash.update(bytes, bytes.byteLength);
+  const digest = hash.finish(false);
+  let hex = '';
+  for (let index = 0; index < digest.length; index++)
+    hex += digest.charCodeAt(index).toString(16).padStart(2, '0');
+  return hex;
 }
 async function contents(
   item: Zotero.Item,
@@ -103,19 +122,28 @@ async function contents(
 ): Promise<SnapshotAttachmentContents> {
   const path = await item.getFilePathAsync();
   assertSettingsCurrent(context);
+  assertSyncReady(item);
   if (!path)
-    fail(
-      pending(item) ? 'download-pending' : 'missing-file',
-      'The snapshot file is remote, awaiting download, or missing. Download it with Zotero before reading.',
-    );
-  const stat = await io().stat(path);
-  if (stat.size === undefined || stat.size > MAX_SETTINGS_ARMORED_BYTES)
+    fail('missing-file', 'The snapshot file is missing. Download it with Zotero before reading.');
+  const bytes = await io().read(path, { maxBytes: MAX_SETTINGS_ARMORED_BYTES + 1 });
+  if (bytes.byteLength > MAX_SETTINGS_ARMORED_BYTES)
     fail('oversized', 'The snapshot file exceeds the supported size.');
-  const digest = await io().computeHexDigest(path, 'sha256');
-  const text = await io().readUTF8(path);
-  if ((await io().computeHexDigest(path, 'sha256')) !== digest)
+  const digest = digestBytes(bytes);
+  if ((await io().computeHexDigest(path, 'sha256')) !== digest || item.getFilePath() !== path)
     fail('external-change', 'The snapshot changed while it was being read.');
   assertSettingsCurrent(context);
+  assertSyncReady(item);
+  if (item.deleted)
+    fail('missing-attachment', 'The snapshot attachment was deleted. It will not be recreated.');
+  // Bootstrap has no DOM constructors. Use the operation's live window when available.
+  type DecoderHost = Pick<typeof globalThis, 'TextDecoder'>;
+  const owner = ('window' in context ? context.window : null) as Partial<DecoderHost> | null;
+  const Decoder =
+    owner?.TextDecoder ??
+    (Zotero.getMainWindow() as unknown as Partial<DecoderHost> | null)?.TextDecoder;
+  if (!Decoder)
+    fail('attachment-read-failed', 'A live Zotero window is required to read the stored backup.');
+  const text = new Decoder('utf-8', { fatal: true, ignoreBOM: true }).decode(bytes);
   return {
     source: source(item),
     text,
@@ -137,11 +165,12 @@ async function checked(
 ): Promise<{ item: Zotero.Item; value: SnapshotAttachmentContents }> {
   const item = await resolve(value, context, true);
   const current = await contents(item, context);
+  writable(value.libraryID);
   assertCleanAttachment(item);
   if (JSON.stringify(current.identity) !== JSON.stringify(expected))
     fail(
       'external-change',
-      'The attachment content or location changed outside this binding. Existing data is preserved; create a new snapshot to resume.',
+      'The attachment content or location changed before the update. Existing data was not overwritten.',
     );
   return { item, value: current };
 }
@@ -192,10 +221,12 @@ export function createSnapshotAttachments() {
           libraryID: library.libraryID,
           label: Zotero.Libraries.getName(library.libraryID),
           writable: library.editable && library.filesEditable,
+          personal: library.libraryType === 'user',
           collections: Zotero.Collections.getByLibrary(library.libraryID, true)
             .filter((value) => !value.deleted)
             .map((value) => ({ id: value.id, label: value.name })),
-        }));
+        }))
+        .sort((left, right) => Number(right.personal) - Number(left.personal));
     },
     async sources(
       libraryID: number,
@@ -232,17 +263,19 @@ export function createSnapshotAttachments() {
       value: SnapshotAttachmentSource,
       expected: SnapshotAttachmentIdentity,
       context: SettingsOperationContext,
+      options?: { readonly observeContentChange: true },
     ): Promise<SnapshotAttachmentContents> {
       try {
         const item = await resolve(value, context, true);
         const current = await contents(item, context);
+        writable(value.libraryID);
         assertCleanAttachment(item);
         // A binding follows the stable library/item key. Native renames, collection edits and
         // stored-file relocations may rebase only while the expected file bytes remain unchanged.
-        if (current.identity.digest !== expected.digest)
+        if (!options?.observeContentChange && current.identity.digest !== expected.digest)
           fail(
             'external-change',
-            'The attachment content changed outside this binding. Existing data is preserved; create a new snapshot to resume.',
+            'The attachment content changed outside this binding. Existing data was not overwritten.',
           );
         return current;
       } catch (error) {
@@ -351,7 +384,7 @@ export function createSnapshotAttachments() {
         if (error instanceof SettingsSnapshotError) throw error;
         fail(
           'attachment-write-failed',
-          'The snapshot could not be updated. Existing content was preserved.',
+          'Zotero could not update the snapshot. Inspect the attachment before retrying.',
         );
       } finally {
         if (stage) await io().remove(stage, { ignoreAbsent: true });

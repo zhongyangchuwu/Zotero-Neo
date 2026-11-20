@@ -15,7 +15,9 @@ import {
 import type { SettingsSnapshotFiles } from '../../src/platform/settings-snapshots-files';
 import type {
   ManagedSettingsSnapshotsPort,
+  ManagedSnapshotTarget,
   SettingsTemplateCatalogPort,
+  SnapshotPluginTemplate,
 } from '../../src/settings-snapshots/ports';
 const ui = vi.hoisted(() => ({
   view: null as null | {
@@ -32,12 +34,7 @@ vi.mock('../../src/platform/native-ui', () => ({
     dispatch: (command: SettingsSnapshotCommand) => void;
   }) => {
     const inputs = new Map<string, HTMLInputElement>();
-    for (const part of [
-      'export-password',
-      'export-confirm',
-      'import-password',
-      'managed-password',
-    ]) {
+    for (const part of ['export-password', 'import-password', 'managed-password']) {
       const input = document.createElement('input');
       input.type = 'password';
       options.root.append(input);
@@ -108,7 +105,7 @@ function setup(
       }));
     },
   );
-  const plan = vi.fn(async () => ({
+  const plan = vi.fn<SettingsAdapter['plan']>(async () => ({
     adapterID: 'zotero-neo',
     sourceVersion: '2',
     issues: [],
@@ -190,12 +187,9 @@ async function chooseAndInspect() {
   dispatch({ type: 'mode', value: 'import' });
   dispatch({ type: 'choose-file' });
   await vi.waitFor(() => expect(ui.view!.model.busy).toBe(false));
-  ui.view!.inputs.get('import-password')!.value = password;
-  dispatch({ type: 'inspect' });
-}
-function confirmRestore() {
-  dispatch({ type: 'review-restore' });
-  dispatch({ type: 'apply' });
+  const input = ui.view!.inputs.get('import-password')!;
+  input.value = password;
+  input.dispatchEvent(new KeyboardEvent('keydown', { key: 'Enter', bubbles: true }));
 }
 const idle = () => vi.waitFor(() => expect(ui.view!.model.busy).toBe(false));
 function expectRedacted() {
@@ -213,13 +207,10 @@ it('uses the source password only for preview and restores selected secrets with
   await idle();
   expectRedacted();
   expect(ui.view!.model.canApply).toBe(false);
-  dispatch({ type: 'field', id: 'zotero-neo:secret:api', checked: true });
   dispatch({ type: 'apply' });
   expect(apply).not.toHaveBeenCalled();
-  dispatch({ type: 'review-restore' });
-  dispatch({ type: 'cancel-restore' });
-  expect(apply).not.toHaveBeenCalled();
-  confirmRestore();
+  dispatch({ type: 'field', id: 'zotero-neo:secret:api', checked: true });
+  dispatch({ type: 'apply' });
   await idle();
   expect(apply).toHaveBeenCalledOnce();
   expect(open.mock.calls[0]?.[1]).toBe(password);
@@ -283,19 +274,20 @@ it('retains a retryable export after a save failure without admitting settings o
   expect(JSON.stringify(debug.mock.calls)).not.toContain(secret);
 });
 
-it('uses matching uncontrolled export passwords only after explicit confirmation and clears both fields', async () => {
-  const { seal } = setup();
-  ui.view!.inputs.get('export-password')!.value = password;
-  ui.view!.inputs.get('export-confirm')!.value = 'different';
+it('uses one ephemeral password for explicit encryption and includes credentials only when selected', async () => {
+  const { capture, seal } = setup();
+  dispatch({ type: 'container', value: 'age' });
   dispatch({ type: 'export' });
   expect(seal).not.toHaveBeenCalled();
-  expect(ui.view!.inputs.get('export-password')!.value).toBe('');
-  expect(ui.view!.inputs.get('export-confirm')!.value).toBe('');
+  expect(ui.view!.model.status).toContain('Enter a backup password');
+  dispatch({ type: 'include-secrets', checked: true });
   ui.view!.inputs.get('export-password')!.value = password;
-  ui.view!.inputs.get('export-confirm')!.value = password;
   dispatch({ type: 'export' });
+  expect(ui.view!.inputs.get('export-password')!.value).toBe('');
   await idle();
+  expect(capture.mock.calls[0]?.[0]).toMatchObject({ container: 'age', includeSecrets: true });
   expect(seal.mock.calls[0]?.[1]).toBe(password);
+  expect(seal.mock.calls[0]?.[0].sections[0]?.entries).toEqual(source.sections[0]!.entries);
   expectRedacted();
 });
 
@@ -307,7 +299,7 @@ it('warns prominently before using settings whose stored state needs full restar
     { adapterID: 'zotero-neo', key: 'secret:api', status: 'applied', requiresRestart: true },
   ]);
   dispatch({ type: 'field', id: 'zotero-neo:secret:api', checked: true });
-  confirmRestore();
+  dispatch({ type: 'apply' });
   await idle();
   expect(ui.view!.model.status).toContain('Completely restart Zotero');
   expect(ui.view!.model.receipts[0]).toContain('restart required');
@@ -335,18 +327,17 @@ it('returns to the same preview when cancelling the optional export file picker'
   expect(write).not.toHaveBeenCalled();
 });
 
-it('clears secret consent and password DOM when switching to JSON and passes actual container policy to capture and seal', async () => {
+it('defaults to plaintext and clears credentials and password when encryption is disabled', async () => {
   const { capture, seal } = setup();
+  expect(ui.view!.model.container).toBe('json');
   dispatch({ type: 'include-secrets', checked: true });
+  expect(ui.view!.model.container).toBe('age');
+  expect(ui.view!.model.includeSecrets).toBe(true);
   ui.view!.inputs.get('export-password')!.value = password;
-  ui.view!.inputs.get('export-confirm')!.value = password;
   dispatch({ type: 'container', value: 'json' });
   expect(ui.view!.model.includeSecrets).toBe(false);
   expect(ui.view!.inputs.get('export-password')!.value).toBe('');
-  expect(ui.view!.inputs.get('export-confirm')!.value).toBe('');
-  dispatch({ type: 'include-secrets', checked: true });
-  expect(ui.view!.model.includeSecrets).toBe(false);
-  dispatch({ type: 'plugin-export', id: 'zotero-neo' });
+  dispatch({ type: 'export' });
   await idle();
   expect(capture.mock.calls[0]?.[0]).toMatchObject({ container: 'json', includeSecrets: false });
   expect(seal.mock.calls[0]?.[1]).toBe('');
@@ -363,24 +354,38 @@ it('detects plaintext from contents rather than the extension and refuses plaint
   await idle();
   expect(open.mock.calls[0]?.[1]).toBe('');
   expect(open.mock.calls[0]?.[2].container).toBe('json');
-  expect(ui.view!.model.sourceContainer).toBe('json');
+  expect(ui.view!.model.awaitingUnlock).toBe(false);
   expect(ui.view!.model.error).toBe(true);
   expect(ui.view!.model.groups).toEqual([]);
   expectRedacted();
 });
 
 it('invalidates the review without writing when a file changes after preview', async () => {
-  const { files, seal, apply } = setup();
+  const { files, seal, open, apply } = setup();
   await chooseAndInspect();
   await idle();
   files.read = async () => `${age}\nchanged`;
   dispatch({ type: 'field', id: 'zotero-neo:secret:api', checked: true });
-  confirmRestore();
+  dispatch({ type: 'apply' });
   await idle();
   expect(seal).not.toHaveBeenCalled();
   expect(apply).not.toHaveBeenCalled();
   expect(ui.view!.model.groups).toEqual([]);
   expect(ui.view!.model.status).toContain('Source contents changed');
+  expect(ui.view!.model.needsDiffRefresh).toBe(true);
+  expect(ui.view!.model.sourceLabel).toBe('/input.age');
+  dispatch({ type: 'refresh-diff' });
+  await idle();
+  expect(ui.view!.model.awaitingUnlock).toBe(true);
+  expect(open).toHaveBeenCalledOnce();
+  ui.view!.inputs.get('import-password')!.value = password;
+  dispatch({ type: 'inspect' });
+  await idle();
+  expect(ui.view!.model.selectedCount).toBe(1);
+  expect(ui.view!.model.needsDiffRefresh).toBe(false);
+  expect(ui.view!.model.awaitingUnlock).toBe(false);
+  expect(open).toHaveBeenCalledTimes(2);
+  expect(apply).not.toHaveBeenCalled();
   expectRedacted();
 });
 
@@ -394,7 +399,7 @@ it('rechecks source contents after revalidating local baselines', async () => {
     return replan;
   });
   dispatch({ type: 'field', id: 'zotero-neo:secret:api', checked: true });
-  confirmRestore();
+  dispatch({ type: 'apply' });
   await idle();
   expect(write).not.toHaveBeenCalled();
   expect(apply).not.toHaveBeenCalled();
@@ -402,11 +407,51 @@ it('rechecks source contents after revalidating local baselines', async () => {
   expectRedacted();
 });
 
-function managedFixture() {
+it('refreshes a stale local baseline on the same unlock and keeps only intersecting chosen fields', async () => {
+  const { plan, open, apply } = setup();
+  const fields: readonly SettingsChange[] = [
+    {
+      adapterID: 'zotero-neo',
+      key: 'safe:theme',
+      label: 'Theme',
+      category: 'Appearance',
+      secret: false,
+      before: { kind: 'set', value: 'old' },
+      after: { kind: 'set', value: 'new' },
+      selected: true,
+      requiresRestart: false,
+    },
+  ];
+  const result = { adapterID: 'zotero-neo', sourceVersion: '2', issues: [], changes: fields };
+  plan.mockResolvedValue(result);
+  await chooseAndInspect();
+  await idle();
+  const changed = { ...fields[0]!, before: { kind: 'set' as const, value: 'edited locally' } };
+  plan.mockResolvedValue({
+    ...result,
+    changes: [changed, { ...changed, key: 'safe:new-field', label: 'New field' }],
+  });
+  dispatch({ type: 'apply' });
+  await idle();
+  expect(apply).not.toHaveBeenCalled();
+  expect(ui.view!.model.needsDiffRefresh).toBe(true);
+  dispatch({ type: 'refresh-diff' });
+  await idle();
+  expect(open).toHaveBeenCalledOnce();
+  expect(ui.view!.model.awaitingUnlock).toBe(false);
+  expect(ui.view!.model.groups[0]?.fields).toMatchObject([
+    { label: 'Theme', before: 'edited locally', selected: true },
+    { label: 'New field', selected: false },
+  ]);
+  expectRedacted();
+});
+
+function managedFixture(overrides: Partial<ManagedSnapshotTarget> = {}) {
   const source = { libraryID: 1, itemKey: 'SNAPSHOT', title: 'Plugin snapshot' };
-  const target = {
+  const target: ManagedSnapshotTarget = {
     id: 'target-1',
-    adapterID: 'zotero-neo',
+    kind: 'legacy',
+    adapterIDs: ['zotero-neo'],
     source,
     title: source.title,
     collectionID: null,
@@ -417,22 +462,26 @@ function managedFixture() {
     status: 'ready' as const,
     message: '',
     updatedAt: '2026-11-18T00:00:00Z',
+    ...overrides,
   };
   const managed: ManagedSettingsSnapshotsPort = {
     start: vi.fn(() => () => {}),
     list: vi.fn(async () => [target]),
     locations: vi.fn(async () => [
-      { libraryID: 1, label: 'Owned fixture library', writable: true, collections: [] },
+      { libraryID: 2, label: 'My Library', writable: true, collections: [] },
+      { libraryID: 1, label: 'Personal fixture', personal: true, writable: true, collections: [] },
     ]),
     sources: vi.fn(async () => [source]),
     read: vi.fn(async () => age),
     create: vi.fn(async () => target),
     update: vi.fn(async () => target),
+    overwrite: vi.fn(async () => target),
+    adoptCloud: vi.fn(async () => target),
     configure: vi.fn(async () => target),
     forget: vi.fn(async () => {}),
     dispose: vi.fn(),
   };
-  return { managed, source };
+  return { managed, source, target };
 }
 
 it('reads attachment sources through the same authenticated preview and rechecks them before restoring', async () => {
@@ -447,7 +496,7 @@ it('reads attachment sources through the same authenticated preview and rechecks
   expect(open).toHaveBeenCalledOnce();
   expect(apply).not.toHaveBeenCalled();
   dispatch({ type: 'field', id: 'zotero-neo:secret:api', checked: true });
-  confirmRestore();
+  dispatch({ type: 'apply' });
   await idle();
   expect(managed.read).toHaveBeenCalledTimes(3);
   expect(apply).toHaveBeenCalledOnce();
@@ -467,35 +516,98 @@ it('does not apply an attachment that changed after preview', async () => {
   await idle();
   managed.read = vi.fn(async () => `${age}\nexternal-change`);
   dispatch({ type: 'field', id: 'zotero-neo:secret:api', checked: true });
-  confirmRestore();
+  dispatch({ type: 'apply' });
   await idle();
   expect(apply).not.toHaveBeenCalled();
   expect(seal).not.toHaveBeenCalled();
   expect(ui.view!.model.groups).toEqual([]);
 });
 
-it('clears automatic publication when choosing encryption and invokes the real managed creation, configuration and forget ports', async () => {
+it('offers same-source Refresh when an attachment is pending download after preview', async () => {
+  const { managed, source } = managedFixture();
+  const { apply, open } = setup({ managed });
+  await idle();
+  dispatch({ type: 'source', libraryID: source.libraryID, itemKey: source.itemKey });
+  await idle();
+  ui.view!.inputs.get('import-password')!.value = password;
+  dispatch({ type: 'inspect' });
+  await idle();
+  vi.mocked(managed.read).mockRejectedValueOnce(
+    new SettingsSnapshotError('download-pending', 'Download the attachment in Zotero first.'),
+  );
+  dispatch({ type: 'field', id: 'zotero-neo:secret:api', checked: true });
+  dispatch({ type: 'apply' });
+  await idle();
+  expect(apply).not.toHaveBeenCalled();
+  expect(ui.view!.model).toMatchObject({
+    needsDiffRefresh: true,
+    hasPreview: false,
+    sourceLabel: source.title,
+  });
+  expect(ui.view!.model.status).toContain('Download the attachment in Zotero first.');
+  dispatch({ type: 'refresh-diff' });
+  await idle();
+  expect(open).toHaveBeenCalledOnce();
+  expect(ui.view!.model.selectedCount).toBe(1);
+});
+
+it('creates one ordinary workspace with all selected adapters in the flagged personal library', async () => {
+  const { managed } = managedFixture();
+  setup({ managed });
+  await idle();
+  expect(ui.view!.model.targets[0]?.kind).toBe('legacy');
+  dispatch({ type: 'mode', value: 'managed' });
+  dispatch({ type: 'target-create' });
+  await idle();
+  expect(managed.create).toHaveBeenCalledOnce();
+  expect(managed.create).toHaveBeenCalledWith(
+    {
+      adapterIDs: ['zotero-neo', 'zotero'],
+      libraryID: 1,
+      collectionID: null,
+      title: '[Zotero-Neo] 工作区同步',
+      container: 'json',
+      autoUpdate: true,
+      includeSecrets: false,
+      includeLibrarySettings: false,
+    },
+    '',
+    expect.objectContaining({ container: 'json' }),
+  );
+});
+
+it('does not default to a writable group library even when its title is My Library', async () => {
+  const { managed } = managedFixture();
+  managed.locations = vi.fn(async () => [
+    { libraryID: 2, label: 'My Library', writable: true, collections: [] },
+  ]);
+  setup({ managed });
+  await idle();
+  expect(ui.view!.model.targetForm.libraryID).toBe(0);
+  dispatch({ type: 'target-create' });
+  expect(managed.create).not.toHaveBeenCalled();
+});
+
+it('creates an encrypted, manual-only workspace and keeps legacy scope immutable', async () => {
   const { managed } = managedFixture();
   setup({ managed });
   await idle();
   const form = ui.view!.model.targetForm;
-  dispatch({
-    type: 'target-form',
-    value: { ...form, container: 'json', autoUpdate: true, consent: true },
-  });
-  expect(ui.view!.model.targetForm.autoUpdate).toBe(true);
-  dispatch({ type: 'target-form', value: { ...ui.view!.model.targetForm, container: 'age' } });
+  dispatch({ type: 'target-form', value: { ...form, includeSecrets: true } });
   expect(ui.view!.model.targetForm.autoUpdate).toBe(false);
+  dispatch({ type: 'target-create' });
+  expect(managed.create).not.toHaveBeenCalled();
   ui.view!.inputs.get('managed-password')!.value = password;
   dispatch({ type: 'target-create' });
   await idle();
   expect(managed.create).toHaveBeenCalledWith(
-    expect.objectContaining({ container: 'age', autoUpdate: false, consent: true }),
+    expect.objectContaining({ container: 'age', autoUpdate: false, includeSecrets: true }),
     password,
     expect.objectContaining({ container: 'age' }),
   );
   expect(ui.view!.inputs.get('managed-password')!.value).toBe('');
   dispatch({ type: 'target-edit', id: 'target-1' });
+  dispatch({ type: 'target-adapter', id: 'zotero', checked: true });
   dispatch({
     type: 'target-form',
     value: { ...ui.view!.model.targetForm, title: 'Renamed snapshot' },
@@ -507,11 +619,188 @@ it('clears automatic publication when choosing encryption and invokes the real m
     expect.objectContaining({ title: 'Renamed snapshot' }),
     expect.anything(),
   );
+  expect(vi.mocked(managed.configure).mock.calls[0]?.[1]).not.toHaveProperty('adapterIDs');
   dispatch({ type: 'target-forget', id: 'target-1' });
   await idle();
   expect(managed.forget).toHaveBeenCalledWith('target-1', expect.anything());
   expectRedacted();
 });
+
+it('changes a paused workspace scope without creating or updating attachments implicitly', async () => {
+  const { managed, target } = managedFixture({
+    kind: 'workspace',
+    status: 'paused',
+    adapterIDs: ['zotero-neo', 'unavailable-plugin'],
+  });
+  setup({ managed });
+  await idle();
+  dispatch({ type: 'target-edit', id: target.id });
+  dispatch({ type: 'target-adapter', id: 'unavailable-plugin', checked: false });
+  dispatch({ type: 'target-adapter', id: 'zotero', checked: true });
+  dispatch({ type: 'target-save' });
+  await idle();
+  expect(managed.configure).toHaveBeenCalledWith(
+    target.id,
+    expect.objectContaining({ adapterIDs: ['zotero-neo', 'zotero'], expected: target }),
+    expect.anything(),
+  );
+  expect(managed.create).not.toHaveBeenCalled();
+  expect(managed.update).not.toHaveBeenCalled();
+});
+
+it('guards overwrite with the exact observed revision and refreshes on a cloud race', async () => {
+  const { managed, target } = managedFixture({
+    kind: 'workspace',
+    status: 'conflict',
+    conflictRevision: 'cloud-old',
+  });
+  setup({ managed });
+  await idle();
+  dispatch({ type: 'target-update', id: target.id });
+  dispatch({ type: 'target-overwrite', id: target.id, revision: 'not-observed' });
+  expect(managed.update).not.toHaveBeenCalled();
+  expect(managed.overwrite).not.toHaveBeenCalled();
+  vi.mocked(managed.overwrite).mockRejectedValueOnce(
+    new SettingsSnapshotError('external-change', 'Cloud changed before overwrite'),
+  );
+  vi.mocked(managed.list).mockResolvedValueOnce([{ ...target, conflictRevision: 'cloud-new' }]);
+  dispatch({ type: 'target-overwrite', id: target.id, revision: 'cloud-old' });
+  await idle();
+  expect(managed.overwrite).toHaveBeenCalledWith(target.id, 'cloud-old', '', expect.anything());
+  expect(ui.view!.model.targets[0]?.conflictRevision).toBe('cloud-new');
+  expect(ui.view!.model.status).toContain('status was refreshed');
+  dispatch({ type: 'target-overwrite', id: target.id, revision: 'cloud-old' });
+  expect(managed.overwrite).toHaveBeenCalledOnce();
+  vi.mocked(managed.overwrite).mockResolvedValueOnce({ ...target, status: 'ready' });
+  dispatch({ type: 'target-overwrite', id: target.id, revision: 'cloud-new' });
+  await idle();
+  expect(managed.overwrite).toHaveBeenLastCalledWith(target.id, 'cloud-new', '', expect.anything());
+  expect(ui.view!.model.targets[0]?.status).toBe('ready');
+});
+
+it('requests the password for the particular encrypted overwrite and clears it immediately', async () => {
+  const { managed, target } = managedFixture({
+    kind: 'workspace',
+    container: 'age',
+    status: 'conflict',
+    conflictRevision: 'current',
+  });
+  setup({ managed });
+  await idle();
+  const overwrite = { type: 'target-overwrite', id: target.id, revision: 'current' } as const;
+  dispatch(overwrite);
+  expect(managed.overwrite).not.toHaveBeenCalled();
+  expect(ui.view!.model.targetPasswordAction).toEqual(overwrite);
+  const input = ui.view!.inputs.get('managed-password')!;
+  input.value = password;
+  input.dispatchEvent(new KeyboardEvent('keydown', { key: 'Enter', bubbles: true }));
+  expect(input.value).toBe('');
+  await idle();
+  expect(managed.overwrite).toHaveBeenCalledWith(
+    target.id,
+    'current',
+    password,
+    expect.objectContaining({ container: 'age' }),
+  );
+  expect(ui.view!.model.targetPasswordAction).toBeUndefined();
+  expectRedacted();
+});
+
+it.each(['complete', 'unchanged', 'unchecked', 'blocked', 'skipped', 'failed', 'drift'] as const)(
+  'only adopts a cloud version whose restore is complete (%s)',
+  async (scenario) => {
+    const { managed, target } = managedFixture({
+      kind: 'workspace',
+      container: 'age',
+      status: 'conflict',
+      conflictRevision: 'current',
+    });
+    const { open, apply, plan } = setup({ managed });
+    const state = { kind: 'set', value: 'new' } as const;
+    const section = {
+      ...source.sections[0]!,
+      entries: [...source.sections[0]!.entries, { key: 'theme', state }],
+    };
+    open.mockResolvedValue({
+      ...source,
+      sections:
+        scenario === 'skipped'
+          ? [section, { ...section, adapterID: 'unsupported-plugin' }]
+          : [section],
+    });
+    const written = new Set(scenario === 'unchanged' ? ['secret:api', 'theme'] : []);
+    const change: SettingsChange = {
+      adapterID: 'zotero-neo',
+      key: 'secret:api',
+      label: 'API credential',
+      category: 'Credentials',
+      secret: true,
+      before: { kind: 'reset' },
+      after: { kind: 'set', value: secret },
+      selected: false,
+      requiresRestart: false,
+    };
+    const theme: SettingsChange = {
+      ...change,
+      key: 'theme',
+      label: 'Theme',
+      secret: false,
+      after: state,
+      ...(scenario === 'blocked' ? { blocked: 'Choose a local value' } : {}),
+    };
+    plan.mockImplementation(async () => ({
+      adapterID: 'zotero-neo',
+      sourceVersion: '2',
+      issues: [],
+      changes: [change, theme].map((field) =>
+        written.has(field.key) ? { ...field, before: field.after } : field,
+      ),
+    }));
+    apply.mockImplementation(async (changes) => {
+      expect(managed.adoptCloud).not.toHaveBeenCalled();
+      return changes.map(({ adapterID, key }) => {
+        if (scenario !== 'drift' || key !== 'theme') written.add(key);
+        return { adapterID, key, status: scenario === 'failed' ? 'failed' : 'applied' };
+      });
+    });
+    vi.mocked(managed.adoptCloud).mockResolvedValue({ ...target, status: 'ready' });
+    await idle();
+    dispatch({ type: 'target-preview', id: target.id });
+    await idle();
+    expect(ui.view!.model).toMatchObject({ reviewingConflict: true, awaitingUnlock: true });
+    expect(managed.read).toHaveBeenCalledWith(target.source, expect.anything());
+    ui.view!.inputs.get('import-password')!.value = password;
+    dispatch({ type: 'inspect' });
+    await idle();
+    if (scenario === 'unchanged') {
+      expect(ui.view!.model.canAdoptUnchanged).toBe(true);
+    } else {
+      dispatch({ type: 'field', id: 'zotero-neo:secret:api', checked: true });
+      if (scenario !== 'unchecked')
+        dispatch({ type: 'field', id: 'zotero-neo:theme', checked: true });
+    }
+    dispatch({ type: 'apply' });
+    await idle();
+    if (scenario === 'unchanged') expect(apply).not.toHaveBeenCalled();
+    else expect(apply).toHaveBeenCalledOnce();
+    if (scenario === 'complete' || scenario === 'unchanged') {
+      expect(managed.adoptCloud).toHaveBeenCalledWith(
+        target.id,
+        age,
+        expect.objectContaining({ container: 'age' }),
+      );
+      expect(ui.view!.model.targets[0]?.status).toBe('ready');
+    } else {
+      expect(managed.adoptCloud).not.toHaveBeenCalled();
+      expect(ui.view!.model.targets[0]?.status).toBe('conflict');
+      expect(ui.view!.model.status).toContain('Sync stays paused');
+      expect(ui.view!.model.needsDiffRefresh).toBe(true);
+    }
+    expect(managed.update).not.toHaveBeenCalled();
+    expect(managed.overwrite).not.toHaveBeenCalled();
+    expectRedacted();
+  },
+);
 
 it.each(['no export', 'JSON', 'age'] as const)(
   'previews plaintext without passwords and can restore after %s',
@@ -566,7 +855,6 @@ it.each(['no export', 'JSON', 'age'] as const)(
       dispatch({ type: 'container', value: format === 'age' ? 'age' : 'json' });
       if (format === 'age') {
         ui.view!.inputs.get('export-password')!.value = exportPassword;
-        ui.view!.inputs.get('export-confirm')!.value = exportPassword;
       }
       dispatch({ type: 'export' });
       await idle();
@@ -577,7 +865,7 @@ it.each(['no export', 'JSON', 'age'] as const)(
       expect(ui.view!.model.mode).toBe('import');
       expect(ui.view!.model.selectedCount).toBe(1);
     }
-    confirmRestore();
+    dispatch({ type: 'apply' });
     await idle();
     expect(apply).toHaveBeenCalledOnce();
     expect(seal).toHaveBeenCalledTimes(format === 'no export' ? 0 : 1);
@@ -627,17 +915,28 @@ it('exports and imports data-only template JSON through native file ports and re
     fields: [{ key: template.fields[0]!.key, type: 'string', secret: true }],
     status: 'draft',
   });
+  let installed: SnapshotPluginTemplate = template;
   const catalog: SettingsTemplateCatalogPort = {
     adapters: [],
-    list: vi.fn(async () => [template]),
-    scan: vi.fn(async () => template),
-    review: vi.fn(async () => ({
-      ...template,
-      status: 'reviewed' as const,
-      reviewedKeys: [template.fields[0]!.key],
-    })),
+    list: vi.fn(async () => [installed]),
+    scan: vi.fn(async () => installed),
+    review: vi.fn<SettingsTemplateCatalogPort['review']>(async (_id, _revision, choices) => {
+      const reviewedKeys = choices
+        .filter(({ portable }) => portable !== false)
+        .map(({ key }) => key);
+      installed = {
+        ...template,
+        status: reviewedKeys.length ? 'reviewed' : 'draft',
+        reviewedKeys,
+        fields: installed.fields.map((field) => ({
+          ...field,
+          secret: field.secret || choices.some(({ key, secret }) => key === field.key && secret),
+        })),
+      };
+      return installed;
+    }),
     exportTemplate: vi.fn(async () => text),
-    importTemplate: vi.fn(async () => template),
+    importTemplate: vi.fn(async () => (installed = template)),
     dispose: vi.fn(),
   };
   const { files, write, capture, seal } = setup({ catalog });
@@ -647,13 +946,11 @@ it('exports and imports data-only template JSON through native file ports and re
   dispatch({ type: 'scan', id: template.pluginID });
   await idle();
   expect(catalog.scan).toHaveBeenCalledWith(template.pluginID, expect.anything());
-  dispatch({
-    type: 'review-field',
-    pluginID: template.pluginID,
-    key: template.fields[0]!.key,
-    portable: true,
-    secret: true,
-  });
+  dispatch({ type: 'template-import' });
+  await idle();
+  expect(catalog.importTemplate).toHaveBeenCalledWith(text, expect.anything());
+  expect(catalog.review).not.toHaveBeenCalled();
+  expect(ui.view!.model.plugins[0]?.review[0]?.portable).toBe(false);
   dispatch({
     type: 'review-field',
     pluginID: template.pluginID,
@@ -661,14 +958,37 @@ it('exports and imports data-only template JSON through native file ports and re
     portable: true,
     secret: false,
   });
-  dispatch({ type: 'review', id: template.pluginID });
+  expect(catalog.review).not.toHaveBeenCalled();
+  dispatch({
+    type: 'review-field',
+    pluginID: template.pluginID,
+    key: template.fields[0]!.key,
+    portable: false,
+    secret: true,
+  });
   await idle();
-  expect(catalog.review).toHaveBeenCalledWith(
+  expect(catalog.review).toHaveBeenLastCalledWith(
+    template.pluginID,
+    template.revision,
+    [{ key: template.fields[0]!.key, secret: true, portable: false }],
+    expect.anything(),
+  );
+  expect(ui.view!.model.plugins[0]?.review[0]?.portable).toBe(false);
+  dispatch({
+    type: 'review-field',
+    pluginID: template.pluginID,
+    key: template.fields[0]!.key,
+    portable: true,
+    secret: true,
+  });
+  await idle();
+  expect(catalog.review).toHaveBeenLastCalledWith(
     template.pluginID,
     template.revision,
     [{ key: template.fields[0]!.key, secret: true }],
     expect.anything(),
   );
+  expect(ui.view!.model.plugins[0]?.review[0]?.portable).toBe(true);
   dispatch({ type: 'template-export', id: template.pluginID });
   await idle();
   expect(files.chooseSave).toHaveBeenCalledWith(window, 'zotero-neo-settings-template.json');
@@ -677,11 +997,7 @@ it('exports and imports data-only template JSON through native file ports and re
     text,
     expect.objectContaining({ container: 'json' }),
   );
-  dispatch({ type: 'template-import' });
-  await idle();
-  expect(catalog.importTemplate).toHaveBeenCalledWith(text, expect.anything());
   expect(capture).not.toHaveBeenCalled();
   expect(seal).not.toHaveBeenCalled();
-  expect(ui.view!.model.plugins[0]?.status).toBe('draft');
   expectRedacted();
 });
