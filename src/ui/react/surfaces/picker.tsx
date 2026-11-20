@@ -111,6 +111,7 @@ function PickerSurface({ model }: { model: PickerReactModel }): React.ReactNode 
         </button>
         <input
           className="picker-query"
+          no-native=""
           type="text"
           data-neo-ui-part="query"
           aria-label={model.title}

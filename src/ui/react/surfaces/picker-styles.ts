@@ -126,6 +126,9 @@ export const PICKER_REACT_CSS = `
   padding-inline: clamp(8px, 2%, 18px);
   border-block-end: 1px solid var(--picker-border);
 }
+.picker-input-wrapper:where(:has(.picker-query:focus-visible)) {
+  border-block-end-color: var(--picker-focus);
+}
 .picker-prompt {
   flex: none;
   color: var(--picker-accent);
@@ -191,7 +194,6 @@ export const PICKER_REACT_CSS = `
   .picker-content { grid-template-columns: var(--picker-panels); grid-template-rows: minmax(0, 1fr); }
   .picker-preview-panel { border-block-start: 0; border-inline-start: var(--picker-divider-width) solid var(--picker-border); }
 }
-.picker-input-wrapper:where(:has(.picker-query:focus-visible)),
 .picker-source:where(:focus-visible),
 .picker-list-container:where(:focus-visible, [data-picker-focused]:focus),
 .picker-preview-panel:where(:focus-visible, [data-picker-focused]:focus) {
