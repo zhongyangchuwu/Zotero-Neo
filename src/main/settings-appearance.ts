@@ -1,3 +1,10 @@
+import {
+  APPEARANCE_CUSTOM_CSS_KEY,
+  APPEARANCE_PRESET_KEY,
+  appearanceCustomCss,
+  appearancePreset,
+  isAppearancePreset,
+} from '../core/appearance-preferences';
 import type { MainWindow } from '../core/contracts';
 import type { PreferenceStore } from '../core/preference-store';
 import {
@@ -20,13 +27,6 @@ import {
   type CustomInteractionTheme,
   type InteractionAppearanceManager,
 } from './interaction-appearance';
-import {
-  PICKER_CUSTOM_CSS_PREFERENCE_KEY,
-  PICKER_THEME_PREFERENCE_KEY,
-  normalizePickerTheme,
-  pickerCustomCss,
-  pickerTheme,
-} from './picker/appearance';
 import { settingsText, type SettingsLanguage, type SettingsMessage } from './settings-i18n';
 import type {
   AppearanceColor,
@@ -102,7 +102,7 @@ export class SettingsAppearance {
       const cleanup = preferences.observe?.(key, () => this.#refresh());
       if (cleanup) this.#cleanups.push(cleanup);
     }
-    for (const key of [PICKER_THEME_PREFERENCE_KEY, PICKER_CUSTOM_CSS_PREFERENCE_KEY]) {
+    for (const key of [APPEARANCE_PRESET_KEY, APPEARANCE_CUSTOM_CSS_KEY]) {
       const cleanup = preferences.observe?.(key, () => this.#notify());
       if (cleanup) this.#cleanups.push(cleanup);
     }
@@ -165,8 +165,8 @@ export class SettingsAppearance {
       view: this.#state.view,
       markerWidth: appearance.marker.width,
       statusStyle: appearance.statusStyle,
-      pickerTheme: pickerTheme(this.#preferences),
-      pickerCustomCss: pickerCustomCss(this.#preferences),
+      appearancePreset: appearancePreset(this.#preferences),
+      appearanceCustomCss: appearanceCustomCss(this.#preferences),
       themes,
       confirmedDelete: this.#confirmedDelete,
       status: this.#status,
@@ -187,13 +187,13 @@ export class SettingsAppearance {
         if (library && (command.value === 'neutral' || command.value === 'tinted'))
           this.#setAppearance(INTERACTION_STATUS_STYLE_PREFERENCE_KEY, command.value);
         break;
-      case 'picker-theme':
-        if (library && command.value === normalizePickerTheme(command.value))
-          this.#setPickerPreference(PICKER_THEME_PREFERENCE_KEY, command.value);
+      case 'appearance-preset':
+        if (library && isAppearancePreset(command.value))
+          this.#setInterfaceAppearance(APPEARANCE_PRESET_KEY, command.value);
         break;
-      case 'picker-custom-css':
+      case 'appearance-custom-css':
         if (library && typeof command.value === 'string')
-          this.#setPickerPreference(PICKER_CUSTOM_CSS_PREFERENCE_KEY, command.value);
+          this.#setInterfaceAppearance(APPEARANCE_CUSTOM_CSS_KEY, command.value);
         break;
       case 'select':
         if (library && ids.includes(command.id)) this.#select(command.id);
@@ -365,7 +365,7 @@ export class SettingsAppearance {
       this.#status = this.#t('Could not update appearance.');
     }
   }
-  #setPickerPreference(key: string, value: string): void {
+  #setInterfaceAppearance(key: string, value: string): void {
     try {
       this.#write(() => this.#preferences.set(key, value));
       this.#status = '';

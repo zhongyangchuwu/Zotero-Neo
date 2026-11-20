@@ -147,6 +147,7 @@ export class MainLocalFind {
       const overlay = doc.createElementNS(H, 'div');
       opening.overlay = overlay;
       overlay.id = 'zv-main-local-find';
+      overlay.className = 'neo-appearance neo-find';
       overlay.style.cssText = LOCAL_FIND_OVERLAY_STYLE;
 
       if (!current()) {

@@ -656,6 +656,7 @@ export class ReaderSession {
           executeNavigation: (pdfWindow, intent, perform) =>
             this.executeReaderNavigation(pdfWindow, intent, perform),
           copyText: (text) => this.copyText(text),
+          themeRoot: (root) => this.themeRoot(root),
           showStatus: (message, duration) => this.showStatus(message, duration),
           text: (key) => t(key, this.keyGuideLanguage()),
           debug: (message) => dependencies.controller.dependencies.logger.debug(message),
@@ -900,6 +901,7 @@ export class ReaderSession {
                 this.clearKeyGuide();
                 this.updateIndicator();
               },
+              themeRoot: (root) => this.themeRoot(root),
               schedule: (delay, task) => this.schedule(delay, task),
               clearTimer: (timer) => this.clearTimer(timer),
               log: (message) => dependencies.controller.dependencies.logger.debug(message),
@@ -2213,6 +2215,7 @@ export class ReaderSession {
     existing?.remove();
     const indicator = document.createElement('div');
     indicator.id = 'zotero-vim-mode-indicator';
+    indicator.className = 'neo-appearance neo-statusbar';
     document.body?.appendChild(indicator);
     return indicator;
   }

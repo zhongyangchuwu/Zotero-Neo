@@ -27,16 +27,22 @@ afterEach(() => {
 });
 
 function fixture() {
-  const nodes: HTMLElement[] = [];
+  const roots: HTMLElement[] = [];
+  const nodes = (): HTMLElement[] =>
+    roots.flatMap((root) => [root, ...Array.from(root.children)] as HTMLElement[]);
   const frames = new Map<number, FrameRequestCallback>();
   let nextFrame = 0;
   const document = {
     documentElement: { clientWidth: 800, clientHeight: 600 },
     querySelectorAll: () => [],
-    body: { appendChild: (node: HTMLElement) => nodes.push(node) },
+    body: { appendChild: (node: HTMLElement) => roots.push(node) },
     createElement: () => {
+      const children: HTMLElement[] = [];
       const node = {
         dataset: {} as Record<string, string>,
+        className: '',
+        children,
+        appendChild: (child: HTMLElement) => children.push(child),
         hidden: false,
         textContent: '',
         style: { cssText: '', left: '', top: '', width: '', height: '', borderRadius: '' },
@@ -47,8 +53,8 @@ function fixture() {
           return { left, top, right: left + width, bottom: top + 16, width, height: 16 } as DOMRect;
         },
         remove: vi.fn(() => {
-          const index = nodes.indexOf(node as unknown as HTMLElement);
-          if (index >= 0) nodes.splice(index, 1);
+          const index = roots.indexOf(node as unknown as HTMLElement);
+          if (index >= 0) roots.splice(index, 1);
         }),
       };
       return node;
@@ -99,11 +105,19 @@ function fixture() {
   const showStatus = vi.fn();
   const debug = vi.fn();
   const diagnostic = vi.fn();
+  const registered = new Set<HTMLElement>();
+  const themeRoot = vi.fn((root: HTMLElement) => {
+    registered.add(root);
+    return () => {
+      registered.delete(root);
+    };
+  });
   const ports: ReaderHintsModuleHost = {
     reader,
     viewForWindow: (candidate) =>
       candidate === window ? (view as unknown as ReaderViewRuntime) : null,
     copyText,
+    themeRoot,
     showStatus,
     debug,
     diagnostic,
@@ -131,10 +145,12 @@ function fixture() {
       preventDefault: vi.fn(),
       stopImmediatePropagation: vi.fn(),
     }) as unknown as KeyboardEvent;
-  const badges = (attribute: string) => nodes.filter((node) => node.dataset[attribute] === '1');
+  const badges = (attribute: string) => nodes().filter((node) => node.dataset[attribute] === '1');
   return {
     window,
-    nodes,
+    roots,
+    themeRoot,
+    registered,
     frames,
     view,
     navigate,
@@ -154,6 +170,38 @@ function fixture() {
 }
 
 describe('Reader hints module lifetime', () => {
+  it('themes the PDF hint groups and destination cue and releases only the retiring PDF view', () => {
+    vi.useFakeTimers();
+    const f = fixture();
+    const { host, module } = f.makeModule();
+    module.followLink(f.window);
+    expect(f.themeRoot).toHaveBeenCalledOnce();
+    const [linkRoot] = f.roots;
+    expect(linkRoot?.className.split(' ')).toEqual(
+      expect.arrayContaining(['neo-appearance', 'neo-hints']),
+    );
+    expect(Array.from(linkRoot!.children)).toHaveLength(3);
+    expect(f.badges('zoteroNeoLinkHint')).toHaveLength(2);
+    expect(f.badges('zoteroNeoHintPrompt')).toHaveLength(1);
+
+    module.links.handleKey(f.key('s'), f.window);
+    const [cue] = f.badges('zoteroNeoDestinationCue');
+    expect(cue).toBeDefined();
+    expect(f.registered).toEqual(new Set([cue]));
+    module.copyTarget(f.window);
+    expect(f.registered.size).toBe(2);
+    module.links.releaseView({} as PdfWindow);
+    expect(f.registered.size).toBe(2);
+    module.links.releaseView(f.window);
+    expect(f.registered.has(cue!)).toBe(false);
+    expect(f.badges('zoteroNeoCopyHint')).toHaveLength(1);
+    module.copy.releaseView(f.window);
+    expect(f.roots).toEqual([]);
+    expect(f.registered.size).toBe(0);
+    expect(f.frames.size).toBe(0);
+    host.dispose();
+  });
+
   it('rejects copy confirmation after the parent retires, before host disposal', () => {
     const f = fixture();
     const { host, module } = f.makeModule();
@@ -244,7 +292,7 @@ describe('Reader hints module lifetime', () => {
     host.dispose();
   });
 
-  it('releases the other owned hints, cue, timer and frames when badge removal fails', () => {
+  it('releases the other owned hints, cue, timer and frames when a group removal fails', () => {
     vi.useFakeTimers();
     const f = fixture();
     const { host, module } = f.makeModule();
@@ -256,9 +304,9 @@ describe('Reader hints module lifetime', () => {
     module.copy.onViewportChange(f.window);
     module.links.onViewportChange(f.window);
     expect(vi.getTimerCount()).toBe(1);
-    const failedBadge = f.badges('zoteroNeoCopyHint')[0]!;
-    const failure = new Error('badge removal failed');
-    vi.mocked(failedBadge.remove).mockImplementationOnce(() => {
+    const failedRoot = f.themeRoot.mock.lastCall![0];
+    const failure = new Error('hint group removal failed');
+    vi.mocked(failedRoot.remove).mockImplementationOnce(() => {
       throw failure;
     });
     let thrown: unknown;
@@ -272,7 +320,8 @@ describe('Reader hints module lifetime', () => {
     expect(module.links.hasHints).toBe(false);
     expect(f.badges('zoteroNeoLinkHint')).toHaveLength(0);
     expect(f.badges('zoteroNeoDestinationCue')).toHaveLength(0);
-    expect(f.nodes).toEqual([failedBadge]);
+    expect(f.roots).toEqual([failedRoot]);
+    expect(f.registered.size).toBe(0);
     expect(f.frames.size).toBe(0);
     expect(vi.getTimerCount()).toBe(0);
   });
@@ -309,13 +358,13 @@ describe('Reader hints module lifetime', () => {
     const f = fixture();
     const { host, module } = f.makeModule();
     module.copyTarget(f.window);
-    const badge = f.badges('zoteroNeoCopyHint')[0]!;
+    const root = f.themeRoot.mock.lastCall![0];
     const original = new Error('native copy geometry root cause');
-    const cleanup = new Error('copy badge removal failed');
+    const cleanup = new Error('copy hint group removal failed');
     vi.spyOn(f.view, 'getClientRectForPopup').mockImplementation(() => {
       throw original;
     });
-    vi.mocked(badge.remove).mockImplementationOnce(() => {
+    vi.mocked(root.remove).mockImplementationOnce(() => {
       throw cleanup;
     });
     let thrown: unknown;
@@ -337,7 +386,7 @@ describe('Reader hints module lifetime', () => {
       const f = fixture();
       const { host, module } = f.makeModule();
       const original = new Error(`${kind} append root cause`);
-      const cleanup = new Error('partial badge removal failed');
+      const cleanup = new Error('partial hint group removal failed');
       const body = f.window.document.body;
       const append = body.appendChild.bind(body);
       vi.spyOn(body, 'appendChild').mockImplementationOnce((node) => {

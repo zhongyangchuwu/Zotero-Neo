@@ -80,9 +80,14 @@ export function validateSettingsSection(value: unknown): asserts value is Settin
     else if (entry.state.kind !== 'reset') invalid('Unknown settings operation');
   }
 }
-/** Names emitted by older Neo adapters, not transferable configuration. */
+/** Retired Neo preferences are not transferable configuration. */
 export function isRetiredNeoPreference(key: unknown): boolean {
-  return key === 'itemAttributes.fields.v1' || key === 'modules.item-attributes.enabled';
+  return (
+    key === 'itemAttributes.fields.v1' ||
+    key === 'modules.item-attributes.enabled' ||
+    key === 'picker.theme' ||
+    key === 'picker.customCss'
+  );
 }
 
 /** Keep unknown values for normal validation; only the retired entries are opaque. */

@@ -11,6 +11,7 @@ import type {
 import {
   assertSettingsCurrent,
   parseSettingsDocument,
+  serializeSettingsDocument,
 } from '../../src/settings-snapshots/document';
 import { SettingsSnapshotService, settingsChangeID } from '../../src/settings-snapshots/service';
 import { saveMinerUToken } from '../../src/platform/document-credentials';
@@ -165,13 +166,67 @@ describe('standalone built-in settings adapters at the native OS boundary', () =
     expect(JSON.stringify(captured)).not.toMatch(/private-groups|private-marks|private-trace/);
   });
 
+  it.each(['.neo-settings {\n  --neo-radius: 3px; /* 自定义 */\n}\n', ''])(
+    'round-trips the global preset and its exact CSS string (%j) through a local snapshot',
+    async (css) => {
+      const t = settingsSnapshotHostFixture();
+      const prefix = 'extensions.zotero-neo.';
+      const adapter = createSettingsAdapters(() => 'neo-target')[1]!;
+      const service = new SettingsSnapshotService([adapter], () => ({
+        neo: 'neo-target',
+        zotero: '8',
+      }));
+      const operation = { ...captureContext(), container: 'json' as const, window: {} as Window };
+      t.user.set(prefix + 'appearance.preset', 'terminal');
+      t.user.set(prefix + 'appearance.customCss', css);
+      t.user.set(prefix + 'picker.theme', 'modern');
+      t.user.set(prefix + 'picker.customCss', 'retired styles');
+
+      const captured = await service.capture(new Set([adapter.id]), operation);
+      const document = parseSettingsDocument(serializeSettingsDocument(captured.document));
+      const entries = [set('appearance.preset', 'terminal'), set('appearance.customCss', css)];
+      expect(document.sections[0]?.entries).toEqual(entries);
+      expect(captured.issues.map(({ code }) => code)).not.toContain('excluded-or-unknown');
+
+      t.user.set(prefix + 'appearance.preset', 'classic');
+      t.user.set(prefix + 'appearance.customCss', '.neo-settings { color: purple; }');
+      t.user.set(prefix + 'appearance.theme', 'dark');
+      const plan = await service.plan(document, operation);
+      const receipt = await service.apply(
+        plan,
+        new Set(entries.map(({ key }) => settingsChangeID(adapter.id, key))),
+        operation,
+        async () => {},
+      );
+      expect(receipt.entries).toMatchObject(entries.map(({ key }) => ({ key, status: 'applied' })));
+      expect(t.user.get(prefix + 'appearance.preset')).toBe('terminal');
+      expect(t.user.get(prefix + 'appearance.customCss')).toBe(css);
+      expect(t.user.get(prefix + 'appearance.theme')).toBe('dark');
+    },
+  );
+
+  it('rejects unsupported preset and non-string custom CSS values', async () => {
+    settingsSnapshotHostFixture();
+    const adapter = createSettingsAdapters(() => 'neo-target')[1]!;
+    const plan = await adapter.plan(
+      section(adapter.id, [set('appearance.preset', 'dark'), set('appearance.customCss', true)]),
+      context(),
+    );
+    expect(plan.changes).toEqual([]);
+    expect(plan.issues.map(({ code }) => code)).toEqual(['invalid-field', 'invalid-field']);
+  });
+
   it('restores live Neo settings and shortcuts without writing or backing up retired preferences', async () => {
     const t = settingsSnapshotHostFixture();
     const definitions = 'itemAttributes.fields.v1';
     const moduleFlag = 'modules.item-attributes.enabled';
+    const legacyPreset = 'picker.theme';
+    const legacyCss = 'picker.customCss';
     const prefix = 'extensions.zotero-neo.';
     t.user.set(prefix + definitions, '{"version":1,"fields":[]}');
     t.user.set(prefix + moduleFlag, true);
+    t.user.set(prefix + legacyPreset, 'classic');
+    t.user.set(prefix + legacyCss, 'local retired styles');
     const adapter = createSettingsAdapters(() => 'neo-target')[1]!;
     const service = new SettingsSnapshotService([adapter], () => ({
       neo: 'neo-target',
@@ -189,6 +244,8 @@ describe('standalone built-in settings adapters at the native OS boundary', () =
           section('zotero-neo', [
             set(definitions, '{"version":999,"fields":null}'),
             reset(moduleFlag),
+            set(legacyPreset, 'modern'),
+            reset(legacyCss),
             set('language', 'zh-CN'),
             set('bindings', {
               schemaVersion: 22,
@@ -210,7 +267,7 @@ describe('standalone built-in settings adapters at the native OS boundary', () =
     const receipt = await service.apply(
       plan,
       new Set(
-        ['language', 'bindings', definitions, moduleFlag].map((key) =>
+        ['language', 'bindings', definitions, moduleFlag, legacyPreset, legacyCss].map((key) =>
           settingsChangeID(adapter.id, key),
         ),
       ),
@@ -223,6 +280,8 @@ describe('standalone built-in settings adapters at the native OS boundary', () =
     ]);
     expect(t.mutations).not.toContain(prefix + definitions);
     expect(t.mutations).not.toContain(prefix + moduleFlag);
+    expect(t.mutations).not.toContain(prefix + legacyPreset);
+    expect(t.mutations).not.toContain(prefix + legacyCss);
     expect(t.user.get(prefix + definitions)).toBe('{"version":1,"fields":[]}');
     expect(t.user.get(prefix + moduleFlag)).toBe(true);
     expect(t.user.get(prefix + 'language')).toBe('zh-CN');

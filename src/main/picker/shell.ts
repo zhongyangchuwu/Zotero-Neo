@@ -2,7 +2,6 @@ import { CleanupFailure } from '../../core/cleanup';
 
 import type { Logger } from '../../core/logging';
 import type { CommandPaletteContext, MainWindow } from '../../core/contracts';
-import type { PreferenceStore } from '../../core/preference-store';
 import { PICKER_OVERLAY_STYLE } from '../../ui/react/shells/main';
 import { asElement } from '../../platform/dom';
 import {
@@ -16,7 +15,6 @@ import type { PickerItem, PickerScope } from './model';
 import type { PickerCloseReason, PickerOpenOptions, PickerPane, PickerProvider } from './types';
 import { fuzzyMatchScore } from '../../ui/fuzzy';
 import { itemRowCells } from './item-row';
-import { attachPickerAppearance } from './appearance';
 import { mountNativeReactView } from '../../platform/native-ui';
 import type { PickerReactCommand, PickerReactModel, PickerReactRow } from './react-model';
 import { createCommandsProvider } from './providers/commands';
@@ -100,7 +98,6 @@ export class FuzzyPicker {
   readonly #bindings: () => BindingMap;
   readonly #isSessionCurrent: (session: MainWindowSession) => boolean;
   readonly #language: () => AppLanguage;
-  readonly #preferences?: PreferenceStore;
   readonly #projectedRows = new WeakMap<PickerItem[], readonly PickerReactRow[]>();
   readonly #sessions = new WeakSet<MainWindowSession>();
 
@@ -111,7 +108,6 @@ export class FuzzyPicker {
     bindings: () => BindingMap = () => DEFAULT_BINDINGS,
     isSessionCurrent: (session: MainWindowSession) => boolean,
     language: () => AppLanguage = () => 'en',
-    preferences?: PreferenceStore,
   ) {
     this.#logger = logger;
     this.#navigation = navigation;
@@ -119,7 +115,6 @@ export class FuzzyPicker {
     this.#bindings = bindings;
     this.#isSessionCurrent = isSessionCurrent;
     this.#language = language;
-    this.#preferences = preferences;
   }
 
   async open(
@@ -156,10 +151,22 @@ export class FuzzyPicker {
       orphanOverlay = overlay;
       overlay.style.cssText = PICKER_OVERLAY_STYLE;
       const modal = create('div');
-      modal.className = 'picker-root';
+      modal.className = 'picker-root neo-appearance';
       overlay.append(modal);
       (doc.body ?? doc.documentElement).append(overlay);
-      const themeCleanup = session.theme.add(overlay);
+      const backdropCleanup = session.theme.add(overlay);
+      orphanThemeCleanup = backdropCleanup;
+      const modalCleanup = session.theme.add(modal, () => {
+        // The new geometry can move the same selected row out of the viewport.
+        modal.querySelector('.picker-row[selected]')?.scrollIntoView({ block: 'nearest' });
+      });
+      const themeCleanup = () => {
+        try {
+          modalCleanup();
+        } finally {
+          backdropCleanup();
+        }
+      };
       orphanThemeCleanup = themeCleanup;
       Object.assign(session.picker, {
         open: true,
@@ -195,13 +202,6 @@ export class FuzzyPicker {
       session.picker.view = view;
       await view.ready;
       if (!this.isCurrent(session, generation)) return;
-      if (this.#preferences) {
-        session.picker.appearanceCleanup = attachPickerAppearance(
-          modal,
-          this.#preferences,
-          (error) => this.failure('picker appearance', error),
-        );
-      }
       const input = view.getElement('query') as HTMLInputElement | null;
       const results = view.getElement('results');
       const preview = view.getElement('preview');
@@ -360,7 +360,6 @@ export class FuzzyPicker {
       localBindings,
       inputCleanup,
       view,
-      appearanceCleanup,
       themeCleanup,
       onClose,
     } = picker;
@@ -380,7 +379,6 @@ export class FuzzyPicker {
     cleanup.run(() => localBindings?.dispose());
     cleanup.run(() => inputCleanup?.());
     cleanup.run(() => view?.dispose());
-    cleanup.run(() => appearanceCleanup?.());
     cleanup.run(() => themeCleanup?.());
     cleanup.run(() => overlay?.remove());
     let focusBeforeClose: PickerFocusSnapshot | null = null;
@@ -1023,7 +1021,6 @@ export class FuzzyPicker {
     picker.previousElement = null;
     picker.previousWindow = null;
     picker.themeCleanup = null;
-    picker.appearanceCleanup = null;
   }
 
   private reportCleanupFailure(context: string, cleanup: CleanupFailure): void {

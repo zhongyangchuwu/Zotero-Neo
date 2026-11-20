@@ -166,7 +166,6 @@ export class MainWindowController implements MainWindowControllerApi {
       () => this.bindings(),
       (session) => this.#sessions.get(session.window) === session && !session.cleanup.disposed,
       () => this.keyGuideLanguage(),
-      dependencies.preferences,
     );
     this.#noteEditor = new NoteEditor(
       dependencies.logger,

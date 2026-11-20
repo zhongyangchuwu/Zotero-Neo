@@ -11,6 +11,7 @@ import { NEO_READER_API_CHANGED } from './core/contracts';
 import { CleanupFailure } from './core/cleanup';
 import { ZoteroLogger } from './core/logging';
 import { ZoteroPreferenceStore } from './core/preference-store';
+import { migrateAppearancePreferences } from './core/appearance-preferences';
 import { BuiltinModuleRuntime } from './core/module-runtime';
 import {
   migrateBindingPreferences,
@@ -203,6 +204,7 @@ export class ZoteroNeoAddon implements ZoteroNeoController {
     // Bootstrap initializes both early and after Zotero initialization completes.
     this.#releaseNativeUI ??= registerNativeUIResources(context.rootURI);
     migrateInteractionPreferences(this.#preferences);
+    migrateAppearancePreferences(this.#preferences);
     migrateBindingPreferences(this.#preferences);
     migrateReaderPreferences(this.#preferences);
     this.#registerPreferences();

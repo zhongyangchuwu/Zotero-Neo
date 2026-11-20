@@ -32,6 +32,8 @@ type ItemSelectUi = {
   view: NativeReactView<MainStatusReactModel> | null;
   timer: number | undefined;
   readonly appearance: InteractionAppearanceSource;
+  readonly themeRoot: (root: HTMLElement) => () => void;
+  themeCleanup: (() => void) | null;
   selectionCleanup: (() => void) | null;
   appearanceCleanup: (() => void) | null;
   status: ItemSelectStatus | null;
@@ -76,6 +78,7 @@ export class MainItemSelect {
     window: MainWindow,
     selection: SelectionStore,
     appearance: InteractionAppearanceSource,
+    themeRoot: (root: HTMLElement) => () => void,
   ): void {
     if (this.#ui.has(window)) return;
     const ui: ItemSelectUi = {
@@ -83,6 +86,8 @@ export class MainItemSelect {
       view: null,
       timer: undefined,
       appearance,
+      themeRoot,
+      themeCleanup: null,
       selectionCleanup: null,
       appearanceCleanup: null,
       status: null,
@@ -339,6 +344,7 @@ export class MainItemSelect {
       failure.run(() => ui.selectionCleanup?.());
       failure.run(() => ui.appearanceCleanup?.());
       failure.run(() => ui.view?.dispose());
+      failure.run(() => ui.themeCleanup?.());
       failure.run(() => ui.badge?.remove());
     }
     failure.rethrow();
@@ -412,6 +418,7 @@ export class MainItemSelect {
     const kind: InteractionStatusKind = status.kind === 'message' ? 'neutral' : status.kind;
     const model: MainStatusReactModel = {
       status,
+      tinted: kind !== 'neutral' && ui.appearance.appearance.statusStyle === 'tinted',
       colors: interactionStatusColors(ui.appearance.appearance, kind),
     };
     if (ui.view) {
@@ -421,8 +428,10 @@ export class MainItemSelect {
     const document = window.document;
     const root = document.createElementNS('http://www.w3.org/1999/xhtml', 'div') as HTMLElement;
     root.id = 'zotero-neo-item-select-status';
+    root.className = 'neo-appearance neo-statusbar';
     ui.badge = root;
     (document.body ?? document.documentElement).append(root);
+    ui.themeCleanup = ui.themeRoot(root);
     ui.view = mountNativeReactView({
       surface: 'main-status',
       root,
@@ -448,6 +457,8 @@ export class MainItemSelect {
     ui.status = null;
     ui.view?.dispose();
     ui.view = null;
+    ui.themeCleanup?.();
+    ui.themeCleanup = null;
     ui.badge?.remove();
     ui.badge = null;
   }

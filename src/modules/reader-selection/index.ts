@@ -125,6 +125,7 @@ export function createReaderSelectionModule(
     const flash = new ReaderFlash({
       isCurrent,
       captureView: ports.captureView,
+      themeRoot: ports.themeRoot,
       activate: (intent, window, target) => range.activateFlashTarget(intent, window, target),
       showStatus,
       debug: ports.debug,
@@ -133,6 +134,7 @@ export function createReaderSelectionModule(
     const range = new ReaderSelectionRange({
       isCurrent,
       captureView: ports.captureView,
+      themeRoot: ports.themeRoot,
       mode: ports.mode,
       setModeVisual: () => ports.setMode('visual'),
       invalidateNativeSelection: ports.invalidateNativeSelection,

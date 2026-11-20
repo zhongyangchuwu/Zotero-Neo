@@ -1,8 +1,9 @@
 export const NATIVE_UI_CSS = `
 .neo-ui, .neo-ui * { box-sizing: border-box; }
 .neo-ui { color: var(--zotero-neo-text); font: menu; line-height: 1.5; min-width: 0; }
+.neo-appearance .neo-ui, .neo-ui.neo-appearance { font-family: var(--neo-font-ui); }
 .neo-ui button, .neo-ui input, .neo-ui select, .neo-ui textarea { font: inherit; color: inherit; }
-.neo-ui button, .neo-ui input, .neo-ui select, .neo-ui textarea { border: 1px solid var(--zotero-neo-border); border-radius: 5px; background: var(--zotero-neo-input); }
+.neo-ui button, .neo-ui input, .neo-ui select, .neo-ui textarea { border: 1px solid var(--zotero-neo-border); border-radius: var(--neo-radius-small, 5px); background: var(--zotero-neo-input); }
 .neo-ui button { cursor: pointer; }
 .neo-ui button:disabled, .neo-ui input:disabled, .neo-ui select:disabled, .neo-ui textarea:disabled { cursor: not-allowed; opacity: .55; }
 .neo-ui :is(button, input, select, textarea, a, [tabindex]):focus-visible { outline: 2px solid var(--zotero-neo-focus-ring); outline-offset: 2px; }
@@ -22,6 +23,6 @@ export const NATIVE_UI_CSS = `
 .neo-field-label { font-weight: 600; }
 .neo-field-control { display: flex; align-items: center; gap: 8px; flex: 0 1 auto; min-width: 0; }
 .neo-status { padding: 8px 10px; color: var(--zotero-neo-muted); }
-.neo-status-error { color: var(--zotero-neo-status-error-text); background: var(--zotero-neo-status-error); border-radius: 5px; }
-.neo-kbd { font: .85em ui-monospace, SFMono-Regular, Consolas, monospace; padding: 1px 4px; border: 1px solid var(--zotero-neo-border); border-radius: 3px; color: var(--zotero-neo-muted); background: var(--zotero-neo-elevated); }
+.neo-status-error { color: var(--zotero-neo-status-error-text); background: var(--zotero-neo-status-error); border-radius: var(--neo-radius-small, 5px); }
+.neo-kbd { font: .85em var(--neo-font-mono, ui-monospace, SFMono-Regular, Consolas, monospace); padding: 1px 4px; border: 1px solid var(--zotero-neo-border); border-radius: var(--neo-radius-small, 3px); color: var(--zotero-neo-muted); background: var(--zotero-neo-elevated); }
 `;

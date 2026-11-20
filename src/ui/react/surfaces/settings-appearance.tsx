@@ -1,5 +1,5 @@
 import { React } from '../runtime';
-import { PICKER_THEMES, type PickerTheme } from '../../../main/picker/appearance';
+import { APPEARANCE_PRESETS, type AppearancePreset } from '../../../core/appearance-preferences';
 import { settingsText, type SettingsMessage } from '../../../main/settings-i18n';
 import type {
   AppearanceColor,
@@ -18,7 +18,7 @@ const COLORS: readonly [AppearanceColor, SettingsMessage][] = [
   ['white', 'White'],
 ];
 const HEX = /^#[0-9a-fA-F]{6}$/;
-const PICKER_THEME_LABELS: Record<PickerTheme, SettingsMessage> = {
+const PRESET_LABELS: Record<AppearancePreset, SettingsMessage> = {
   classic: 'Classic',
   terminal: 'Terminal',
   modern: 'Modern',
@@ -38,31 +38,34 @@ export function AppearancePage({
     <div className="neo-settings-appearance">
       {model.view === 'library' ? (
         <>
-          <section className="appearance-picker" aria-labelledby="neo-settings-picker-appearance">
-            <h3 id="neo-settings-picker-appearance">{t('Picker appearance')}</h3>
+          <section
+            className="appearance-interface"
+            aria-labelledby="neo-settings-interface-appearance"
+          >
+            <h3 id="neo-settings-interface-appearance">{t('Interface appearance')}</h3>
             <label>
-              {t('Picker theme')}
+              {t('Appearance preset')}
               <select
-                value={model.pickerTheme}
+                value={model.appearancePreset}
                 onChange={(event) =>
-                  dispatch({ type: 'picker-theme', value: event.currentTarget.value })
+                  dispatch({ type: 'appearance-preset', value: event.currentTarget.value })
                 }
               >
-                {PICKER_THEMES.map((theme) => (
-                  <option key={theme} value={theme}>
-                    {t(PICKER_THEME_LABELS[theme])}
+                {APPEARANCE_PRESETS.map((preset) => (
+                  <option key={preset} value={preset}>
+                    {t(PRESET_LABELS[preset])}
                   </option>
                 ))}
               </select>
             </label>
             <label>
-              {t('Custom Picker CSS')}
+              {t('Custom CSS')}
               <textarea
                 rows={6}
                 spellCheck={false}
-                value={model.pickerCustomCss}
+                value={model.appearanceCustomCss}
                 onChange={(event) =>
-                  dispatch({ type: 'picker-custom-css', value: event.currentTarget.value })
+                  dispatch({ type: 'appearance-custom-css', value: event.currentTarget.value })
                 }
               />
             </label>
@@ -285,25 +288,25 @@ export const APPEARANCE_REACT_CSS = `
 .neo-settings-appearance h2 { margin:0 0 .55em; font-size:1.55em; }
 .neo-settings-appearance h3 { margin:0 0 .6em; font-size:1.2em; }
 .neo-settings-appearance button, .neo-settings-appearance input { font:inherit; color:var(--zotero-neo-text); }
-.neo-settings-appearance button { background:var(--zotero-neo-elevated); border:1px solid var(--zotero-neo-border); border-radius:4px; padding:.35em .65em; cursor:pointer; }
+.neo-settings-appearance button { background:var(--zotero-neo-elevated); border:1px solid var(--zotero-neo-border); border-radius:var(--neo-radius-small); padding:.35em .65em; cursor:pointer; }
 .neo-settings-appearance button[aria-pressed="true"] { background:var(--zotero-neo-selected); color:var(--zotero-neo-selected-text); border-color:var(--zotero-neo-accent); }
 .neo-settings-appearance button:disabled { opacity:.5; cursor:default; }
 .neo-settings-appearance button:focus-visible, .neo-settings-appearance input:focus-visible { outline:2px solid var(--zotero-neo-focus-ring); outline-offset:1px; }
 .neo-settings-appearance .appearance-controls { display:flex; flex-wrap:wrap; gap:18px; align-items:center; margin:0 0 18px; }
-.neo-settings-appearance .appearance-picker { display:grid; gap:10px; margin-bottom:20px; }
-.neo-settings-appearance .appearance-picker h3 { margin:0; }
-.neo-settings-appearance .appearance-picker label { display:grid; gap:4px; }
-.neo-settings-appearance .appearance-picker select { justify-self:start; }
-.neo-settings-appearance .appearance-picker select, .neo-settings-appearance .appearance-picker textarea { color:var(--zotero-neo-text); background:var(--zotero-neo-input); border:1px solid var(--zotero-neo-border); border-radius:4px; padding:.4em; }
-.neo-settings-appearance .appearance-picker textarea { font:inherit; font-family:monospace; resize:vertical; }
-.neo-settings-appearance .appearance-picker :is(select, textarea):focus-visible { outline:2px solid var(--zotero-neo-focus-ring); outline-offset:1px; }
+.neo-settings-appearance .appearance-interface { display:grid; gap:10px; margin-bottom:20px; }
+.neo-settings-appearance .appearance-interface h3 { margin:0; }
+.neo-settings-appearance .appearance-interface label { display:grid; gap:4px; }
+.neo-settings-appearance .appearance-interface select { font:inherit; justify-self:start; }
+.neo-settings-appearance .appearance-interface :is(select, textarea) { color:var(--zotero-neo-text); background:var(--zotero-neo-input); border:1px solid var(--zotero-neo-border); border-radius:var(--neo-radius-small); padding:.4em; }
+.neo-settings-appearance .appearance-interface textarea { font:inherit; font-family:var(--neo-font-mono); resize:vertical; }
+.neo-settings-appearance .appearance-interface :is(select, textarea):focus-visible { outline:2px solid var(--zotero-neo-focus-ring); outline-offset:1px; }
 .neo-settings-appearance .appearance-grid { display:grid; grid-template-columns:repeat(auto-fit,minmax(min(100%,280px),1fr)); gap:12px; }
-.neo-settings-appearance .appearance-card { padding:12px; border:2px solid var(--zotero-neo-border); border-radius:7px; background:var(--zotero-neo-elevated); }
+.neo-settings-appearance .appearance-card { padding:12px; border:2px solid var(--zotero-neo-border); border-radius:var(--neo-radius); background:var(--zotero-neo-elevated); }
 .neo-settings-appearance .appearance-card[aria-current="true"] { border-color:var(--zotero-neo-accent); background:var(--zotero-neo-selected); }
 .neo-settings-appearance .appearance-choice { width:100%; text-align:left; font-weight:600; font-size:1.15em; border:0; background:transparent; }
 .neo-settings-appearance .appearance-note { font-size:.95em; color:var(--zotero-neo-muted); }
 .neo-settings-appearance .appearance-swatches { display:grid; grid-template-columns:repeat(8,minmax(0,1fr)); gap:3px; margin:10px 0; }
-.neo-settings-appearance .appearance-swatches span { height:24px; border:1px solid var(--zotero-neo-border); border-radius:3px; }
+.neo-settings-appearance .appearance-swatches span { height:24px; border:1px solid var(--zotero-neo-border); border-radius:var(--neo-radius-small); }
 .neo-settings-appearance .appearance-actions, .neo-settings-appearance .appearance-toolbar, .neo-settings-appearance .appearance-samples { display:flex; gap:6px; }
 .neo-settings-appearance .appearance-add { min-height:5.5em; font-size:1.15em; text-align:left; }
 .neo-settings-appearance .appearance-toolbar { margin-bottom:12px; }
@@ -315,7 +318,7 @@ export const APPEARANCE_REACT_CSS = `
 .neo-settings-appearance .appearance-row > span:first-child { width:90px; }
 .neo-settings-appearance .appearance-row input[type="text"] { width:7em; }
 .neo-settings-appearance .appearance-error { color:var(--zotero-neo-error); }
-.neo-settings-appearance .appearance-preview { padding:10px; margin:16px 0; border:1px solid; border-radius:5px; }
+.neo-settings-appearance .appearance-preview { padding:10px; margin:16px 0; border:1px solid; border-radius:var(--neo-radius); }
 .neo-settings-appearance .appearance-samples { margin-top:8px; }
-.neo-settings-appearance .appearance-samples span { padding:4px 8px; border:1px solid; border-radius:3px; }
+.neo-settings-appearance .appearance-samples span { padding:4px 8px; border:1px solid; border-radius:var(--neo-radius-small); }
 `;

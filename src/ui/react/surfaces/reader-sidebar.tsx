@@ -9,34 +9,37 @@ import type {
 export const READER_SIDEBAR_REACT_CSS = `
 #zv-reader-captions {
   flex: 0 1 auto; max-height: 35%; overflow: auto;
-  border-top: 1px solid var(--color-border, currentColor); padding: 4px 8px;
-  font: inherit; color: inherit;
+  border-top: 1px solid var(--zotero-neo-border); padding: 4px 8px;
+  background: var(--zotero-neo-surface); color: var(--zotero-neo-text);
+  font-family: var(--neo-font-ui);
 }
 #zv-reader-captions summary { cursor: pointer; padding-block: 3px; }
 #zv-reader-captions details details { margin-inline-start: 8px; }
 #zv-reader-captions button {
   display: block; width: 100%; overflow: hidden; white-space: nowrap; text-overflow: ellipsis;
   border: 0; background: transparent; color: inherit; font: inherit;
+  border-radius: var(--neo-radius-small);
   padding: 4px; text-align: start; cursor: pointer;
 }
-#zv-reader-captions [data-zv-caption-kind="figure"] > summary { color: var(--zv-outline-figure); }
-#zv-reader-captions [data-zv-caption-kind="table"] > summary { color: var(--zv-outline-table); }
-#zv-reader-captions :focus-visible { outline: 2px solid currentColor; outline-offset: -2px; }
-#zv-reader-captions .zv-caption-status { opacity: .7; padding: 4px; }
+#zv-reader-captions [data-zv-caption-kind="figure"] > summary { color: var(--zotero-neo-mode-insert-text); }
+#zv-reader-captions [data-zv-caption-kind="table"] > summary { color: var(--zotero-neo-mode-visual-text); }
+#zv-reader-captions :focus-visible { outline: 2px solid var(--zotero-neo-focus-ring); outline-offset: -2px; }
+#zv-reader-captions .zv-caption-status { color: var(--zotero-neo-muted); padding: 4px; }
 #zv-reader-marks {
   flex: 0 1 auto; max-height: 35%; overflow: auto;
-  border-top: 1px solid var(--color-border, currentColor); padding: 8px;
-  font: inherit; color: inherit;
+  border-top: 1px solid var(--zotero-neo-border); padding: 8px;
+  background: var(--zotero-neo-surface); color: var(--zotero-neo-text);
+  font-family: var(--neo-font-ui);
 }
 #zv-reader-marks summary { cursor: pointer; padding-block: 3px; }
 #zv-reader-marks .zv-mark-row { display: flex; align-items: center; gap: 4px; }
 #zv-reader-marks button {
   font: inherit; color: inherit; background: transparent; border: 0;
-  border-radius: 3px; padding: 5px; text-align: start; cursor: pointer;
+  border-radius: var(--neo-radius-small); padding: 5px; text-align: start; cursor: pointer;
 }
 #zv-reader-marks button[data-zv-mark] { flex: 1; min-width: 0; }
-#zv-reader-marks button:focus-visible { outline: 2px solid currentColor; }
-#zv-reader-marks .zv-empty-marks { opacity: .65; padding-block: 5px; }
+#zv-reader-marks button:focus-visible { outline: 2px solid var(--zotero-neo-focus-ring); }
+#zv-reader-marks .zv-empty-marks { color: var(--zotero-neo-muted); padding-block: 5px; }
 `;
 
 export function mountReaderSidebarReactView(

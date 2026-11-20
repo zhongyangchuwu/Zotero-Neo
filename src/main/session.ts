@@ -49,9 +49,10 @@ export class MainWindowSession {
     this.cleanup.add(() => this.focusOwnership.dispose());
     const doc = window.document;
     this.status = doc.createElementNS('http://www.w3.org/1999/xhtml', 'div');
+    this.status.className = 'neo-appearance neo-toast';
     this.status.setAttribute('aria-live', 'polite');
     (doc.body ?? doc.documentElement).append(this.status);
-    this.host.theme.add(this.status);
+    this.cleanup.add(this.host.theme.add(this.status));
     this.cleanup.add(() => this.input.dispose());
     this.cleanup.add(() => this.note.input.dispose());
     this.cleanup.add(() => this.prefixGuide.dispose());

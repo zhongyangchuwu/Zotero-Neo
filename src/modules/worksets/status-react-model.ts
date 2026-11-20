@@ -7,5 +7,6 @@ export type ItemSelectStatus =
 
 export interface MainStatusReactModel {
   readonly status: ItemSelectStatus;
+  readonly tinted: boolean;
   readonly colors: InteractionStatusColors;
 }

@@ -59,6 +59,7 @@ import { mountSettingsSnapshotsView, SETTINGS_SNAPSHOTS_CSS } from './surfaces/s
 import type { SettingsSnapshotModel } from '../../settings-snapshots/react-model';
 import { NATIVE_UI_CSS } from './styles';
 import type { NativeUIRuntime, ReactView } from './types';
+import { NEO_CUSTOM_STYLE_ID } from '../appearance-styles';
 
 let stylesheet: HTMLElement | null = null;
 const runtime: NativeUIRuntime = {
@@ -89,7 +90,9 @@ const runtime: NativeUIRuntime = {
         KEY_GUIDE_REACT_CSS +
         MAIN_STATUS_REACT_CSS +
         READER_STATUS_REACT_CSS;
-      root.ownerDocument.documentElement.append(stylesheet);
+      const customStyle = root.ownerDocument.getElementById(NEO_CUSTOM_STYLE_ID);
+      if (customStyle) customStyle.before(stylesheet);
+      else root.ownerDocument.documentElement.append(stylesheet);
     }
     switch (surface) {
       case 'settings':

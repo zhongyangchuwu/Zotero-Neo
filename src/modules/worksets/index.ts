@@ -83,7 +83,7 @@ export function createWorksetsModule(host: ModuleHost, ports: WorksetsModuleHost
       failure.run(() => ports.refreshItemDecorations());
       failure.rethrow();
     });
-    visual.addWindow(window, store, appearance);
+    visual.addWindow(window, store, appearance, ports.themeRoot);
     const selection: MainSelectionSource = Object.freeze({
       get size() {
         return scope.isCurrent() ? store.size : 0;

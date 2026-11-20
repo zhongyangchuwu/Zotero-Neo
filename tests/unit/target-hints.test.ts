@@ -10,13 +10,17 @@ afterEach(() => {
 });
 
 function host() {
-  const nodes: HTMLElement[] = [];
+  const roots: HTMLElement[] = [];
   const document = {
     documentElement: { clientWidth: 800, clientHeight: 600 },
-    body: { appendChild: (node: HTMLElement) => nodes.push(node) },
+    body: { appendChild: (node: HTMLElement) => roots.push(node) },
     createElement: () => {
+      const children: HTMLElement[] = [];
       const node = {
+        className: '',
         dataset: {} as Record<string, string>,
+        children,
+        appendChild: (child: HTMLElement) => children.push(child),
         hidden: false,
         textContent: '',
         style: { cssText: '', left: '', top: '' },
@@ -27,8 +31,8 @@ function host() {
           return { left, top, right: left + width, bottom: top + 16, width, height: 16 } as DOMRect;
         },
         remove: () => {
-          const index = nodes.indexOf(node as unknown as HTMLElement);
-          if (index >= 0) nodes.splice(index, 1);
+          const index = roots.indexOf(node as unknown as HTMLElement);
+          if (index >= 0) roots.splice(index, 1);
         },
       };
       return node;
@@ -46,6 +50,7 @@ function host() {
   const hints = new ReaderTargetHints<string>({
     attribute: 'zoteroNeoCopyHint',
     isCurrent: () => true,
+    themeRoot: () => () => {},
     choose,
   });
   const press = (key: string) =>
@@ -58,7 +63,15 @@ function host() {
       } as unknown as KeyboardEvent,
       window,
     );
-  return { nodes, window, hints, choose, press };
+  return {
+    get nodes() {
+      return roots.flatMap((root) => Array.from(root.children) as HTMLElement[]);
+    },
+    window,
+    hints,
+    choose,
+    press,
+  };
 }
 
 describe('grouped Reader target hints', () => {

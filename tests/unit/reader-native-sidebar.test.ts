@@ -364,6 +364,7 @@ function harness(
         onCaptionTarget: () => {},
         bindings: () => currentBindings,
         language: () => 'en-US',
+        themeRoot: () => () => {},
         activePdfWindow: () => currentPdfWindow,
         onDocumentAction: options.onDocumentAction ?? (() => false),
         onAnnotation: () => {},

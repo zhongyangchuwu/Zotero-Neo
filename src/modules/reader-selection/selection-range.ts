@@ -29,6 +29,7 @@ import type { PdfWindow, Pointer, ReaderMode } from '../../reader/types';
 export interface ReaderSelectionRangeHost {
   readonly isCurrent: (pdfWindow: PdfWindow) => boolean;
   readonly captureView: (pdfWindow: PdfWindow) => () => boolean;
+  readonly themeRoot: (root: HTMLElement) => () => void;
   readonly mode: () => ReaderMode;
   readonly setModeVisual: () => void;
   readonly invalidateNativeSelection: () => void;
@@ -47,7 +48,8 @@ function isTextNode(node: Node | null): node is Text {
 interface SelectionStyleLease {
   dispose: (() => void) | null;
   readonly current: () => boolean;
-  readonly markers: Set<HTMLElement>;
+  cursorRoot: HTMLElement | null;
+  unthemeCursor: (() => void) | null;
 }
 
 /**
@@ -341,19 +343,20 @@ export class ReaderSelectionRange {
   refresh(pdfWindow: PdfWindow, autoPan: boolean, actionTokens?: readonly SourceToken[]): void {
     if (!this.#current(pdfWindow)) return;
     const current = this.#host.captureView(pdfWindow);
-    this.#removeViewMarker(pdfWindow);
+    const cursor = this.#styledViews.get(pdfWindow)?.cursorRoot;
+    if (cursor && !isDeadObject(cursor)) cursor.replaceChildren();
     if (!this.#current(pdfWindow) || !current()) return;
     if (this.#host.mode() !== 'visual') return;
     const document = pdfWindow.document;
     let lease = this.#styledViews.get(pdfWindow);
     if (lease && !lease.current()) {
       this.#styledViews.delete(pdfWindow);
-      lease.dispose?.();
+      this.#releaseStyle(lease);
       if (!this.#current(pdfWindow) || !current()) return;
       lease = this.#styledViews.get(pdfWindow);
     }
     if (!lease) {
-      lease = { dispose: null, current, markers: new Set() };
+      lease = { dispose: null, current, cursorRoot: null, unthemeCursor: null };
       this.#styledViews.set(pdfWindow, lease);
       try {
         const dispose = decorateReaderSelection(pdfWindow);
@@ -426,13 +429,10 @@ export class ReaderSelectionRange {
     this.#anchorWindow = null;
     this.#anchorCurrent = null;
     this.#preferredX = null;
-    const views = [...this.#styledViews];
+    const styles = [...this.#styledViews.values()];
     this.#styledViews.clear();
     const failure = new CleanupFailure();
-    for (const [pdfWindow, lease] of views) {
-      if (lease.dispose) failure.run(lease.dispose);
-      failure.run(() => this.#removeViewMarker(pdfWindow, lease));
-    }
+    for (const lease of styles) failure.run(() => this.#releaseStyle(lease));
     failure.rethrow();
   }
 
@@ -451,10 +451,7 @@ export class ReaderSelectionRange {
     const lease = this.#styledViews.get(pdfWindow);
     if (!lease) return;
     this.#styledViews.delete(pdfWindow);
-    const failure = new CleanupFailure();
-    if (lease.dispose) failure.run(lease.dispose);
-    failure.run(() => this.#removeViewMarker(pdfWindow, lease));
-    failure.rethrow();
+    this.#releaseStyle(lease);
   }
 
   #current(pdfWindow: PdfWindow): boolean {
@@ -532,6 +529,8 @@ export class ReaderSelectionRange {
         rect.height <= 0
       )
         continue;
+      const root = lease.cursorRoot ?? this.#mountCursorRoot(pdfWindow, lease);
+      if (!root || isDeadObject(root)) return;
       const marker = document.createElement('span');
       marker.dataset.zvCursor = 'token';
       marker.setAttribute('aria-hidden', 'true');
@@ -540,12 +539,10 @@ export class ReaderSelectionRange {
       marker.style.top = `${rect.top}px`;
       marker.style.width = `${rect.width}px`;
       marker.style.height = `${rect.height}px`;
-      lease.markers.add(marker);
       try {
-        document.body?.appendChild(marker);
+        root.appendChild(marker);
       } finally {
         if (!this.#current(pdfWindow) || !current() || this.#styledViews.get(pdfWindow) !== lease) {
-          lease.markers.delete(marker);
           if (!isDeadObject(marker)) marker.remove();
         }
       }
@@ -627,14 +624,39 @@ export class ReaderSelectionRange {
     return 0;
   }
 
-  #removeViewMarker(pdfWindow: PdfWindow, lease = this.#styledViews.get(pdfWindow)): void {
-    const markers = [...(lease?.markers ?? [])];
-    lease?.markers.clear();
-    if (isDeadObject(pdfWindow)) return;
+  #mountCursorRoot(pdfWindow: PdfWindow, lease: SelectionStyleLease): HTMLElement | null {
+    const document = pdfWindow.document;
+    const body = document.body;
+    if (!body) return null;
+    const root = document.createElement('div');
+    root.className = 'neo-appearance neo-reader-overlay';
+    root.style.display = 'contents';
+    lease.cursorRoot = root;
+    const current = (): boolean =>
+      this.#styledViews.get(pdfWindow) === lease && this.#current(pdfWindow) && lease.current();
     const failure = new CleanupFailure();
-    // Never discover cleanup targets from shared DOM: even an empty retired lease may share
-    // its Document with a successor owned by another module instance.
-    for (const marker of markers) if (!isDeadObject(marker)) failure.run(() => marker.remove());
+    failure.run(() => {
+      body.appendChild(root);
+      if (!current()) return;
+      const untheme = this.#host.themeRoot(root);
+      if (current()) lease.unthemeCursor = untheme;
+      else untheme();
+    });
+    if (lease.unthemeCursor) return root;
+    lease.cursorRoot = null;
+    if (!isDeadObject(root)) failure.run(() => root.remove());
+    failure.rethrow();
+    return null;
+  }
+
+  #releaseStyle(lease: SelectionStyleLease): void {
+    const { dispose, cursorRoot, unthemeCursor } = lease;
+    lease.cursorRoot = null;
+    lease.unthemeCursor = null;
+    const failure = new CleanupFailure();
+    failure.run(() => dispose?.());
+    failure.run(() => unthemeCursor?.());
+    if (cursorRoot && !isDeadObject(cursorRoot)) failure.run(() => cursorRoot.remove());
     failure.rethrow();
   }
 }

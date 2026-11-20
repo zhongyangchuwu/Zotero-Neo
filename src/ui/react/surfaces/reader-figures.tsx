@@ -7,16 +7,17 @@ import type {
 } from '../../../modules/reader-figures/react-model';
 
 export const READER_FIGURES_REACT_CSS = `
-.neo-figures { position:fixed; inset:4%; z-index:2147483645; padding:16px; display:flex; flex-direction:column; gap:10px; overflow:auto; background:var(--zotero-neo-surface); color:var(--zotero-neo-text); border:1px solid var(--zotero-neo-border); border-radius:8px; box-shadow:0 8px 40px #0006; font:menu; }
+.neo-figures { position:fixed; inset:4%; z-index:2147483645; padding:16px; display:flex; flex-direction:column; gap:10px; overflow:auto; background:var(--zotero-neo-surface); color:var(--zotero-neo-text); border:1px solid var(--zotero-neo-border); border-radius:var(--neo-radius); box-shadow:var(--neo-shadow); font:menu; font-family:var(--neo-font-ui); }
 .neo-figures h2, .neo-figures p { margin:0; }
 .neo-figures .controls, .neo-figures .tools { display:flex; gap:8px; }
 .neo-figures .controls { flex-wrap:wrap; }
 .neo-figures input { flex:1; min-width:160px; }
+.neo-figures :is(button, input, select) { border-radius:var(--neo-radius-small); }
 .neo-figures .help { color:var(--zotero-neo-muted); }
 .neo-figures .content { display:flex; flex-wrap:wrap; gap:12px; flex:1; min-height:0; }
 .neo-figures .list { flex:1 1 260px; min-height:120px; overflow:auto; border:1px solid var(--zotero-neo-border); }
 .neo-figures .row { padding:8px; cursor:pointer; white-space:pre-wrap; overflow-wrap:anywhere; border-bottom:1px solid var(--zotero-neo-border); }
-.neo-figures .row.selected { background:var(--zotero-neo-selected); }
+.neo-figures .row.selected { background:var(--zotero-neo-selected); color:var(--zotero-neo-selected-text); }
 .neo-figures .right { flex:2 1 360px; display:flex; flex-direction:column; min-width:0; min-height:160px; }
 .neo-figures .preview { flex:1; min-height:120px; overflow:auto; background:var(--zotero-neo-elevated); margin-top:8px; }
 .neo-figures img { display:block; height:auto; max-width:none; }

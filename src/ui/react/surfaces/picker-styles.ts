@@ -1,19 +1,19 @@
 export const PICKER_REACT_CSS = `
 .picker-root {
-  --picker-bg: var(--zotero-neo-surface);
-  --picker-fg: var(--zotero-neo-text);
-  --picker-muted: var(--zotero-neo-muted);
-  --picker-border: var(--zotero-neo-border);
-  --picker-accent: var(--zotero-neo-accent);
+  --picker-bg: var(--neo-surface);
+  --picker-fg: var(--neo-fg);
+  --picker-muted: var(--neo-muted);
+  --picker-border: var(--neo-border);
+  --picker-accent: var(--neo-accent);
   --picker-match-fg: color-mix(in srgb, var(--picker-accent), var(--picker-fg) 25%);
   --picker-focus: var(--picker-accent);
-  --picker-selected-bg: var(--zotero-neo-selected);
-  --picker-selected-fg: var(--zotero-neo-selected-text);
+  --picker-selected-bg: var(--neo-selected-bg);
+  --picker-selected-fg: var(--neo-selected-fg);
   --picker-row-leading-border: 1px solid transparent;
   --picker-selected-left-border: 1px solid var(--picker-accent);
-  --picker-preview-bg: var(--zotero-neo-elevated);
+  --picker-preview-bg: var(--neo-surface-subtle);
   --picker-card-bg: var(--picker-bg);
-  --picker-font: system-ui, sans-serif;
+  --picker-font: var(--neo-font-ui);
   --picker-font-title: var(--picker-font);
   --picker-icon-size: 16px;
   --picker-icon-gap: 6px;
@@ -29,11 +29,11 @@ export const PICKER_REACT_CSS = `
   --picker-height: 780px;
   --picker-header-height: 40px;
   --picker-footer-height: 22px;
-  --picker-frame-width: 1px;
-  --picker-divider-width: 1px;
-  --picker-radius: 5px;
-  --picker-card-radius: 4px;
-  --picker-shadow: 0 10px 28px var(--zotero-neo-shadow);
+  --picker-frame-width: var(--neo-divider-width);
+  --picker-divider-width: var(--neo-divider-width);
+  --picker-radius: var(--neo-radius);
+  --picker-card-radius: var(--neo-radius-small);
+  --picker-shadow: var(--neo-shadow);
 
   box-sizing: border-box;
   container: neo-picker / inline-size;
@@ -50,54 +50,22 @@ export const PICKER_REACT_CSS = `
 }
 
 .picker-root:where([data-picker-theme='classic']) {
-  --picker-accent: #3568d4;
-  --picker-selected-bg: var(--picker-accent);
-  --picker-selected-fg: #fff;
   --picker-columns: minmax(0, 1fr) minmax(0, 24%) clamp(3em, 10%, 5em) minmax(0, 23%);
   --picker-cell-gap: 0px;
 }
 
-:where([data-zotero-neo-theme='dark']) .picker-root:where([data-picker-theme='classic']) {
-  --picker-accent: #8ab4f8;
-  --picker-selected-fg: #1e1e1e;
-}
-
 .picker-root:where([data-picker-theme='terminal']) {
-  --picker-bg: #f8fafc;
-  --picker-fg: #151922;
-  --picker-muted: #46515f;
-  --picker-accent: #006663;
-  --picker-selected-bg: #c9f4ed;
-  --picker-selected-fg: var(--picker-fg);
-  --picker-preview-bg: var(--picker-bg);
-  --picker-card-bg: var(--picker-preview-bg);
-  --picker-font: ui-monospace, SFMono-Regular, Consolas, monospace;
   --picker-row-height: 28px;
   --picker-row-padding: 8px;
   --picker-columns: minmax(0, 1fr) fit-content(min(29%, 24ch)) fit-content(min(24%, 18ch));
   --picker-height: 860px;
   --picker-header-height: 34px;
   --picker-footer-height: 20px;
-  --picker-frame-width: 0px;
-  --picker-divider-width: 0px;
-  --picker-radius: 0px;
-  --picker-card-radius: 0px;
-  --picker-shadow: none;
-}
-
-:where([data-zotero-neo-theme='dark']) .picker-root:where([data-picker-theme='terminal']) {
-  --picker-bg: #111318;
-  --picker-fg: #f1f5f9;
-  --picker-muted: #b5bfcd;
-  --picker-accent: #68e4d5;
-  --picker-selected-bg: #244643;
 }
 
 .picker-root:where([data-picker-theme='modern']) {
-  --picker-selected-bg: color-mix(in srgb, var(--picker-bg), var(--picker-accent) 16%);
-  --picker-preview-bg: color-mix(in srgb, var(--picker-bg), var(--zotero-neo-elevated) 65%);
   --picker-row-height: 58px;
-  --picker-row-radius: 10px;
+  --picker-row-radius: var(--neo-radius-small);
   --picker-row-padding: 12px;
   --picker-list-padding: 8px;
   --picker-preview-padding: 22px;
@@ -105,9 +73,6 @@ export const PICKER_REACT_CSS = `
   --picker-height: 740px;
   --picker-header-height: 52px;
   --picker-footer-height: 24px;
-  --picker-radius: 18px;
-  --picker-card-radius: 12px;
-  --picker-shadow: 0 22px 64px var(--zotero-neo-shadow);
 }
 
 .picker-container, :where(.picker-container) * { box-sizing: border-box; }

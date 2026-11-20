@@ -118,11 +118,14 @@ function harness(
   const showStatus = vi.fn();
   const scrollBy = vi.fn();
   const openFlash = vi.fn();
+  const untheme = vi.fn();
+  const themeRoot = vi.fn(() => untheme);
   const container = { clientHeight: 600 } as HTMLElement;
   const createOwner = () =>
     new ReaderSelectionRange({
       isCurrent,
       captureView,
+      themeRoot,
       mode: () => mode,
       setModeVisual: () => {
         mode = 'visual';
@@ -147,6 +150,8 @@ function harness(
     showStatus,
     scrollBy,
     openFlash,
+    themeRoot,
+    untheme,
   };
 }
 
@@ -169,7 +174,7 @@ function tokenHarness() {
     },
   );
   const document = test.pdfWindow.document;
-  const markers: HTMLElement[] = [];
+  const roots: HTMLElement[] = [];
   const span = {
     firstChild: test.node,
     getBoundingClientRect: () => ({
@@ -186,24 +191,38 @@ function tokenHarness() {
     selector === '.textLayer span'
       ? [span]
       : selector === '[data-zv-cursor]'
-        ? [...markers]
+        ? roots.flatMap((root) => Array.from(root.children))
         : query(selector),
   );
   const create = document.createElement.bind(document);
   Reflect.set(document, 'createElement', (tag: string) => {
     if (tag === 'style') return create(tag);
+    if (tag === 'div') {
+      const children: HTMLElement[] = [];
+      const root = {
+        className: '',
+        style: {},
+        children,
+        appendChild: (child: HTMLElement) => children.push(child),
+        replaceChildren: () => {
+          children.length = 0;
+        },
+        remove: () => {
+          const index = roots.indexOf(root);
+          if (index >= 0) roots.splice(index, 1);
+        },
+      } as unknown as HTMLElement;
+      return root;
+    }
     const marker = {
       dataset: {},
       style: {},
       setAttribute: vi.fn(),
-      remove: vi.fn(() => {
-        const index = markers.indexOf(marker);
-        if (index >= 0) markers.splice(index, 1);
-      }),
+      remove: vi.fn(),
     } as unknown as HTMLElement;
     return marker;
   });
-  Reflect.set(document, 'body', { appendChild: (marker: HTMLElement) => markers.push(marker) });
+  Reflect.set(document, 'body', { appendChild: (root: HTMLElement) => roots.push(root) });
   Reflect.set(document, 'createRange', () => {
     let start = 0;
     let end = 0;
@@ -229,7 +248,12 @@ function tokenHarness() {
       getClientRects: () => [rect()],
     };
   });
-  return { ...test, markers };
+  return {
+    ...test,
+    get markers() {
+      return roots.flatMap((root) => Array.from(root.children) as HTMLElement[]);
+    },
+  };
 }
 
 describe('ReaderSelectionRange', () => {
@@ -242,8 +266,10 @@ describe('ReaderSelectionRange', () => {
     expect(test.markers[0]?.style.width).toBe('64px');
     test.owner.extendByToken(test.pdfWindow, -1);
     expect(test.markers).toHaveLength(1);
+    expect(test.themeRoot).toHaveBeenCalledOnce();
     test.owner.leave();
     expect(test.markers).toHaveLength(0);
+    expect(test.untheme).toHaveBeenCalledOnce();
   });
 
   it('removes an old outline without removing a successor created during style cleanup', () => {

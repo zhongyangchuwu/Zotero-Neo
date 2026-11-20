@@ -104,37 +104,38 @@ export const TAB_SIDEBAR_REACT_CSS = `
 [data-zv-tab-sidebar] #zotero-tabs-toolbar { display:flex !important; align-items:center; background:${THEME_VARS.surface} !important; color:${THEME_VARS.text} !important; }
 [data-zv-tab-sidebar] #zotero-tabs-toolbar > .zotero-tb-button { color:${THEME_VARS.muted} !important; fill:currentColor !important; }
 [data-zv-tab-sidebar] #zotero-tabs-toolbar > .zotero-tb-separator { width:1px; height:18px; flex:0 0 1px; }
+.neo-tab-sidebar__header, .neo-tab-sidebar__body { background:${THEME_VARS.surface}; color:${THEME_VARS.text}; }
 .neo-tab-sidebar__header { grid-row:1; display:flex; align-items:center; gap:4px; padding:4px 6px; }
-.neo-tab-sidebar__header > button { min-width:28px; min-height:28px; border:0; border-radius:7px; background:transparent; color:inherit; }
+.neo-tab-sidebar__header > button { min-width:28px; min-height:28px; border:0; border-radius:var(--neo-radius-small); background:transparent; color:inherit; }
 .neo-tab-sidebar__header > button:hover { background:${THEME_VARS.elevated}; }
 .neo-tab-sidebar__body { grid-row:3; display:flex; flex:1; flex-direction:column; min-width:0; min-height:0; }
 .neo-tab-sidebar__body[hidden] { display:none !important; }
-.neo-tab-sidebar__query { min-width:0; margin:2px 6px 6px; padding:6px 9px; border:1px solid ${THEME_VARS.border}; border-radius:8px; background:${THEME_VARS.input}; color:${THEME_VARS.text}; }
+.neo-tab-sidebar__query { min-width:0; margin:2px 6px 6px; padding:6px 9px; border:1px solid ${THEME_VARS.border}; border-radius:var(--neo-radius-small); background:${THEME_VARS.input}; color:${THEME_VARS.text}; font:inherit; }
 .neo-tab-sidebar__query::placeholder { color:${THEME_VARS.muted} !important; opacity:1; }
 .neo-tab-sidebar__list { flex:1; min-height:0; overflow:auto; padding:0 6px 6px; outline:none; }
 .neo-tab-sidebar__group { border-inline-start:4px solid transparent; }
 .neo-tab-sidebar__members { padding-inline-start:18px; }
-.neo-tab-sidebar__row { display:flex; align-items:center; gap:5px; min-height:32px; margin:2px 0; padding:2px 6px; border-radius:8px; }
+.neo-tab-sidebar__row { display:flex; align-items:center; gap:5px; min-height:32px; margin:2px 0; padding:2px 6px; border-radius:var(--neo-radius-small); }
 .neo-tab-sidebar__row[hidden] { display:none; }
 .neo-tab-sidebar__row:hover { background:${THEME_VARS.elevated}; }
 .neo-tab-sidebar__row:focus-visible { outline:2px solid ${THEME_VARS.focusRing}; outline-offset:-2px; }
 .neo-tab-sidebar__row > button { appearance:none; border:0; background:transparent; color:inherit; font:inherit; }
-.neo-tab-sidebar__row > button:focus-visible { outline:2px solid ${THEME_VARS.focusRing}; outline-offset:-2px; border-radius:6px; }
+.neo-tab-sidebar__row > button:focus-visible { outline:2px solid ${THEME_VARS.focusRing}; outline-offset:-2px; border-radius:var(--neo-radius-small); }
 .neo-tab-sidebar__group-toggle { display:flex; flex:1; align-items:center; gap:7px; min-width:0; padding:3px 0; text-align:start; font-weight:600 !important; }
 .neo-tab-sidebar__group-name { overflow:hidden; text-overflow:ellipsis; white-space:nowrap; }
 .neo-tab-sidebar__group-count { flex:0 0 auto; color:${THEME_VARS.muted}; font-size:.82em; }
 .neo-tab-sidebar__icon { flex:0 0 19px; }
 .neo-tab-sidebar__entry-title { flex:1; min-width:0; padding:3px 0; overflow:hidden; text-overflow:ellipsis; white-space:nowrap; text-align:start; }
 .neo-tab-sidebar__row [data-action='group-menu'],
-.neo-tab-sidebar__row [data-action='entry-menu'] { flex:0 0 auto; padding:3px 5px; border-radius:6px; color:${THEME_VARS.muted}; cursor:pointer; }
+.neo-tab-sidebar__row [data-action='entry-menu'] { flex:0 0 auto; padding:3px 5px; border-radius:var(--neo-radius-small); color:${THEME_VARS.muted}; cursor:pointer; }
 .neo-tab-sidebar__row [data-action='group-menu']:hover,
 .neo-tab-sidebar__row [data-action='entry-menu']:hover { background:${THEME_VARS.elevated}; color:${THEME_VARS.text}; }
 .neo-tab-sidebar__badge { flex:0 0 auto; color:${THEME_VARS.muted}; font-size:.82em; }
-.neo-tab-sidebar__editor { box-sizing:border-box; min-width:0; max-width:100%; padding:4px 6px; border:1px solid ${THEME_VARS.border}; border-radius:6px; background:${THEME_VARS.input}; color:${THEME_VARS.text}; font:inherit; }
+.neo-tab-sidebar__editor { box-sizing:border-box; min-width:0; max-width:100%; padding:4px 6px; border:1px solid ${THEME_VARS.border}; border-radius:var(--neo-radius-small); background:${THEME_VARS.input}; color:${THEME_VARS.text}; font:inherit; }
 .neo-tab-sidebar__group-row > .neo-tab-sidebar__editor { flex:1; }
 .neo-tab-sidebar__list > .neo-tab-sidebar__editor { width:100%; margin-top:4px; }
-.neo-tab-sidebar__menu { position:fixed; z-index:2147483647; display:flex; flex-direction:column; min-width:160px; max-height:70vh; overflow:auto; padding:4px; border:1px solid ${THEME_VARS.border}; border-radius:9px; background:${THEME_VARS.surface}; color:${THEME_VARS.text}; box-shadow:${THEME_VARS.shadow}; }
-.neo-tab-sidebar__menu > button { border:0; border-radius:6px; padding:7px 10px; background:transparent; color:inherit; font:inherit; text-align:start; }
+.neo-tab-sidebar__menu { position:fixed; z-index:2147483647; display:flex; flex-direction:column; min-width:160px; max-height:70vh; overflow:auto; padding:4px; border:1px solid ${THEME_VARS.border}; border-radius:var(--neo-radius); background:${THEME_VARS.surface}; color:${THEME_VARS.text}; box-shadow:var(--neo-shadow); }
+.neo-tab-sidebar__menu > button { border:0; border-radius:var(--neo-radius-small); padding:7px 10px; background:transparent; color:inherit; font:inherit; text-align:start; }
 .neo-tab-sidebar__menu > button:hover,
 .neo-tab-sidebar__menu > button:focus-visible { background:${THEME_VARS.selected}; color:${THEME_VARS.selectedText}; }
 .neo-tab-sidebar__palette { display:flex; flex-wrap:wrap; gap:5px; max-width:220px; padding:6px 10px; }
@@ -153,7 +154,7 @@ export const TAB_SIDEBAR_REACT_CSS = `
 [data-zv-tab-top] .neo-tab-sidebar__entry-row { width:180px; }
 [data-zv-tab-top] .neo-tab-sidebar__group-row { max-width:180px; }
 [data-zv-tab-top] .neo-tab-sidebar__status:not(:empty) { max-width:180px; margin:0; padding:4px; }
-.neo-tab-sidebar__status:not(:empty) { margin:4px 6px; padding:8px; border:1px solid ${THEME_VARS.border}; border-radius:8px; background:${THEME_VARS.elevated}; }
+.neo-tab-sidebar__status:not(:empty) { margin:4px 6px; padding:8px; border:1px solid ${THEME_VARS.border}; border-radius:var(--neo-radius-small); background:${THEME_VARS.elevated}; }
 `;
 
 export function mountTabSidebarReactView(

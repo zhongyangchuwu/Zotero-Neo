@@ -31,6 +31,7 @@ import type {
 export interface ReaderLinkHintsHost {
   readonly reader: ReaderRuntime;
   viewForWindow(pdfWindow: PdfWindow): ReaderViewRuntime | null;
+  readonly themeRoot: (root: HTMLElement) => () => void;
   showStatus(message: string, duration?: number): void;
   text(key: string): string;
   debug(message: string): void;
@@ -50,6 +51,7 @@ export class ReaderLinkHints {
   #activation = 0;
   #activationWindow: PdfWindow | null = null;
   #destinationCue: HTMLElement | null = null;
+  #destinationUntheme: (() => void) | null = null;
   #destinationPosition: ReaderLinkPosition | null = null;
   #destinationWindow: PdfWindow | null = null;
   #destinationTimer: ReaderTimer | null = null;
@@ -59,6 +61,7 @@ export class ReaderLinkHints {
     this.#host = host;
     this.#hints = new ReaderTargetHints({
       attribute: 'zoteroNeoLinkHint',
+      themeRoot: host.themeRoot,
       isCurrent: (window) =>
         host.isCurrent() &&
         this.#hintView !== null &&
@@ -279,6 +282,7 @@ export class ReaderLinkHints {
       createdCue = cue;
       if (!this.#activationIsCurrent(invocation)) return;
       cue.dataset.zoteroNeoDestinationCue = '1';
+      cue.className = 'neo-appearance neo-hints';
       cue.hidden = true;
       cue.style.cssText = PDF_LINK_CUE_STYLE;
       const body = pdfWindow.document.body;
@@ -298,6 +302,12 @@ export class ReaderLinkHints {
         failure.rethrow();
         return;
       }
+      const untheme = this.#host.themeRoot(cue);
+      if (this.#destinationCue !== cue) {
+        untheme();
+        return;
+      }
+      this.#destinationUntheme = untheme;
       this.#destinationTimer = setTimeout(() => {
         if (this.#destinationCue === cue) this.#clearDestinationCue();
       }, 2000);
@@ -392,10 +402,12 @@ export class ReaderLinkHints {
 
   #clearDestinationCue(): void {
     const cue = this.#destinationCue;
+    const untheme = this.#destinationUntheme;
     const owner = this.#destinationWindow;
     const frame = this.#destinationRepositionFrame;
     const timer = this.#destinationTimer;
     this.#destinationCue = null;
+    this.#destinationUntheme = null;
     this.#destinationPosition = null;
     this.#destinationTimer = null;
     this.#destinationWindow = null;
@@ -404,6 +416,7 @@ export class ReaderLinkHints {
     failure.run(() => clearTimeout(timer ?? undefined));
     if (owner && !isDeadObject(owner) && frame !== null)
       failure.run(() => owner.cancelAnimationFrame(frame));
+    failure.run(() => untheme?.());
     if (cue && !isDeadObject(cue)) failure.run(() => cue.remove());
     failure.rethrow();
   }

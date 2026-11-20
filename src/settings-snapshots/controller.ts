@@ -170,8 +170,8 @@ export class SettingsSnapshotController implements SettingsSnapshotPort {
     const backdrop = doc.createElementNS('http://www.w3.org/1999/xhtml', 'div') as HTMLElement;
     backdrop.style.cssText = PREPARATION_BACKDROP_STYLE;
     const root = doc.createElementNS('http://www.w3.org/1999/xhtml', 'section') as HTMLElement;
-    root.style.cssText = PREPARATION_PANEL_STYLE;
-    root.className = 'neo-ui';
+    root.style.cssText = `${PREPARATION_PANEL_STYLE};border-radius:var(--neo-radius);box-shadow:var(--neo-shadow)`;
+    root.className = 'neo-ui neo-appearance neo-settings neo-snapshots';
     root.dataset.neoSettingsSnapshots = '1';
     root.tabIndex = -1;
     root.setAttribute('role', 'dialog');
@@ -180,12 +180,20 @@ export class SettingsSnapshotController implements SettingsSnapshotPort {
     const focus = doc.activeElement as HTMLElement | null;
     backdrop.append(root);
     doc.documentElement.append(backdrop);
+    const unthemeBackdrop = host.themeRoot(backdrop);
+    const unthemePanel = host.themeRoot(root);
     const view: SnapshotView = {
       host,
       root,
       backdrop,
       focus,
-      untheme: host.themeRoot(backdrop),
+      untheme: () => {
+        try {
+          unthemePanel();
+        } finally {
+          unthemeBackdrop();
+        }
+      },
       capture: (event) => {
         this.handleKey(event);
       },

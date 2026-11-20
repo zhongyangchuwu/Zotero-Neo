@@ -50,11 +50,21 @@ export class TabEnhancementsSidebar {
     this.root.dataset.zvTabSidebar = '1';
     this.root.style.cssText = TAB_SIDEBAR_STYLE;
     this.#content = doc.createElementNS(H, 'div') as HTMLElement;
+    this.#content.className = 'neo-appearance neo-sidebar neo-tabs';
     this.#content.style.display = 'contents';
     this.toolbarSlot = doc.createElementNS(H, 'div') as HTMLElement;
     this.toolbarSlot.style.gridRow = '2';
     this.root.append(this.#content, this.toolbarSlot);
-    this.#untheme = options.themeRoot(this.root);
+    // The native toolbars may be moved into toolbarSlot. Opt in only the Neo-owned sibling.
+    const unthemeRail = options.themeRoot(this.root);
+    const unthemeContent = options.themeRoot(this.#content);
+    this.#untheme = () => {
+      try {
+        unthemeContent();
+      } finally {
+        unthemeRail();
+      }
+    };
     this.#runtime = new LocalBindingRuntime({
       bindings: options.bindings,
       execute: (action) => this.execute(action),

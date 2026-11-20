@@ -1,4 +1,9 @@
 import { describe, expect, it, vi } from 'vitest';
+import {
+  appearanceCustomCss,
+  appearancePreset,
+  migrateAppearancePreferences,
+} from '../../src/core/appearance-preferences';
 import type { PreferenceStore } from '../../src/core/preference-store';
 import {
   INTERACTION_COLOR_PRESET_PREFERENCE_KEY as PRESET,
@@ -108,23 +113,96 @@ function themes(preferences: Preferences): readonly CustomInteractionTheme[] {
   return parseCustomInteractionThemes(preferences.get(CUSTOM, '')).themes;
 }
 
-describe('Settings Appearance consumer contracts', () => {
-  it('autosaves each Picker setting and reflects updates from a different view', () => {
-    const test = mount();
-    const css = '.picker-root { --picker-row-height: 27px; }';
-    test.appearance.dispatch({ type: 'picker-theme', value: 'terminal' });
-    test.appearance.dispatch({ type: 'picker-custom-css', value: css });
-    expect(test.preferences.writes).toEqual([
-      ['picker.theme', 'terminal'],
-      ['picker.customCss', css],
-    ]);
-    expect(test.appearance.model()).toMatchObject({
-      pickerTheme: 'terminal',
-      pickerCustomCss: css,
+describe('Picker appearance preference migration', () => {
+  it('copies the legacy preset and CSS once, without changing the color mode', () => {
+    const css = '.neo-picker { color: red; }\n.neo-settings { color: blue; }\n';
+    const preferences = new Preferences({
+      'appearance.theme': 'dark',
+      'picker.theme': 'terminal',
+      'picker.customCss': css,
     });
-    test.preferences.set('picker.theme', 'modern');
-    test.preferences.clear('picker.customCss');
-    expect(test.appearance.model()).toMatchObject({ pickerTheme: 'modern', pickerCustomCss: '' });
+    migrateAppearancePreferences(preferences);
+    migrateAppearancePreferences(preferences);
+    expect(preferences.writes).toEqual([
+      ['appearance.preset', 'terminal'],
+      ['appearance.customCss', css],
+    ]);
+    expect(preferences.get('appearance.theme', '')).toBe('dark');
+    expect(appearancePreset(preferences)).toBe('terminal');
+    expect(appearanceCustomCss(preferences)).toBe(css);
+    expect(preferences.has('picker.theme')).toBe(false);
+    expect(preferences.has('picker.customCss')).toBe(false);
+
+    preferences.clear('appearance.preset');
+    preferences.clear('appearance.customCss');
+    migrateAppearancePreferences(preferences);
+    expect(appearancePreset(preferences)).toBe('classic');
+    expect(appearanceCustomCss(preferences)).toBe('');
+    expect(preferences.writes).toHaveLength(2);
+  });
+
+  it('keeps an explicit global preset and even explicitly empty CSS', () => {
+    const preferences = new Preferences({
+      'appearance.preset': 'classic',
+      'appearance.customCss': '',
+      'picker.theme': 'modern',
+      'picker.customCss': '.neo-picker { color: red; }',
+    });
+    migrateAppearancePreferences(preferences);
+    expect(preferences.writes).toEqual([]);
+    expect([...preferences.data]).toEqual([
+      ['appearance.preset', 'classic'],
+      ['appearance.customCss', ''],
+    ]);
+  });
+
+  it('retires malformed legacy values without persisting them', () => {
+    const preferences = new Preferences({ 'picker.theme': 'light', 'picker.customCss': true });
+    migrateAppearancePreferences(preferences);
+    expect(preferences.data.size).toBe(0);
+    expect(appearancePreset(preferences)).toBe('classic');
+    expect(appearanceCustomCss(preferences)).toBe('');
+  });
+
+  it('keeps the source value if its replacement could not be written', () => {
+    const preferences = new Preferences({ 'picker.theme': 'modern' });
+    vi.spyOn(preferences, 'set').mockImplementationOnce(() => {
+      throw new Error('write failure');
+    });
+    expect(() => migrateAppearancePreferences(preferences)).toThrow('write failure');
+    expect(preferences.get('picker.theme', '')).toBe('modern');
+    migrateAppearancePreferences(preferences);
+    expect(preferences.has('picker.theme')).toBe(false);
+    expect(appearancePreset(preferences)).toBe('modern');
+  });
+});
+
+describe('Settings Appearance consumer contracts', () => {
+  it('autosaves global appearance and reflects external changes in the open settings model', () => {
+    const test = mount({ 'appearance.theme': 'dark' });
+    const css = '.neo-settings { --neo-radius: 1px; }\n.neo-picker { --neo-accent: blue; }\n';
+    test.appearance.dispatch({ type: 'appearance-preset', value: 'light' });
+    test.appearance.dispatch({ type: 'appearance-preset', value: 'terminal' });
+    test.appearance.dispatch({ type: 'appearance-custom-css', value: css });
+    expect(test.preferences.writes).toEqual([
+      ['appearance.preset', 'terminal'],
+      ['appearance.customCss', css],
+    ]);
+    expect(test.preferences.get('appearance.theme', '')).toBe('dark');
+    expect(test.appearance.model()).toMatchObject({
+      appearancePreset: 'terminal',
+      appearanceCustomCss: css,
+    });
+    test.appearance.dispatch({ type: 'appearance-custom-css', value: '' });
+    expect(test.preferences.writes.at(-1)).toEqual(['appearance.customCss', '']);
+    test.changed.mockClear();
+    test.preferences.set('appearance.preset', 'modern');
+    test.preferences.set('appearance.customCss', css);
+    expect(test.changed).toHaveBeenCalled();
+    expect(test.appearance.model()).toMatchObject({
+      appearancePreset: 'modern',
+      appearanceCustomCss: css,
+    });
     test.appearance.dispose();
     test.manager.dispose();
   });
