@@ -39,6 +39,42 @@ const document: SettingsDocument = {
   ],
 };
 
+const publicExtension = {
+  addonId: 'public@test',
+  name: 'Public extension',
+  version: '2',
+  enabled: true,
+  source: { kind: 'xpi' as const, url: 'https://downloads.example.org/public.xpi' },
+};
+const manualExtension = {
+  addonId: 'manual@test',
+  name: 'Manual extension',
+  version: '1',
+  enabled: false,
+  source: null,
+  sensitiveKeys: ['apiToken'],
+};
+const workspace: SettingsDocument = {
+  ...document,
+  extensions: {
+    version: 1,
+    addons: [
+      publicExtension,
+      {
+        ...manualExtension,
+        source: {
+          kind: 'xpi',
+          url: 'https://private.example.org/private.xpi?signature=url-secret',
+        },
+      },
+    ],
+  },
+};
+const portableWorkspace: SettingsDocument = {
+  ...document,
+  extensions: { version: 1, addons: [manualExtension, publicExtension] },
+};
+
 // Only the OS Worker boundary is adapted. Production classic worker code and
 // the actual vendored age implementation run in a separate native Node thread.
 class ThreadWorker {
@@ -157,20 +193,77 @@ it('round-trips plaintext snapshots without a password or DOM worker and still v
   });
 });
 
+it('round-trips a version 1 workspace, sanitizing unavailable sources without losing settings', async () => {
+  const files = codec();
+  const { context } = operation();
+  const text = await files.seal(workspace, '', context, 'json');
+  expect(text).not.toContain('url-secret');
+  expect(await files.open(text, '', context)).toEqual(portableWorkspace);
+  expect(await files.open(JSON.stringify(workspace), '', context)).toEqual(portableWorkspace);
+
+  const invalidSources = [
+    { kind: 'xpi', url: 'https://user:url-secret@downloads.example.org/add-on.xpi' },
+    { kind: 'xpi', url: 'https://downloads.example.org/add-on.xpi#url-secret' },
+    { kind: 'xpi', url: 'https://downloads.example.org/add-on.xpi?' },
+    { kind: 'xpi', url: 'https://downloads.example.org/password/url-secret/add-on.xpi' },
+    { kind: 'xpi', url: 'javascript:url-secret' },
+    { kind: 'github', owner: 'https://bad-host.com/url-secret', repo: 'p' },
+    { kind: 'unknown', token: 'url-secret' },
+  ];
+  const importText = JSON.stringify({
+    ...document,
+    extensions: {
+      version: 1,
+      addons: invalidSources.map((source, i) => ({
+        ...manualExtension,
+        addonId: `test${i}`,
+        source,
+      })),
+    },
+  });
+  const imported = await files.open(importText, '', context);
+  expect(imported.extensions?.addons.map(({ source }) => source)).toEqual(
+    invalidSources.map(() => null),
+  );
+  expect(imported.sections).toEqual(document.sections);
+  expect(await files.seal(imported, '', context, 'json')).not.toContain('url-secret');
+});
+
+it('rejects duplicate rows and oversized or unsupported inventory manifests', async () => {
+  const files = codec();
+  const { context } = operation();
+  for (const extensions of [
+    { version: 1, addons: [manualExtension, manualExtension] },
+    { version: 2, addons: [] },
+    {
+      version: 1,
+      addons: Array.from({ length: 1025 }, (_, i) => ({ ...manualExtension, addonId: `test${i}` })),
+    },
+    {
+      version: 1,
+      addons: [{ ...manualExtension, sensitiveKeys: [{ key: 'apiToken', value: 'secret' }] }],
+    },
+  ]) {
+    await expect(
+      files.open(JSON.stringify({ ...document, extensions }), '', context),
+    ).rejects.toMatchObject({ code: 'invalid-file' });
+  }
+});
+
 describe('password-encrypted settings files', () => {
-  it('round-trips Unicode, false, zero, empty and reset with production age', async () => {
+  it('round-trips settings and scrubs signed provenance from the encrypted plaintext', async () => {
     const files = codec();
-    const sealed = await files.seal(document, password, operation().context);
+    const sealed = await files.seal(workspace, password, operation().context);
     expect(sealed).toMatch(/^-----BEGIN AGE ENCRYPTED FILE-----\n/u);
     expect(sealed).not.toContain('中文');
     const binary = armor.decode(sealed);
     expect(new TextDecoder().decode(binary.subarray(0, 100))).toMatch(/-> scrypt \S+ 18\n/u);
     const independent = new Decrypter();
     independent.addPassphrase(password);
-    expect(JSON.parse(new TextDecoder().decode(await independent.decrypt(binary)))).toEqual(
-      document,
-    );
-    expect(await files.open(sealed, password, operation().context)).toEqual(document);
+    const plaintext = new TextDecoder().decode(await independent.decrypt(binary));
+    expect(plaintext).not.toContain('url-secret');
+    expect(JSON.parse(plaintext)).toEqual(portableWorkspace);
+    expect(await files.open(sealed, password, operation().context)).toEqual(portableWorkspace);
   }, 60_000);
 
   it('reads official armored age produced outside the codec, including CRLF', async () => {

@@ -30,6 +30,7 @@ import { registerNativeUIResources } from './platform/native-ui';
 import { createScholarlyMetadataService } from './scholarly';
 import { createArtifactRepository } from './artifacts';
 import { MetadataReviewController } from './metadata-review/controller';
+import { workspaceExtensionEngine } from './modules/extensions/workspace';
 import { SettingsSnapshotController } from './settings-snapshots/controller';
 import { SettingsSnapshotService } from './settings-snapshots/service';
 import { createSettingsTemplateCatalog } from './settings-snapshots/catalog';
@@ -116,6 +117,7 @@ export class ZoteroNeoAddon implements ZoteroNeoController {
         neo: version(),
         zotero: Zotero.version,
       }),
+      workspaceExtensionEngine.capture,
     );
     const codec = createSettingsFileCodec();
     this.#managedSnapshots = createManagedSettingsSnapshots(
@@ -128,7 +130,11 @@ export class ZoteroNeoAddon implements ZoteroNeoController {
       codec,
       createSettingsSnapshotFiles(),
       (message) => this.#logger.debug(message),
-      { catalog: this.#snapshotCatalog, managed: this.#managedSnapshots },
+      {
+        catalog: this.#snapshotCatalog,
+        managed: this.#managedSnapshots,
+        extensions: workspaceExtensionEngine,
+      },
     );
     this.#itemAttributes = new ItemAttributesController(preferences, (message) =>
       this.#logger.debug(message),

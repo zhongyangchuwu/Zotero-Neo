@@ -1,7 +1,10 @@
 // @vitest-environment jsdom
 import { afterEach, expect, it, vi } from 'vitest';
 import type { ManagedSnapshotTarget } from '../../src/settings-snapshots/ports';
-import type { SettingsSnapshotModel } from '../../src/settings-snapshots/react-model';
+import type {
+  SettingsSnapshotExtensionRow,
+  SettingsSnapshotModel,
+} from '../../src/settings-snapshots/react-model';
 import { mountSettingsSnapshotsView } from '../../src/ui/react/surfaces/settings-snapshots';
 import type { ReactView } from '../../src/ui/react/types';
 
@@ -122,6 +125,7 @@ it('restores directly and offers inline refresh without a separate confirmation 
   };
   const { view, dispatch, button } = setup(preview);
   expect(button('确认恢复')).toBeUndefined();
+  expect(button('备份当前设置…').disabled).toBe(false);
   button('恢复所选 1 项').click();
   expect(dispatch).toHaveBeenLastCalledWith({ type: 'apply' });
   view.update({
@@ -187,5 +191,251 @@ it('places both guarded conflict actions at the target and identifies legacy sin
     type: 'target-overwrite',
     id: 'workspace',
     revision: 'observed-version',
+  });
+});
+
+it('shows a single backup inventory summary only when its count is known', () => {
+  const { root, view } = setup({ chinese: false });
+  expect(root.textContent).not.toContain('Third-party extensions included');
+  view.update({ ...model, chinese: false, extensionCount: 3 });
+  expect(root.textContent?.match(/Third-party extensions included: 3/g)).toHaveLength(1);
+  view.update({ ...model, chinese: false, extensionCount: 0 });
+  expect(root.textContent).toContain('Third-party extensions included: 0');
+});
+
+it('previews extension-only changes with one restore action and one restart notice', () => {
+  const preview: Partial<SettingsSnapshotModel> = {
+    chinese: false,
+    mode: 'import',
+    hasPreview: true,
+    canApply: true,
+    selectedCount: 2,
+    extensionRestart: true,
+    extensionDiff: {
+      sameCount: 3,
+      rows: [
+        {
+          id: 'direct',
+          name: 'Direct add-on',
+          version: '1.2',
+          status: 'install',
+          toEnabled: true,
+          source: 'https://example.org/direct.xpi',
+          checked: true,
+          canReplace: true,
+          message: 'Previous download failed.',
+        },
+        {
+          id: 'local',
+          name: 'Local add-on',
+          version: '2.0',
+          status: 'state',
+          fromEnabled: true,
+          toEnabled: false,
+          checked: true,
+        },
+        {
+          id: 'missing',
+          name: 'Manual add-on',
+          version: '3.1',
+          status: 'missing',
+          toEnabled: true,
+          checked: false,
+        },
+        {
+          id: 'blocked',
+          name: 'Blocked add-on',
+          version: '4.0',
+          status: 'blocked',
+          toEnabled: true,
+          checked: false,
+          message: 'Zotero does not allow this change.',
+        },
+      ],
+    },
+  };
+  const { root, dispatch, button, view } = setup(preview);
+  expect(root.textContent).toContain('Extensions contain executable code');
+  expect(root.textContent).toContain('Source: https://example.org/direct.xpi');
+  expect(root.textContent).toContain('Previous download failed.');
+  expect(root.textContent).toContain('Enabled → Disabled');
+  expect(root.textContent).toContain('Zotero does not allow this change.');
+  expect(root.textContent?.match(/Extensions already matching: 3/g)).toHaveLength(1);
+  expect(
+    root.textContent?.match(/Restart Zotero to finish applying extension changes/g),
+  ).toHaveLength(1);
+  const checkboxes = Array.from(
+    root.querySelectorAll('input[type="checkbox"]'),
+  ) as HTMLInputElement[];
+  expect(
+    checkboxes.map(({ labels, checked, disabled }) => [
+      labels?.[0]?.textContent?.trim(),
+      checked,
+      disabled,
+    ]),
+  ).toEqual([
+    ['Direct add-on 1.2', true, false],
+    ['Local add-on 2.0', true, false],
+    ['Manual add-on 3.1', false, true],
+    ['Blocked add-on 4.0', false, true],
+  ]);
+  checkboxes[1]!.click();
+  expect(dispatch).toHaveBeenLastCalledWith({
+    type: 'extension-toggle',
+    id: 'local',
+    checked: false,
+  });
+  button('Replace source…').click();
+  expect(dispatch).toHaveBeenLastCalledWith({ type: 'extension-source-open', id: 'direct' });
+  expect(button('Back up current settings…')).toBeUndefined();
+  expect(
+    (Array.from(root.querySelectorAll('button')) as HTMLButtonElement[]).filter(({ textContent }) =>
+      textContent?.startsWith('Restore 2'),
+    ),
+  ).toHaveLength(1);
+  button('Restore 2 selected changes').click();
+  expect(dispatch).toHaveBeenLastCalledWith({ type: 'apply' });
+
+  view.update({
+    ...model,
+    ...preview,
+    groups: [
+      {
+        id: 'direct-preferences',
+        label: 'Direct add-on',
+        selected: true,
+        fields: [
+          {
+            id: 'mode',
+            label: 'Mode',
+            before: 'Read during restore',
+            after: 'Backup value (verified against the local add-on)',
+            selected: true,
+            secret: false,
+            requiresRestart: false,
+            canMap: false,
+          },
+        ],
+      },
+    ],
+    selectedCount: 3,
+    canBackUpCurrent: false,
+  });
+  expect(root.textContent).toContain('Read during restore');
+  expect(button('Back up current settings…')).toBeUndefined();
+  expect(button('Restore 3 selected changes').disabled).toBe(false);
+});
+
+it('repairs a missing source in its row, preserving input during IME and candidate selection', () => {
+  const missing: SettingsSnapshotExtensionRow = {
+    id: 'manual',
+    name: 'Manual add-on',
+    version: '2.0',
+    status: 'missing',
+    toEnabled: true,
+    checked: false,
+    canReplace: true,
+  };
+  const preview: Partial<SettingsSnapshotModel> = {
+    chinese: false,
+    mode: 'import',
+    hasPreview: true,
+    extensionDiff: { rows: [missing], sameCount: 0 },
+  };
+  const { root, view, dispatch, button } = setup(preview);
+  const row = button('Add source…').parentElement!;
+  button('Add source…').click();
+  expect(dispatch).toHaveBeenLastCalledWith({ type: 'extension-source-open', id: 'manual' });
+  const editing = { ...missing, addingSource: true };
+  view.update({ ...model, ...preview, extensionDiff: { rows: [editing], sameCount: 0 } });
+
+  const input = row.querySelector<HTMLInputElement>('form input[type="text"]')!;
+  expect(input.labels?.[0]?.textContent).toContain('GitHub repository or .xpi link');
+  const source = 'https://github.com/example/manual';
+  input.value = source;
+  input.dispatchEvent(new CompositionEvent('compositionstart', { bubbles: true }));
+  input.form!.requestSubmit();
+  expect(dispatch).toHaveBeenCalledTimes(1);
+  input.dispatchEvent(new CompositionEvent('compositionend', { bubbles: true }));
+  expect(input.value).toBe(source);
+  button('Find extension', row).click();
+  expect(dispatch).toHaveBeenLastCalledWith({
+    type: 'extension-source-lookup',
+    id: 'manual',
+    value: source,
+  });
+
+  const candidates = [
+    { name: 'Manual add-on', version: '2.0', source: 'https://example.org/manual.xpi' },
+    { name: 'Manual add-on alternative', source: 'https://example.org/other.xpi' },
+  ];
+  view.update({
+    ...model,
+    ...preview,
+    extensionDiff: { rows: [{ ...editing, candidates }], sameCount: 0 },
+  });
+  expect(input.value).toBe(source);
+  const selection = row.querySelector<HTMLSelectElement>('select')!;
+  expect(selection.labels?.[0]?.textContent).toContain('Choose an .xpi package');
+  expect(
+    (Array.from(selection.options) as HTMLOptionElement[]).map((option) => option.text),
+  ).toEqual([
+    'Select a package',
+    'Manual add-on (2.0) — https://example.org/manual.xpi',
+    'Manual add-on alternative — https://example.org/other.xpi',
+  ]);
+  selection.value = '1';
+  button('Use this package', row).click();
+  expect(dispatch).toHaveBeenLastCalledWith({
+    type: 'extension-source-choose',
+    id: 'manual',
+    index: 1,
+  });
+  button('Cancel', row).click();
+  expect(dispatch).toHaveBeenLastCalledWith({ type: 'extension-source-close', id: 'manual' });
+
+  view.update({
+    ...model,
+    ...preview,
+    extensionDiff: {
+      rows: [{ ...missing, status: 'install', source: candidates[1]!.source }],
+      sameCount: 0,
+    },
+  });
+  expect(root.querySelector('form')).toBeNull();
+  expect(row.textContent).toContain('Source: https://example.org/other.xpi');
+  const restored = row.querySelector<HTMLInputElement>('input[type="checkbox"]')!;
+  expect(restored.disabled).toBe(false);
+  expect(restored.checked).toBe(false);
+  restored.click();
+  expect(dispatch).toHaveBeenLastCalledWith({
+    type: 'extension-toggle',
+    id: 'manual',
+    checked: true,
+  });
+});
+
+it('opens the preferred library attachment directly and leaves alternatives collapsed', () => {
+  const preferred = { libraryID: 1, itemKey: 'WORK1234', title: 'Workspace backup' };
+  const other = { libraryID: 1, itemKey: 'OLD12345', title: 'Earlier backup' };
+  const { root, dispatch, button } = setup({
+    chinese: false,
+    mode: 'import',
+    preferredLibrarySource: preferred,
+    sources: [preferred, other],
+  });
+  const details = (Array.from(root.querySelectorAll('summary')) as HTMLElement[]).find(
+    ({ textContent }) => textContent === 'Restore an existing library backup',
+  )!.parentElement!;
+  const direct = button('Preview library backup: Workspace backup');
+  expect(details.contains(direct)).toBe(false);
+  expect(details.hasAttribute('open')).toBe(false);
+  expect(button(preferred.title, details)).toBeUndefined();
+  expect(button(other.title, details)).toBeDefined();
+  direct.click();
+  expect(dispatch).toHaveBeenCalledExactlyOnceWith({
+    type: 'source',
+    libraryID: preferred.libraryID,
+    itemKey: preferred.itemKey,
   });
 });

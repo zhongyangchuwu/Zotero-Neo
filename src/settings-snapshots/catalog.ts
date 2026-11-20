@@ -5,6 +5,7 @@ import {
 } from './contracts';
 import type {
   SettingsTemplateCatalogPort,
+  SnapshotCaptureAdapter,
   SnapshotPluginTemplate,
   SnapshotTemplateField,
 } from './ports';
@@ -296,26 +297,37 @@ export function createSettingsTemplateCatalog(
       if (!adapters.has(template.pluginID)) {
         let adapter: SettingsAdapter;
         const selection = record;
-        adapter = new ReviewedPreferenceAdapter(
-          template,
-          settingsTemplateHost,
-          (operation) =>
-            serial(operation, async () => {
-              await refresh(operation);
-              if (
-                adapters.get(template.pluginID) !== adapter ||
-                records.get(template.pluginID) !== selection
-              )
-                throw new SettingsSnapshotError(
-                  'stale-template',
-                  'Plugin settings have changed; choose the settings to back up again',
-                );
-            }),
-          () =>
-            !disposed &&
-            adapters.get(template.pluginID) === adapter &&
-            records.get(template.pluginID) === selection,
+        const captureAdapter = Object.assign(
+          new ReviewedPreferenceAdapter(
+            template,
+            settingsTemplateHost,
+            (operation) =>
+              serial(operation, async () => {
+                await refresh(operation);
+                if (
+                  adapters.get(template.pluginID) !== adapter ||
+                  records.get(template.pluginID) !== selection
+                )
+                  throw new SettingsSnapshotError(
+                    'stale-template',
+                    'Plugin settings have changed; choose the settings to back up again',
+                  );
+              }),
+            () =>
+              !disposed &&
+              adapters.get(template.pluginID) === adapter &&
+              records.get(template.pluginID) === selection,
+          ),
+          {
+            snapshotSensitiveKeys: {
+              addonId: template.pluginID,
+              keys: template.fields
+                .filter((field) => field.secret && template.reviewedKeys.includes(field.key))
+                .map((field) => field.key),
+            },
+          } satisfies Pick<SnapshotCaptureAdapter, 'snapshotSensitiveKeys'>,
         );
+        adapter = captureAdapter;
         adapters.set(template.pluginID, adapter);
       }
     }
@@ -365,6 +377,26 @@ export function createSettingsTemplateCatalog(
     tail = result.catch(() => {});
     return result;
   };
+  const scanBindings = async (
+    template: SnapshotPluginTemplate,
+    context: SettingsOperationContext,
+  ): Promise<void> => {
+    const generation = pluginGeneration;
+    const current = () =>
+      !disposed &&
+      !context.signal.aborted &&
+      context.isCurrent() &&
+      generation === pluginGeneration;
+    const keys = await settingsTemplateHost.scanBindings(template.pluginID, current);
+    assert(context);
+    if (!current())
+      throw new SettingsSnapshotError(
+        'stale-template',
+        'The installed plugin changed during scanning',
+      );
+    scans.set(template.pluginID, { revision: template.revision, keys });
+    await refresh(context);
+  };
   const builtinTemplates = (): SnapshotPluginTemplate[] =>
     builtins.map((adapter, index) =>
       frozen({
@@ -404,23 +436,8 @@ export function createSettingsTemplateCatalog(
       return serial(context, async () => {
         await refresh(context);
         const template = requireTemplate(pluginID);
-        if (template.fields.some((field) => field.requiresLiveBinding)) {
-          const generation = pluginGeneration;
-          const current = () =>
-            !disposed &&
-            !context.signal.aborted &&
-            context.isCurrent() &&
-            generation === pluginGeneration;
-          const keys = await settingsTemplateHost.scanBindings(pluginID, current);
-          assert(context);
-          if (!current())
-            throw new SettingsSnapshotError(
-              'stale-template',
-              'The installed plugin changed during scanning',
-            );
-          scans.set(pluginID, { revision: template.revision, keys });
-          await refresh(context);
-        }
+        if (template.fields.some((field) => field.requiresLiveBinding))
+          await scanBindings(template, context);
         return requireTemplate(pluginID);
       });
     },
@@ -468,6 +485,101 @@ export function createSettingsTemplateCatalog(
         );
         await refresh(context);
         return requireTemplate(pluginID);
+      });
+    },
+    workspaceAdapter(pluginID, version, approved, context) {
+      return serial(context, async () => {
+        await refresh(context);
+        let template = templates.get(pluginID);
+        if (!template || template.status === 'unavailable' || template.version !== version) return;
+        if (template.fields.some((field) => field.requiresLiveBinding && approved.has(field.key))) {
+          await scanBindings(template, context);
+          template = templates.get(pluginID);
+          if (!template || template.status === 'unavailable' || template.version !== version)
+            return;
+        }
+        const fields = template.fields
+          .filter(
+            (field) =>
+              field.supported &&
+              approved.has(field.key) &&
+              (!field.secret || approved.get(field.key)),
+          )
+          .map((field) => (approved.get(field.key) ? { ...field, secret: true } : field));
+        const keys = new Set(fields.map(({ key }) => key));
+        if (!keys.size) return;
+        const revision = template.revision;
+        const generation = pluginGeneration;
+        const liveBinding = fields.some((field) => field.requiresLiveBinding);
+        const scan = scans.get(pluginID);
+        let record = records.get(pluginID);
+        const current = () => {
+          const local = templates.get(pluginID);
+          if (!local || local.status === 'unavailable') return false;
+          return (
+            !disposed &&
+            generation === pluginGeneration &&
+            records.get(pluginID) === record &&
+            local.revision === revision &&
+            (!liveBinding || scans.get(pluginID) === scan)
+          );
+        };
+        const recheck = (operation: SettingsOperationContext) => {
+          assert(operation);
+          if (!current())
+            throw new SettingsSnapshotError(
+              'stale-template',
+              'Plugin settings changed after workspace review',
+            );
+        };
+        const adapter = new ReviewedPreferenceAdapter(
+          { ...template, fields, reviewedKeys: [...keys] },
+          settingsTemplateHost,
+          (operation) =>
+            serial(operation, async () => {
+              await refresh(operation);
+              recheck(operation);
+            }),
+          current,
+        );
+        const apply = adapter.apply.bind(adapter);
+        return {
+          keys,
+          adapter: Object.assign(adapter, {
+            async apply(
+              changes: Parameters<SettingsAdapter['apply']>[0],
+              operation: SettingsOperationContext,
+            ) {
+              const sensitiveKeys = new Set(record?.sensitiveKeys);
+              const previousSize = sensitiveKeys.size;
+              for (const { key } of changes)
+                if (keys.has(key) && approved.get(key)) sensitiveKeys.add(key);
+              if (sensitiveKeys.size !== previousSize) {
+                // After source verification, remember stronger sensitivity without changing review authority.
+                await serial(operation, async () => {
+                  await refresh(operation);
+                  recheck(operation);
+                  const next: TemplateRecord = {
+                    ...(record ?? {
+                      format: 'zotero-neo-settings-template',
+                      schemaVersion: 1,
+                      pluginID,
+                      version,
+                      revision,
+                      fields: [],
+                      status: 'draft',
+                    }),
+                    sensitiveKeys: [...sensitiveKeys],
+                  };
+                  adapters.delete(pluginID);
+                  await save(next, operation);
+                  record = next;
+                });
+              }
+              return apply(changes, operation);
+            },
+          }),
+        };
       });
     },
     exportTemplate(pluginID, context) {

@@ -81,6 +81,8 @@ export class ExtensionSourceError extends Error {
 const GITHUB_ORIGIN = 'https://github.com';
 const GITHUB_TIMEOUT_MS = 15_000;
 const SOURCE_VERSION = 1;
+const MAX_SOURCE_STORE_LENGTH = 2 * 1024 * 1024;
+const MAX_STORED_SOURCES = 4096;
 const SHA256 = /^sha256:[a-f0-9]{64}$/i;
 
 export function safeExtensionHTTPSURL(raw: string): URL | undefined {
@@ -118,7 +120,7 @@ function isSHA256(value: unknown): value is string {
   return typeof value === 'string' && value.length === 71 && SHA256.test(value);
 }
 
-function parseStoredSource(value: unknown): ExtensionSource {
+export function parseExtensionSource(value: unknown): ExtensionSource | undefined {
   if (value && typeof value === 'object' && 'kind' in value) {
     if (value.kind === 'github' && 'owner' in value && 'repo' in value) {
       const { owner, repo } = value;
@@ -146,13 +148,19 @@ function parseStoredSource(value: unknown): ExtensionSource {
       }
     }
   }
-  throw new ExtensionSourceError('source-read');
 }
 
-function readSources(): Map<string, ExtensionSource> {
+function parseStoredSource(value: unknown): ExtensionSource {
+  const source = parseExtensionSource(value);
+  if (!source) throw new ExtensionSourceError('source-read');
+  return source;
+}
+
+export function readSources(): Map<string, ExtensionSource> {
   try {
     const raw = readProfileExtensionSources();
     if (raw === null) return new Map();
+    if (raw.length > MAX_SOURCE_STORE_LENGTH) throw new ExtensionSourceError('source-read');
     const value: unknown = JSON.parse(raw);
     if (
       value &&
@@ -165,8 +173,9 @@ function readSources(): Map<string, ExtensionSource> {
       !Array.isArray(value.sources)
     ) {
       const sources = new Map<string, ExtensionSource>();
-      for (const [id, source] of Object.entries(value.sources))
-        sources.set(id, parseStoredSource(source));
+      const entries = Object.entries(value.sources);
+      if (entries.length > MAX_STORED_SOURCES) throw new ExtensionSourceError('source-read');
+      for (const [id, source] of entries) sources.set(id, parseStoredSource(source));
       return sources;
     }
   } catch {

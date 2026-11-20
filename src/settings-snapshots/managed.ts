@@ -1,4 +1,5 @@
 import type { Cleanup } from '../core/cleanup';
+import { validateWorkspaceExtensionManifest } from '../modules/extensions/workspace';
 import {
   createSnapshotAttachments,
   type SnapshotAttachmentIdentity,
@@ -89,10 +90,11 @@ function canonical(value: unknown): string {
   return JSON.stringify(value);
 }
 function semantic(document: SettingsDocument): string {
-  const { createdAt: _createdAt, ...settings } = document;
+  const { createdAt: _createdAt, extensions, ...settings } = document;
   return managedSnapshotSemanticIdentity(
     canonical({
       ...settings,
+      ...(extensions && { extensions: validateWorkspaceExtensionManifest(extensions) }),
       sections: settings.sections
         .map((section) => ({
           ...section,
@@ -353,7 +355,9 @@ export function createManagedSettingsSnapshots(
         includeSecrets: target.includeSecrets,
         includeLibrarySettings: target.includeLibrarySettings,
       },
-      target.kind === 'workspace' ? { skipFailedAdapters: true } : undefined,
+      target.kind === 'workspace'
+        ? { skipFailedAdapters: true, includeExtensions: true }
+        : undefined,
     );
     assertSettingsCurrent(context);
     const capturedAdapterIDs = captured.document.sections.map((section) => section.adapterID);

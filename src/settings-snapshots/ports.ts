@@ -6,6 +6,11 @@ import type {
   SettingsOperationContext,
 } from './contracts';
 
+/** Only selected, locally reviewed plugin fields can contribute capture metadata. */
+export interface SnapshotCaptureAdapter extends SettingsAdapter {
+  readonly snapshotSensitiveKeys: { readonly addonId: string; readonly keys: readonly string[] };
+}
+
 export interface SnapshotTemplateField {
   readonly key: string;
   readonly label: string;
@@ -48,6 +53,14 @@ export interface SettingsTemplateCatalogPort {
     }[],
     context: SettingsOperationContext,
   ): Promise<SnapshotPluginTemplate>;
+  /** Admit selected names for this restore only; never replace the profile's template review. */
+  workspaceAdapter?(
+    pluginID: string,
+    version: string,
+    /** True only for keys explicitly approved as credential fields. */
+    fields: ReadonlyMap<string, boolean>,
+    context: SettingsOperationContext,
+  ): Promise<{ readonly adapter: SettingsAdapter; readonly keys: ReadonlySet<string> } | undefined>;
   exportTemplate(pluginID: string, context: SettingsOperationContext): Promise<string>;
   importTemplate(text: string, context: SettingsOperationContext): Promise<SnapshotPluginTemplate>;
   dispose(): void;

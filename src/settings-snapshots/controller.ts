@@ -3,6 +3,13 @@ import { actionText, t } from '../i18n';
 import type { KeyGuideLanguage } from '../input/key-guide-config';
 import { compositionOwnsKey } from '../input/composition';
 import { keyString } from '../input/keys';
+import { extensionErrorText } from '../modules/extensions/operations';
+import type { ExtensionCandidate } from '../modules/extensions/sources';
+import {
+  workspaceExtensionCandidateLabel,
+  type WorkspaceExtensionPlan,
+  type workspaceExtensionEngine,
+} from '../modules/extensions/workspace';
 import { isDeadObject } from '../platform/cross-compartment';
 import { mountNativeReactView } from '../platform/native-ui';
 import { openSettingsHelp } from '../platform/settings-help';
@@ -27,6 +34,11 @@ import type {
   SettingsSnapshotModel,
 } from './react-model';
 import type { SnapshotTargetForm } from './react-model';
+import {
+  prepareWorkspacePreferences,
+  restoreWorkspacePreferences,
+  type DeferredWorkspaceSetting,
+} from './workspace-preferences';
 import { settingsContainerFor } from './codec';
 import type {
   ManagedSettingsSnapshotsPort,
@@ -38,6 +50,12 @@ import type {
 } from './ports';
 
 const DEFAULT_TARGET_TITLE = '[Zotero-Neo] 工作区同步';
+
+interface ExtensionSourceEditor {
+  readonly id: string;
+  readonly candidates?: readonly ExtensionCandidate[];
+  readonly message?: string;
+}
 
 export interface SettingsSnapshotPresentation {
   readonly window: Window;
@@ -60,6 +78,11 @@ interface SnapshotView {
   readonly unload: () => void;
   readonly adapters: Set<string>;
   readonly selected: Set<string>;
+  readonly selectedExtensions: Set<string>;
+  readonly replacementSources: Map<string, ExtensionCandidate>;
+  readonly extensionRows: Map<string, WorkspaceExtensionPlan['rows'][number]>;
+  readonly unusableSources: Set<string>;
+  readonly extensionMessages: Map<string, string>;
   readonly paths: Record<string, string>;
   react: NativeReactView<SettingsSnapshotModel> | null;
   mode: SettingsSnapshotModel['mode'];
@@ -76,6 +99,12 @@ interface SnapshotView {
   error: boolean;
   sourcePath: string;
   issues: readonly string[];
+  extensionCount?: number;
+  extensionPlan?: WorkspaceExtensionPlan;
+  extensionSourceEditor?: ExtensionSourceEditor;
+  extensionRestart: boolean;
+  deferredSettings: readonly DeferredWorkspaceSetting[];
+  settingsPreviewDocument?: SettingsDocument;
   receipt?: SettingsRestoreReceipt;
   document?: SettingsDocument;
   plan?: SettingsSnapshotPlan;
@@ -102,6 +131,7 @@ export class SettingsSnapshotController implements SettingsSnapshotPort {
   readonly #debug: (message: string) => void;
   readonly #catalog?: SettingsTemplateCatalogPort;
   readonly #managed?: ManagedSettingsSnapshotsPort;
+  readonly #extensions?: typeof workspaceExtensionEngine;
   #view: SnapshotView | null = null;
   constructor(
     service: SettingsSnapshotService,
@@ -111,6 +141,7 @@ export class SettingsSnapshotController implements SettingsSnapshotPort {
     dependencies: {
       readonly catalog?: SettingsTemplateCatalogPort;
       readonly managed?: ManagedSettingsSnapshotsPort;
+      readonly extensions?: typeof workspaceExtensionEngine;
     } = {},
   ) {
     this.#service = service;
@@ -119,6 +150,7 @@ export class SettingsSnapshotController implements SettingsSnapshotPort {
     this.#debug = debug;
     this.#catalog = dependencies.catalog;
     this.#managed = dependencies.managed;
+    this.#extensions = dependencies.extensions;
   }
   #text(view: SnapshotView, cn: string, en: string): string {
     return view.host.language() === 'zh-CN' ? cn : en;
@@ -160,6 +192,13 @@ export class SettingsSnapshotController implements SettingsSnapshotPort {
       unload: () => this.closeOwner(host.window),
       adapters: new Set(this.#service.adapters.map(({ id }) => id)),
       selected: new Set(),
+      selectedExtensions: new Set(),
+      replacementSources: new Map(),
+      extensionMessages: new Map(),
+      unusableSources: new Set(),
+      extensionRestart: false,
+      extensionRows: new Map(),
+      deferredSettings: [],
       paths: Object.create(null) as Record<string, string>,
       react: null,
       mode: 'export',
@@ -214,7 +253,7 @@ export class SettingsSnapshotController implements SettingsSnapshotPort {
           view.react?.getElement('close')?.focus();
       })
       .catch(() => this.#debug('Settings snapshots interface failed'));
-    if (this.#catalog || this.#managed)
+    if (this.#catalog || this.#managed || this.#extensions)
       this.#run(view, (context) => this.#refresh(view, context, true));
     return () => {
       if (this.#view === view) this.close();
@@ -246,6 +285,29 @@ export class SettingsSnapshotController implements SettingsSnapshotPort {
       )
     );
   }
+  #canAdoptExtensions(view: SnapshotView, selected?: ReadonlySet<string>): boolean {
+    return (
+      !view.extensionPlan ||
+      view.extensionPlan.rows.every(
+        ({ entry, status }) =>
+          status === 'same' ||
+          (selected?.has(entry.addonId) &&
+            (status === 'install' ||
+              status === 'state' ||
+              view.replacementSources.has(entry.addonId))),
+      )
+    );
+  }
+  #deferredBlocked(view: SnapshotView, setting: DeferredWorkspaceSetting): boolean {
+    const row = view.extensionRows.get(setting.addonId);
+    return (
+      !row ||
+      row.status === 'blocked' ||
+      ((row.status === 'install' || row.status === 'missing') &&
+        !view.selectedExtensions.has(setting.addonId))
+    );
+  }
+
   #showsChange(view: SnapshotView, change: SettingsChange): boolean {
     return (
       !view.conflictTargetID || !!change.blocked || !sameSettingState(change.before, change.after)
@@ -301,6 +363,50 @@ export class SettingsSnapshotController implements SettingsSnapshotPort {
         });
         if (!change.blocked && !selected) group.selected = false;
       }
+    for (const entry of view.deferredSettings) {
+      const groupID = settingsChangeID(entry.adapterID, 'workspace-deferred');
+      let group = groups.get(groupID);
+      if (!group) {
+        const addon = view.extensionRows.get(entry.addonId);
+        group = {
+          id: groupID,
+          label: addon?.entry.name ?? this.#adapterLabel(view, entry.adapterID),
+          selected: true,
+          fields: [],
+        };
+        groups.set(groupID, group);
+      }
+      const addon = view.extensionRows.get(entry.addonId);
+      const blocked =
+        !addon || addon.status === 'blocked'
+          ? this.#text(view, '无法在本机验证此扩展。', 'This add-on cannot be verified locally.')
+          : this.#deferredBlocked(view, entry)
+            ? this.#text(view, '先选择安装此扩展。', 'Select the add-on for installation first.')
+            : undefined;
+      const selected = !blocked && view.selected.has(entry.id);
+      group.fields.push({
+        id: entry.id,
+        label: entry.label,
+        before: this.#text(view, '恢复时读取', 'Read during restore'),
+        after: this.#text(
+          view,
+          '使用备份值（经本机扩展验证）',
+          'Backup value (verified against the local add-on)',
+        ),
+        selected,
+        secret: entry.secret,
+        requiresRestart: false,
+        canMap: false,
+        blocked,
+      });
+      if (!blocked && !selected) group.selected = false;
+    }
+    const extensionRows = view.extensionPlan?.rows;
+    const editor = view.extensionSourceEditor;
+    const selectedSettings = this.#selectedSettings(view);
+    const selectedCount = selectedSettings.size + view.selectedExtensions.size;
+    const preferred = view.sources.find(({ title }) => title === DEFAULT_TARGET_TITLE);
+
     return {
       chinese: language === 'zh-CN',
       title: actionText('openSettingsSnapshots', language),
@@ -321,6 +427,41 @@ export class SettingsSnapshotController implements SettingsSnapshotPort {
       targets: view.targets,
       locations: view.locations,
       sources: view.sources,
+      preferredLibrarySource: preferred,
+      extensionCount: view.extensionCount,
+      extensionRestart: view.extensionRestart,
+      extensionDiff: extensionRows && {
+        sameCount: extensionRows.filter(({ status }) => status === 'same').length,
+        rows: extensionRows.flatMap(({ entry, status, currentEnabled, sourceLabel }) => {
+          if (status === 'same') return [];
+          const replacement = view.replacementSources.get(entry.addonId);
+          const edit = editor?.id === entry.addonId ? editor : undefined;
+          return [
+            {
+              id: entry.addonId,
+              name: entry.name,
+              version: entry.version,
+              status: status === 'missing' && replacement ? ('install' as const) : status,
+              fromEnabled: currentEnabled,
+              toEnabled: entry.enabled,
+              source: replacement
+                ? workspaceExtensionCandidateLabel(replacement)
+                : view.unusableSources.has(entry.addonId)
+                  ? undefined
+                  : sourceLabel,
+              checked: view.selectedExtensions.has(entry.addonId),
+              canReplace: status === 'missing' || status === 'install',
+              addingSource: !!edit,
+              candidates: edit?.candidates?.map((candidate) => ({
+                name: candidate.name,
+                version: candidate.version,
+                source: workspaceExtensionCandidateLabel(candidate),
+              })),
+              message: edit?.message ?? view.extensionMessages.get(entry.addonId),
+            },
+          ];
+        }),
+      },
       sourceLibraryID: view.sourceLibraryID,
       targetForm: view.targetForm.editingID
         ? view.targetForm
@@ -330,7 +471,12 @@ export class SettingsSnapshotController implements SettingsSnapshotPort {
       needsDiffRefresh: !!view.refreshChoices,
       awaitingUnlock: view.awaitingUnlock,
       reviewingConflict: !!view.conflictTargetID,
-      canAdoptUnchanged: !!view.conflictTargetID && !!view.plan && this.#canAdopt(view.plan),
+      canAdoptUnchanged:
+        !!view.conflictTargetID &&
+        !!view.plan &&
+        !view.deferredSettings.length &&
+        this.#canAdopt(view.plan) &&
+        this.#canAdoptExtensions(view),
       targetPasswordAction: view.targetPasswordAction,
       adapters: this.#service.adapters.map((adapter) => ({
         ...adapter,
@@ -350,9 +496,19 @@ export class SettingsSnapshotController implements SettingsSnapshotPort {
           (entry) =>
             `${this.#adapterLabel(view, entry.adapterID)} · ${entry.key}: ${entry.status}${entry.message ? ` — ${entry.message}` : ''}${entry.requiresRestart ? this.#text(view, '（需重启）', ' (restart required)') : ''}`,
         ) ?? [],
-      canApply: !!view.plan && !!view.selected.size,
-      selectedCount: view.selected.size,
+      canApply: !!view.plan && selectedCount > 0,
+      canBackUpCurrent: view.plan?.plans.some(({ adapterID, changes }) =>
+        changes.some(({ key }) => view.selected.has(settingsChangeID(adapterID, key))),
+      ),
+      selectedCount,
     };
+  }
+  #selectedSettings(view: SnapshotView): ReadonlySet<string> {
+    if (!view.deferredSettings.length) return view.selected;
+    const selected = new Set(view.selected);
+    for (const entry of view.deferredSettings)
+      if (this.#deferredBlocked(view, entry)) selected.delete(entry.id);
+    return selected;
   }
   #adapterLabel(view: SnapshotView, id: string): string {
     return (
@@ -375,13 +531,26 @@ export class SettingsSnapshotController implements SettingsSnapshotPort {
     view.awaitingUnlock = false;
     view.sourceContents = '';
     view.document = undefined;
+    view.settingsPreviewDocument = undefined;
     view.plan = undefined;
     view.selected.clear();
+    view.extensionPlan = undefined;
+    view.deferredSettings = [];
+    view.extensionSourceEditor = undefined;
+    view.selectedExtensions.clear();
+    view.extensionRows.clear();
+    view.replacementSources.clear();
+    view.extensionMessages.clear();
+    view.unusableSources.clear();
   }
   #invalidatePlan(view: SnapshotView): void {
     view.refreshChoices ??= new Set(view.selected);
     view.plan = undefined;
     view.selected.clear();
+    view.extensionPlan = undefined;
+    view.extensionRows.clear();
+    view.deferredSettings = [];
+    view.extensionSourceEditor = undefined;
     view.issues = [];
   }
   #setPlan(view: SnapshotView, plan: SettingsSnapshotPlan, preserve?: ReadonlySet<string>): void {
@@ -398,6 +567,8 @@ export class SettingsSnapshotController implements SettingsSnapshotPort {
         )
           view.selected.add(id);
       }
+    for (const setting of view.deferredSettings)
+      if (preserve ? preserve.has(setting.id) : !setting.secret) view.selected.add(setting.id);
     view.issues = plan.issues.map(
       (issue) => `${issue.adapterID ?? ''}${issue.key ? ` · ${issue.key}` : ''}: ${issue.message}`,
     );
@@ -405,6 +576,7 @@ export class SettingsSnapshotController implements SettingsSnapshotPort {
   #run(
     view: SnapshotView,
     task: (context: SettingsCryptoContext & SettingsPlanContext) => Promise<void>,
+    invalidateOnAbort = true,
   ): void {
     if (view.busy || !this.#current(view)) return;
     const abort = new (view.host.window as Window & typeof globalThis).AbortController();
@@ -468,7 +640,8 @@ export class SettingsSnapshotController implements SettingsSnapshotPort {
           this.#debug('Settings snapshots operation failed');
       })
       .finally(() => {
-        if (abort.signal.aborted && view.plan && !view.reviewExport) this.#invalidatePlan(view);
+        if (invalidateOnAbort && abort.signal.aborted && view.plan && !view.reviewExport)
+          this.#invalidatePlan(view);
         if (this.#current(view)) {
           view.busy = false;
           view.abort = undefined;
@@ -481,6 +654,17 @@ export class SettingsSnapshotController implements SettingsSnapshotPort {
     context: SettingsCryptoContext,
     initial = false,
   ): Promise<void> {
+    if (this.#extensions) {
+      try {
+        const inventory = await this.#extensions.capture(context, new Map());
+        assertSettingsCurrent(context);
+        view.extensionCount = inventory.addons.length;
+      } catch {
+        assertSettingsCurrent(context);
+        view.extensionCount = undefined;
+        this.#debug('Installed extension summary could not be read');
+      }
+    }
     if (this.#catalog) {
       const plugins = await this.#catalog.list(context);
       assertSettingsCurrent(context);
@@ -563,6 +747,10 @@ export class SettingsSnapshotController implements SettingsSnapshotPort {
       if (view.document) for (const key of Object.keys(view.paths)) delete view.paths[key];
       view.document = undefined;
       view.sourceContents = '';
+      view.selectedExtensions.clear();
+      view.replacementSources.clear();
+      view.extensionMessages.clear();
+      view.unusableSources.clear();
     }
     view.awaitingUnlock = container === 'age' && !unlocked;
     if (view.awaitingUnlock && !password) {
@@ -583,8 +771,41 @@ export class SettingsSnapshotController implements SettingsSnapshotPort {
     view.awaitingUnlock = false;
     view.document = document;
     view.sourceContents = contents;
-    const plan = await this.#service.plan(document, sourceContext);
+    const extensions = document.extensions && this.#extensions;
+    const [extensionPlan, prepared] = await Promise.all([
+      extensions && document.extensions
+        ? extensions.inspect(document.extensions, sourceContext)
+        : undefined,
+      extensions && this.#catalog
+        ? prepareWorkspacePreferences(document, this.#catalog, sourceContext)
+        : undefined,
+    ]);
     assertSettingsCurrent(sourceContext);
+    const plan = await this.#service.plan(prepared?.document ?? document, sourceContext);
+    assertSettingsCurrent(sourceContext);
+    view.extensionPlan = extensionPlan && {
+      rows: extensionPlan.rows.map((row) =>
+        row.status === 'install' && view.unusableSources.has(row.entry.addonId)
+          ? { ...row, status: 'missing' }
+          : row,
+      ),
+    };
+    view.extensionRows.clear();
+    const previous = unlocked && view.refreshChoices ? new Set(view.selectedExtensions) : undefined;
+    view.selectedExtensions.clear();
+    for (const row of view.extensionPlan?.rows ?? []) {
+      const id = row.entry.addonId;
+      view.extensionRows.set(id, row);
+      if (
+        (row.status === 'install' ||
+          row.status === 'state' ||
+          (row.status === 'missing' && view.replacementSources.has(id))) &&
+        (previous ? previous.has(id) : row.status !== 'missing')
+      )
+        view.selectedExtensions.add(id);
+    }
+    view.settingsPreviewDocument = prepared?.document;
+    view.deferredSettings = prepared?.deferred ?? [];
     this.#setPlan(view, plan, view.refreshChoices);
     view.status = '';
   }
@@ -602,7 +823,7 @@ export class SettingsSnapshotController implements SettingsSnapshotPort {
       );
     }
   }
-  #export(view: SnapshotView, adapterIDs: ReadonlySet<string>): void {
+  #export(view: SnapshotView, adapterIDs: ReadonlySet<string>, workspace = false): void {
     if (!adapterIDs.size) return;
     const container = view.container;
     const password = container === 'age' ? this.#password(view, 'export-password') : '';
@@ -630,7 +851,10 @@ export class SettingsSnapshotController implements SettingsSnapshotPort {
           includeSecrets: container === 'age' && view.includeSecrets,
           includeLibrarySettings: view.includeLibrarySettings,
         },
-        { skipFailedAdapters: true },
+        {
+          skipFailedAdapters: true,
+          ...(workspace && this.#extensions ? { includeExtensions: true as const } : {}),
+        },
       );
       const contents = await this.#codec.seal(
         captured.document,
@@ -657,6 +881,11 @@ export class SettingsSnapshotController implements SettingsSnapshotPort {
         `已保存到 ${choice.path}（${labels}；${fields} 项设置）。`,
         `Saved to ${choice.path} (${labels}; ${fields} settings).`,
       );
+      if (captured.document.extensions) {
+        const count = captured.document.extensions.addons.length;
+        view.extensionCount = count;
+        view.status += this.#text(view, ` 包含 ${count} 个扩展。`, ` Includes ${count} add-ons.`);
+      }
       const skipped = captured.issues.filter(({ code }) => code === 'adapter-skipped').length;
       if (skipped)
         view.status += this.#text(
@@ -753,37 +982,78 @@ export class SettingsSnapshotController implements SettingsSnapshotPort {
     });
   }
   #apply(view: SnapshotView): void {
-    const { plan, document, conflictTargetID } = view;
+    const { plan, document, conflictTargetID, extensionPlan, deferredSettings } = view;
     if (!plan || !document || view.reviewExport) return;
-    const selected = new Set(view.selected);
+    const selected = new Set(this.#selectedSettings(view));
+    const selectedExtensions = new Set(view.selectedExtensions);
     const managed = conflictTargetID ? this.#managed : undefined;
+    const extensions = extensionPlan ? this.#extensions : undefined;
     const resolving = !!managed;
-    const coversDiff = resolving && this.#canAdopt(plan, selected);
-    if (!selected.size && !coversDiff) return;
+    const coversDiff =
+      resolving &&
+      this.#canAdopt(plan, selected) &&
+      this.#canAdoptExtensions(view, selectedExtensions) &&
+      deferredSettings.every(({ id }) => selected.has(id));
+    if (!selected.size && !selectedExtensions.size && !coversDiff) return;
     view.status = this.#text(
       view,
       '正在检查并恢复所选设置…',
       'Checking and restoring selected settings…',
     );
     this.#run(view, async (context) => {
-      const receipt = selected.size
-        ? await this.#service.apply(plan, selected, context, () =>
-            this.#assertSourceCurrent(view, context),
-          )
-        : undefined;
+      const verifySource = () => this.#assertSourceCurrent(view, context);
+      const extensionReceipt =
+        extensions && extensionPlan
+          ? await extensions.apply(
+              extensionPlan,
+              selectedExtensions,
+              view.replacementSources,
+              context,
+              verifySource,
+            )
+          : undefined;
+      if (extensionReceipt?.pendingRestart) view.extensionRestart = true;
+      assertSettingsCurrent(context);
+      const restored =
+        selected.size && extensions && this.#catalog
+          ? await restoreWorkspacePreferences(
+              document,
+              this.#catalog,
+              this.#service,
+              plan,
+              deferredSettings,
+              selected,
+              context,
+              verifySource,
+            )
+          : undefined;
+      const receipt = restored
+        ? restored.receipt
+        : selected.size
+          ? await this.#service.apply(plan, selected, context, verifySource)
+          : undefined;
       view.receipt = receipt;
       const successful =
-        !receipt ||
-        (!receipt.cancelled &&
-          receipt.entries.length === selected.size &&
-          receipt.entries.every(({ status }) => status === 'applied' || status === 'unchanged'));
+        !extensionReceipt?.skipped.length &&
+        !restored?.skipped.length &&
+        (!selected.size ||
+          (!!receipt &&
+            !receipt.cancelled &&
+            receipt.entries.length === selected.size &&
+            receipt.entries.every(({ status }) => status === 'applied' || status === 'unchanged')));
       let adopted = false;
       if (managed && conflictTargetID && coversDiff && successful) {
         try {
           // Recheck even unchanged rows: a setting may have drifted after the preview.
           const current = await this.#service.plan(document, context);
-          if (this.#canAdopt(current)) {
-            await this.#assertSourceCurrent(view, context);
+          const sameExtensions =
+            !extensions ||
+            !document.extensions ||
+            (await extensions.inspect(document.extensions, context)).rows.every(
+              ({ status }) => status === 'same',
+            );
+          if (sameExtensions && this.#canAdopt(current)) {
+            await verifySource();
             const target = await managed.adoptCloud(conflictTargetID, view.sourceContents, context);
             assertSettingsCurrent(context);
             view.targets = view.targets.map((entry) => (entry.id === target.id ? target : entry));
@@ -800,7 +1070,11 @@ export class SettingsSnapshotController implements SettingsSnapshotPort {
           }
         }
       }
-      if (resolving && !adopted) this.#invalidatePlan(view);
+      const extensionFailures = extensionReceipt?.skipped ?? [];
+      const retainSource =
+        (resolving && !adopted) ||
+        extensionFailures.some(({ addonId }) => selectedExtensions.has(addonId));
+      if (retainSource) this.#invalidatePlan(view);
       else this.#clearReview(view);
       view.error = !successful || (coversDiff && !adopted);
       view.status = receipt?.cancelled
@@ -818,6 +1092,37 @@ export class SettingsSnapshotController implements SettingsSnapshotPort {
           : selected.size
             ? this.#text(view, '已恢复所选设置。', 'Selected settings restored.')
             : '';
+      if (extensionReceipt && !receipt?.cancelled) {
+        const { installed, aligned } = extensionReceipt;
+        const fields = receipt?.entries.filter(({ status }) => status === 'applied').length ?? 0;
+        const resolved =
+          receipt?.entries.filter(({ status }) => status === 'applied' || status === 'unchanged')
+            .length ?? 0;
+        const settingFailures = Math.max(0, selected.size - resolved);
+        view.status = this.#text(
+          view,
+          `已安装 ${installed} 个扩展、对齐 ${aligned} 项启停状态、恢复 ${fields} 项设置。`,
+          `Installed ${installed} add-ons, aligned ${aligned} states, and restored ${fields} settings.`,
+        );
+        if (extensionFailures.length || settingFailures)
+          view.status += this.#text(
+            view,
+            ` 跳过 ${extensionFailures.length} 个扩展、${settingFailures} 项设置。`,
+            ` Skipped ${extensionFailures.length} add-ons and ${settingFailures} settings.`,
+          );
+        const failures = extensionFailures.map((failure) => {
+          if (failure.needsSource) {
+            view.unusableSources.add(failure.addonId);
+            view.selectedExtensions.delete(failure.addonId);
+          }
+          const reason = this.#text(view, failure.reasonCN ?? failure.reason, failure.reason);
+          if (retainSource) view.extensionMessages.set(failure.addonId, reason);
+          return `${failure.name} · ${reason}`;
+        });
+        view.issues = [...view.issues, ...failures];
+        if (retainSource && !resolving)
+          view.status += this.#text(view, ' 可刷新差异后重试。', ' Refresh changes to try again.');
+      }
       if (resolving)
         view.status = [
           view.status,
@@ -831,7 +1136,7 @@ export class SettingsSnapshotController implements SettingsSnapshotPort {
         ]
           .filter(Boolean)
           .join(' ');
-      if (receipt?.entries.some((entry) => entry.requiresRestart))
+      if (!view.extensionRestart && receipt?.entries.some((entry) => entry.requiresRestart))
         view.status += this.#text(
           view,
           ' 完全重启 Zotero 后再使用恢复的设置。',
@@ -839,6 +1144,13 @@ export class SettingsSnapshotController implements SettingsSnapshotPort {
         );
     });
   }
+  #setReplacementSource(view: SnapshotView, id: string, candidate: ExtensionCandidate): void {
+    view.replacementSources.set(id, candidate);
+    view.extensionMessages.delete(id);
+    view.selectedExtensions.delete(id);
+    view.extensionSourceEditor = undefined;
+  }
+
   #dispatch(view: SnapshotView, command: SettingsSnapshotCommand): void {
     if (command.type === 'close') {
       this.close(true);
@@ -1129,10 +1441,85 @@ export class SettingsSnapshotController implements SettingsSnapshotPort {
         if (!source) break;
         this.#clearTargetPassword(view);
         this.#password(view, 'import-password');
-        this.#chooseSource(view, source.title, source);
+        const conflict = view.targets.find(
+          (target) =>
+            target.status === 'conflict' &&
+            target.source.libraryID === source.libraryID &&
+            target.source.itemKey === source.itemKey,
+        );
+        this.#chooseSource(view, source.title, source, conflict?.id);
         view.mode = 'import';
         this.#run(view, (context) => this.#inspect(view, context));
         return;
+      }
+      case 'extension-toggle': {
+        const row = view.extensionRows.get(command.id);
+        if (!view.plan || !row || view.extensionSourceEditor?.id === command.id) break;
+        if (
+          row.status !== 'install' &&
+          row.status !== 'state' &&
+          !(row.status === 'missing' && view.replacementSources.has(command.id))
+        )
+          break;
+        if (command.checked) view.selectedExtensions.add(command.id);
+        else view.selectedExtensions.delete(command.id);
+        break;
+      }
+      case 'extension-source-open': {
+        const row = view.extensionRows.get(command.id);
+        if (!view.plan || (row?.status !== 'missing' && row?.status !== 'install')) break;
+        view.selectedExtensions.delete(command.id);
+        view.extensionSourceEditor = { id: command.id };
+        break;
+      }
+      case 'extension-source-close':
+        if (view.extensionSourceEditor?.id === command.id) view.extensionSourceEditor = undefined;
+        break;
+      case 'extension-source-lookup': {
+        const extensions = this.#extensions;
+        const editor = view.extensionSourceEditor;
+        if (!view.plan || !extensions || editor?.id !== command.id) break;
+        view.extensionSourceEditor = { id: command.id };
+        this.#run(
+          view,
+          async (context) => {
+            try {
+              const candidates = await extensions.resolveInput(
+                command.id,
+                command.value,
+                context.signal,
+              );
+              assertSettingsCurrent(context);
+              if (candidates.length === 1)
+                this.#setReplacementSource(view, command.id, candidates[0]);
+              else if (candidates.length)
+                view.extensionSourceEditor = { id: command.id, candidates };
+              else
+                view.extensionSourceEditor = {
+                  id: command.id,
+                  message: this.#text(
+                    view,
+                    '没有匹配此扩展的安装包。',
+                    'No package matches this add-on.',
+                  ),
+                };
+            } catch (error) {
+              assertSettingsCurrent(context);
+              view.extensionSourceEditor = {
+                id: command.id,
+                message: extensionErrorText(error, view.host.language() === 'zh-CN'),
+              };
+            }
+          },
+          false,
+        );
+        return;
+      }
+      case 'extension-source-choose': {
+        const editor = view.extensionSourceEditor;
+        const candidate = editor?.id === command.id && editor.candidates?.[command.index];
+        if (candidate) this.#setReplacementSource(view, command.id, candidate);
+        break;
       }
       case 'mode':
         if (view.reviewExport || view.mode === command.value) break;
@@ -1174,9 +1561,20 @@ export class SettingsSnapshotController implements SettingsSnapshotPort {
               else view.selected.delete(id);
             }
           }
+        for (const setting of view.deferredSettings) {
+          if (this.#deferredBlocked(view, setting)) continue;
+          if (
+            command.type === 'field'
+              ? command.id !== setting.id
+              : command.id !== settingsChangeID(setting.adapterID, 'workspace-deferred')
+          )
+            continue;
+          if (command.checked) view.selected.add(setting.id);
+          else view.selected.delete(setting.id);
+        }
         break;
       case 'export':
-        this.#export(view, new Set(view.reviewExport ?? view.adapters));
+        this.#export(view, new Set(view.reviewExport ?? view.adapters), !view.reviewExport);
         return;
       case 'choose-file':
         this.#run(view, async (context) => {
@@ -1227,7 +1625,7 @@ export class SettingsSnapshotController implements SettingsSnapshotPort {
           .flatMap((plan) => plan.changes)
           .find((entry) => settingsChangeID(entry.adapterID, entry.key) === command.id);
         if (!change?.mapping || !view.document) break;
-        const document = view.document,
+        const document = view.settingsPreviewDocument ?? view.document,
           selected = new Set(view.selected);
         this.#run(view, async (context) => {
           const path = await this.#files.choosePath(view.host.window, change.mapping!.kind);
@@ -1261,6 +1659,12 @@ export class SettingsSnapshotController implements SettingsSnapshotPort {
     const key = keyString(event);
     if (key === 'escape') {
       event.preventDefault();
+      if (view.extensionSourceEditor) {
+        if (view.busy) view.abort?.abort();
+        view.extensionSourceEditor = undefined;
+        this.#render(view);
+        return true;
+      }
       if (!view.busy && view.reviewExport) this.#dispatch(view, { type: 'return-to-preview' });
       else if (!view.busy && view.targetPasswordAction)
         this.#dispatch(view, { type: 'target-password-cancel' });

@@ -32,6 +32,26 @@ export interface SettingsSnapshotField {
   readonly blocked?: string;
   readonly canMap: boolean;
 }
+
+export interface SettingsSnapshotExtensionRow {
+  readonly id: string;
+  readonly name: string;
+  readonly version: string;
+  readonly status: 'install' | 'missing' | 'state' | 'blocked';
+  readonly fromEnabled?: boolean;
+  readonly toEnabled: boolean;
+  readonly source?: string;
+  readonly checked: boolean;
+  readonly canReplace?: boolean;
+  readonly addingSource?: boolean;
+  readonly candidates?: readonly {
+    readonly name: string;
+    readonly version?: string;
+    readonly source: string;
+  }[];
+  readonly message?: string;
+}
+
 /** Passwords and unredacted secret values must never cross the React model boundary. */
 export interface SettingsSnapshotModel {
   readonly chinese: boolean;
@@ -49,6 +69,7 @@ export interface SettingsSnapshotModel {
   readonly targets: readonly ManagedSnapshotTarget[];
   readonly locations: readonly SnapshotLibraryLocation[];
   readonly sources: readonly SnapshotAttachmentSource[];
+  readonly preferredLibrarySource?: SnapshotAttachmentSource;
   readonly sourceLibraryID: number;
   readonly targetForm: SnapshotTargetForm;
   readonly mode: 'export' | 'import' | 'managed';
@@ -57,6 +78,8 @@ export interface SettingsSnapshotModel {
   readonly awaitingUnlock: boolean;
   readonly reviewingConflict: boolean;
   readonly canAdoptUnchanged: boolean;
+  readonly extensionCount?: number;
+  readonly extensionRestart?: boolean;
   readonly targetPasswordAction?: TargetWrite;
   readonly adapters: readonly {
     readonly id: string;
@@ -76,9 +99,14 @@ export interface SettingsSnapshotModel {
     readonly selected: boolean;
     readonly fields: readonly SettingsSnapshotField[];
   }[];
+  readonly extensionDiff?: {
+    readonly rows: readonly SettingsSnapshotExtensionRow[];
+    readonly sameCount: number;
+  };
   readonly issues: readonly string[];
   readonly receipts: readonly string[];
   readonly canApply: boolean;
+  readonly canBackUpCurrent?: boolean;
   readonly selectedCount: number;
 }
 export type SettingsSnapshotCommand =
@@ -101,6 +129,11 @@ export type SettingsSnapshotCommand =
       readonly id: string;
       readonly checked: boolean;
     }
+  | { readonly type: 'extension-toggle'; readonly id: string; readonly checked: boolean }
+  | { readonly type: 'extension-source-open'; readonly id: string }
+  | { readonly type: 'extension-source-close'; readonly id: string }
+  | { readonly type: 'extension-source-lookup'; readonly id: string; readonly value: string }
+  | { readonly type: 'extension-source-choose'; readonly id: string; readonly index: number }
   | { readonly type: 'include-secrets' | 'include-library'; readonly checked: boolean }
   | { readonly type: 'map'; readonly id: string }
   | { readonly type: 'container'; readonly value: SettingsContainer }

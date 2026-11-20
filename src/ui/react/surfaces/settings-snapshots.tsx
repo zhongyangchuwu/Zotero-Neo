@@ -4,6 +4,7 @@ import { Button, Status } from '../components';
 import type { ReactView } from '../types';
 import type {
   SettingsSnapshotCommand,
+  SettingsSnapshotExtensionRow,
   SettingsSnapshotModel,
 } from '../../../settings-snapshots/react-model';
 
@@ -68,6 +69,14 @@ export function mountSettingsSnapshotsView(
             </Button>
           </div>
           <Status error={model.error}>{model.status}</Status>
+          {model.extensionRestart && (
+            <Status>
+              {text(
+                '请重启 Zotero 以完成扩展更改。',
+                'Restart Zotero to finish applying extension changes.',
+              )}
+            </Status>
+          )}
           {(model.mode === 'export' || model.mode === 'managed') && (
             <p>
               {text(
@@ -265,6 +274,14 @@ function Backup({ model, text, dispatch }: SurfaceProps) {
         </p>
       )}
       <Scope model={model} text={text} dispatch={dispatch} />
+      {model.extensionCount !== undefined && (
+        <p>
+          {text(
+            `包含 ${model.extensionCount} 个第三方扩展`,
+            `Third-party extensions included: ${model.extensionCount}`,
+          )}
+        </p>
+      )}
       <fieldset disabled={model.busy}>
         <legend>{text('备份保护', 'Backup protection')}</legend>
         <Encryption
@@ -325,9 +342,14 @@ function Backup({ model, text, dispatch }: SurfaceProps) {
 }
 
 function LibrarySources({ model, text, dispatch }: SurfaceProps) {
+  const preferred = model.preferredLibrarySource;
+  const sources = model.sources.filter(
+    ({ libraryID, itemKey }) =>
+      !preferred || libraryID !== preferred.libraryID || itemKey !== preferred.itemKey,
+  );
   return (
     <details>
-      <summary>{text('从文库中的现有备份恢复', 'Restore an existing library backup')}</summary>
+      <summary>{text('文库来源', 'Restore an existing library backup')}</summary>
       <div className="neo-snapshot-toolbar">
         <label>
           {text('来源文库', 'Source library')}{' '}
@@ -352,9 +374,9 @@ function LibrarySources({ model, text, dispatch }: SurfaceProps) {
           {text('刷新文库列表', 'Refresh library list')}
         </Button>
       </div>
-      {model.sources.length ? (
+      {sources.length ? (
         <ul>
-          {model.sources.map(({ libraryID, itemKey, title }) => (
+          {sources.map(({ libraryID, itemKey, title }) => (
             <li key={`${libraryID}:${itemKey}`}>
               <Button
                 disabled={model.busy}
@@ -366,16 +388,217 @@ function LibrarySources({ model, text, dispatch }: SurfaceProps) {
           ))}
         </ul>
       ) : (
-        <p>{text('此文库暂无可用备份。', 'No backups available in this library.')}</p>
+        <p>
+          {model.sources.length
+            ? text('此文库暂无其他可用备份。', 'No other backups available in this library.')
+            : text('此文库暂无可用备份。', 'No backups available in this library.')}
+        </p>
       )}
     </details>
   );
 }
 
+function ExtensionSourceEditor({
+  row,
+  busy,
+  text,
+  dispatch,
+}: Pick<SurfaceProps, 'text' | 'dispatch'> & {
+  readonly row: SettingsSnapshotExtensionRow;
+  readonly busy: boolean;
+}) {
+  const input = React.useRef<HTMLInputElement>(null);
+  const selection = React.useRef<HTMLSelectElement>(null);
+  const composing = React.useRef(false);
+  return (
+    <>
+      <form
+        className="neo-snapshot-toolbar"
+        onSubmit={(event) => {
+          event.preventDefault();
+          const value = input.current?.value;
+          if (busy || composing.current || !value) return;
+          dispatch({ type: 'extension-source-lookup', id: row.id, value });
+        }}
+      >
+        <label>
+          {text(
+            '扩展来源（GitHub 仓库或 .xpi 链接）',
+            'Extension source (GitHub repository or .xpi link)',
+          )}{' '}
+          <input
+            type="text"
+            ref={input}
+            autoFocus
+            required
+            disabled={busy}
+            autoComplete="off"
+            onCompositionStart={() => {
+              composing.current = true;
+            }}
+            onCompositionEnd={() => {
+              composing.current = false;
+            }}
+          />
+        </label>
+        <Button type="submit" disabled={busy}>
+          {text('查找扩展', 'Find extension')}
+        </Button>
+        <Button
+          disabled={busy}
+          onClick={() => dispatch({ type: 'extension-source-close', id: row.id })}
+        >
+          {text('取消', 'Cancel')}
+        </Button>
+      </form>
+      {!!row.candidates?.length && (
+        <form
+          className="neo-snapshot-toolbar"
+          onSubmit={(event) => {
+            event.preventDefault();
+            const value = selection.current?.value;
+            if (!busy && value) {
+              dispatch({ type: 'extension-source-choose', id: row.id, index: Number(value) });
+            }
+          }}
+        >
+          <label>
+            {text('选择 .xpi 安装包', 'Choose an .xpi package')}{' '}
+            <select ref={selection} required disabled={busy} defaultValue="">
+              <option value="" disabled>
+                {text('选择安装包', 'Select a package')}
+              </option>
+              {row.candidates.map(({ name, version, source }, index) => (
+                <option key={index} value={index}>
+                  {version ? `${name} (${version}) — ${source}` : `${name} — ${source}`}
+                </option>
+              ))}
+            </select>
+          </label>
+          <Button type="submit" disabled={busy}>
+            {text('使用此安装包', 'Use this package')}
+          </Button>
+        </form>
+      )}
+    </>
+  );
+}
+
+function ExtensionDiff({ model, text, dispatch }: SurfaceProps) {
+  const diff = model.extensionDiff;
+  if (!diff || (!diff.rows.length && !diff.sameCount)) return null;
+  const enabled = (value: boolean | undefined) => {
+    if (value === undefined) return text('未知', 'Unknown');
+    return value ? text('已启用', 'Enabled') : text('已禁用', 'Disabled');
+  };
+  const statuses = {
+    install: text('缺失，可安装', 'Install'),
+    missing: text('无安装来源', 'Installation source needed'),
+    state: text('更改启用状态', 'Change enabled state'),
+    blocked: text('无法恢复', 'Cannot restore'),
+  };
+  return (
+    <details open>
+      <summary>{text('扩展', 'Third-party extensions')}</summary>
+      {diff.sameCount > 0 && (
+        <p className="neo-muted">
+          <small>
+            {text(
+              `已有 ${diff.sameCount} 个扩展与备份一致`,
+              `Extensions already matching: ${diff.sameCount}`,
+            )}
+          </small>
+        </p>
+      )}
+      {diff.rows.some(({ status }) => status === 'install' || status === 'missing') && (
+        <p>
+          {text(
+            '恢复时会从下方显示的来源安装所选扩展。扩展包含可执行代码，请只选择您信任的来源。',
+            'Restore installs the selected extensions from the sources shown below. Extensions contain executable code; select only sources you trust.',
+          )}
+        </p>
+      )}
+      {diff.rows.map((row) => (
+        <div key={row.id} className="neo-snapshot-target">
+          <label>
+            <input
+              type="checkbox"
+              checked={row.checked}
+              disabled={
+                model.busy ||
+                row.status === 'missing' ||
+                row.status === 'blocked' ||
+                row.addingSource
+              }
+              onChange={(event) =>
+                dispatch({
+                  type: 'extension-toggle',
+                  id: row.id,
+                  checked: event.currentTarget.checked,
+                })
+              }
+            />{' '}
+            {row.name} {row.version}
+          </label>
+          {' — '}
+          {statuses[row.status]}
+          {row.status === 'state' && `: ${enabled(row.fromEnabled)} → ${enabled(row.toEnabled)}`}
+          {row.status === 'install' && ` → ${enabled(row.toEnabled)}`}
+          {row.source && (
+            <p className="neo-snapshot-path">
+              {text('来源：', 'Source: ')}
+              {row.source}
+            </p>
+          )}
+          {row.message && <p className="neo-snapshot-path">{row.message}</p>}
+          {row.addingSource ? (
+            <ExtensionSourceEditor row={row} busy={model.busy} text={text} dispatch={dispatch} />
+          ) : (
+            (row.status === 'missing' || row.canReplace) && (
+              <Button
+                disabled={model.busy}
+                aria-label={
+                  row.source
+                    ? text(`更换 ${row.name} 的来源`, `Replace source for ${row.name}`)
+                    : text(`添加 ${row.name} 的来源`, `Add source for ${row.name}`)
+                }
+                onClick={() => dispatch({ type: 'extension-source-open', id: row.id })}
+              >
+                {row.source
+                  ? text('更换来源…', 'Replace source…')
+                  : text('补充来源…', 'Add source…')}
+              </Button>
+            )
+          )}
+        </div>
+      ))}
+    </details>
+  );
+}
+
 function Restore({ model, text, dispatch }: SurfaceProps) {
+  const preferred = model.reviewingConflict ? undefined : model.preferredLibrarySource;
+  const hasExtensionChanges = !!model.extensionDiff?.rows.length;
+  const hasChanges = !!model.groups.length || hasExtensionChanges;
+  const canBackUp = model.canBackUpCurrent ?? !!model.groups.length;
   return (
     <>
       <div className="neo-snapshot-toolbar">
+        {preferred && (
+          <Button
+            primary
+            disabled={model.busy}
+            onClick={() =>
+              dispatch({
+                type: 'source',
+                libraryID: preferred.libraryID,
+                itemKey: preferred.itemKey,
+              })
+            }
+          >
+            {text(`预览文库备份：${preferred.title}`, `Preview library backup: ${preferred.title}`)}
+          </Button>
+        )}
         <Button disabled={model.busy} onClick={() => dispatch({ type: 'choose-file' })}>
           {text('选择备份文件…', 'Choose backup file…')}
         </Button>
@@ -431,8 +654,8 @@ function Restore({ model, text, dispatch }: SurfaceProps) {
           {model.reviewingConflict && (
             <p>
               {text(
-                '仅恢复所选设置。只有完整应用云端改动后才会恢复同步；部分恢复不会覆盖云端。',
-                'Only selected settings are restored. Sync resumes only after all cloud changes are applied; a partial restore never overwrites cloud settings.',
+                '仅恢复所选改动。只有完整应用云端改动后才会恢复同步；部分恢复不会覆盖云端备份。',
+                'Only selected changes are restored. Sync resumes only after all cloud changes are applied; a partial restore never overwrites the cloud backup.',
               )}
             </p>
           )}
@@ -513,15 +736,22 @@ function Restore({ model, text, dispatch }: SurfaceProps) {
               </table>
             </details>
           ))}
+          <ExtensionDiff model={model} text={text} dispatch={dispatch} />
           <div className="neo-snapshot-toolbar">
-            {!!model.groups.length && (
-              <>
-                <Button
-                  disabled={model.busy || !model.canApply}
-                  onClick={() => dispatch({ type: 'export-current' })}
-                >
-                  {text('备份当前设置…', 'Back up current settings…')}
-                </Button>
+            {canBackUp && (
+              <Button
+                disabled={model.busy || !model.canApply}
+                onClick={() => dispatch({ type: 'export-current' })}
+              >
+                {text('备份当前设置…', 'Back up current settings…')}
+              </Button>
+            )}
+            {model.canAdoptUnchanged && !model.canApply ? (
+              <Button primary disabled={model.busy} onClick={() => dispatch({ type: 'apply' })}>
+                {text('本机已一致，采用云端版本', 'Settings already match; adopt cloud version')}
+              </Button>
+            ) : (
+              (hasChanges || model.canApply) && (
                 <Button
                   primary
                   disabled={model.busy || !model.canApply}
@@ -529,23 +759,22 @@ function Restore({ model, text, dispatch }: SurfaceProps) {
                 >
                   {text(
                     `恢复所选 ${model.selectedCount} 项`,
-                    `Restore ${model.selectedCount} selected settings`,
+                    hasExtensionChanges
+                      ? `Restore ${model.selectedCount} selected changes`
+                      : `Restore ${model.selectedCount} selected settings`,
                   )}
                 </Button>
-              </>
-            )}
-            {model.canAdoptUnchanged && !model.canApply && (
-              <Button primary disabled={model.busy} onClick={() => dispatch({ type: 'apply' })}>
-                {text('本机已一致，采用云端版本', 'Settings already match; adopt cloud version')}
-              </Button>
+              )
             )}
           </div>
-          {!model.groups.length && !model.canAdoptUnchanged && (
+          {!hasChanges && !model.canApply && !model.canAdoptUnchanged && (
             <p>
-              {text(
-                '没有可恢复的设置。请检查跳过项。',
-                'No settings to restore. See skipped items.',
-              )}
+              {model.extensionDiff && !model.issues.length
+                ? text('没有可恢复的改动。', 'No changes to restore.')
+                : text(
+                    '没有可恢复的设置。请检查跳过项。',
+                    'No settings to restore. See skipped items.',
+                  )}
             </p>
           )}
         </>
