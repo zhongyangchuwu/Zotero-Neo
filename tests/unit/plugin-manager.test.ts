@@ -7,11 +7,28 @@ import { createExtensionsModule } from '../../src/modules/extensions';
 import type { InstalledPlugin } from '../../src/modules/extensions/host';
 import { DEFAULT_BINDINGS, resolveBindings, type BindingMap } from '../../src/input/bindings';
 import { ZOTERO_NEO_PLUGIN_ID } from '../../src/modules/extensions/host';
+import {
+  ExtensionSourceWriteError,
+  forgetExtensionSource,
+  installExtension,
+  updateExtension,
+} from '../../src/modules/extensions/operations';
+import type * as ExtensionOperations from '../../src/modules/extensions/operations';
 import { createPickerHarness, pickerKey } from './feature-panel-harness';
 import type {
   ExtensionsReactCommand,
   ExtensionsReactModel,
 } from '../../src/modules/extensions/react-model';
+
+vi.mock('../../src/modules/extensions/operations', async (importOriginal) => {
+  const actual = await importOriginal<typeof ExtensionOperations>();
+  return {
+    ...actual,
+    installExtension: vi.fn(actual.installExtension),
+    updateExtension: vi.fn(actual.updateExtension),
+    forgetExtensionSource: vi.fn(),
+  };
+});
 
 vi.mock('../../src/platform/native-ui', () => ({
   mountNativeReactView(options: {
@@ -34,19 +51,32 @@ vi.mock('../../src/platform/native-ui', () => ({
     const list = create('div');
     const details = create('div');
     const footer = create('footer');
+    const restart = create('div');
+    const inline = create('div');
     header.append(title, count, input);
     content.append(list, details);
-    panel.append(header, content, footer);
+    panel.append(header, content, footer, restart, inline);
     options.root.append(panel);
     const parts: Record<string, HTMLElement> = { input, list, details, count, footer };
+    let source: HTMLInputElement | null = null;
     let disposed = false;
     const update = (model: ExtensionsReactModel): void => {
       if (disposed || !options.isCurrent()) return;
       count.textContent = model.count;
       footer.textContent = model.footer;
+      restart.textContent = model.needsRestart ? 'Restart required' : '';
+      if (model.inline?.kind === 'source' && !source) {
+        source = create('input') as HTMLInputElement;
+        parts['install-input'] = source;
+        inline.append(source);
+      } else if (model.inline?.kind !== 'source' && source) {
+        inline.replaceChildren();
+        delete parts['install-input'];
+        source = null;
+      }
       const selected = model.plugins[model.selected];
       details.textContent = selected
-        ? `${selected.name} ${selected.pendingRestart ? 'Restart required' : ''} ${model.shortcuts}`
+        ? `${selected.name} ${model.shortcuts}`
         : 'No plugin selected.';
       if (model.listMessage) {
         list.replaceChildren();
@@ -77,6 +107,7 @@ vi.mock('../../src/platform/native-ui', () => ({
 afterEach(() => {
   vi.unstubAllGlobals();
   vi.useRealTimers();
+  vi.clearAllMocks();
 });
 
 const plugins: readonly InstalledPlugin[] = [
@@ -87,6 +118,7 @@ const plugins: readonly InstalledPlugin[] = [
     enabled: true,
     canEnable: true,
     canDisable: true,
+    canUninstall: true,
     description: 'Citation key management and BibTeX export',
   },
   {
@@ -96,6 +128,7 @@ const plugins: readonly InstalledPlugin[] = [
     enabled: false,
     canEnable: true,
     canDisable: true,
+    canUninstall: true,
     description: '',
   },
   {
@@ -105,6 +138,7 @@ const plugins: readonly InstalledPlugin[] = [
     enabled: true,
     canEnable: true,
     canDisable: true,
+    canUninstall: true,
     description: '',
   },
 ];
@@ -141,8 +175,9 @@ function installManagerHost() {
     type: 'extension',
     version: '1.0',
     isActive: false,
-    permissions: 6,
+    permissions: 7,
     pendingOperations: 0,
+    updateURL: 'https://example.test/alpha-updates.json',
     findUpdates(listener: { onUpdateFinished: (addon: unknown, error: number) => void }) {
       listener.onUpdateFinished(alpha, 0);
     },
@@ -152,6 +187,9 @@ function installManagerHost() {
     }),
     disable: vi.fn(async () => {
       alpha.isActive = false;
+    }),
+    uninstall: vi.fn(async (): Promise<void> => {
+      addons.splice(addons.indexOf(alpha), 1);
     }),
   };
   const beta = {
@@ -170,12 +208,14 @@ function installManagerHost() {
     type: 'extension',
     version: '3.0',
     isActive: true,
-    permissions: 6,
+    permissions: 7,
     enable: vi.fn(async () => {}),
     disable: vi.fn(async () => {}),
+    uninstall: vi.fn(async () => {}),
   };
   const addons = [alpha, beta, neo];
   const manager = {
+    PERM_CAN_UNINSTALL: 1,
     PERM_CAN_ENABLE: 2,
     PERM_CAN_DISABLE: 4,
     PENDING_INSTALL: 8,
@@ -200,12 +240,12 @@ function installManagerHost() {
 function createPanelFixture(
   bindings: () => BindingMap = () => DEFAULT_BINDINGS,
   themeRoot?: (root: HTMLElement) => () => void,
+  language: 'en' | 'zh-CN' = 'en',
 ) {
   const { window, session } = createPickerHarness();
   const state = new PluginManagerRuntime();
   const logger = { debug: vi.fn(), diagnostic: vi.fn() };
   const host = new ModuleHost(logger, () => true);
-  const openExtras = vi.fn();
   const panel = host.activate('extensions', (scope) => {
     const instance = new PluginManagerPanel({
       window,
@@ -214,12 +254,12 @@ function createPanelFixture(
       bindings,
       themeRoot: themeRoot ?? ((root) => session.theme.add(root)),
       isCurrent: () => scope.isCurrent(),
-      openExtras,
+      language: () => language,
     });
     scope.add(() => instance.close());
     return instance;
   });
-  return { window, state, host, panel, openExtras };
+  return { window, state, host, panel, logger };
 }
 
 describe('configurable plugin manager contexts', () => {
@@ -451,47 +491,253 @@ describe('configurable plugin manager contexts', () => {
   it('keeps native pending restart status after reopen and a no-update check', async () => {
     const native = installManagerHost();
     const { state, panel, window } = createPanelFixture();
-    Reflect.set(
-      window,
-      'confirm',
-      vi.fn(() => true),
-    );
+    const confirm = vi.fn(() => true);
+    Reflect.set(window, 'confirm', confirm);
     for (const pending of [native.manager.PENDING_INSTALL, native.manager.PENDING_UPGRADE]) {
       native.alpha.pendingOperations = pending;
       panel.open();
       await vi.waitFor(() => expect(state.loading).toBe(false));
-      expect(state.details?.textContent).toContain('Restart required');
+      expect(panelElements(state.overlay!).restart.textContent).toContain('Restart required');
       panel.close();
       panel.open();
       await vi.waitFor(() => expect(state.loading).toBe(false));
-      expect(state.details?.textContent).toContain('Restart required');
+      expect(panelElements(state.overlay!).restart.textContent).toContain('Restart required');
       panel.handleKey(pickerKey('u', state.overlay));
       await vi.waitFor(() => expect(state.notice).toContain('No update available'));
-      expect(state.details?.textContent).toContain('Restart required');
+      expect(panelElements(state.overlay!).restart.textContent).toContain('Restart required');
+      expect(confirm).not.toHaveBeenCalled();
       panel.close();
     }
   });
-  it('opens Extras from an empty filtered list without downloading anything', async () => {
-    const native = installManagerHost();
-    const getInstallForURL = vi.fn();
-    Reflect.set(native.manager, 'getInstallForURL', getInstallForURL);
-    const { state, panel, openExtras } = createPanelFixture();
+  it('opens the pinned install choice from an empty filtered list without downloading until confirmed', async () => {
+    installManagerHost();
+    const install = vi.mocked(installExtension).mockResolvedValueOnce({ pendingRestart: true });
+    const { state, panel, window } = createPanelFixture();
     panel.open();
     await vi.waitFor(() => expect(state.loading).toBe(false));
-    const input = state.input as HTMLInputElement & { emit(type: string): void };
-    input.value = 'Translate for Zotero';
-    input.emit('input');
+    const filter = state.input as HTMLInputElement & { emit(type: string): void };
+    filter.value = 'Translate for Zotero';
+    filter.emit('input');
     expect(state.list?.textContent).toContain('No matching plugins');
-    expect(state.footer?.textContent).toContain('i Open Extras');
     panel.handleKey(pickerKey('i', state.overlay));
-    expect(openExtras).toHaveBeenCalledOnce();
-    expect(getInstallForURL).not.toHaveBeenCalled();
+    const source = state.sourceInput as HTMLInputElement & { emit(type: string): void };
+    expect(window.document.activeElement).toBe(source);
+    panel.handleKey(pickerKey('Enter', source, { isComposing: true }));
+    expect(state.inline?.kind).toBe('source');
+    source.emit('compositionstart');
+    panel.handleKey(pickerKey('Enter', source));
+    expect(state.inline?.kind).toBe('source');
+    source.emit('compositionend');
+    panel.handleKey(pickerKey('Enter', source));
+    expect(state.inline).toMatchObject({
+      kind: 'install',
+      candidate: {
+        name: 'translate-for-zotero.xpi',
+        expectedID: expect.any(String),
+        expectedVersion: expect.any(String),
+      },
+    });
+    expect(install).not.toHaveBeenCalled();
+    panel.handleKey(pickerKey('Escape', state.overlay));
+    expect(state.inline).toBeNull();
+    expect(state.open).toBe(true);
+    expect(state.input?.value).toBe('Translate for Zotero');
+    panel.handleKey(pickerKey('i', state.overlay));
+    panel.handleKey(pickerKey('Enter', state.sourceInput));
+    panel.handleKey(Object.assign(pickerKey('Enter', state.overlay), { repeat: true }));
+    expect(install).not.toHaveBeenCalled();
+    panel.handleKey(pickerKey('Enter', state.overlay));
+    await vi.waitFor(() => expect(state.busy).toBe(false));
+    expect(install).toHaveBeenCalledOnce();
+    panel.close();
+    panel.open();
+    await vi.waitFor(() => expect(state.loading).toBe(false));
+    expect(panelElements(state.overlay!).restart.textContent).toContain('Restart required');
+    panel.close();
+  });
+
+  it('chooses a GitHub release asset with arrows and confirms the exact source before native installation', async () => {
+    installManagerHost();
+    const origin = 'https://github.com/example/addon/releases/download/v2.1';
+    const fetch = vi.fn(async () =>
+      Response.json({
+        tag_name: 'v2.1',
+        assets: ['alpha.xpi', 'beta.xpi'].map((name) => ({
+          name,
+          state: 'uploaded',
+          browser_download_url: `${origin}/${name}`,
+        })),
+      }),
+    );
+    vi.stubGlobal('fetch', fetch);
+    const install = vi.mocked(installExtension).mockResolvedValueOnce({ pendingRestart: false });
+    const { state, panel } = createPanelFixture();
+    panel.open();
+    await vi.waitFor(() => expect(state.loading).toBe(false));
+    panel.handleKey(pickerKey('i', state.overlay));
+    state.sourceInput!.value = 'example/addon';
+    panel.handleKey(pickerKey('Enter', state.sourceInput));
+    await vi.waitFor(() => expect(state.inline?.kind).toBe('choose'));
+    expect(fetch).toHaveBeenCalledExactlyOnceWith(
+      'https://api.github.com/repos/example/addon/releases/latest',
+      expect.objectContaining({ signal: expect.any(AbortSignal) }),
+    );
+    panel.handleKey(pickerKey('ArrowDown', state.overlay));
+    panel.handleKey(pickerKey('Enter', state.overlay));
+    expect(state.inline).toMatchObject({
+      kind: 'install',
+      candidate: { name: 'beta.xpi', url: `${origin}/beta.xpi`, version: '2.1' },
+    });
+    expect(install).not.toHaveBeenCalled();
+    panel.handleKey(pickerKey('Enter', state.overlay));
+    await vi.waitFor(() => expect(state.busy).toBe(false));
+    expect(install).toHaveBeenCalledExactlyOnceWith(
+      expect.objectContaining({ name: 'beta.xpi', url: `${origin}/beta.xpi` }),
+      expect.anything(),
+    );
+    panel.close();
+  });
+
+  it('confirms a direct XPI without prefetch and distinguishes source-save failure from failed installation', async () => {
+    installManagerHost();
+    const fetch = vi.fn();
+    vi.stubGlobal('fetch', fetch);
+    const install = vi
+      .mocked(installExtension)
+      .mockRejectedValueOnce(new ExtensionSourceWriteError(true));
+    const { state, panel } = createPanelFixture(undefined, undefined, 'zh-CN');
+    panel.open();
+    await vi.waitFor(() => expect(state.loading).toBe(false));
+    panel.handleKey(pickerKey('i', state.overlay));
+    const url = 'https://example.test/zotero-extensions/alpha.xpi';
+    state.sourceInput!.value = url;
+    panel.handleKey(pickerKey('Enter', state.sourceInput));
+    await vi.waitFor(() => expect(state.inline?.kind).toBe('install'));
+    expect(state.inline).toMatchObject({ kind: 'install', candidate: { name: 'alpha.xpi', url } });
+    expect(fetch).not.toHaveBeenCalled();
+    expect(install).not.toHaveBeenCalled();
+    panel.handleKey(pickerKey('Enter', state.overlay));
+    await vi.waitFor(() => expect(state.busy).toBe(false));
+    expect(state.notice).toContain('扩展已更改，但无法保存安装来源');
+    expect(panelElements(state.overlay!).restart.textContent).toContain('Restart required');
+    panel.close();
+  });
+
+  it('requires one uninstall confirmation and protects Neo and non-uninstallable plugins', async () => {
+    const native = installManagerHost();
+    const { state, panel } = createPanelFixture();
+    panel.open();
+    await vi.waitFor(() => expect(state.loading).toBe(false));
+    const key = (value: string): void => panel.handleKey(pickerKey(value, state.overlay));
+    key('G');
+    key('x');
+    expect(state.inline).toBeNull();
+    expect(native.neo.uninstall).not.toHaveBeenCalled();
+    key('k');
+    key('x');
+    expect(state.inline).toBeNull();
+    expect(state.notice).toContain('Beta cannot be uninstalled');
+    key('k');
+    key('x');
+    expect(state.inline).toMatchObject({ kind: 'uninstall', plugin: { id: native.alpha.id } });
+    expect(native.alpha.uninstall).not.toHaveBeenCalled();
+    key('Escape');
+    expect(state.open).toBe(true);
+    expect(state.inline).toBeNull();
+    expect(forgetExtensionSource).not.toHaveBeenCalled();
+    key('x');
+    key('Enter');
+    await vi.waitFor(() => expect(state.busy).toBe(false));
+    expect(native.alpha.uninstall).toHaveBeenCalledOnce();
+    expect(forgetExtensionSource).toHaveBeenCalledExactlyOnceWith(native.alpha.id);
+    expect(state.plugins.map(({ id }) => id)).not.toContain(native.alpha.id);
+    panel.close();
+  });
+
+  it('updates all third-party plugins sequentially despite a failure and reports each outcome', async () => {
+    const native = installManagerHost();
+    const delta = { ...native.beta, name: 'Delta', id: 'delta@example.test' };
+    const gamma = { ...native.beta, name: 'Gamma', id: 'gamma@example.test' };
+    native.manager.getAddonsByTypes.mockResolvedValue([
+      native.alpha,
+      native.beta,
+      delta,
+      gamma,
+      native.neo,
+    ]);
+    const failure = Promise.withResolvers<never>();
+    const update = vi
+      .mocked(updateExtension)
+      .mockReturnValueOnce(failure.promise)
+      .mockResolvedValueOnce({ pendingRestart: true })
+      .mockResolvedValueOnce('current')
+      .mockResolvedValueOnce('skipped');
+    const { state, panel, logger } = createPanelFixture();
+    panel.open();
+    await vi.waitFor(() => expect(state.loading).toBe(false));
+    const filter = state.input as HTMLInputElement & { emit(type: string): void };
+    filter.value = 'Beta';
+    filter.emit('input');
+    panel.handleKey(pickerKey('U', state.overlay, { shift: true }));
+    expect(update.mock.calls.map(([plugin]) => plugin.id)).toEqual([native.alpha.id]);
+    failure.reject(new Error('native detail for diagnostic only'));
+    await vi.waitFor(() => expect(state.busy).toBe(false));
+    expect(update.mock.calls.map(([plugin]) => plugin.id)).toEqual([
+      native.alpha.id,
+      native.beta.id,
+      delta.id,
+      gamma.id,
+    ]);
+    expect(state.report).toEqual([
+      'Updated: Beta',
+      'Already up to date: Delta',
+      'Skipped (no supported update source): Gamma',
+      'Alpha failed: Zotero could not complete the extension operation.',
+    ]);
+    expect(state.notice).toContain('1 updated, 1 current, 1 skipped, 1 failed');
+    expect(logger.diagnostic).toHaveBeenCalledWith(
+      expect.stringContaining('native detail for diagnostic only'),
+    );
+    expect(panelElements(state.overlay!).restart.textContent).toContain('Restart required');
+    expect(state.filtered.map(({ name }) => name)).toEqual(['Beta']);
+    panel.close();
+  });
+
+  it('cancels a batch and never starts more updates or paints a replacement panel', async () => {
+    const native = installManagerHost();
+    const pending = Promise.withResolvers<{ pendingRestart: boolean }>();
+    const cancel = vi.fn();
+    const update = vi.mocked(updateExtension).mockImplementationOnce((_plugin, transport) => {
+      transport.registerCancel(cancel);
+      return pending.promise;
+    });
+    const { state, panel } = createPanelFixture();
+    panel.open();
+    await vi.waitFor(() => expect(state.loading).toBe(false));
+    panel.handleKey(pickerKey('U', state.overlay, { shift: true }));
+    const transport = update.mock.calls[0][1];
+    panel.handleKey(pickerKey('Escape', state.overlay));
+    expect(state.open).toBe(true);
+    expect(transport.signal.aborted).toBe(true);
+    expect(cancel).toHaveBeenCalledOnce();
+    panel.handleKey(pickerKey('Escape', state.overlay));
+    expect(state.open).toBe(false);
+    panel.open();
+    await vi.waitFor(() => expect(state.loading).toBe(false));
+    const loads = native.manager.getAddonsByTypes.mock.calls.length;
+    pending.resolve({ pendingRestart: true });
+    await pending.promise;
+    expect(update).toHaveBeenCalledOnce();
+    expect(native.manager.getAddonsByTypes).toHaveBeenCalledTimes(loads);
+    expect(state.report).toEqual([]);
+    expect(state.notice).toBe('');
+    expect(panelElements(state.overlay!).restart.textContent).toBe('');
     panel.close();
   });
 
   it('preserves permissions, surfaces domain failures and discards lifecycle completion after close/reopen', async () => {
     const host = installManagerHost();
-    const { state, panel } = createPanelFixture();
+    const { state, panel, logger } = createPanelFixture();
     panel.open();
     await vi.waitFor(() => expect(state.loading).toBe(false));
     panel.handleKey(pickerKey('G', state.overlay));
@@ -502,7 +748,11 @@ describe('configurable plugin manager contexts', () => {
     host.alpha.enable.mockRejectedValueOnce(new Error('host rejected mutation'));
     panel.handleKey(pickerKey('e', state.overlay));
     await vi.waitFor(() => expect(state.busy).toBe(false));
-    expect(state.notice).toContain('host rejected mutation');
+    expect(state.notice).toContain('Zotero could not complete');
+    expect(state.notice).not.toContain('host rejected mutation');
+    expect(logger.diagnostic).toHaveBeenCalledWith(
+      expect.stringContaining('host rejected mutation'),
+    );
     expect(state.open).toBe(true);
     let release: (() => void) | undefined;
     host.alpha.enable.mockImplementationOnce(
@@ -528,7 +778,7 @@ describe('configurable plugin manager contexts', () => {
     host.manager.getAddonsByTypes.mockRejectedValueOnce(new Error('load unavailable'));
     panel.open();
     await vi.waitFor(() => expect(state.loading).toBe(false));
-    expect(state.error).toContain('load unavailable');
+    expect(state.error).not.toContain('load unavailable');
     expect(state.list?.textContent).toContain('Unable to load plugins');
     panel.close();
   });
@@ -579,7 +829,7 @@ function createModuleFixture(themeRoot?: (root: HTMLElement) => () => void) {
     logger,
     bindings: () => DEFAULT_BINDINGS,
     themeRoot: themeRoot ?? ((root) => session.theme.add(root)),
-    openExtras: () => {},
+    language: () => 'en',
   });
   return { host, module, bodyChildren };
 }
@@ -592,6 +842,7 @@ function panelElements(overlay: HTMLElement) {
     input: header.children[2] as HTMLInputElement & { emit(type: string): void },
     list: content.children[0] as HTMLElement,
     details: content.children[1] as HTMLElement,
+    restart: panel.children[3] as HTMLElement,
   };
 }
 

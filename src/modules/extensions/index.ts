@@ -3,6 +3,7 @@ import type { MainWindow } from '../../core/contracts';
 import type { Logger } from '../../core/logging';
 import type { ModuleHost } from '../../core/module-host';
 import type { BindingMap } from '../../input/bindings';
+import type { KeyGuideLanguage } from '../../input/key-guide-config';
 import { PluginManagerPanel } from './panel';
 import { PluginManagerRuntime } from './runtime';
 
@@ -13,7 +14,7 @@ export interface ExtensionsModuleHost {
   readonly logger: Logger;
   readonly bindings: () => BindingMap;
   readonly themeRoot: (root: HTMLElement) => Cleanup;
-  readonly openExtras: () => void;
+  readonly language: () => KeyGuideLanguage;
 }
 
 export interface ExtensionsModule {

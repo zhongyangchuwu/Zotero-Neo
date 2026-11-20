@@ -21,6 +21,8 @@ export const PLUGINS_LIST_ACTIONS = Object.freeze([
   'pluginsRefresh',
   'pluginsInstall',
   'pluginsUpdate',
+  'pluginsUpdateAll',
+  'pluginsUninstall',
   'pluginsEnable',
   'pluginsDisable',
   'pluginsPreferences',

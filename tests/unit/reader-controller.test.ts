@@ -1011,7 +1011,7 @@ function createHistorySession(
       logger,
       bindings: () => bindings,
       themeRoot: () => () => {},
-      openExtras: () => {},
+      language: () => 'en',
     }),
   );
   mainScope.activate('workspace', () =>

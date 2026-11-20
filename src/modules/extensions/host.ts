@@ -1,6 +1,7 @@
 import {
   mainInstalledPlugins,
   setMainPluginEnabled,
+  uninstallMainPlugin,
   openMainPluginPreferences,
   launchMainURL,
 } from '../../toolkit/main';
@@ -15,6 +16,7 @@ export interface InstalledPlugin {
   readonly pendingRestart?: boolean;
   readonly canEnable: boolean;
   readonly canDisable: boolean;
+  readonly canUninstall: boolean;
   readonly description: string;
   readonly homepageURL?: string;
   readonly repositoryURL?: string;
@@ -72,6 +74,7 @@ export async function installedPlugins(): Promise<InstalledPlugin[]> {
   const entries: InstalledPlugin[] = plugins.map((plugin) => ({
     ...plugin,
     canDisable: plugin.id !== ZOTERO_NEO_PLUGIN_ID && plugin.canDisable,
+    canUninstall: plugin.id !== ZOTERO_NEO_PLUGIN_ID && plugin.canUninstall,
     ...pluginInfoLinks(plugin.homepageURL),
   }));
   return entries.sort((left, right) => left.name.localeCompare(right.name, Zotero.locale));
@@ -83,6 +86,13 @@ export async function setPluginEnabled(pluginID: string, enabled: boolean): Prom
   }
 
   await setMainPluginEnabled(pluginID, enabled);
+}
+
+export function uninstallPlugin(pluginID: string): Promise<{ pendingRestart: boolean }> {
+  if (pluginID === ZOTERO_NEO_PLUGIN_ID) {
+    throw new Error('Zotero Neo cannot uninstall itself from inside Plugin Manager');
+  }
+  return uninstallMainPlugin(pluginID);
 }
 
 export function openPluginPreferences(pluginID: string): boolean {

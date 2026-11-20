@@ -16,10 +16,154 @@ export const EXTENSIONS_REACT_CSS = `
 .neo-extensions-content{display:grid;grid-template-columns:minmax(260px,42%) minmax(320px,58%);flex:1;min-height:0}
 .neo-extensions-list{overflow:auto;min-height:0;padding:7px 0;border-right:1px solid ${THEME_VARS.border};outline:none}
 .neo-extensions-details{overflow:auto;min-height:0;padding:20px 22px;background:${THEME_VARS.elevated};white-space:pre-wrap;outline:none}
+.neo-extensions-inline,.neo-extensions-status,.neo-extensions-restart{padding:8px 14px;border-bottom:1px solid ${THEME_VARS.border}}
+.neo-extensions-inline{display:grid;gap:6px;background:${THEME_VARS.elevated}}
+.neo-extensions-inline-line,.neo-extensions-actions{display:flex;align-items:center;flex-wrap:wrap;gap:8px}
+.neo-extensions-inline-file{white-space:normal;overflow-wrap:anywhere;color:${THEME_VARS.muted}}
+.neo-extensions-candidates,.neo-extensions-report{overflow:auto;max-height:24vh}
+.neo-extensions-candidate{display:block;width:100%;text-align:start;font:inherit;padding:5px 8px}
+.neo-extensions-candidate[aria-pressed="true"]{color:${THEME_VARS.selectedText};background:${THEME_VARS.selected}}
+.neo-extensions-report{margin:4px 0 0;padding-inline-start:22px;overflow-wrap:anywhere}
+.neo-extensions-restart{font-weight:600;color:${THEME_VARS.accent}}
 .neo-extensions-row{display:flex;align-items:center;gap:10px;padding:7px 12px;cursor:pointer;border-left:3px solid transparent}.neo-extensions-row.selected{color:${THEME_VARS.selectedText};background:${THEME_VARS.selected};border-left-color:${THEME_VARS.accent}}
 .neo-extensions-footer{padding:7px 12px;color:${THEME_VARS.muted};border-top:1px solid ${THEME_VARS.border};white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
 .neo-extensions-links{margin-top:18px;display:flex;flex-wrap:wrap;gap:8px 14px;color:${THEME_VARS.muted}}.neo-extensions-links button{padding:0;border:0;background:none;color:${THEME_VARS.accent};font:inherit;text-decoration:underline;cursor:pointer}
 `;
+
+function InlineExtensionAction({
+  inline,
+  chinese,
+  dispatch,
+}: {
+  inline: NonNullable<ExtensionsReactModel['inline']>;
+  chinese: boolean;
+  dispatch: (command: ExtensionsReactCommand) => void;
+}) {
+  const back = (
+    <button
+      type="button"
+      data-neo-ui-part="inline-back"
+      onClick={() => dispatch({ type: 'inline-dismiss' })}
+    >
+      {chinese ? '返回' : 'Back'}
+    </button>
+  );
+
+  return (
+    <section
+      className="neo-extensions-inline"
+      data-neo-ui-part="inline"
+      aria-label={chinese ? '扩展操作' : 'Extension action'}
+    >
+      {inline.kind === 'source' ? (
+        <>
+          <div className="neo-extensions-inline-line">
+            <input
+              className="neo-extensions-input"
+              data-neo-ui-part="install-input"
+              type="text"
+              aria-label={chinese ? '扩展安装来源' : 'Extension install source'}
+              placeholder={
+                chinese
+                  ? 'GitHub owner/repo、发布页或 HTTPS XPI 链接'
+                  : 'GitHub owner/repo, release page, or HTTPS XPI URL'
+              }
+              autoComplete="off"
+              spellCheck={false}
+              readOnly={inline.resolving}
+            />
+            <button
+              type="button"
+              data-neo-ui-part="install-lookup"
+              disabled={inline.resolving}
+              onClick={() => dispatch({ type: 'inline-submit' })}
+            >
+              {chinese ? '继续' : 'Continue'}
+            </button>
+            {back}
+          </div>
+          <div className="neo-extensions-inline-line">
+            <span>{chinese ? '精选扩展：' : 'Curated:'}</span>
+            {inline.curated.map((label, index) => (
+              <button
+                key={label}
+                type="button"
+                data-neo-curated-index={index}
+                disabled={inline.resolving}
+                onClick={() => dispatch({ type: 'curated', index })}
+              >
+                {label}
+              </button>
+            ))}
+          </div>
+        </>
+      ) : inline.kind === 'choose' ? (
+        <>
+          <strong>{chinese ? '选择一个 XPI 安装文件' : 'Choose an XPI file'}</strong>
+          <div className="neo-extensions-candidates" data-neo-ui-part="install-candidates">
+            {inline.candidates.map(({ name, version }, index) => (
+              <button
+                key={index}
+                type="button"
+                className="neo-extensions-candidate"
+                data-neo-candidate-index={index}
+                data-neo-ui-part={index === inline.selected ? 'install-selected' : undefined}
+                aria-pressed={index === inline.selected}
+                onClick={() => dispatch({ type: 'choose', index })}
+              >
+                {name}
+                {version ? ` · ${version}` : ''}
+              </button>
+            ))}
+          </div>
+          <div className="neo-extensions-actions">{back}</div>
+        </>
+      ) : (
+        <>
+          <strong>
+            {inline.kind === 'install'
+              ? chinese
+                ? '确认安装：'
+                : 'Confirm install: '
+              : chinese
+                ? '确认卸载：'
+                : 'Confirm uninstall: '}
+            {inline.name}
+            {inline.version ? ` · ${inline.version}` : ''}
+          </strong>
+          {inline.kind === 'install' && (
+            <>
+              <div className="neo-extensions-inline-file" data-neo-ui-part="install-url">
+                {inline.url}
+              </div>
+              <div>
+                {chinese
+                  ? '扩展可以访问 Zotero 数据和你的计算机。请只安装你信任的扩展。'
+                  : 'Extensions can access your Zotero data and computer. Install only extensions you trust.'}
+              </div>
+            </>
+          )}
+          <div className="neo-extensions-actions">
+            <button
+              type="button"
+              data-neo-ui-part={inline.kind === 'install' ? 'install-confirm' : 'uninstall-confirm'}
+              onClick={() => dispatch({ type: 'inline-submit' })}
+            >
+              {inline.kind === 'install'
+                ? chinese
+                  ? '安装'
+                  : 'Install'
+                : chinese
+                  ? '卸载'
+                  : 'Uninstall'}
+            </button>
+            {back}
+          </div>
+        </>
+      )}
+    </section>
+  );
+}
 
 function ExtensionsView({
   model,
@@ -29,6 +173,7 @@ function ExtensionsView({
   dispatch: (command: ExtensionsReactCommand) => void;
 }) {
   const plugin = model.plugins[model.selected];
+  const { chinese } = model;
   const links = plugin
     ? [
         { label: 'Homepage', url: plugin.homepageURL, kind: 'homepage' as const },
@@ -44,7 +189,7 @@ function ExtensionsView({
   return (
     <section className="neo-extensions-panel">
       <header className="neo-extensions-header">
-        <strong>Plugin Manager</strong>
+        <strong>{chinese ? '扩展管理器' : 'Plugin Manager'}</strong>
         <span className="neo-extensions-count" data-neo-ui-part="count">
           {model.count}
         </span>
@@ -52,19 +197,70 @@ function ExtensionsView({
           className="neo-extensions-input"
           data-neo-ui-part="input"
           type="text"
-          placeholder="Filter installed plugins"
+          placeholder={chinese ? '筛选已安装的扩展' : 'Filter installed plugins'}
+          aria-label={chinese ? '筛选已安装的扩展' : 'Filter installed plugins'}
+          readOnly={model.inline !== null}
           autoComplete="off"
           spellCheck={false}
           defaultValue={model.query}
         />
         <button
           type="button"
-          disabled={!model.canOpenExtras}
-          onClick={() => dispatch({ type: 'extras' })}
+          data-neo-ui-part="pluginsInstall"
+          disabled={!model.canInstall}
+          onClick={() => dispatch({ type: 'action', action: 'pluginsInstall' })}
         >
-          Extras
+          {chinese ? '安装扩展' : 'Install extension'}
+        </button>
+        <button
+          type="button"
+          data-neo-ui-part="pluginsUpdateAll"
+          disabled={!model.canUpdateAll}
+          onClick={() => dispatch({ type: 'action', action: 'pluginsUpdateAll' })}
+        >
+          {chinese ? '全部更新' : 'Update all'}
         </button>
       </header>
+      {model.needsRestart && (
+        <div className="neo-extensions-restart" role="status" data-neo-ui-part="restart">
+          {chinese
+            ? '需要重启 Zotero 才能完成扩展更改。'
+            : 'Restart required to finish extension changes.'}
+        </div>
+      )}
+      {model.inline && (
+        <InlineExtensionAction inline={model.inline} chinese={chinese} dispatch={dispatch} />
+      )}
+      {(model.notice || model.canStop || model.report.length > 0) && (
+        <div className="neo-extensions-status" data-neo-ui-part="operation">
+          <div className="neo-extensions-actions">
+            <span role="status">{model.notice}</span>
+            {model.canStop && (
+              <button
+                type="button"
+                data-neo-ui-part="operation-stop"
+                onClick={() => dispatch({ type: 'stop' })}
+              >
+                {chinese ? '停止' : 'Stop'}
+              </button>
+            )}
+          </div>
+          {model.report.length > 0 && (
+            <details data-neo-ui-part="operation-details">
+              <summary>{chinese ? '更新详情' : 'Update details'}</summary>
+              <ul
+                className="neo-extensions-report"
+                data-neo-ui-part="operation-report"
+                tabIndex={0}
+              >
+                {model.report.map((line, index) => (
+                  <li key={index}>{line}</li>
+                ))}
+              </ul>
+            </details>
+          )}
+        </div>
+      )}
       <div className="neo-extensions-content">
         <div
           className="neo-extensions-list"
@@ -104,7 +300,13 @@ function ExtensionsView({
         <div className="neo-extensions-details" data-neo-ui-part="details" tabIndex={-1}>
           {!plugin ? (
             model.loading ? (
-              'Loading plugin details…'
+              chinese ? (
+                '正在加载扩展详情…'
+              ) : (
+                'Loading plugin details…'
+              )
+            ) : chinese ? (
+              '未选择扩展。'
             ) : (
               'No plugin selected.'
             )
@@ -123,16 +325,28 @@ function ExtensionsView({
                   border: `1px solid ${plugin.enabled ? THEME_VARS.success : THEME_VARS.border}`,
                 }}
               >
-                {plugin.enabled ? 'Enabled' : 'Disabled'}
+                {plugin.enabled
+                  ? chinese
+                    ? '已启用'
+                    : 'Enabled'
+                  : chinese
+                    ? '已停用'
+                    : 'Disabled'}
               </div>
               <div style={{ display: 'grid', gridTemplateColumns: '90px 1fr', gap: '8px 14px' }}>
                 {[
-                  ['Version', plugin.version || 'Unknown'],
-                  ...(plugin.pendingRestart
-                    ? [['Pending', 'Restart required to finish installation or update']]
-                    : []),
-                  ['Plugin ID', plugin.id],
-                  ['Settings', plugin.preferencePaneID ? 'Available' : 'Not registered'],
+                  [chinese ? '版本' : 'Version', plugin.version || (chinese ? '未知' : 'Unknown')],
+                  [chinese ? '扩展 ID' : 'Plugin ID', plugin.id],
+                  [
+                    chinese ? '设置' : 'Settings',
+                    plugin.preferencePaneID
+                      ? chinese
+                        ? '可用'
+                        : 'Available'
+                      : chinese
+                        ? '未注册'
+                        : 'Not registered',
+                  ],
                 ].map(([label, value]) => (
                   <React.Fragment key={label}>
                     <span style={{ color: THEME_VARS.muted }}>{label}</span>
@@ -150,7 +364,8 @@ function ExtensionsView({
                   overflowWrap: 'anywhere',
                 }}
               >
-                {plugin.description || 'No description provided by the plugin.'}
+                {plugin.description ||
+                  (chinese ? '此扩展未提供说明。' : 'No description provided by the plugin.')}
               </div>
               {links.length > 0 && (
                 <div className="neo-extensions-links">
@@ -166,11 +381,24 @@ function ExtensionsView({
                   ))}
                 </div>
               )}
-              {model.canCancel && (
-                <button type="button" onClick={() => dispatch({ type: 'cancel' })}>
-                  Cancel download
+              <div className="neo-extensions-actions">
+                <button
+                  type="button"
+                  data-neo-ui-part="pluginsUpdate"
+                  disabled={!model.canUpdate}
+                  onClick={() => dispatch({ type: 'action', action: 'pluginsUpdate' })}
+                >
+                  {chinese ? '更新' : 'Update'}
                 </button>
-              )}
+                <button
+                  type="button"
+                  data-neo-ui-part="pluginsUninstall"
+                  disabled={!model.canUninstall}
+                  onClick={() => dispatch({ type: 'action', action: 'pluginsUninstall' })}
+                >
+                  {chinese ? '卸载' : 'Uninstall'}
+                </button>
+              </div>
               <div
                 style={{
                   marginTop: '24px',

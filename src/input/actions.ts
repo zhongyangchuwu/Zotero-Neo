@@ -203,6 +203,8 @@ const BASE_ACTION_IDS = [
   'pluginsRefresh',
   'pluginsInstall',
   'pluginsUpdate',
+  'pluginsUpdateAll',
+  'pluginsUninstall',
   'pluginsEnable',
   'pluginsDisable',
   'pluginsPreferences',

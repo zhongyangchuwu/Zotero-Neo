@@ -3,6 +3,7 @@ import type { MainWindow } from '../../core/contracts';
 import { reportDiagnosticError, type Logger } from '../../core/logging';
 import { ACTION_LABELS, type ActionId } from '../../input/actions';
 import type { BindingContext, BindingMap } from '../../input/bindings';
+import type { KeyGuideLanguage } from '../../input/key-guide-config';
 import { LocalBindingRuntime } from '../../input/local-binding-runtime';
 import { nativeReservation, shortcutsForAction } from '../../input/shortcut-catalog';
 import { keyString } from '../../input/keys';
@@ -13,24 +14,39 @@ import {
   isCommittedInput,
 } from '../../input/composition';
 import { asElement, isEditableElement } from '../../platform/dom';
+import { createExtensionAbortController } from '../../platform/extension-sources';
 import { mountNativeReactView } from '../../platform/native-ui';
 import type { NativeReactView } from '../../ui/react/types';
 import type { ExtensionsReactCommand, ExtensionsReactModel } from './react-model';
 import { PLUGINS_INPUT_ACTIONS, PLUGINS_LIST_ACTIONS } from './capabilities';
 import { CENTERED_MONOSPACE_OVERLAY_STYLE } from '../../ui/react/shells/main';
 import { fuzzyMatchScore } from '../../ui/fuzzy';
-import { updateMainPlugin, type MainPluginInstallOptions } from '../../toolkit/main';
+import {
+  ExtensionSourceWriteError,
+  extensionErrorText,
+  forgetExtensionSource,
+  installExtension,
+  updateExtension,
+  type ExtensionTransport,
+} from './operations';
+import { CURATED_EXTENSIONS, resolveExtensionCandidates, type ExtensionCandidate } from './sources';
 import {
   installedPlugins,
   openPluginInfoURL,
   openPluginPreferences,
   setPluginEnabled,
+  uninstallPlugin,
   ZOTERO_NEO_PLUGIN_ID,
   type InstalledPlugin,
 } from './host';
-import type { PluginManagerRuntime } from './runtime';
+import type {
+  ExtensionPanelInline,
+  ExtensionPanelOperation,
+  PluginManagerRuntime,
+} from './runtime';
 
 const H = 'http://www.w3.org/1999/xhtml';
+const CURATED_LABELS = CURATED_EXTENSIONS.map(({ label }) => label);
 
 export interface PluginManagerPanelHost {
   readonly window: MainWindow;
@@ -39,7 +55,7 @@ export interface PluginManagerPanelHost {
   readonly bindings: () => BindingMap;
   readonly themeRoot: (root: HTMLElement) => Cleanup;
   readonly isCurrent: () => boolean;
-  readonly openExtras: () => void;
+  readonly language: () => KeyGuideLanguage;
 }
 
 export function filterInstalledPlugins(
@@ -71,11 +87,13 @@ export class PluginManagerPanel {
     if (!this.#host.isCurrent()) return;
     const state = this.#host.state;
     if (state.open) {
-      if (state.overlay?.ownerDocument === this.#host.window.document) {
-        state.overlay.focus();
+      const overlay = state.overlay;
+      if (this.isOpenView(overlay)) {
+        (state.sourceInput ?? overlay)?.focus();
         return;
       }
       this.close();
+      if (!this.#host.isCurrent() || state.open) return;
     }
     const window = this.#host.window;
     let pendingOverlay: HTMLElement | null = null;
@@ -94,9 +112,9 @@ export class PluginManagerPanel {
 
       state.open = true;
       state.loading = true;
-      state.busy = false;
       state.error = '';
       state.notice = '';
+      state.report = [];
       state.query = '';
       state.selected = 0;
       state.overlay = overlay;
@@ -120,6 +138,7 @@ export class PluginManagerPanel {
         return;
       }
       state.composition = { active: false };
+      state.sourceComposition = { active: false };
       state.localBindings = new LocalBindingRuntime({
         bindings: this.#host.bindings,
         execute: (action, event) =>
@@ -132,28 +151,32 @@ export class PluginManagerPanel {
       });
       const localBindings = state.localBindings;
       const deactivate = (): void => localBindings?.deactivate();
+      const current = (): boolean => this.isOpenView(overlay);
       const focus = (): void => {
-        if (!this.#host.isCurrent() || !state.open || state.overlay !== overlay) return;
+        if (!current()) return;
         deactivate();
         this.renderFooter();
       };
-      const current = (): boolean =>
-        this.#host.isCurrent() &&
-        state.open &&
-        state.overlay === overlay &&
-        window.document === doc &&
-        overlay.isConnected;
       const view = mountNativeReactView<ExtensionsReactModel, ExtensionsReactCommand>({
         surface: 'extensions',
         root,
         model: this.model(),
-        dispatch: (command) => this.dispatch(command),
+        dispatch: (command) => {
+          if (current()) this.dispatch(command);
+        },
         isCurrent: current,
-        loadingText: 'Preparing Plugin Manager…',
-        errorText: 'Could not load Plugin Manager. Press Escape to close.',
+        loadingText: this.text('Preparing Plugin Manager…', '正在打开扩展管理器…'),
+        errorText: this.text(
+          'Could not load Plugin Manager. Press Escape to close.',
+          '无法加载扩展管理器，按 Esc 关闭。',
+        ),
         onError: (error) =>
           reportDiagnosticError(this.#host.logger, 'Plugin manager renderer failed', error),
       });
+      if (!current()) {
+        view.dispose();
+        return;
+      }
       this.#view = view;
       void view.ready.then(
         () => {
@@ -186,23 +209,19 @@ export class PluginManagerPanel {
             overlay.removeEventListener('focusout', deactivate);
           };
           this.render();
+          if (current() && state.inline?.kind === 'source') state.sourceInput?.focus();
         },
         () => undefined,
       );
 
       overlay.addEventListener('mousedown', (event) => {
-        if (
-          this.#host.isCurrent() &&
-          state.open &&
-          state.overlay === overlay &&
-          event.target === overlay
-        )
-          this.close();
+        if (current() && event.target === overlay) this.close();
       });
 
       overlay.focus();
+      if (!current()) return;
       this.render();
-      void this.refresh();
+      if (current()) void this.refresh();
     } catch (error) {
       const failure = new CleanupFailure();
       if (state.overlay === pendingOverlay) failure.run(() => this.close());
@@ -226,34 +245,45 @@ export class PluginManagerPanel {
     const state = this.#host.state;
     if (!state.open) return;
     const generation = ++state.generation;
-    const cancelInstall = state.cancelInstall;
-    state.cancelInstall = null;
-    state.open = false;
-    cancelInstall?.();
-    const { localBindings, inputCleanup, themeCleanup, overlay, previousElement } = state;
+    const {
+      operation,
+      localBindings,
+      inputCleanup,
+      sourceInputCleanup,
+      themeCleanup,
+      overlay,
+      previousElement,
+    } = state;
     const view = this.#view;
     this.#view = null;
+    state.open = false;
+    state.operation = null;
+    state.inline = null;
     state.localBindings = null;
     state.inputCleanup = null;
+    state.sourceInputCleanup = null;
     state.themeCleanup = null;
     state.previousElement = null;
     state.loading = false;
-    state.busy = false;
     state.plugins = [];
     state.filtered = [];
     state.selected = 0;
     state.query = '';
     state.notice = '';
+    state.report = [];
     state.error = '';
     state.overlay = null;
     state.list = null;
     state.details = null;
     state.count = null;
     state.input = null;
+    state.sourceInput = null;
     state.footer = null;
     const failure = new CleanupFailure();
+    failure.run(() => this.abortOperation(operation));
     failure.run(() => localBindings?.dispose());
     failure.run(() => inputCleanup?.());
+    failure.run(() => sourceInputCleanup?.());
     failure.run(() => view?.dispose());
     failure.run(() => themeCleanup?.());
     failure.run(() => overlay?.remove());
@@ -277,17 +307,14 @@ export class PluginManagerPanel {
 
   handleKey(event: KeyboardEvent): void {
     const state = this.#host.state;
-    if (
-      !this.#host.isCurrent() ||
-      !state.open ||
-      state.overlay?.ownerDocument !== this.#host.window.document
-    )
-      return;
+    const overlay = state.overlay;
+    if (!this.isOpenView(overlay)) return;
     const eventTarget = asElement(event.target);
     let target = eventTarget;
     while (
       target &&
       target !== state.input &&
+      target !== state.sourceInput &&
       target !== state.overlay &&
       target !== state.list &&
       target !== state.details
@@ -297,17 +324,41 @@ export class PluginManagerPanel {
       state.localBindings?.deactivate();
       return;
     }
-    if (
-      eventTarget?.localName === 'button' ||
-      (eventTarget !== state.input && isEditableElement(eventTarget))
-    ) {
+    const composing =
+      (target === state.input && state.composition.active) ||
+      (target === state.sourceInput && state.sourceComposition.active);
+    if (compositionOwnsKey(event, composing) || event.getModifierState?.('AltGraph')) {
       state.localBindings?.deactivate();
       event.stopPropagation();
       return;
     }
+    if (event.key === 'Escape' && event.repeat) {
+      event.preventDefault();
+      event.stopPropagation();
+      return;
+    }
+    if (state.inline) {
+      this.handleInlineKey(event, eventTarget);
+      return;
+    }
     if (
-      compositionOwnsKey(event, state.composition.active) ||
-      event.getModifierState?.('AltGraph')
+      state.operation?.stoppable &&
+      !state.operation.controller.signal.aborted &&
+      event.key === 'Escape' &&
+      !event.ctrlKey &&
+      !event.altKey &&
+      !event.metaKey &&
+      !event.shiftKey &&
+      target !== state.input
+    ) {
+      event.preventDefault();
+      event.stopPropagation();
+      this.stopOperation();
+      return;
+    }
+    if (
+      eventTarget?.localName === 'button' ||
+      (eventTarget !== state.input && isEditableElement(eventTarget))
     ) {
       state.localBindings?.deactivate();
       event.stopPropagation();
@@ -321,6 +372,7 @@ export class PluginManagerPanel {
       return;
     }
     this.renderFooter(context);
+    if (!this.isOpenView(overlay)) return;
     if (state.localBindings?.handle(event, context)) {
       event.preventDefault();
       event.stopImmediatePropagation?.();
@@ -330,7 +382,7 @@ export class PluginManagerPanel {
 
   private execute(action: ActionId, _event: KeyboardEvent | null): boolean {
     const state = this.#host.state;
-    if (!this.#host.isCurrent() || !state.open) return false;
+    if (!this.isOpenView(state.overlay) || state.inline) return false;
     switch (action) {
       case 'uiFocusList':
         state.overlay?.focus();
@@ -365,10 +417,16 @@ export class PluginManagerPanel {
         void this.refresh();
         break;
       case 'pluginsInstall':
-        if (!state.busy) this.#host.openExtras();
+        this.openInstallSource();
         break;
       case 'pluginsUpdate':
         void this.updateSelectedPlugin();
+        break;
+      case 'pluginsUpdateAll':
+        void this.updateAllPlugins();
+        break;
+      case 'pluginsUninstall':
+        this.openUninstall();
         break;
       case 'pluginsEnable':
         void this.setEnabled(true);
@@ -396,21 +454,17 @@ export class PluginManagerPanel {
 
   async refresh(): Promise<void> {
     const state = this.#host.state;
-    if (!this.#host.isCurrent() || !state.open) return;
-    const document = state.overlay?.ownerDocument;
+    const overlay = state.overlay;
+    if (!this.isOpenView(overlay)) return;
     const generation = ++state.generation;
+    const current = (): boolean => this.isOpenView(overlay) && state.generation === generation;
     state.loading = true;
     state.error = '';
     this.render();
+    if (!current()) return;
     try {
       const plugins = await installedPlugins();
-      if (
-        !this.#host.isCurrent() ||
-        !state.open ||
-        state.generation !== generation ||
-        this.#host.window.document !== document
-      )
-        return;
+      if (!current()) return;
       const selectedID = state.filtered[state.selected]?.id;
       state.plugins = plugins;
       this.filter();
@@ -422,167 +476,459 @@ export class PluginManagerPanel {
           ? selectedIndex
           : Math.min(state.selected, Math.max(0, state.filtered.length - 1));
     } catch (error) {
-      if (
-        !this.#host.isCurrent() ||
-        !state.open ||
-        state.generation !== generation ||
-        this.#host.window.document !== document
-      )
-        return;
-      state.error = String(error);
-      this.#host.logger.debug(`plugin manager load failed: ${String(error)}`);
-      this.#host.logger.diagnostic(`plugin manager load failed: ${String(error)}`);
-    } finally {
-      if (
-        !this.#host.isCurrent() ||
-        !state.open ||
-        state.generation !== generation ||
-        this.#host.window.document !== document
-      )
-        return;
-      state.loading = false;
-      this.render();
-    }
-  }
-
-  private async updateSelectedPlugin(): Promise<void> {
-    const state = this.#host.state;
-    const plugin = state.filtered[state.selected];
-    if (!this.#host.isCurrent() || !state.open || !plugin || state.busy || state.loading) return;
-    const overlay = state.overlay;
-    const document = overlay?.ownerDocument;
-    const current = (): boolean =>
-      this.#host.isCurrent() &&
-      state.open &&
-      state.overlay === overlay &&
-      overlay?.isConnected === true &&
-      this.#host.window.document === document;
-    if (
-      !this.#host.window.confirm(
-        `Check for updates for ${plugin.name}? This contacts the plugin's update service.`,
-      )
-    )
-      return;
-    if (!current()) return;
-    state.busy = true;
-    state.notice = `Checking updates for ${plugin.name}…`;
-    this.render();
-    try {
-      const options: MainPluginInstallOptions = {
-        id: plugin.id,
-        confirm: (details: { name: string; version: string; source: string }): boolean => {
-          if (!current()) return false;
-          if (!details.source.startsWith('https://'))
-            throw new Error('Plugin update source must use HTTPS');
-          const accepted = this.#host.window.confirm(
-            `Install ${details.name} ${details.version}?\n\nPlugin ID: ${plugin.id}\nSource: ${details.source}\n\nPlugins can access your Zotero data and computer. Only install plugins you trust.`,
-          );
-          if (accepted && current()) {
-            state.notice = `Installing ${details.name} ${details.version}…`;
-            this.renderFooter();
-          }
-          return accepted && current();
-        },
-        progress: (bytes: number, total: number): void => {
-          if (!current()) return;
-          state.notice = `Downloading ${plugin.name}: ${bytes}${total > 0 ? ` / ${total}` : ''} bytes`;
-          this.renderFooter();
-        },
-        registerCancel: (cancel: (() => void) | null): void => {
-          if (!current()) {
-            cancel?.();
-            return;
-          }
-          state.cancelInstall = cancel;
-          this.render();
-        },
-      };
-      const result = await updateMainPlugin(options);
-      if (!current()) return;
-      state.notice =
-        result === 'no-update'
-          ? `No update available for ${plugin.name}`
-          : result === null
-            ? 'Installation cancelled'
-            : result.pendingRestart
-              ? 'Installation complete; restart required'
-              : 'Installation complete';
-      await this.refresh();
-    } catch (error) {
-      if (!current()) return;
-      state.notice = `Plugin operation failed: ${String(error)}`;
-      this.#host.logger.diagnostic(`plugin installation failed: ${String(error)}`);
+      if (current()) {
+        state.error = this.text('Unable to load plugins.', '无法加载已安装的扩展。');
+        reportDiagnosticError(this.#host.logger, 'Plugin manager load failed', error);
+      }
     } finally {
       if (current()) {
-        state.cancelInstall = null;
-        state.busy = false;
+        state.loading = false;
         this.render();
       }
     }
   }
 
+  private handleInlineKey(event: KeyboardEvent, target: Element | null): void {
+    const state = this.#host.state;
+    const inline = state.inline;
+    state.localBindings?.deactivate();
+    event.stopPropagation();
+    if (!inline || event.ctrlKey || event.altKey || event.metaKey || event.shiftKey) return;
+    if (event.key === 'Escape') {
+      event.preventDefault();
+      if (!event.repeat) this.dismissInline();
+      return;
+    }
+    if (inline.kind === 'choose' && (event.key === 'ArrowDown' || event.key === 'ArrowUp')) {
+      event.preventDefault();
+      const selected = Math.max(
+        0,
+        Math.min(
+          inline.candidates.length - 1,
+          inline.selected + (event.key === 'ArrowDown' ? 1 : -1),
+        ),
+      );
+      state.inline = { ...inline, selected };
+      const overlay = state.overlay;
+      this.render();
+      if (this.isOpenView(overlay) && target?.localName === 'button') overlay?.focus();
+      return;
+    }
+    if (event.key !== 'Enter') return;
+    if (!event.repeat && target?.localName === 'button') return; // Native button activation.
+    event.preventDefault();
+    if (!event.repeat && (target === state.sourceInput || !isEditableElement(target))) {
+      this.submitInline();
+    }
+  }
+
+  private setInline(inline: ExtensionPanelInline | null): void {
+    const state = this.#host.state;
+    const overlay = state.overlay;
+    if (!this.isOpenView(overlay)) return;
+    state.localBindings?.deactivate();
+    state.inline = inline;
+    this.render();
+    if (!this.isOpenView(overlay) || state.inline !== inline) return;
+    (inline?.kind === 'source' ? (state.sourceInput ?? overlay) : overlay)?.focus();
+  }
+
+  private openInstallSource(): void {
+    const state = this.#host.state;
+    if (state.busy || state.inline) return;
+    state.notice = '';
+    state.report = [];
+    this.setInline({ kind: 'source' });
+  }
+
+  private openUninstall(): void {
+    const state = this.#host.state;
+    const plugin = state.filtered[state.selected];
+    if (state.busy || state.loading || state.inline || !plugin) return;
+    if (!plugin.canUninstall) {
+      state.notice =
+        plugin.id === ZOTERO_NEO_PLUGIN_ID
+          ? this.text(
+              'Zotero Neo cannot uninstall itself.',
+              '不能在扩展管理器中卸载 Zotero Neo 自身。',
+            )
+          : this.text(`${plugin.name} cannot be uninstalled.`, `无法卸载 ${plugin.name}。`);
+      this.renderFooter();
+      return;
+    }
+    state.notice = '';
+    state.report = [];
+    this.setInline({ kind: 'uninstall', plugin });
+  }
+
+  private dismissInline(): void {
+    const state = this.#host.state;
+    const { inline, overlay } = state;
+    if (!inline) return;
+    if (inline.kind === 'source' && state.busy) this.stopOperation();
+    if (this.isOpenView(overlay) && state.inline === inline) this.setInline(null);
+  }
+
+  private chooseCandidate(candidates: readonly ExtensionCandidate[], index: number): void {
+    if (this.#host.state.busy || !Number.isInteger(index)) return;
+    const candidate = candidates[index];
+    if (candidate) this.setInline({ kind: 'install', candidate });
+  }
+
+  private submitInline(): void {
+    const state = this.#host.state;
+    const inline = state.inline;
+    if (!inline || state.busy) return;
+    switch (inline.kind) {
+      case 'source': {
+        const input = state.sourceInput;
+        if (!input || state.sourceComposition.active) return;
+        const value = input.value.trim();
+        if (!value) {
+          const curated = CURATED_EXTENSIONS[0];
+          if (curated) this.setInline({ kind: 'install', candidate: curated.candidate });
+          return;
+        }
+        input.focus();
+        if (state.inline !== inline) return;
+        void this.run(
+          this.text('Finding install files…', '正在查找安装文件…'),
+          async (transport) => {
+            const candidates = await resolveExtensionCandidates(value, transport.signal);
+            if (!transport.isCurrent()) return;
+            if (!candidates.length) {
+              state.notice = this.text('No XPI files found.', '未找到 XPI 文件。');
+              return;
+            }
+            state.notice = '';
+            this.setInline(
+              candidates.length === 1
+                ? { kind: 'install', candidate: candidates[0] }
+                : { kind: 'choose', candidates, selected: 0 },
+            );
+          },
+          { stoppable: true },
+        );
+        return;
+      }
+      case 'choose':
+        this.chooseCandidate(inline.candidates, inline.selected);
+        return;
+      case 'install':
+      case 'uninstall': {
+        const overlay = state.overlay;
+        this.setInline(null);
+        if (!this.isOpenView(overlay) || state.inline) return;
+        if (inline.kind === 'install') void this.installCandidate(inline.candidate);
+        else void this.uninstallSelectedPlugin(inline.plugin);
+      }
+    }
+  }
+
+  private async installCandidate(candidate: ExtensionCandidate): Promise<void> {
+    const state = this.#host.state;
+    const name = candidate.name;
+    await this.run(
+      this.text(`Installing ${name}…`, `正在安装 ${name}…`),
+      async (transport, showing) => {
+        const result = await installExtension(candidate, transport);
+        if (!showing()) return;
+        if (result) state.operationNeedsRestart ||= result.pendingRestart;
+        if (transport.signal.aborted && !result) return;
+        state.notice = result
+          ? this.text(`Installed ${name}.`, `已安装 ${name}。`)
+          : this.text('Installation cancelled.', '已取消安装。');
+      },
+      { refresh: true, stoppable: true, name },
+    );
+  }
+
+  private async uninstallSelectedPlugin(plugin: InstalledPlugin): Promise<void> {
+    const state = this.#host.state;
+    const { id, name } = plugin;
+    await this.run(
+      this.text(`Uninstalling ${name}…`, `正在卸载 ${name}…`),
+      async (transport) => {
+        const result = await uninstallPlugin(id);
+        if (transport.isCurrent()) state.operationNeedsRestart ||= result.pendingRestart;
+        // Source cleanup belongs to the completed host mutation, even if the UI has closed.
+        forgetExtensionSource(id);
+        if (transport.isCurrent()) {
+          state.notice = this.text(`Uninstalled ${name}.`, `已卸载 ${name}。`);
+        }
+      },
+      { refresh: true },
+    );
+  }
+
+  private async updateSelectedPlugin(): Promise<void> {
+    const state = this.#host.state;
+    const plugin = state.filtered[state.selected];
+    if (!plugin || state.loading) return;
+    const name = plugin.name;
+    await this.run(
+      this.text(`Checking updates for ${name}…`, `正在检查 ${name} 的更新…`),
+      async (transport, showing) => {
+        const result = await updateExtension(plugin, transport);
+        if (!showing()) return;
+        if (result && typeof result === 'object') {
+          state.operationNeedsRestart ||= result.pendingRestart;
+          state.notice = this.text(`Updated ${name}.`, `已更新 ${name}。`);
+        } else if (transport.signal.aborted) {
+          return;
+        } else if (result === 'current') {
+          state.notice = this.text(`No update available for ${name}.`, `${name} 已是最新版本。`);
+        } else if (result === 'skipped') {
+          state.notice = this.text(
+            `${name} has no supported update source.`,
+            `${name} 没有受支持的更新来源。`,
+          );
+        } else {
+          state.notice = this.text('Update cancelled.', '已取消更新。');
+        }
+      },
+      { refresh: true, stoppable: true, name },
+    );
+  }
+
+  private async updateAllPlugins(): Promise<void> {
+    const state = this.#host.state;
+    if (state.loading || state.busy || state.inline) return;
+    const plugins = state.plugins.filter(({ id }) => id !== ZOTERO_NEO_PLUGIN_ID);
+    if (!plugins.length) {
+      state.notice = this.text('No third-party plugins to update.', '没有可检查更新的第三方扩展。');
+      this.renderFooter();
+      return;
+    }
+    await this.run(
+      this.text('Checking plugin updates…', '正在检查扩展更新…'),
+      async (transport, showing) => {
+        const updated: string[] = [];
+        const current: string[] = [];
+        const skipped: string[] = [];
+        const errors: string[] = [];
+        let failed = 0;
+        for (const [index, plugin] of plugins.entries()) {
+          if (!transport.isCurrent()) break;
+          const heading = this.text(
+            `Checking ${plugin.name} (${index + 1}/${plugins.length})…`,
+            `正在检查 ${plugin.name}（${index + 1}/${plugins.length}）…`,
+          );
+          state.notice = heading;
+          this.renderFooter();
+          if (!transport.isCurrent()) break;
+          try {
+            const result = await updateExtension(plugin, {
+              ...transport,
+              progress: (bytes, total) => {
+                if (!transport.isCurrent()) return;
+                state.notice = this.text(
+                  `Downloading ${plugin.name} (${index + 1}/${plugins.length}): ${bytes}${total > 0 ? ` / ${total}` : ''} bytes`,
+                  `正在下载 ${plugin.name}（${index + 1}/${plugins.length}）：${bytes}${total > 0 ? ` / ${total}` : ''} 字节`,
+                );
+                this.renderFooter();
+              },
+            });
+            if (!showing()) break;
+            if (result === 'current') current.push(plugin.name);
+            else if (result === 'skipped') skipped.push(plugin.name);
+            else if (result) {
+              state.operationNeedsRestart ||= result.pendingRestart;
+              updated.push(plugin.name);
+            } else if (!transport.signal.aborted) {
+              failed += 1;
+              errors.push(
+                this.text(`${plugin.name}: update cancelled.`, `${plugin.name}：已取消更新。`),
+              );
+            }
+          } catch (error) {
+            if (!showing()) break;
+            if (transport.signal.aborted && !(error instanceof ExtensionSourceWriteError)) break;
+            if (error instanceof ExtensionSourceWriteError && error.pendingRestart !== null) {
+              updated.push(plugin.name);
+              errors.push(`${plugin.name}: ${this.operationError(error)}`);
+            } else {
+              failed += 1;
+              const message = this.operationError(error);
+              errors.push(
+                this.text(
+                  `${plugin.name} failed: ${message}`,
+                  `${plugin.name} 更新失败：${message}`,
+                ),
+              );
+            }
+          }
+        }
+        if (!showing()) return;
+        const report = [];
+        if (updated.length) {
+          report.push(this.text(`Updated: ${updated.join(', ')}`, `已更新：${updated.join('、')}`));
+        }
+        if (current.length) {
+          report.push(
+            this.text(
+              `Already up to date: ${current.join(', ')}`,
+              `已是最新版本：${current.join('、')}`,
+            ),
+          );
+        }
+        if (skipped.length) {
+          report.push(
+            this.text(
+              `Skipped (no supported update source): ${skipped.join(', ')}`,
+              `已跳过（没有受支持的更新来源）：${skipped.join('、')}`,
+            ),
+          );
+        }
+        state.report = [...report, ...errors];
+        const stopped = transport.signal.aborted;
+        state.notice = this.text(
+          `${stopped ? 'Update check stopped' : 'Update check finished'}: ${updated.length} updated, ${current.length} current, ${skipped.length} skipped, ${failed} failed.`,
+          `${stopped ? '已停止检查更新' : '更新检查已完成'}：${updated.length} 个已更新，${current.length} 个已是最新版本，${skipped.length} 个已跳过，${failed} 个失败。`,
+        );
+      },
+      { refresh: true, stoppable: true },
+    );
+  }
+
+  private async run(
+    notice: string,
+    action: (transport: ExtensionTransport, showing: () => boolean) => Promise<void>,
+    options: { refresh?: boolean; stoppable?: boolean; name?: string } = {},
+  ): Promise<void> {
+    const state = this.#host.state;
+    const overlay = state.overlay;
+    if (!this.isOpenView(overlay) || state.busy) return;
+    const buttonFocused = overlay?.ownerDocument.activeElement?.localName === 'button';
+    const operation: ExtensionPanelOperation = {
+      controller: createExtensionAbortController(),
+      cancel: null,
+      stoppable: options.stoppable ?? false,
+    };
+    state.operation = operation;
+    state.notice = notice;
+    state.report = [];
+    const showing = (): boolean => this.isOpenView(overlay) && state.operation === operation;
+    const signal = operation.controller.signal;
+    const isCurrent = (): boolean => showing() && !signal.aborted;
+    const transport: ExtensionTransport = {
+      signal,
+      isCurrent,
+      progress: (bytes, total) => {
+        if (!isCurrent() || !options.name) return;
+        const count = `${bytes}${total > 0 ? ` / ${total}` : ''}`;
+        state.notice = this.text(
+          `Downloading ${options.name}: ${count} bytes`,
+          `正在下载 ${options.name}：${count} 字节`,
+        );
+        this.renderFooter();
+      },
+      registerCancel: (cancel) => {
+        if (isCurrent()) operation.cancel = cancel;
+        else cancel?.();
+      },
+    };
+    this.render();
+    if (buttonFocused && isCurrent()) overlay?.focus();
+    try {
+      if (isCurrent()) await action(transport, showing);
+    } catch (error) {
+      if (showing() && (!signal.aborted || error instanceof ExtensionSourceWriteError)) {
+        state.notice = this.operationError(error);
+      } else if (!signal.aborted || error instanceof ExtensionSourceWriteError) {
+        reportDiagnosticError(this.#host.logger, 'Plugin manager operation failed', error);
+      }
+    } finally {
+      if (showing()) {
+        if (signal.aborted && state.notice === this.text('Stopping…', '正在停止…')) {
+          state.notice = this.text('Operation stopped.', '操作已停止。');
+        }
+        operation.stoppable = false;
+        operation.cancel = null;
+        if (options.refresh) await this.refresh();
+        if (showing()) {
+          state.operation = null;
+          this.render();
+        }
+      }
+    }
+  }
+
+  private stopOperation(): void {
+    const state = this.#host.state;
+    const operation = state.operation;
+    if (!operation?.stoppable || operation.controller.signal.aborted) return;
+    const overlay = state.overlay;
+    const buttonFocused = overlay?.ownerDocument.activeElement?.localName === 'button';
+    state.notice = this.text('Stopping…', '正在停止…');
+    try {
+      this.abortOperation(operation);
+    } catch (error) {
+      reportDiagnosticError(this.#host.logger, 'Plugin manager cancellation failed', error);
+    }
+    if (!this.isOpenView(overlay) || state.operation !== operation) return;
+    this.render();
+    if (buttonFocused && this.isOpenView(overlay) && state.operation === operation) {
+      (state.sourceInput ?? overlay)?.focus();
+    }
+  }
+
+  private abortOperation(operation: ExtensionPanelOperation | null): void {
+    if (!operation || operation.controller.signal.aborted) return;
+    const cancel = operation.cancel;
+    operation.cancel = null;
+    operation.controller.abort();
+    cancel?.();
+  }
+
+  private operationError(error: unknown): string {
+    if (error instanceof ExtensionSourceWriteError) {
+      this.#host.state.operationNeedsRestart ||= error.pendingRestart === true;
+    }
+    reportDiagnosticError(this.#host.logger, 'Plugin manager operation failed', error);
+    return extensionErrorText(error, this.#host.language() === 'zh-CN');
+  }
+
   private async setEnabled(enabled: boolean): Promise<void> {
     const state = this.#host.state;
     const plugin = state.filtered[state.selected];
-    if (!this.#host.isCurrent() || !state.open || !plugin || state.busy) return;
-
+    if (!plugin || state.busy || state.loading) return;
+    const name = plugin.name;
     if (plugin.enabled === enabled) {
-      state.notice = `${plugin.name} is already ${enabled ? 'enabled' : 'disabled'}`;
+      state.notice = enabled
+        ? this.text(`${name} is already enabled.`, `${name} 已启用。`)
+        : this.text(`${name} is already disabled.`, `${name} 已停用。`);
       this.renderFooter();
       return;
     }
-    if (enabled && !plugin.canEnable) {
-      state.notice = `${plugin.name} cannot be enabled by the user`;
-      this.renderFooter();
-      return;
-    }
-    if (!enabled && !plugin.canDisable) {
+    if (enabled ? !plugin.canEnable : !plugin.canDisable) {
       state.notice =
-        plugin.id === ZOTERO_NEO_PLUGIN_ID
-          ? 'Zotero Neo cannot disable itself from inside Plugin Manager'
-          : `${plugin.name} cannot be disabled by the user`;
+        !enabled && plugin.id === ZOTERO_NEO_PLUGIN_ID
+          ? this.text(
+              'Zotero Neo cannot disable itself from inside Plugin Manager.',
+              '不能在扩展管理器中停用 Zotero Neo 自身。',
+            )
+          : enabled
+            ? this.text(`${name} cannot be enabled.`, `无法启用 ${name}。`)
+            : this.text(`${name} cannot be disabled.`, `无法停用 ${name}。`);
       this.renderFooter();
       return;
     }
-
-    const overlay = state.overlay;
-    const document = overlay?.ownerDocument;
-    state.busy = true;
-    state.notice = `${enabled ? 'Enabling' : 'Disabling'} ${plugin.name}…`;
-    this.render();
-    try {
-      await setPluginEnabled(plugin.id, enabled);
-      if (
-        !this.#host.isCurrent() ||
-        !state.open ||
-        state.overlay !== overlay ||
-        this.#host.window.document !== document
-      )
-        return;
-      state.notice = `${enabled ? 'Enabled' : 'Disabled'} ${plugin.name}`;
-      await this.refresh();
-    } catch (error) {
-      if (
-        !this.#host.isCurrent() ||
-        !state.open ||
-        state.overlay !== overlay ||
-        this.#host.window.document !== document
-      )
-        return;
-      state.notice = `Failed to ${enabled ? 'enable' : 'disable'} ${plugin.name}: ${String(error)}`;
-      this.#host.logger.debug(`plugin manager lifecycle action failed: ${String(error)}`);
-      this.#host.logger.diagnostic(`plugin manager lifecycle action failed: ${String(error)}`);
-    } finally {
-      if (
-        !this.#host.isCurrent() ||
-        !state.open ||
-        state.overlay !== overlay ||
-        this.#host.window.document !== document
-      )
-        return;
-      state.busy = false;
-      this.render();
-    }
+    const notice = enabled
+      ? this.text(`Enabling ${name}…`, `正在启用 ${name}…`)
+      : this.text(`Disabling ${name}…`, `正在停用 ${name}…`);
+    await this.run(
+      notice,
+      async (transport) => {
+        await setPluginEnabled(plugin.id, enabled);
+        if (transport.isCurrent()) {
+          state.notice = enabled
+            ? this.text(`Enabled ${name}.`, `已启用 ${name}。`)
+            : this.text(`Disabled ${name}.`, `已停用 ${name}。`);
+        }
+      },
+      { refresh: true },
+    );
   }
 
   private openPreferences(): void {
@@ -654,26 +1000,48 @@ export class PluginManagerPanel {
 
   private dispatch(command: ExtensionsReactCommand): void {
     const state = this.#host.state;
-    if (!this.#host.isCurrent() || !state.open) return;
-    if (command.type === 'cancel') {
-      state.cancelInstall?.();
-      return;
-    }
-    if (command.type === 'extras') {
-      if (!state.busy) this.#host.openExtras();
-      return;
-    }
-    if (command.type === 'select') {
-      if (
-        !Number.isInteger(command.index) ||
-        command.index < 0 ||
-        command.index >= state.filtered.length
-      )
+    const overlay = state.overlay;
+    if (!this.isOpenView(overlay)) return;
+    switch (command.type) {
+      case 'stop':
+        this.stopOperation();
         return;
-      state.localBindings?.deactivate();
-      state.list?.focus();
-      this.select(command.index);
-      return;
+      case 'action':
+        this.execute(command.action, null);
+        return;
+      case 'inline-submit':
+        this.submitInline();
+        return;
+      case 'inline-dismiss':
+        this.dismissInline();
+        return;
+      case 'choose':
+        if (state.inline?.kind === 'choose')
+          this.chooseCandidate(state.inline.candidates, command.index);
+        return;
+      case 'curated': {
+        if (state.inline?.kind !== 'source' || state.busy || state.sourceComposition.active) return;
+        const curated = Number.isInteger(command.index)
+          ? CURATED_EXTENSIONS[command.index]
+          : undefined;
+        if (curated) this.setInline({ kind: 'install', candidate: curated.candidate });
+        return;
+      }
+      case 'select':
+        if (
+          state.inline ||
+          !Number.isInteger(command.index) ||
+          command.index < 0 ||
+          command.index >= state.filtered.length
+        )
+          return;
+        state.localBindings?.deactivate();
+        state.list?.focus();
+        if (this.isOpenView(overlay) && !state.inline) this.select(command.index);
+        return;
+      case 'link':
+        if (state.inline || state.busy) return;
+        break;
     }
     const plugin = state.filtered[state.selected];
     if (!plugin) return;
@@ -691,10 +1059,23 @@ export class PluginManagerPanel {
   }
 
   private render(): void {
-    this.#view?.update(this.model());
     const state = this.#host.state;
-    if (!state.loading && !state.error && state.filtered.length)
+    const overlay = state.overlay;
+    this.#view?.update(this.model());
+    if (!this.isOpenView(overlay)) return;
+    const input = (this.#view?.getElement('install-input') ?? null) as HTMLInputElement | null;
+    if (input !== state.sourceInput) {
+      state.sourceInputCleanup?.();
+      state.sourceInput = input;
+      state.sourceInputCleanup = input
+        ? bindCompositionState(input, state.sourceComposition)
+        : null;
+    }
+    if (state.inline?.kind === 'choose') {
+      this.#view?.getElement('install-selected')?.scrollIntoView({ block: 'nearest' });
+    } else if (!state.inline && !state.loading && !state.error && state.filtered.length) {
       state.list?.children[state.selected]?.scrollIntoView({ block: 'nearest' });
+    }
   }
 
   private model(context?: BindingContext): ExtensionsReactModel {
@@ -704,6 +1085,7 @@ export class PluginManagerPanel {
     const actions = plugin
       ? [
           this.hint(bindings, 'plugins-list', 'pluginsUpdate'),
+          plugin.canUninstall ? this.hint(bindings, 'plugins-list', 'pluginsUninstall') : null,
           !plugin.enabled && plugin.canEnable
             ? this.hint(bindings, 'plugins-list', 'pluginsEnable')
             : null,
@@ -719,42 +1101,74 @@ export class PluginManagerPanel {
         ].filter((hint): hint is string => !!hint)
       : [];
     const loading = state.loading && !state.plugins.length;
+    const inline = state.inline;
+    const enabled = !inline && !state.busy;
+    const canChange = enabled && !state.loading;
+    let inlineModel: ExtensionsReactModel['inline'] = null;
+    switch (inline?.kind) {
+      case 'source':
+        inlineModel = {
+          kind: 'source',
+          resolving: state.busy,
+          curated: CURATED_LABELS,
+        };
+        break;
+      case 'choose':
+        inlineModel = {
+          kind: 'choose',
+          selected: inline.selected,
+          candidates: inline.candidates.map(({ name, version, expectedVersion }) => ({
+            name,
+            version: version ?? expectedVersion,
+          })),
+        };
+        break;
+      case 'install': {
+        const { name, url, version, expectedVersion } = inline.candidate;
+        inlineModel = { kind: 'install', name, url, version: version ?? expectedVersion };
+        break;
+      }
+      case 'uninstall':
+        inlineModel = {
+          kind: 'uninstall',
+          name: inline.plugin.name,
+          version: inline.plugin.version,
+        };
+        break;
+    }
     return {
-      plugins: state.filtered.map((item) => ({
-        id: item.id,
-        name: item.name,
-        version: item.version,
-        pendingRestart: item.pendingRestart,
-        enabled: item.enabled,
-        canEnable: item.canEnable,
-        canDisable: item.canDisable,
-        description: item.description,
-        homepageURL: item.homepageURL,
-        repositoryURL: item.repositoryURL,
-        readmeURL: item.readmeURL,
-        gitLogURL: item.gitLogURL,
-        preferencePaneID: item.preferencePaneID,
-      })),
+      chinese: this.#host.language() === 'zh-CN',
+      plugins: state.filtered,
       selected: state.selected,
       query: state.query,
-      count: state.loading ? 'Loading…' : `${state.filtered.length}/${state.plugins.length}`,
+      count: state.loading
+        ? this.text('Loading…', '正在加载…')
+        : `${state.filtered.length}/${state.plugins.length}`,
       listMessage: loading
-        ? 'Loading installed plugins…'
+        ? this.text('Loading installed plugins…', '正在加载已安装的扩展…')
         : state.error
-          ? `Unable to load plugins: ${state.error.slice(0, 120)}`
+          ? state.error
           : !state.filtered.length
             ? state.query.trim()
-              ? 'No matching plugins'
-              : 'No installed plugins'
+              ? this.text('No matching plugins', '没有匹配的扩展')
+              : this.text('No installed plugins', '没有已安装的扩展')
             : '',
       listStatus: loading ? 'muted' : state.error ? 'error' : 'normal',
-      canCancel: !!state.cancelInstall,
-      canOpenExtras: !state.busy,
+      canStop: state.operation?.stoppable === true && !state.operation.controller.signal.aborted,
+      canInstall: enabled,
+      canUpdate: canChange && !!plugin,
+      canUpdateAll: canChange && state.plugins.some(({ id }) => id !== ZOTERO_NEO_PLUGIN_ID),
+      canUninstall: canChange && !!plugin?.canUninstall,
+      needsRestart:
+        state.operationNeedsRestart || state.plugins.some(({ pendingRestart }) => pendingRestart),
+      inline: inlineModel,
+      notice: state.notice,
+      report: state.report,
       loading: state.loading,
       shortcuts: actions.length
-        ? `Shortcuts\n${actions.join('  ·  ')}`
-        : 'No additional shortcuts available',
-      footer: this.footer(context),
+        ? `${this.text('Shortcuts', '快捷键')}\n${actions.join('  ·  ')}`
+        : this.text('No additional shortcuts available', '没有其他快捷键'),
+      footer: this.footer(bindings, actions, context),
     };
   }
 
@@ -762,29 +1176,17 @@ export class PluginManagerPanel {
     this.#view?.update(this.model(context));
   }
 
-  private footer(context?: BindingContext): string {
+  private footer(
+    bindings: BindingMap,
+    actions: readonly string[],
+    context?: BindingContext,
+  ): string {
     const state = this.#host.state;
-    const bindings = this.#host.bindings();
-    const plugin = state.filtered[state.selected];
-    const actions = plugin
-      ? [
-          this.hint(bindings, 'plugins-list', 'pluginsUpdate'),
-          !plugin.enabled && plugin.canEnable
-            ? this.hint(bindings, 'plugins-list', 'pluginsEnable')
-            : null,
-          plugin.enabled && plugin.canDisable
-            ? this.hint(bindings, 'plugins-list', 'pluginsDisable')
-            : null,
-          plugin.preferencePaneID
-            ? this.hint(bindings, 'plugins-list', 'pluginsPreferences')
-            : null,
-          plugin.homepageURL ? this.hint(bindings, 'plugins-list', 'pluginsHomepage') : null,
-          plugin.readmeURL ? this.hint(bindings, 'plugins-list', 'pluginsReadme') : null,
-          plugin.gitLogURL ? this.hint(bindings, 'plugins-list', 'pluginsGitLog') : null,
-        ].filter((hint): hint is string => !!hint)
-      : [];
-    const notice = state.notice ? ` · ${state.notice}` : '';
-    const busy = state.busy ? ' · working…' : '';
+    if (state.inline) {
+      return state.inline.kind === 'choose'
+        ? this.text('↑/↓ Select · Enter Continue · Esc Back', '↑/↓ 选择 · Enter 继续 · Esc 返回')
+        : this.text('Enter Continue · Esc Back', 'Enter 继续 · Esc 返回');
+    }
     const ownedContext =
       context ??
       (this.#host.window.document.activeElement === state.input ? 'plugins-input' : 'plugins-list');
@@ -795,16 +1197,39 @@ export class PluginManagerPanel {
             (action) =>
               !action.startsWith('plugins') ||
               action === 'pluginsRefresh' ||
-              action === 'pluginsInstall',
+              action === 'pluginsInstall' ||
+              action === 'pluginsUpdateAll',
           );
     const hints = navigation
       .map((action) => this.hint(bindings, ownedContext, action))
       .filter(Boolean);
-    return `${[...hints, ...(ownedContext === 'plugins-list' ? actions : [])].join(' · ')}${state.query.trim() ? ` · filter: ${state.query.trim()}` : ''}${busy}${notice}`;
+    const filter = state.query.trim();
+    return [
+      ...hints,
+      ...(ownedContext === 'plugins-list' ? actions : []),
+      ...(filter ? [this.text(`filter: ${filter}`, `筛选：${filter}`)] : []),
+    ].join(' · ');
   }
 
   private hint(bindings: BindingMap, context: BindingContext, action: ActionId): string | null {
     const keys = shortcutsForAction(bindings, context, action);
-    return keys.length ? `${keys.join('/')} ${ACTION_LABELS[action].en}` : null;
+    const language = this.#host.language();
+    return keys.length ? `${keys.join('/')} ${ACTION_LABELS[action][language]}` : null;
+  }
+
+  private isOpenView(overlay: HTMLElement | null): boolean {
+    const state = this.#host.state;
+    return (
+      this.#host.isCurrent() &&
+      state.open &&
+      overlay !== null &&
+      state.overlay === overlay &&
+      overlay.ownerDocument === this.#host.window.document &&
+      overlay.isConnected
+    );
+  }
+
+  private text(english: string, chinese: string): string {
+    return this.#host.language() === 'zh-CN' ? chinese : english;
   }
 }
