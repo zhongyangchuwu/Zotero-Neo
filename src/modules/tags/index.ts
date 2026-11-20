@@ -22,25 +22,28 @@ export function createTagModule(host: ModuleHost, ports: TagModuleHost): TagModu
   return host.activate('tags', (scope) => {
     let releaseChooser: Cleanup | null = null;
     scope.add(() => releaseChooser?.());
-    const actions = new TagActions({
-      ...ports,
-      status: (message) => {
-        if (scope.isCurrent()) ports.status(message);
+    const actions = new TagActions(
+      {
+        ...ports,
+        status: (message) => {
+          if (scope.isCurrent()) ports.status(message);
+        },
+        choose: (options) => {
+          if (!scope.isCurrent()) return;
+          const confirm = options.confirm;
+          const release = ports.choose({
+            ...options,
+            confirm: confirm
+              ? (item, openInWindow) => {
+                  if (scope.isCurrent()) return confirm(item, openInWindow);
+                }
+              : undefined,
+          });
+          if (release) releaseChooser = release;
+        },
       },
-      choose: (options) => {
-        if (!scope.isCurrent()) return;
-        const confirm = options.confirm;
-        const release = ports.choose({
-          ...options,
-          confirm: confirm
-            ? (item, openInWindow) => {
-                if (scope.isCurrent()) return confirm(item, openInWindow);
-              }
-            : undefined,
-        });
-        if (release) releaseChooser = release;
-      },
-    });
+      () => scope.isCurrent(),
+    );
     const bindItems = (context: BindingContext, present: boolean) =>
       host.bind<ItemTargetSet>(scope, context, present ? 'addTag' : 'removeTag', (targets) => {
         if (present) actions.add(targets);

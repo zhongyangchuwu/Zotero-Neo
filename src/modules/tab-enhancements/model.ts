@@ -1,3 +1,4 @@
+import type { BatchOutcome } from '../../i18n/batch-result';
 import type { TabDocumentRef, TabViewSnapshot } from '../../toolkit/main/tab-enhancements-types';
 import type {
   SavedTabMember,
@@ -352,7 +353,8 @@ export function createTabGroupManager(options: TabGroupManagerOptions): TabGroup
       const registration = getHost(hostID);
       if ('name' in destination && !validString(destination.name))
         throw new Error('Group name is required');
-      if ('groupID' in destination) getGroup(destination.groupID);
+      if ('groupID' in destination && !groups.some((group) => group.id === destination.groupID))
+        return { done: 0, unavailable: documents.length };
       let groupID = 'groupID' in destination ? destination.groupID : undefined;
       const closeEpoch = groupID ? (registration.closedGroups.get(groupID) ?? 0) : 0;
       const current = () =>
@@ -363,12 +365,26 @@ export function createTabGroupManager(options: TabGroupManagerOptions): TabGroup
         (!groupID ||
           (groups.some((group) => group.id === groupID) &&
             (registration.closedGroups.get(groupID) ?? 0) === closeEpoch));
-      let count = 0;
+      const result: BatchOutcome = { done: 0 };
+      const closeUncommitted = (nativeID: string) => {
+        try {
+          if (registration.active) registration.host.native.close([nativeID]);
+        } catch (error) {
+          options.onError?.(error);
+        }
+      };
       const keys = new Set<string>();
-      for (const item of documents) {
-        if (!current()) break;
+      for (let index = 0; index < documents.length; index++) {
+        if (!current()) {
+          result.unavailable = (result.unavailable ?? 0) + documents.length - index;
+          break;
+        }
+        const item = documents[index]!;
         const key = `${item.document.kind}:${item.document.libraryID}:${item.document.key}`;
-        if (keys.has(key)) continue;
+        if (keys.has(key)) {
+          result.unchanged = (result.unchanged ?? 0) + 1;
+          continue;
+        }
         keys.add(key);
         const viewID = options.createID();
         registration.opening.add(viewID);
@@ -376,41 +392,60 @@ export function createTabGroupManager(options: TabGroupManagerOptions): TabGroup
         let nativeID: string | false;
         try {
           nativeID = await registration.host.native.open(item.document, viewID, current);
+        } catch (error) {
+          options.onError?.(error);
+          nativeID = false;
         } finally {
           registration.opening.delete(viewID);
           wasClosed = registration.closed.delete(viewID);
         }
-        if (!nativeID) continue;
-        if (!current() || wasClosed) {
-          if (registration.active && !wasClosed) registration.host.native.close([nativeID]);
+        if (!current()) {
+          if (nativeID && !wasClosed) closeUncommitted(nativeID);
+          result.unavailable = (result.unavailable ?? 0) + documents.length - index;
           break;
         }
+        if (wasClosed) {
+          result.unavailable = (result.unavailable ?? 0) + 1;
+          continue;
+        }
+        if (!nativeID) {
+          result.failed = (result.failed ?? 0) + 1;
+          continue;
+        }
+        const member = { id: viewID, document: { ...item.document }, title: item.title };
+        let newGroupID = groupID;
+        let committed = false;
         try {
-          const newGroupID = groupID ?? options.createID();
+          const id = (newGroupID ??= options.createID());
           commit((draft) => {
             if (!groupID && 'name' in destination) {
               draft.push({
-                id: newGroupID,
+                id,
                 name: destination.name.trim(),
                 color: '',
                 collapsed: false,
                 members: [],
               });
             }
-            getGroup(newGroupID, draft).members.push({
-              id: viewID,
-              document: { ...item.document },
-              title: item.title,
-            });
+            getGroup(id, draft).members.push(member);
           });
-          groupID = newGroupID;
-          if (findMember(viewID)) count++;
+          committed = true;
         } catch (error) {
-          if (registration.active && !wasClosed) registration.host.native.close([nativeID]);
-          throw error;
+          options.onError?.(error);
+          // Notification follows persistence, so membership can exist even if a listener throws.
+        }
+        const saved = findMember(viewID)?.member === member;
+        if (committed || saved) groupID = newGroupID;
+        if (saved) {
+          result.done++;
+        } else if (committed) {
+          result.unavailable = (result.unavailable ?? 0) + 1;
+        } else {
+          result.failed = (result.failed ?? 0) + 1;
+          closeUncommitted(nativeID);
         }
       }
-      return count;
+      return result;
     },
     renameGroup(id, name) {
       if (!validString(name)) throw new Error('Group name is required');

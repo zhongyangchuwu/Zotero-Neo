@@ -95,7 +95,7 @@ export class ReaderLinkHints {
       if (active) reportDiagnosticError(this.#host, 'reader follow link discovery failed', error);
       failure.run(() => {
         if (this.#host.isCurrent() && this.#hintView === null)
-          this.#host.showStatus('Link hints unavailable', 1500);
+          this.#host.showStatus(this.#host.text('reader.hints.followUnavailable'), 1500);
       });
       try {
         failure.rethrow();
@@ -105,7 +105,8 @@ export class ReaderLinkHints {
       }
       return;
     }
-    if (!this.hasHints && this.#host.isCurrent()) this.#host.showStatus('No visible links', 1500);
+    if (!this.hasHints && this.#host.isCurrent())
+      this.#host.showStatus(this.#host.text('reader.hints.followEmpty'), 1500);
   }
 
   handleKey(event: KeyboardEvent, pdfWindow: PdfWindow): boolean {
@@ -254,7 +255,8 @@ export class ReaderLinkHints {
     failure.run(() => this.#clearDestinationCue());
     reportDiagnosticError(this.#host, 'reader follow link activation failed', error);
     failure.run(() => {
-      if (this.#activationIsCurrent(invocation)) this.#host.showStatus('Link unavailable', 1500);
+      if (this.#activationIsCurrent(invocation))
+        this.#host.showStatus(this.#host.text('reader.hints.followFailed'), 1500);
     });
     try {
       failure.rethrow();

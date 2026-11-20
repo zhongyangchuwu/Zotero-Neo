@@ -1,7 +1,12 @@
 import type { MainWindow } from '../../core/contracts';
 import type { ItemTargetSet } from '../../core/item-target';
-import type { Logger } from '../../core/logging';
-import { moveCollectionItems, setCollectionMembership } from '../../operations/item-collections';
+import { reportDiagnosticError, type Logger } from '../../core/logging';
+import {
+  moveCollectionItems,
+  setCollectionMembership,
+  writableCollectionItem,
+  type CollectionBatchOutcome,
+} from '../../operations/item-collections';
 import {
   createCollection,
   createCollectionAndAdd,
@@ -30,7 +35,8 @@ import type {
   PickerContinuation,
   PickerProvider,
 } from '../../main/picker/types';
-import { t } from '../../i18n';
+import { t, type AppLanguage } from '../../i18n';
+import { batchStatus } from '../../i18n/batch-result';
 
 function targetLabel(targets: ItemTargetSet, count: number, language: string): string {
   const countText = String(count);
@@ -70,6 +76,7 @@ export type CollectionConfirmation = (
 export interface CollectionActionHost {
   readonly window: MainWindow;
   readonly logger: Logger;
+  readonly language: () => AppLanguage;
   readonly isCurrent: () => boolean;
   readonly status: (message: string) => void;
   readonly navigate: (collectionID: number) => Promise<void>;
@@ -77,51 +84,109 @@ export interface CollectionActionHost {
   readonly captureCurrent: () => () => boolean;
 }
 
-export interface CollectionMembershipTargets {
-  readonly items: readonly Zotero.Item[];
-  readonly libraryID: number;
-  readonly signature: string;
-  readonly source: ItemTargetSet['source'];
+type MembershipAction = 'collectionAdd' | 'collectionRemove' | 'collectionMove';
+
+class CollectionWorkflowError extends Error {
+  constructor(readonly reason: string) {
+    super(reason);
+  }
 }
 
-function targetSignature(items: readonly Zotero.Item[]): string {
-  return [...new Set(items.map((item) => `${item.libraryID}:${item.id}`))].sort().join('|');
+function membershipMessage(
+  action: MembershipAction,
+  result: CollectionBatchOutcome,
+  missing: number,
+  locale: AppLanguage,
+): string {
+  const summary = batchStatus(
+    action,
+    missing ? { ...result, unavailable: (result.unavailable ?? 0) + missing } : result,
+    locale,
+  );
+  return result.cacheWarning
+    ? `${summary} · ${t('workflow.collections.savedRefreshWarning', locale)}`
+    : summary;
 }
 
-export function resolveCollectionMembershipTargets(
-  resolved: ItemTargetSet,
-): CollectionMembershipTargets {
-  if (resolved.missing)
-    throw new Error(
-      resolved.source === 'main'
-        ? 'Selection contains unavailable items'
-        : 'Context item is unavailable',
-    );
-  if (!resolved.total || !resolved.items.length) throw new Error('No item target');
-  const items = resolved.items;
-  const libraryID = items[0]!.libraryID;
-  if (items.some((item) => item.libraryID !== libraryID))
-    throw new Error('Collection membership requires one library');
-  if (!Number.isInteger(libraryID) || libraryID <= 0)
-    throw new Error('Target library is unavailable');
-  return { items, libraryID, signature: targetSignature(items), source: resolved.source };
+function membershipInventory(
+  items: readonly Zotero.Item[],
+  preferredID: number | undefined,
+  present: boolean,
+  logger: Logger,
+): {
+  libraryID: number | undefined;
+  matching: readonly (readonly number[])[];
+  failed: number;
+} {
+  const groups = new Map<number, { memberships: number[][]; assigned: boolean }>();
+  let failed = 0;
+  for (const item of items) {
+    try {
+      const id = item.libraryID;
+      if (!mainLibraryWritable(id) || !writableCollectionItem(item, id)) continue;
+      const memberships = item.getCollections();
+      const group = groups.get(id);
+      if (group) {
+        group.memberships.push(memberships);
+        group.assigned ||= memberships.length > 0;
+      } else {
+        groups.set(id, { memberships: [memberships], assigned: memberships.length > 0 });
+      }
+    } catch (error) {
+      failed += 1;
+      reportDiagnosticError(logger, 'Collection item eligibility could not be read', error);
+    }
+  }
+  const preferred = preferredID === undefined ? undefined : groups.get(preferredID);
+  if (preferred && (present || preferred.assigned))
+    return { libraryID: preferredID, matching: preferred.memberships, failed };
+  if (!present)
+    for (const [id, group] of groups)
+      if (group.assigned) return { libraryID: id, matching: group.memberships, failed };
+  if (preferred) return { libraryID: preferredID, matching: preferred.memberships, failed };
+  const first = groups.entries().next();
+  if (!first.done)
+    return { libraryID: first.value[0], matching: first.value[1].memberships, failed };
+  return { libraryID: undefined, matching: [], failed };
+}
+
+function scopeTitle(title: string, library: string, locale: AppLanguage): string {
+  return t('workflow.collections.membershipScope', locale)
+    .replace('{title}', () => title)
+    .replace('{library}', () => library);
+}
+
+/** Re-resolve only to detect changed intent; never use a new resolution as the write set. */
+function checkTargets(initial: ItemTargetSet, current: ItemTargetSet): void {
+  const original = new Map(initial.items.map((item) => [item.id, item]));
+  const currentIDs = new Set(current.items.map((item) => item.id));
+  if (
+    current.source !== initial.source ||
+    current.presentation?.origin !== initial.presentation?.origin ||
+    current.total !== initial.total ||
+    current.items.some((item) => original.get(item.id)?.libraryID !== item.libraryID) ||
+    initial.items.some(
+      (item) => !currentIDs.has(item.id) && Zotero.Items.get(item.id) === item && !item.deleted,
+    )
+  )
+    throw new CollectionWorkflowError('selectionChanged');
 }
 
 function writable(libraryID: number): void {
-  if (!mainLibraryWritable(libraryID)) throw new Error('This library is read-only or unavailable');
+  if (!mainLibraryWritable(libraryID)) throw new CollectionWorkflowError('libraryUnavailable');
 }
 
 function currentCollection(id: number, libraryID: number): MainCollectionRef {
   const collection = mainCollectionRef(id);
   if (!collection || collection.libraryID !== libraryID)
-    throw new Error('Collection target is unavailable');
+    throw new CollectionWorkflowError('collectionUnavailable');
   writable(libraryID);
   return collection;
 }
 
 function candidateID(candidate: PickerItem, libraryID: number): number {
   const id = Number(candidate.id);
-  if (!Number.isInteger(id) || id <= 0) throw new Error('Choose an ordinary collection');
+  if (!Number.isInteger(id) || id <= 0) throw new CollectionWorkflowError('chooseCollection');
   return currentCollection(id, libraryID).id;
 }
 
@@ -137,101 +202,107 @@ export class CollectionMembershipActions {
     const { window } = this.#host;
     const { resolveTargets } = request;
     this.start(() => {
-      const initialTarget = resolveTargets();
-      const initial = resolveCollectionMembershipTargets(initialTarget);
-      const language = Zotero.locale ?? 'en';
-      const target = targetLabel(initialTarget, initial.items.length, language);
-      writable(initial.libraryID);
-      const source = createCollectionCandidateProvider(initial.libraryID, {
-        title: t(
-          present ? 'workflow.collections.addTitle' : 'workflow.collections.removeTitle',
-          language,
-        ).replace('{target}', target),
-        items: initial.items,
+      const resolved = resolveTargets();
+      const items = [...resolved.items];
+      const initial = { ...resolved, items };
+      const locale = this.#host.language();
+      const action = present ? 'collectionAdd' : 'collectionRemove';
+      const report = (result: CollectionBatchOutcome) =>
+        this.#host.status(membershipMessage(action, result, initial.missing, locale));
+      const active = mainActiveCollection(window);
+      const { libraryID, matching, failed } = membershipInventory(
+        items,
+        active?.libraryID ?? mainCollectionLibrary(window)?.libraryID,
+        present,
+        this.#host.logger,
+      );
+      if (libraryID === undefined) {
+        report({ done: 0, unavailable: items.length - failed, failed });
+        return;
+      }
+      const library = Zotero.Libraries.get(libraryID);
+      const libraryName = library ? library.name || String(libraryID) : String(libraryID);
+      const target = targetLabel(initial, items.length + initial.missing, locale);
+      if (!present && matching.every((ids) => ids.length === 0)) {
+        report({
+          done: 0,
+          unchanged: matching.length,
+          unavailable: items.length - matching.length - failed,
+          failed,
+        });
+        return;
+      }
+      const source = createCollectionCandidateProvider(libraryID, {
+        title: scopeTitle(
+          t(
+            present ? 'workflow.collections.addTitle' : 'workflow.collections.removeTitle',
+            locale,
+          ).replace('{target}', () => target),
+          libraryName,
+          locale,
+        ),
+        libraryName,
+        memberships: matching,
         present,
         includeCreate: present,
-        preferredID: mainActiveCollection(window)?.id,
+        preferredID: active?.id,
       });
       let creating = false;
       let originalQuery = '';
       let name = '';
-      const targets = (): CollectionMembershipTargets => {
-        const current = resolveCollectionMembershipTargets(resolveTargets());
-        if (
-          current.source !== initial.source ||
-          current.libraryID !== initial.libraryID ||
-          current.signature !== initial.signature
-        )
-          throw new Error('Collection target changed; retry');
-        return current;
-      };
       this.openPicker(source, async (candidate, isCurrent, query) => {
-        const current = targets();
-        writable(current.libraryID);
+        checkTargets(initial, resolveTargets());
+        writable(libraryID);
         if (candidate.collectionCandidate === 'create') {
           originalQuery = query;
           creating = true;
           return {
             keepOpen: true,
             query: '',
-            source: createCollectionCandidateProvider(current.libraryID, {
-              title: 'New collection · choose parent',
+            source: createCollectionCandidateProvider(libraryID, {
+              title: scopeTitle('New collection · choose parent', libraryName, locale),
+              libraryName,
               includeRoot: true,
             }),
           };
         }
         if (creating) {
           const parentID =
-            candidate.collectionCandidate === 'root'
-              ? false
-              : candidateID(candidate, current.libraryID);
+            candidate.collectionCandidate === 'root' ? false : candidateID(candidate, libraryID);
+          const parent = parentID ? Zotero.Collections.get(parentID) : undefined;
           const parentPath = parentID
-            ? currentCollection(parentID, current.libraryID).path
-            : `Library ${current.libraryID} / (root)`;
-          const input = promptMainCollectionName(
-            window,
-            `Create and add ${current.items.length} items · ${parentPath}`,
-            name,
-          );
-          if (!isCurrent()) throw new Error('Collection workflow expired');
+            ? currentCollection(parentID, libraryID).path
+            : `${libraryName} / (root)`;
+          const input = promptMainCollectionName(window, `New collection · ${parentPath}`, name);
+          if (!isCurrent()) throw new CollectionWorkflowError('actionClosed');
           const back = (): PickerContinuation => {
             creating = false;
             return { keepOpen: true, source, query: originalQuery };
           };
           if (input === undefined) return back();
           name = input;
-          if (!name.trim()) throw new Error('Collection name is required');
+          if (!name.trim()) throw new CollectionWorkflowError('nameRequired');
           if (
             !confirmMainCollectionAction(
               window,
-              t('workflow.collections.createAndAddConfirmTitle', language),
-              t('workflow.collections.createAndAddConfirmMessage', language)
-                .replace('{name}', name)
-                .replace('{parent}', parentPath)
-                .replace('{target}', target),
+              t('workflow.collections.createAndAddConfirmTitle', locale),
+              t('workflow.collections.createAndAddConfirmMessage', locale)
+                .replace('{name}', () => name)
+                .replace('{parent}', () => parentPath)
+                .replace('{target}', () => target),
             )
           )
             return back();
-          if (!isCurrent()) throw new Error('Collection workflow expired');
-          const confirmed = targets();
-          await createCollectionAndAdd(
-            confirmed.items,
-            confirmed.libraryID,
-            name,
-            parentID,
-            isCurrent,
-          );
-          this.#host.status(`✓ Created “${name}” and added ${confirmed.items.length} items`);
-          return;
+          if (!isCurrent()) throw new CollectionWorkflowError('actionClosed');
+          checkTargets(initial, resolveTargets());
+          if (parentID && Zotero.Collections.get(parentID) !== parent)
+            throw new CollectionWorkflowError('collectionUnavailable');
+          const result = await createCollectionAndAdd(items, libraryID, name, parentID, isCurrent);
+          return this.finishMembership(action, result, initial.missing, locale);
         }
-        const id = candidateID(candidate, current.libraryID);
-        const collection = currentCollection(id, current.libraryID);
-        const changed = await setCollectionMembership(current.items, id, present, isCurrent);
-        this.#host.status(
-          changed
-            ? `✓ ${present ? 'Added' : 'Removed'} ${changed} items ${present ? 'to' : 'from'} ${collection.path}`
-            : `→ No collection membership changes for ${collection.path}`,
-        );
+        const id = candidateID(candidate, libraryID);
+        const result = await setCollectionMembership(items, id, present, isCurrent);
+        return this.finishMembership(action, result, initial.missing, locale);
       });
     });
   }
@@ -240,7 +311,7 @@ export class CollectionMembershipActions {
     const { window } = this.#host;
     this.start(() => {
       const scope = mainCollectionLibrary(window);
-      if (!scope) throw new Error('Choose one library scope to find collections');
+      if (!scope) throw new CollectionWorkflowError('chooseLibrary');
       const source = createCollectionCandidateProvider(scope.libraryID, {
         title: `Find collections · ${scope.name}`,
         libraryName: scope.name,
@@ -248,8 +319,8 @@ export class CollectionMembershipActions {
       this.openPicker(source, async (candidate, isCurrent) => {
         const collection = mainCollectionRef(Number(candidate.id));
         if (!collection || collection.libraryID !== scope.libraryID)
-          throw new Error('Collection target is unavailable');
-        if (!isCurrent()) throw new Error('Collection workflow expired');
+          throw new CollectionWorkflowError('collectionUnavailable');
+        if (!isCurrent()) throw new CollectionWorkflowError('actionClosed');
         await this.#host.navigate(collection.id);
       });
     });
@@ -259,17 +330,21 @@ export class CollectionMembershipActions {
     const { window } = this.#host;
     this.start(() => {
       const collection = mainActiveCollection(window);
-      if (!collection) throw new Error('Choose one active ordinary collection to add items');
+      if (!collection) throw new CollectionWorkflowError('chooseCollection');
       writable(collection.libraryID);
+      const original = Zotero.Collections.get(collection.id);
       this.openPicker(createCollectionItemsProvider(collection), async (candidate, isCurrent) => {
         currentCollection(collection.id, collection.libraryID);
         const item = await prepareMainCollectionItem(Number(candidate.id), collection.libraryID);
-        const changed = await setCollectionMembership([item], collection.id, true, isCurrent);
+        if (Zotero.Collections.get(collection.id) !== original)
+          throw new CollectionWorkflowError('collectionUnavailable');
+        const result = await setCollectionMembership([item], collection.id, true, isCurrent);
+        const summary = membershipMessage('collectionAdd', result, 0, this.#host.language());
         return {
           keepOpen: true,
-          message: changed
-            ? `Added “${candidate.title}” to ${collection.path}. Current filters remain unchanged; the item may be hidden. Esc ends; saved additions remain.`
-            : `“${candidate.title}” is already directly assigned. No changes. Esc ends.`,
+          message: result.done
+            ? `${summary} · Current filters remain unchanged; the item may be hidden. Esc ends; saved additions remain.`
+            : summary,
         };
       });
     });
@@ -280,52 +355,50 @@ export class CollectionMembershipActions {
     const { resolveTargets } = request;
     this.start(() => {
       const source = mainActiveCollection(window);
-      if (!source)
-        throw new Error(
-          'Move requires one active ordinary source collection; use Add to collection instead',
-        );
-      const initialTarget = resolveTargets();
-      const initial = resolveCollectionMembershipTargets(initialTarget);
-      const language = Zotero.locale ?? 'en';
-      const target = targetLabel(initialTarget, initial.items.length, language);
-      const targets = (): CollectionMembershipTargets => {
-        const current = resolveCollectionMembershipTargets(resolveTargets());
-        const active = mainActiveCollection(window);
-        if (
-          active?.id !== source.id ||
-          active.libraryID !== source.libraryID ||
-          current.source !== initial.source ||
-          current.signature !== initial.signature ||
-          current.libraryID !== source.libraryID ||
-          current.items.some((item) => !item.getCollections().includes(source.id))
-        )
-          throw new Error(
-            'Move requires unchanged targets directly assigned to the active source; use Add to collection instead',
-          );
-        currentCollection(source.id, source.libraryID);
-        return current;
-      };
-      targets();
+      if (!source) throw new CollectionWorkflowError('chooseSource');
+      currentCollection(source.id, source.libraryID);
+      const originalSource = Zotero.Collections.get(source.id);
+      const sourceIsCurrent = () =>
+        mainActiveCollection(window)?.id === source.id &&
+        Zotero.Collections.get(source.id) === originalSource;
+      const resolved = resolveTargets();
+      const items = [...resolved.items];
+      const initial = { ...resolved, items };
+      const locale = this.#host.language();
+      const target = targetLabel(initial, items.length + initial.missing, locale);
+      const report = (result: CollectionBatchOutcome) =>
+        this.#host.status(membershipMessage('collectionMove', result, initial.missing, locale));
+      if (!items.length) {
+        report({ done: 0 });
+        return;
+      }
+      const library = Zotero.Libraries.get(source.libraryID);
+      const libraryName = library
+        ? library.name || String(source.libraryID)
+        : String(source.libraryID);
       this.openPicker(
         createCollectionCandidateProvider(source.libraryID, {
-          title: t('workflow.collections.moveItemsTitle', language)
-            .replace('{target}', target)
-            .replace('{source}', source.path),
+          title: scopeTitle(
+            t('workflow.collections.moveItemsTitle', locale)
+              .replace('{target}', () => target)
+              .replace('{source}', () => source.path),
+            libraryName,
+            locale,
+          ),
+          libraryName,
           excludeIDs: new Set([source.id]),
         }),
         async (candidate, isCurrent) => {
-          const current = targets();
-          const destination = currentCollection(
-            candidateID(candidate, source.libraryID),
-            source.libraryID,
-          );
-          const changed = await moveCollectionItems(
-            current.items,
+          checkTargets(initial, resolveTargets());
+          if (!sourceIsCurrent()) throw new CollectionWorkflowError('sourceChanged');
+          const destination = candidateID(candidate, source.libraryID);
+          const result = await moveCollectionItems(
+            items,
             source.id,
-            destination.id,
-            isCurrent,
+            destination,
+            () => isCurrent() && sourceIsCurrent(),
           );
-          this.#host.status(`✓ Moved ${changed} items from ${source.path} to ${destination.path}`);
+          return this.finishMembership('collectionMove', result, initial.missing, locale);
         },
       );
     });
@@ -374,7 +447,7 @@ export class CollectionMembershipActions {
         : undefined;
       const scope = mainCollectionLibrary(window);
       const libraryID = cursor?.libraryID ?? scope?.libraryID;
-      if (!libraryID) throw new Error('Choose one library scope to create a collection');
+      if (!libraryID) throw new CollectionWorkflowError('chooseLibrary');
       writable(libraryID);
       let name = '';
       this.openPicker(
@@ -391,10 +464,10 @@ export class CollectionMembershipActions {
             ? currentCollection(parentID, libraryID).path
             : `Library ${libraryID} / (root)`;
           const input = promptMainCollectionName(window, `New collection · ${parentPath}`, name);
-          if (!isCurrent()) throw new Error('Collection workflow expired');
+          if (!isCurrent()) throw new CollectionWorkflowError('actionClosed');
           if (input === undefined) return { keepOpen: true };
           name = input;
-          if (!name.trim()) throw new Error('Collection name is required');
+          if (!name.trim()) throw new CollectionWorkflowError('nameRequired');
           if (
             !confirmMainCollectionAction(
               window,
@@ -403,7 +476,7 @@ export class CollectionMembershipActions {
             )
           )
             return { keepOpen: true };
-          if (!isCurrent()) throw new Error('Collection workflow expired');
+          if (!isCurrent()) throw new CollectionWorkflowError('actionClosed');
           await createCollection(libraryID, name, parentID, isCurrent);
           this.#host.status(`✓ Created “${name}” under ${parentPath}`);
         },
@@ -425,7 +498,7 @@ export class CollectionMembershipActions {
         return;
       }
       this.#renameDraft = { id: target.id, name };
-      if (!name.trim()) throw new Error('Collection name is required');
+      if (!name.trim()) throw new CollectionWorkflowError('nameRequired');
       currentCollection(target.id, target.libraryID);
       await renameCollection(target.id, name, isCurrent);
       this.#renameDraft = undefined;
@@ -454,13 +527,44 @@ export class CollectionMembershipActions {
     const target = mainTreeFocused(window, 'collections')
       ? mainCursorCollection(window)
       : mainActiveCollection(window);
-    if (!target)
-      throw new Error('Choose one ordinary collection; multiple selections are not supported');
+    if (!target) throw new CollectionWorkflowError('chooseCollection');
     return currentCollection(target.id, target.libraryID);
   }
 
   private openPicker(source: PickerProvider, confirm: CollectionConfirmation): void {
-    this.#host.choose(source, confirm);
+    this.#host.choose(this.safeProvider(source), async (candidate, isCurrent, query) => {
+      try {
+        const result = await confirm(candidate, isCurrent, query);
+        if (result?.source) return { ...result, source: this.safeProvider(result.source) };
+        return result;
+      } catch (error) {
+        if (error instanceof CollectionWorkflowError)
+          return { keepOpen: true, message: this.failureMessage(error) };
+        throw new Error(this.failureMessage(error));
+      }
+    });
+  }
+
+  private safeProvider(source: PickerProvider): PickerProvider {
+    const load = async (query?: string) => {
+      try {
+        return await (query !== undefined && source.query ? source.query(query) : source.load());
+      } catch (error) {
+        throw new Error(this.failureMessage(error));
+      }
+    };
+    return { ...source, load, query: source.query ? load : undefined };
+  }
+
+  private finishMembership(
+    action: MembershipAction,
+    result: CollectionBatchOutcome,
+    missing: number,
+    locale: AppLanguage,
+  ): PickerConfirmationResult {
+    const message = membershipMessage(action, result, missing, locale);
+    if (!result.done && result.failed) return { keepOpen: true, message };
+    this.#host.status(message);
   }
 
   private dialogAction(
@@ -468,8 +572,12 @@ export class CollectionMembershipActions {
   ): void {
     this.start(() => {
       const target = this.target(this.#host.window);
+      const original = Zotero.Collections.get(target.id);
       const isCurrent = this.#host.captureCurrent();
-      void action(target, isCurrent).catch((error) => this.failure(error));
+      void action(
+        target,
+        () => isCurrent() && Zotero.Collections.get(target.id) === original,
+      ).catch((error) => this.failure(error));
     });
   }
 
@@ -483,7 +591,13 @@ export class CollectionMembershipActions {
   }
 
   private failure(error: unknown): void {
-    this.#host.logger.debug(`collection workflow failed: ${String(error)}`);
-    this.#host.status(`✗ ${error instanceof Error ? error.message : String(error)}`);
+    this.#host.status(`✗ ${this.failureMessage(error)}`);
+  }
+
+  private failureMessage(error: unknown): string {
+    if (error instanceof CollectionWorkflowError)
+      return t(`workflow.collections.${error.reason}`, this.#host.language());
+    reportDiagnosticError(this.#host.logger, 'Collection workflow failed', error);
+    return t('workflow.collections.failed', this.#host.language());
   }
 }

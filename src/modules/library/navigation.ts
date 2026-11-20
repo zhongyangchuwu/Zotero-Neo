@@ -1,6 +1,7 @@
 import type { MainWindow } from '../../core/contracts';
 import type { Logger } from '../../core/logging';
 import { t } from '../../i18n';
+import { batchStatus, type BatchOutcome } from '../../i18n/batch-result';
 import type { KeyGuideLanguage } from '../../input/key-guide-config';
 import { openItem } from '../../operations/open-item';
 import { trashItems } from '../../operations/trash-items';
@@ -51,6 +52,7 @@ function trashTargetSummary(targets: MainResolvedTargets, language: KeyGuideLang
 export class LibraryNavigation {
   readonly #ports: LibraryNavigationPorts;
   #lastTrashedIDs: number[] = [];
+  #restoring = false;
 
   constructor(ports: LibraryNavigationPorts) {
     this.#ports = ports;
@@ -92,26 +94,36 @@ export class LibraryNavigation {
     return selectMainScopeRow(window, next, shouldDebounce);
   }
 
-  /** Restores explicit Neo Trash identities and returns the number successfully saved. */
-  async restoreTrashedItems(ids: readonly number[]): Promise<number> {
-    if (!this.#ports.isCurrent()) return 0;
-    const valid = new Set(ids);
-    let restored = 0;
-    for (const id of valid) {
+  /** Restores the recorded trash batch independently and keeps only failed identities for retry. */
+  async restoreTrashedItems(ids: readonly number[]): Promise<{
+    outcome: BatchOutcome;
+    retries: number[];
+  }> {
+    const outcome = { done: 0, unchanged: 0, unavailable: 0, failed: 0 };
+    const retries: number[] = [];
+    for (const id of new Set(ids)) {
       if (!this.#ports.isCurrent()) break;
-      if (!Number.isInteger(id) || id <= 0) continue;
-      const item = Zotero.Items.get(id);
-      if (!item || !item.deleted) continue;
-      item.deleted = false;
       try {
+        const item = Number.isInteger(id) && id > 0 && Zotero.Items.get(id);
+        if (!item) {
+          outcome.unavailable++;
+          continue;
+        }
+        if (!item.deleted) {
+          outcome.unchanged++;
+          continue;
+        }
+        item.deleted = false;
+        // Zotero reloads the item's persisted state when saveTx rejects.
         await item.saveTx();
+        outcome.done++;
       } catch (error) {
-        item.deleted = true;
-        throw error;
+        this.#ports.logger.debug(`restore failed for item ${id}: ${String(error)}`);
+        outcome.failed++;
+        retries.push(id);
       }
-      restored += 1;
     }
-    return restored;
+    return { outcome, retries };
   }
 
   async trashSelectedItems(
@@ -122,16 +134,16 @@ export class LibraryNavigation {
     const { window, logger } = this.#ports;
     if (!this.#ports.isCurrent()) return false;
     if (!mainTreeFocused(window, 'items')) {
-      this.#status('✗ Focus the items list first');
+      this.#status(t('status.trashFocusItems', language));
       return false;
     }
     const targets = resolveMainEffectiveTargets(window, selection, currentTarget);
     if (!targets.total || !targets.items.length) {
-      this.#status('✗ No item target');
+      this.#status(t('status.trashNoItems', language));
       return false;
     }
     if (targets.missing > 0) {
-      this.#status('✗ Selection contains unavailable items; refresh before trash');
+      this.#status(t('status.trashUnavailable', language));
       return false;
     }
     if (targets.source === 'selection' && targets.hidden > 0) {
@@ -154,7 +166,7 @@ export class LibraryNavigation {
       if (!this.#ports.isCurrent()) return false;
       const ids = await trashItems(targets.items);
       if (!ids.length) {
-        this.#status('✗ No valid item target');
+        this.#status(t('status.trashNoItems', language));
         return false;
       }
       if (this.#ports.isCurrent()) {
@@ -172,42 +184,42 @@ export class LibraryNavigation {
     }
   }
 
-  async restoreLastTrashedItems(): Promise<void> {
-    if (!this.#ports.isCurrent()) return;
+  async restoreLastTrashedItems(language: KeyGuideLanguage = 'en'): Promise<void> {
+    if (!this.#ports.isCurrent() || this.#restoring) return;
+    this.#restoring = true;
+    const itemIDs = this.#lastTrashedIDs;
     try {
-      const itemIDs = this.#lastTrashedIDs;
-      const count = await this.restoreTrashedItems(itemIDs);
-      if (!this.#ports.isCurrent()) return;
-      if (!count) {
-        this.#status('✗ Nothing to restore');
-        return;
-      }
-      if (this.#lastTrashedIDs === itemIDs) this.#lastTrashedIDs = [];
-      this.#status(`✓ Restored ${count} item${count === 1 ? '' : 's'}`);
-    } catch (error) {
-      this.#ports.logger.debug(`restore trashed items failed: ${String(error)}`);
-      this.#status('✗ Unable to restore items');
+      const { outcome, retries } = await this.restoreTrashedItems(itemIDs);
+      if (!this.#ports.isCurrent() || this.#lastTrashedIDs !== itemIDs) return;
+      this.#lastTrashedIDs = retries;
+      this.#status(batchStatus('restore', outcome, language));
+    } finally {
+      this.#restoring = false;
     }
   }
 
-  async openPDF(target: Zotero.Item | null, isCurrent: () => boolean): Promise<boolean> {
+  async openPDF(
+    target: Zotero.Item | null,
+    isCurrent: () => boolean,
+    language: KeyGuideLanguage = 'en',
+  ): Promise<boolean> {
     const current = () => this.#ports.isCurrent() && isCurrent();
     if (!current()) return false;
     if (!target) {
-      this.#status('✗ No item under cursor');
+      this.#status(t('status.openNoItem', language));
       return false;
     }
     try {
       const unavailable = await openItem(target, mainItemOpening(this.#ports.window), current);
       if (!current()) return false;
       if (unavailable) {
-        this.#status(`✗ ${unavailable}`);
+        this.#status(t(unavailable, language));
         return false;
       }
       return true;
     } catch (error) {
       this.#ports.logger.debug(`mainOpenPDF error: ${String(error)}`);
-      if (current()) this.#status(`✗ ${String(error).slice(0, 40)}`);
+      if (current()) this.#status(t('status.openItemFailed', language));
       return false;
     }
   }

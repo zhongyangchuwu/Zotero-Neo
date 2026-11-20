@@ -36,6 +36,7 @@ export interface InternalReaderRuntime {
   _handleOverlayPopupClose?(primary: boolean): void;
   readonly _state?: {
     readonly annotations?: readonly NativeReaderAnnotationRuntime[];
+    readonly readOnly?: boolean;
     readonly filter?: object;
     readonly showAnnotations?: boolean;
     readonly primaryReadingModeEnabled?: boolean;
@@ -96,6 +97,7 @@ export interface ReaderFindControllerRuntime {
 
 export interface NativeReaderAnnotationRuntime {
   readonly id?: string;
+  readonly readOnly?: boolean;
   readonly type?: string;
   readonly text?: string;
   readonly comment?: string;

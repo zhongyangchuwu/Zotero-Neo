@@ -13,6 +13,7 @@ import { ModuleHost } from '../../src/core/module-host';
 import { createTagModule } from '../../src/modules/tags';
 import { mainTagScope, mainViewFilterState, applyMainTagFilter } from '../../src/toolkit/main';
 import { SelectionStore } from '../../src/modules/worksets/selection-store';
+import { createCollectionTransactionDB } from '../fixtures/collection-transactions';
 
 const originalZotero = Reflect.get(globalThis, 'Zotero');
 
@@ -26,6 +27,10 @@ function tagItem(id: number, initial: Array<{ tag: string; type: number }> = [])
   return {
     id,
     libraryID: 1,
+    isRegularItem: () => true,
+    isEditable: () => true,
+    hasChanged: () => false,
+    reload: async () => undefined,
     isAttachment: () => false,
     isNote: () => false,
     hasTag: (tag: string) => tags.has(tag),
@@ -152,6 +157,7 @@ function harness(options: {
 
   return {
     actions,
+    logger,
     modules,
     window,
     session,
@@ -170,13 +176,19 @@ function harness(options: {
 function installZotero(
   items: readonly Zotero.Item[],
   libraryTags: _ZoteroTypes.Tags.TagJson[] = [],
+  extraLibraryTags: Readonly<Record<number, _ZoteroTypes.Tags.TagJson[]>> = {},
 ) {
   const byID = new Map(items.map((item) => [item.id, item]));
-  const executeTransaction = vi.fn(async (callback: () => Promise<void>) => callback());
+  const libraries = new Map(
+    items.map((item) => [
+      item.libraryID,
+      { editable: true, libraryType: item.libraryID === 1 ? 'user' : 'group' },
+    ]),
+  );
   vi.stubGlobal('Zotero', {
     Items: { get: (id: number) => byID.get(id) ?? false },
     Reader: { getByTabID: () => null },
-    Libraries: { userLibraryID: 1 },
+    Libraries: { userLibraryID: 1, get: (id: number) => libraries.get(id) },
     CollectionTreeRow: {
       getTagsAcrossRows: async (
         rows: readonly { getSearchResults: () => Promise<readonly number[]> }[],
@@ -185,10 +197,12 @@ function installZotero(
         return [...ids].flatMap((id) => byID.get(id)?.getTags() ?? []);
       },
     },
-    Tags: { getAll: vi.fn(async () => libraryTags) },
-    DB: { executeTransaction },
+    Tags: {
+      getAll: vi.fn(async (id: number) => (id === 1 ? libraryTags : (extraLibraryTags[id] ?? []))),
+    },
+    DB: createCollectionTransactionDB(),
   });
-  return { executeTransaction };
+  return { byID, libraries };
 }
 
 describe('semantic Tag actions', () => {
@@ -217,6 +231,7 @@ describe('semantic Tag actions', () => {
     );
     expect(first.hasTag('robotics')).toBe(true);
     expect(second.hasTag('robotics')).toBe(true);
+    expect(h.session.status.textContent).toBe('✓ Tags added: 2');
 
     h.actions.remove(MAIN_ITEM_TARGET.resolve(h.window, h.selection));
     const remove = h.open();
@@ -236,6 +251,7 @@ describe('semantic Tag actions', () => {
     );
     expect(first.hasTag('robotics')).toBe(false);
     expect(second.hasTag('robotics')).toBe(false);
+    expect(h.session.status.textContent).toBe('✓ Tags removed: 2');
   });
 
   it('deduplicates same-named tags across types and keeps the candidate actionable', async () => {
@@ -253,6 +269,7 @@ describe('semantic Tag actions', () => {
     expect(unassigned.hasTag('mixed')).toBe(true);
     expect(typeOne.getTags()).toEqual([{ tag: 'mixed', type: 1 }]);
     expect(typeZero.getTags()).toEqual([{ tag: 'mixed', type: 0 }]);
+    expect(h.session.status.textContent).toBe('→ Tags added: 1 · Skipped 2 (2 already up to date)');
 
     h.actions.remove(MAIN_ITEM_TARGET.resolve(h.window, h.selection));
     const remove = h.open();
@@ -461,15 +478,34 @@ describe('semantic Tag actions', () => {
     expect(h.selection.values()).toEqual([{ libraryID: 1, itemID: main.id }]);
   });
 
-  it('refuses a partial Main tag mutation when Selection contains an unavailable item', () => {
-    const selected = tagItem(2);
-    installZotero([selected], [{ tag: 'robotics' }]);
-    const h = harness({ items: [selected] });
+  it('adds to eligible Main targets despite missing, unsupported, read-only and assigned items', async () => {
+    const writable = tagItem(1);
+    const assigned = tagItem(2, [{ tag: 'robotics', type: 1 }]);
+    const readOnly = tagItem(3);
+    const unsupported = tagItem(4);
+    Reflect.set(readOnly, 'libraryID', 2);
+    Reflect.set(unsupported, 'isRegularItem', () => false);
+    const items = [writable, assigned, readOnly, unsupported];
+    const { libraries } = installZotero(items, [{ tag: 'robotics' }], {
+      2: [{ tag: 'read-only candidate' }],
+    });
+    libraries.get(2)!.editable = false;
+    const h = harness({ items });
     h.selection.add({ libraryID: 1, itemID: 99 });
 
     h.actions.add(MAIN_ITEM_TARGET.resolve(h.window, h.selection));
+    const chooser = h.open();
+    const candidates = await chooser.options.source!.load();
+    expect(candidates.map((item) => item.tagName)).toEqual(['robotics']);
+    await chooser.options.confirm?.(candidates[0]!, false);
 
-    expect(() => h.open()).toThrow('Tag action did not open a chooser');
+    expect(writable.getTags()).toEqual([{ tag: 'robotics', type: 0 }]);
+    expect(assigned.getTags()).toEqual([{ tag: 'robotics', type: 1 }]);
+    expect(readOnly.getTags()).toEqual([]);
+    expect(unsupported.getTags()).toEqual([]);
+    expect(h.session.status.textContent).toBe(
+      '→ Tags added: 1 · Skipped 4 (3 unavailable or read-only, 1 already up to date)',
+    );
   });
 
   it('does not open a tag chooser for an unavailable Reader item', () => {
@@ -481,29 +517,121 @@ describe('semantic Tag actions', () => {
 
     expect(() => h.open()).toThrow('Tag action did not open a chooser');
     expect(main.getTags()).toEqual([]);
+    expect(h.session.status.textContent).toContain('→ No tags added');
+    expect(h.session.status.textContent).toContain('1 unavailable or read-only');
   });
 
-  it('rejects mixed-library tag targets before opening either mutation chooser', () => {
-    const first = tagItem(1, [{ tag: 'robotics', type: 0 }]);
-    const second = tagItem(2, [{ tag: 'robotics', type: 0 }]);
+  it('aggregates writable library candidates by name and changes items across both libraries', async () => {
+    const first = tagItem(1);
+    const second = tagItem(2);
     Reflect.set(second, 'libraryID', 2);
-    installZotero([first, second]);
-    const h = harness({ items: [first] });
-    const targets = {
-      source: 'main' as const,
-      items: [first, second],
-      total: 2,
-      missing: 0,
-      presentation: { origin: 'selection' as const, outsideCurrentList: 0 },
-    };
+    installZotero([first, second], [{ tag: 'first only' }, { tag: 'shared', type: 1 }], {
+      2: [{ tag: 'second only' }, { tag: 'shared', type: 0 }],
+    });
+    const h = harness({ items: [first, second] });
+    const targets = MAIN_ITEM_TARGET.resolve(h.window, h.selection);
 
     h.actions.add(targets);
-    expect(h.session.status.textContent).toBe('✗ Add Tag requires one library at a time');
+    const add = h.open();
+    const candidates = await add.options.source!.load();
+    expect(candidates.map((item) => item.tagName).sort()).toEqual([
+      'first only',
+      'second only',
+      'shared',
+    ]);
+    await add.options.confirm?.(candidates.find((item) => item.tagName === 'second only')!, false);
+    expect(first.hasTag('second only')).toBe(true);
+    expect(second.hasTag('second only')).toBe(true);
+
     h.actions.remove(targets);
-    expect(h.session.status.textContent).toBe('✗ Remove Tag requires one library at a time');
+    const remove = h.open();
+    const [assigned] = await remove.options.source!.load();
+    expect(assigned?.tagName).toBe('second only');
+    await remove.options.confirm?.(assigned!, false);
+    expect(first.hasTag('second only')).toBe(false);
+    expect(second.hasTag('second only')).toBe(false);
+  });
+
+  it('reports a neutral removal notice when the only assigned tags are protected or read-only', () => {
+    const identity = 'urn:zotero-neo:chapter-note:v1:0123456789abcdef0123456789abcdef';
+    const writable = tagItem(1, [{ tag: identity, type: 1 }]);
+    const readOnly = tagItem(2, [{ tag: 'ordinary', type: 0 }]);
+    Reflect.set(readOnly, 'isEditable', () => false);
+    const items = [writable, readOnly];
+    installZotero(items);
+    const h = harness({ items });
+
+    h.actions.remove(MAIN_ITEM_TARGET.resolve(h.window, h.selection));
+
     expect(() => h.open()).toThrow('Tag action did not open a chooser');
-    expect(first.hasTag('robotics')).toBe(true);
-    expect(second.hasTag('robotics')).toBe(true);
+    expect(writable.hasTag(identity)).toBe(true);
+    expect(readOnly.hasTag('ordinary')).toBe(true);
+    expect(h.session.status.textContent).toContain('→ No tags removed');
+  });
+
+  it('reports a localized no-change notice when every target already has the tag', async () => {
+    const item = tagItem(1, [{ tag: 'robotics', type: 1 }]);
+    installZotero([item], [{ tag: 'robotics' }]);
+    Reflect.set(Zotero, 'locale', 'zh-CN');
+    const h = harness({ items: [item] });
+    h.actions.add(MAIN_ITEM_TARGET.resolve(h.window, h.selection));
+    const chooser = h.open();
+    const [candidate] = await chooser.options.source!.load();
+    await chooser.options.confirm?.(candidate!, false);
+
+    expect(item.getTags()).toEqual([{ tag: 'robotics', type: 1 }]);
+    expect(item.save).not.toHaveBeenCalled();
+    expect(h.session.status.textContent).toBe('→ 未添加标签，跳过 1 项（1 项无需更改）');
+  });
+
+  it('uses the original selection but skips replaced and newly read-only items at confirm', async () => {
+    const retained = tagItem(1);
+    const replaced = tagItem(2);
+    const readOnly = tagItem(3);
+    const other = tagItem(4);
+    const { byID } = installZotero([retained, replaced, readOnly, other], [{ tag: 'robotics' }]);
+    const h = harness({ items: [retained, replaced, readOnly] });
+    h.actions.add(MAIN_ITEM_TARGET.resolve(h.window, h.selection));
+    const chooser = h.open();
+    const [candidate] = await chooser.options.source!.load();
+
+    const replacement = tagItem(replaced.id);
+    byID.set(replacement.id, replacement);
+    Reflect.set(readOnly, 'isEditable', () => false);
+    h.selection.clear();
+    h.selection.add({ libraryID: other.libraryID, itemID: other.id });
+    await chooser.options.confirm?.(candidate!, false);
+
+    expect(retained.hasTag('robotics')).toBe(true);
+    for (const item of [replaced, replacement, readOnly, other]) {
+      expect(item.hasTag('robotics')).toBe(false);
+    }
+    expect(h.session.status.textContent).toBe(
+      '→ Tags added: 1 · Skipped 2 (2 unavailable or read-only)',
+    );
+  });
+
+  it('reports a partial removal when one save fails and another item lacks the chosen tag', async () => {
+    const failed = tagItem(1, [{ tag: 'robotics', type: 1 }]);
+    Reflect.set(failed, 'save', async () => {
+      throw new Error('Save unavailable');
+    });
+    const unassigned = tagItem(2);
+    const removed = tagItem(3, [{ tag: 'robotics', type: 0 }]);
+    const items = [failed, unassigned, removed];
+    installZotero(items);
+    const h = harness({ items });
+    h.actions.remove(MAIN_ITEM_TARGET.resolve(h.window, h.selection));
+    const chooser = h.open();
+    const [candidate] = await chooser.options.source!.load();
+    await chooser.options.confirm?.(candidate!, false);
+
+    expect(failed.getTags()).toEqual([{ tag: 'robotics', type: 1 }]);
+    expect(removed.getTags()).toEqual([]);
+    expect(h.logger.debug).toHaveBeenCalledWith(expect.stringContaining('Save unavailable'));
+    expect(h.session.status.textContent).toBe(
+      '→ Tags removed: 1 · Skipped 2 (1 already up to date, 1 failed)',
+    );
   });
 
   it.each([
@@ -698,29 +826,31 @@ describe('semantic Tag actions', () => {
 
   it('lets an admitted native save finish without reviving retired module feedback', async () => {
     const item = tagItem(1);
-    installZotero([item], [{ tag: 'robotics' }]);
-    let completeSave!: () => void;
-    const barrier = new Promise<void>((resolve) => {
-      completeSave = resolve;
-    });
+    const later = tagItem(2);
+    installZotero([item, later], [{ tag: 'robotics' }]);
+    const started = Promise.withResolvers<void>();
+    const barrier = Promise.withResolvers<void>();
     let saved = false;
     Reflect.set(item, 'save', async () => {
-      await barrier;
+      started.resolve();
+      await barrier.promise;
       saved = true;
       return item.id;
     });
-    const h = harness({ items: [item] });
+    const h = harness({ items: [item, later] });
     h.actions.add(MAIN_ITEM_TARGET.resolve(h.window, h.selection));
     const chooser = h.open();
     const [candidate] = await chooser.options.source!.load();
     const pending = chooser.options.confirm!(candidate!, false);
+    await started.promise;
     expect(item.hasTag('robotics')).toBe(true);
 
     h.modules.dispose();
-    completeSave();
+    barrier.resolve();
     await pending;
     expect(saved).toBe(true);
     expect(item.hasTag('robotics')).toBe(true);
+    expect(later.hasTag('robotics')).toBe(false);
     expect(h.session.status.textContent).toBe('');
   });
 });

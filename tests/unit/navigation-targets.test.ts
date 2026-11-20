@@ -6,10 +6,12 @@ import { MAIN_ITEM_TARGET } from '../../src/main/main-item-target';
 import { NOTE_ITEM_TARGET } from '../../src/main/note-item-target';
 import { READER_ITEM_TARGET } from '../../src/reader/item-target';
 import { copyCitekeys } from '../../src/operations/citekeys';
+import { batchStatus } from '../../src/i18n/batch-result';
 import { SelectionStore } from '../../src/modules/worksets/selection-store';
 
 const originalZotero = Reflect.get(globalThis, 'Zotero');
 const originalComponents = Reflect.get(globalThis, 'Components');
+const logger = { debug: vi.fn(), diagnostic: vi.fn() };
 
 afterEach(() => {
   if (originalZotero === undefined) Reflect.deleteProperty(globalThis, 'Zotero');
@@ -141,7 +143,8 @@ describe('Main action target contracts', () => {
     h.viewAttachment.mockImplementation(() => {
       throw new Error('viewer failed');
     });
-    await expect(h.navigation.openPDF(target, () => true)).resolves.toBe(false);
+    await expect(h.navigation.openPDF(target, () => true, 'zh-CN')).resolves.toBe(false);
+    expect(h.status).toHaveBeenLastCalledWith('无法打开该条目', undefined);
 
     const noTarget = {
       id: 20,
@@ -152,7 +155,8 @@ describe('Main action target contracts', () => {
       getAttachments: () => [],
       getField: () => '',
     } as unknown as Zotero.Item;
-    await expect(h.navigation.openPDF(noTarget, () => true)).resolves.toBe(false);
+    await expect(h.navigation.openPDF(noTarget, () => true, 'zh-CN')).resolves.toBe(false);
+    expect(h.status).toHaveBeenLastCalledWith('该条目没有附件或链接', undefined);
   });
 
   it('trashes native multi-selection when persistent Selection is empty', async () => {
@@ -182,7 +186,7 @@ describe('Main action target contracts', () => {
     expect(h.confirm).toHaveBeenCalledTimes(1);
     expect(h.trashTx).not.toHaveBeenCalled();
     await h.navigation.restoreLastTrashedItems();
-    expect(h.status).toHaveBeenLastCalledWith('✗ Nothing to restore', undefined);
+    expect(h.status).toHaveBeenLastCalledWith('→ No items restored', undefined);
     expect(h.selection.values()).toEqual([{ libraryID: 1, itemID: first.id }]);
   });
 
@@ -197,7 +201,7 @@ describe('Main action target contracts', () => {
 
     expect(h.selection.values()).toEqual([{ libraryID: 1, itemID: first.id }]);
     await h.navigation.restoreLastTrashedItems();
-    expect(h.status).toHaveBeenLastCalledWith('✗ Nothing to restore', undefined);
+    expect(h.status).toHaveBeenLastCalledWith('→ No items restored', undefined);
   });
 
   it('uses an explicit Visual target when Selection is empty and keeps Selection authoritative when present', async () => {
@@ -383,13 +387,14 @@ describe('Main action target contracts', () => {
     h.selection.add({ libraryID: 1, itemID: first.id });
     h.selection.add({ libraryID: 1, itemID: cursor.id });
 
-    copyCitekeys(MAIN_ITEM_TARGET.resolve(h.window, h.selection));
+    const outcome = copyCitekeys(MAIN_ITEM_TARGET.resolve(h.window, h.selection), logger);
+    expect(batchStatus('citekeys', outcome, 'zh-CN')).toBe('✓ 已复制 2 个 Citekey');
 
     expect(h.copied).toEqual(['first cursor']);
     expect(h.selection.size).toBe(2);
 
     h.selection.clear();
-    copyCitekeys(MAIN_ITEM_TARGET.resolve(h.window, h.selection));
+    copyCitekeys(MAIN_ITEM_TARGET.resolve(h.window, h.selection), logger);
 
     expect(h.copied).toEqual(['first cursor', 'cursor']);
   });
@@ -400,9 +405,9 @@ describe('Main action target contracts', () => {
     const h = harness([selected, visual], 0);
     const current = { source: 'visual' as const, refs: [{ libraryID: 1, itemID: visual.id }] };
 
-    copyCitekeys(MAIN_ITEM_TARGET.resolve(h.window, h.selection, current));
+    copyCitekeys(MAIN_ITEM_TARGET.resolve(h.window, h.selection, current), logger);
     h.selection.add({ libraryID: 1, itemID: selected.id });
-    copyCitekeys(MAIN_ITEM_TARGET.resolve(h.window, h.selection, current));
+    copyCitekeys(MAIN_ITEM_TARGET.resolve(h.window, h.selection, current), logger);
     expect(h.copied).toEqual(['visual', 'selected']);
   });
 
@@ -413,7 +418,7 @@ describe('Main action target contracts', () => {
     h.install(reader);
     h.selection.add({ libraryID: 1, itemID: main.id });
 
-    copyCitekeys(READER_ITEM_TARGET.resolve({ itemID: reader.id }));
+    copyCitekeys(READER_ITEM_TARGET.resolve({ itemID: reader.id }), logger);
 
     expect(h.copied).toEqual(['reader']);
     expect(h.selection.values()).toEqual([{ libraryID: 1, itemID: main.id }]);
@@ -436,27 +441,37 @@ describe('Main action target contracts', () => {
 
     const targets = NOTE_ITEM_TARGET.resolve(h.window);
     Reflect.set(h.window.document, 'activeElement', null);
-    copyCitekeys(targets);
+    copyCitekeys(targets, logger);
     expect(h.copied).toEqual(['paper']);
     expect(h.selection.values()).toEqual([{ libraryID: 1, itemID: main.id }]);
   });
 
-  it('refuses the entire citekey batch when a target is stale or missing a citekey', () => {
+  it('copies valid citekeys in selection order while counting unavailable and missing entries', () => {
     const first = attachment(10, 'first');
-    const missingKey = attachment(11, '');
-    const h = harness([first, missingKey], 0);
-    h.selection.add({ libraryID: 1, itemID: first.id });
+    const missingKey = attachment(11);
+    const last = attachment(12, 'last');
+    const h = harness([first, missingKey, last]);
+    for (const itemID of [first.id, 999, missingKey.id, last.id])
+      h.selection.add({ libraryID: 1, itemID });
+
+    const outcome = copyCitekeys(MAIN_ITEM_TARGET.resolve(h.window, h.selection), logger);
+
+    expect(h.copied).toEqual(['first last']);
+    expect(batchStatus('citekeys', outcome, 'zh-CN')).toBe(
+      '→ 已复制 2 个 Citekey，跳过 2 项（1 项没有 Citekey、1 项不可用）',
+    );
+  });
+
+  it('does not write the clipboard when none of the selected targets has a citekey', () => {
+    const missingKey = attachment(11);
+    const h = harness([missingKey]);
     h.selection.add({ libraryID: 1, itemID: missingKey.id });
-
-    copyCitekeys(MAIN_ITEM_TARGET.resolve(h.window, h.selection));
-
-    expect(h.copied).toEqual([]);
-
-    h.selection.clear();
-    h.selection.add({ libraryID: 1, itemID: 999 });
-    copyCitekeys(MAIN_ITEM_TARGET.resolve(h.window, h.selection));
+    const outcome = copyCitekeys(MAIN_ITEM_TARGET.resolve(h.window, h.selection), logger);
 
     expect(h.copied).toEqual([]);
+    expect(batchStatus('citekeys', outcome, 'zh-CN')).toBe(
+      '✗ 未复制 Citekey，跳过 1 项（1 项没有 Citekey）',
+    );
   });
 
   it('uses Zotero keepTopLevel normalization and deduplicates normalized citekey targets', () => {
@@ -470,7 +485,7 @@ describe('Main action target contracts', () => {
     const keepTopLevel = vi.fn(() => [parent, parent]);
     (Zotero.Items as unknown as { keepTopLevel: typeof keepTopLevel }).keepTopLevel = keepTopLevel;
 
-    copyCitekeys(MAIN_ITEM_TARGET.resolve(h.window, h.selection));
+    copyCitekeys(MAIN_ITEM_TARGET.resolve(h.window, h.selection), logger);
 
     expect(h.copied).toEqual(['parent']);
   });

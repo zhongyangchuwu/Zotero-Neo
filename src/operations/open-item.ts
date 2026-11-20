@@ -1,3 +1,5 @@
+import type { TranslationKey } from '../i18n';
+
 export interface ItemOpenHost {
   viewAttachment?(itemID: number): void | Promise<void>;
   openNote?(itemID: number): void | Promise<void>;
@@ -9,18 +11,18 @@ export async function openItem(
   item: Zotero.Item,
   host: ItemOpenHost | undefined,
   isCurrent?: () => boolean,
-): Promise<string | null> {
+): Promise<TranslationKey | null> {
   if (isCurrent && !isCurrent()) return null;
 
   if (item.isAttachment()) {
     const viewAttachment = host?.viewAttachment;
-    if (!viewAttachment) return 'Attachment viewer is unavailable';
+    if (!viewAttachment) return 'status.openViewerUnavailable';
     await viewAttachment.call(host, item.id);
     return null;
   }
   if (item.isNote()) {
     const openNote = host?.openNote;
-    if (!openNote) return 'Note viewer is unavailable';
+    if (!openNote) return 'status.openViewerUnavailable';
     await openNote.call(host, item.id);
     return null;
   }
@@ -42,7 +44,7 @@ export async function openItem(
   }
   if (attachment) {
     const viewAttachment = host?.viewAttachment;
-    if (!viewAttachment) return 'Attachment viewer is unavailable';
+    if (!viewAttachment) return 'status.openViewerUnavailable';
     await viewAttachment.call(host, attachment.id);
     return null;
   }
@@ -51,9 +53,9 @@ export async function openItem(
   const url =
     item.getField('url') ||
     (doi ? `https://doi.org/${Zotero.Utilities.cleanDOI?.(doi) ?? doi}` : '');
-  if (!url) return 'No attachment';
+  if (!url) return 'status.openNoAttachment';
   const loadURI = host?.loadURI;
-  if (!loadURI) return 'URI navigation is unavailable';
+  if (!loadURI) return 'status.openViewerUnavailable';
   await loadURI.call(host, url);
   return null;
 }

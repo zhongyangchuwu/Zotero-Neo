@@ -653,7 +653,7 @@ describe('current Zotero collection APIs', () => {
 });
 
 describe('main item trash and restore', () => {
-  it('restores only recorded Neo Trash items when native Undo belongs to another batch', async () => {
+  it('restores the valid Neo Trash targets and retries only failed items instead of using native Undo', async () => {
     const originalZotero = Reflect.get(globalThis, 'Zotero');
     const active = { id: 'item-tree-row-1' } as Element;
     const itemsRoot = { contains: (node: unknown) => node === active } as HTMLElement;
@@ -662,12 +662,17 @@ describe('main item trash and restore', () => {
       [42, false],
       [99, true],
     ]);
+    let failFirst = true;
     const selected = [41, 42].map((id) => {
       const item = {
         id,
         libraryID: 1,
         deleted: false,
         saveTx: async () => {
+          if (id === 41 && failFirst) {
+            item.deleted = persisted.get(id)!;
+            throw new Error('test storage failure');
+          }
           persisted.set(id, item.deleted);
         },
       };
@@ -724,6 +729,14 @@ describe('main item trash and restore', () => {
       expect(trashTx).toHaveBeenCalledWith([41, 42]);
       expect(selection.empty).toBe(true);
       await navigation.restoreLastTrashedItems();
+      expect(session.status.textContent).toBe('→ Items restored: 1 · Skipped 1 (1 failed)');
+      expect(persisted.get(41)).toBe(true);
+      expect(selected[0]!.deleted).toBe(true);
+      expect(persisted.get(42)).toBe(false);
+
+      failFirst = false;
+      await navigation.restoreLastTrashedItems();
+      expect(session.status.textContent).toBe('✓ Items restored: 1');
 
       expect(persisted).toEqual(
         new Map([
@@ -733,7 +746,7 @@ describe('main item trash and restore', () => {
         ]),
       );
       await navigation.restoreLastTrashedItems();
-      expect(session.status.textContent).toBe('✗ Nothing to restore');
+      expect(session.status.textContent).toBe('→ No items restored');
       Reflect.set(window.document, 'activeElement', { id: 'zotero-item-pane' });
       await navigation.trashSelectedItems(selection);
       expect(trashTx).toHaveBeenCalledTimes(1);
@@ -755,7 +768,10 @@ describe('main item trash and restore', () => {
       id: 41,
       deleted: true,
       saveTx: async () => {
-        if (fail) throw failure;
+        if (fail) {
+          pending.deleted = persisted.get(41)!;
+          throw failure;
+        }
         persisted.set(41, pending.deleted);
       },
     };
@@ -780,7 +796,10 @@ describe('main item trash and restore', () => {
     });
     try {
       Reflect.set(globalThis, 'Zotero', { Items: { get: (id: number) => items.get(id) } });
-      expect(await navigation.restoreTrashedItems([41, 41, 42, 404, -1])).toBe(1);
+      expect(await navigation.restoreTrashedItems([41, 41, 42, 404, -1])).toEqual({
+        outcome: { done: 1, unchanged: 1, unavailable: 2, failed: 0 },
+        retries: [],
+      });
       expect(persisted).toEqual(
         new Map([
           [41, false],
@@ -790,7 +809,10 @@ describe('main item trash and restore', () => {
       pending.deleted = true;
       persisted.set(41, true);
       fail = true;
-      await expect(navigation.restoreTrashedItems([41])).rejects.toBe(failure);
+      await expect(navigation.restoreTrashedItems([41])).resolves.toEqual({
+        outcome: { done: 0, unchanged: 0, unavailable: 0, failed: 1 },
+        retries: [41],
+      });
       expect(pending.deleted).toBe(true);
       expect(persisted.get(41)).toBe(true);
     } finally {

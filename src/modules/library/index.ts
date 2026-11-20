@@ -25,6 +25,7 @@ import {
   type MainTreePanel as MainPanel,
 } from '../../toolkit/main';
 import { t } from '../../i18n';
+import { batchStatus } from '../../i18n/batch-result';
 import { createItemsProvider } from './items-provider';
 import { MainLocalFind } from './local-find';
 import { LibraryNavigation } from './navigation';
@@ -253,13 +254,11 @@ export function createLibraryModule(host: ModuleHost, ports: LibraryModuleHost):
         }
       });
     const identifiers = { main: identifier('main-normal'), reader: identifier('reader-normal') };
+    const copy = (targets: ItemTargetSet) =>
+      status(batchStatus('citekeys', copyCitekeys(targets, ports.logger), ports.language()));
     const yank = {
-      main: host.bind<ItemTargetSet>(scope, 'main-normal', 'mainYankCitekey', (targets) =>
-        status(copyCitekeys(targets)),
-      ),
-      note: host.bind<ItemTargetSet>(scope, 'note-normal', 'mainYankCitekey', (targets) =>
-        status(copyCitekeys(targets)),
-      ),
+      main: host.bind(scope, 'main-normal', 'mainYankCitekey', copy),
+      note: host.bind(scope, 'note-normal', 'mainYankCitekey', copy),
     };
     const open = (
       item: Zotero.Item | null,
@@ -274,7 +273,7 @@ export function createLibraryModule(host: ModuleHost, ports: LibraryModuleHost):
           start: (attempt) => ({
             kind: 'deferred',
             settled: navigation
-              .openPDF(item, () => scope.isCurrent() && attempt.isCurrent())
+              .openPDF(item, () => scope.isCurrent() && attempt.isCurrent(), ports.language())
               .then((opened) =>
                 opened ? { kind: 'completed', evidence: 'settled-change' } : { kind: 'unchanged' },
               ),
@@ -311,7 +310,7 @@ export function createLibraryModule(host: ModuleHost, ports: LibraryModuleHost):
       'main-select': host.bind(scope, 'main-select', 'mainTrashItems', trash),
     };
     const restore = bind<void>('mainRestoreTrashedItems', () => {
-      void navigation.restoreLastTrashedItems();
+      void navigation.restoreLastTrashedItems(ports.language());
     });
     type Motion = { count: number; shouldDebounce?: boolean };
     const bindMotion = (action: ActionId, direction: MotionDirection) =>

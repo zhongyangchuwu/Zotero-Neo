@@ -50,21 +50,22 @@ describe('collection candidate provider', () => {
         get: (id: number) => collections.find((collection) => collection.id === id),
       },
     });
-    const items = [
-      { getCollections: () => [11] },
-      { getCollections: () => [10, 11] },
-    ] as Zotero.Item[];
-    const add = createCollectionCandidateProvider(1, { items, present: true });
+    const memberships = [[11], [10, 11]];
+    const add = createCollectionCandidateProvider(1, { memberships, present: true });
     const added = await add.load();
     expect(added.map((candidate) => [candidate.id, candidate.meta])).toEqual([
       [10, '1/2 direct'],
       [11, 'Parent / Child · 2/2 direct · Already assigned'],
       [12, '0/2 direct'],
     ]);
-    const remove = createCollectionCandidateProvider(1, { items, present: false, preferredID: 11 });
+    const remove = createCollectionCandidateProvider(1, {
+      memberships,
+      present: false,
+      preferredID: 11,
+    });
     const removed = await remove.load();
     expect(removed.map((candidate) => candidate.id)).toEqual([11, 10]);
-    const childOnly = createCollectionCandidateProvider(1, { items: [items[0]!], present: false });
+    const childOnly = createCollectionCandidateProvider(1, { memberships: [[11]], present: false });
     expect((await childOnly.load()).map((candidate) => candidate.id)).toEqual([11]);
   });
 
@@ -81,7 +82,7 @@ describe('collection candidate provider', () => {
         get: (id: number) => collections.find((collection) => collection.id === id),
       },
     });
-    const add = createCollectionCandidateProvider(1, { items: [], includeCreate: true });
+    const add = createCollectionCandidateProvider(1, { includeCreate: true });
     const candidates = await add.load();
     const filtered = add.filterItems!(candidates, 'Folder');
     expect(filtered).toHaveLength(100);

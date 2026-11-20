@@ -5,10 +5,16 @@ import {
   type ReaderNavigationModulePorts,
 } from '../../src/modules/reader-navigation';
 import { ReaderNavigationHost, type ReaderNativeNavigation } from '../../src/toolkit';
-import type { PdfWindow, ReaderRuntime } from '../../src/reader/types';
+import {
+  COLORS,
+  type AnnotationRuntime,
+  type PdfWindow,
+  type ReaderRuntime,
+} from '../../src/reader/types';
 import type { PreferenceStore } from '../../src/core/preference-store';
 import { LOCAL_RULES_KEY } from '../../src/document-analysis/settings';
 import type { ReaderDocumentSnapshot } from '../../src/reader/document-cache';
+import type { NavigationOutcome, NavigationResult } from '../../src/navigation/types';
 
 const documents = vi.hoisted(() => ({ read: vi.fn() }));
 vi.mock('../../src/reader/document-cache', () => ({ readReaderDocument: documents.read }));
@@ -20,7 +26,9 @@ import {
 } from '../../src/reader/action-capabilities';
 
 beforeEach(() => {
-  vi.stubGlobal('Components', { utils: { isDeadWrapper: () => false } });
+  vi.stubGlobal('Components', {
+    utils: { isDeadWrapper: () => false, cloneInto: (value: unknown) => value },
+  });
 });
 
 afterEach(() => {
@@ -136,6 +144,162 @@ describe('Reader navigation module lifetime', () => {
       }
     });
     host.dispose();
+  });
+
+  const fixtureForAnnotations = () => {
+    let active = true;
+    const window = {} as PdfWindow;
+    const state = {
+      selectedAnnotationIDs: ['current'],
+      annotations: [
+        { id: 'current' },
+        { id: 'deleted' },
+        { id: 'bad-sort-index' },
+        { id: 'different-color' },
+        { id: 'ink' },
+        { id: 'target' },
+      ],
+    };
+    const setSelectedAnnotations = vi.fn((keys: string[]) => {
+      state.selectedAnnotationIDs = keys;
+    });
+    const reader = {
+      _iframeWindow: window,
+      _internalReader: { _state: state, setSelectedAnnotations },
+    } as unknown as ReaderRuntime;
+    const showStatus = vi.fn();
+    const rememberAnnotation = vi.fn();
+    const annotations: AnnotationRuntime[] = [];
+    const executeNavigation = vi.fn<ReaderNavigationModulePorts['actions']['executeNavigation']>(
+      (_window, _intent, perform) => ({
+        pending: false,
+        result: {
+          ...(perform({} as ReaderNativeNavigation) as NavigationOutcome),
+          recorded: false,
+        },
+        isCurrent: () => active,
+        cancel: vi.fn(),
+      }),
+    );
+    const host = new ModuleHost({ debug: vi.fn(), diagnostic: vi.fn() }, () => true);
+    const ports = minimalPorts();
+    const module = createReaderNavigationModule(host, {
+      ...ports,
+      sidebar: { ...ports.sidebar, language: () => 'en' },
+      actions: {
+        ...ports.actions,
+        executeNavigation,
+        reader,
+        itemForReader: () => ({
+          key: 'attachment',
+          getAnnotations: () => annotations,
+          saveTx: async () => undefined,
+        }),
+        selectedAnnotationKey: () => state.selectedAnnotationIDs[0] ?? null,
+        filterColor: () => COLORS.red,
+        rememberAnnotation,
+        invocationCurrent: () => () => active,
+        showStatus,
+        debug: vi.fn(),
+      },
+    });
+    const add = (key: string, sortIndex: string, extra?: Partial<AnnotationRuntime>) =>
+      annotations.push({
+        key,
+        annotationSortIndex: sortIndex,
+        annotationType: 'highlight',
+        annotationColor: COLORS.red,
+        saveTx: async () => undefined,
+        ...extra,
+      });
+    return {
+      host,
+      module,
+      window,
+      add,
+      executeNavigation,
+      setSelectedAnnotations,
+      rememberAnnotation,
+      showStatus,
+      retire: () => {
+        active = false;
+      },
+    };
+  };
+
+  it('skips invalid candidates before one native selection in each direction', () => {
+    const f = fixtureForAnnotations();
+    f.add('target', '08');
+    f.add('unloaded', '02');
+    f.add('deleted', '03', { deleted: true });
+    f.add('', '04');
+    f.add('bad-sort-index', '05', { annotationSortIndex: Number.NaN as unknown as string });
+    f.add('different-color', '06', { annotationColor: COLORS.blue });
+    f.add('ink', '07', { annotationType: 'ink' });
+    f.add('current', '01');
+
+    expect(f.module.executeAction('nextAnnotation', f.window, 1)).toBe(true);
+    expect(f.executeNavigation).toHaveBeenCalledOnce();
+    expect(f.setSelectedAnnotations).toHaveBeenCalledExactlyOnceWith(['target']);
+    expect(f.rememberAnnotation).toHaveBeenCalledExactlyOnceWith('target');
+    expect(f.showStatus).toHaveBeenLastCalledWith('→ Annotation 2/2 · Skipped 4 unavailable', 1500);
+
+    f.module.executeAction('nextAnnotation', f.window, 1);
+    expect(f.setSelectedAnnotations).toHaveBeenLastCalledWith(['current']);
+    f.module.executeAction('prevAnnotation', f.window, 1);
+    expect(f.setSelectedAnnotations).toHaveBeenLastCalledWith(['target']);
+    expect(f.executeNavigation).toHaveBeenCalledTimes(3);
+    f.host.dispose();
+  });
+
+  it('does not dispatch or remember a target when all eligible annotations are unavailable', () => {
+    const f = fixtureForAnnotations();
+    f.add('unloaded', '01');
+    f.add('deleted', '02', { deleted: true });
+
+    f.module.executeAction('nextAnnotation', f.window, 1);
+
+    expect(f.executeNavigation).not.toHaveBeenCalled();
+    expect(f.rememberAnnotation).not.toHaveBeenCalled();
+    expect(f.showStatus).toHaveBeenCalledExactlyOnceWith(
+      'No annotations to jump to · Skipped 2 unavailable',
+      2000,
+    );
+    f.host.dispose();
+  });
+
+  it('does not retry or remember a target when native selection does not settle', () => {
+    const f = fixtureForAnnotations();
+    f.add('current', '01');
+    f.add('target', '02');
+    f.setSelectedAnnotations.mockImplementationOnce(() => {});
+
+    f.module.executeAction('nextAnnotation', f.window, 1);
+
+    expect(f.setSelectedAnnotations).toHaveBeenCalledExactlyOnceWith(['target']);
+    expect(f.rememberAnnotation).not.toHaveBeenCalled();
+    expect(f.showStatus).toHaveBeenCalledExactlyOnceWith('Could not jump to the annotation', 2000);
+    f.host.dispose();
+  });
+
+  it('does not remember or announce a selection after the invocation retires', async () => {
+    const f = fixtureForAnnotations();
+    f.add('target', '01');
+    const settled = Promise.withResolvers<NavigationResult>();
+    f.executeNavigation.mockReturnValueOnce({
+      pending: true,
+      result: settled.promise,
+      isCurrent: () => false,
+      cancel: vi.fn(),
+    });
+    f.module.executeAction('nextAnnotation', f.window, 1);
+    f.retire();
+    settled.resolve({ kind: 'completed', evidence: 'settled-change', recorded: false });
+    await settled.promise;
+
+    expect(f.rememberAnnotation).not.toHaveBeenCalled();
+    expect(f.showStatus).not.toHaveBeenCalled();
+    f.host.dispose();
   });
 
   it('stops a pending smooth hold when its owner retires and settles it as stale', async () => {

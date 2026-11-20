@@ -998,6 +998,7 @@ function createHistorySession(
     createCollectionsModule(mainScope.host, {
       window: ownerWindow,
       logger,
+      language: () => 'en',
       status: () => {},
       navigate: async () => {},
       choose: () => null,
@@ -1369,7 +1370,9 @@ describe('Reader annotation creation ownership', () => {
       expect(selection.toString()).toBe(text);
       expect(selection.removeAllRanges).not.toHaveBeenCalled();
       expect(created.session.mode).toBe('visual');
-      expect(created.indicator.textContent).toContain('unsupported page span');
+      expect(created.indicator.textContent).toContain(
+        'Select text on one page or two adjacent pages',
+      );
       expect(created.session.selectionContext()).toEqual({
         text,
         itemID: 41,
@@ -1553,7 +1556,9 @@ describe('Reader annotation creation ownership', () => {
     expect(selection.toString()).toBe(text);
     expect(selection.removeAllRanges).not.toHaveBeenCalled();
     expect(created.session.mode).toBe('visual');
-    expect(created.indicator.textContent).toContain('no complete PDF selection rects');
+    expect(created.indicator.textContent).toContain(
+      'Could not locate all the selected text on the page',
+    );
     created.session.dispose();
   });
 
@@ -1816,7 +1821,7 @@ describe('Reader annotation creation ownership', () => {
     expect(selection.toString()).toBe('alpha');
     expect(selection.removeAllRanges).not.toHaveBeenCalled();
     expect(created.session.mode).toBe('visual');
-    expect(created.indicator.textContent).toContain('native save rejected');
+    expect(created.indicator.textContent).toBe('Could not create the annotation');
     created.session.dispose();
   });
 });
@@ -3360,7 +3365,7 @@ describe('Reader citekey output', () => {
     for (const key of [' ', 'y', 'y']) created.session.focusAndHandle(readerKey(key).event);
 
     expect(copied).toEqual(['Reader2026']);
-    expect(created.indicator.textContent).toBe('✓ @Reader2026');
+    expect(created.indicator.textContent).toBe('✓ Citekeys copied: 1');
     created.session.dispose();
   });
 });
@@ -3482,15 +3487,13 @@ describe('Reader annotation deletion safety', () => {
   it('preserves a newer Neo fallback annotation when deletion is pending', async () => {
     const h = createDeletion(true);
     const newerAnnotation = { ...h.annotation, key: 'ANN-2' };
-    h.annotations.push(newerAnnotation);
+    const lastAnnotation = { ...h.annotation, key: 'ANN-3' };
+    h.annotations.push(newerAnnotation, lastAnnotation);
     const state = h.created.reader._internalReader?._state;
     if (!state) throw new Error('Expected Reader selection state');
-    h.created.session.focusAndHandle(readerKey('[').event);
-    h.created.session.focusAndHandle(readerKey('a').event);
-    Reflect.set(state, 'selectedAnnotationIDs', []);
-    h.created.session.focusAndHandle(readerKey(']').event);
-    h.created.session.focusAndHandle(readerKey('a').event);
-    expect(h.clearHostSelection).toHaveBeenLastCalledWith([h.annotation.key]);
+    h.clearHostSelection.mockImplementation((keys) =>
+      Reflect.set(state, 'selectedAnnotationIDs', [...keys]),
+    );
 
     let finishErase!: () => void;
     h.eraseTx.mockImplementation(() => {
@@ -3504,14 +3507,16 @@ describe('Reader annotation deletion safety', () => {
     h.created.session.focusAndHandle(readerKey('a').event);
     expect(h.clearHostSelection).toHaveBeenLastCalledWith([newerAnnotation.key]);
     const callsAfterSelectingNewer = h.clearHostSelection.mock.calls.length;
+    Reflect.set(state, 'selectedAnnotationIDs', []);
+    h.annotations.shift();
     finishErase();
 
     await settleReaderMicrotasks();
 
     expect(h.clearHostSelection).toHaveBeenCalledTimes(callsAfterSelectingNewer);
-    h.created.session.focusAndHandle(readerKey('[').event);
+    h.created.session.focusAndHandle(readerKey(']').event);
     h.created.session.focusAndHandle(readerKey('a').event);
-    expect(h.clearHostSelection).toHaveBeenLastCalledWith([h.annotation.key]);
+    expect(h.clearHostSelection).toHaveBeenLastCalledWith([lastAnnotation.key]);
     h.created.session.dispose();
   });
 
@@ -4584,7 +4589,7 @@ describe('Reader annotation comment input ownership', () => {
       created.session.focusAndHandle(readerKey('Escape', { target: input ?? null }).event);
       expect(created.session.mode).toBe('normal');
       await settleReaderMicrotasks();
-      expect(created.indicator.textContent).toBe('✓ saved');
+      expect(created.indicator.textContent).toBe('✓ Comment saved');
       created.session.dispose();
     },
   );

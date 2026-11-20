@@ -5,11 +5,12 @@ import {
   tagSeparatorFromPreferences,
   type PreferenceReader,
 } from '../../core/preferences';
-import { setItemTag } from '../../operations/item-tags';
+import { isWritableTagItem, setItemTag } from '../../operations/item-tags';
 import type { PickerOpenOptions } from '../../main/picker/types';
 import { createTagCandidateProvider, type TagRecord } from '../../main/picker/providers/tags';
 import { isSourceNoteIdentity } from '../../platform/note-relations';
 import { t } from '../../i18n';
+import { batchStatus, type BatchOutcome } from '../../i18n/batch-result';
 
 function sameTag(left: string, right: string): boolean {
   return left.toLocaleLowerCase() === right.toLocaleLowerCase();
@@ -40,22 +41,10 @@ function targetLabel(targets: ItemTargetSet, language: string): string {
     .replace('{count}', count);
 }
 
-function targetLibraryID(targets: ItemTargetSet): number | null {
-  const first = targets.items[0]?.libraryID;
-  if (first === undefined) return null;
-  for (let index = 1; index < targets.items.length; index += 1)
-    if (targets.items[index]?.libraryID !== first) return null;
-  return first;
-}
-
-function targetTags(targets: ItemTargetSet): TagRecord[] {
-  const byName = new Map<string, TagRecord>();
-  for (const item of targets.items) {
-    for (const record of item.getTags()) {
-      if (!byName.has(record.tag)) byName.set(record.tag, record);
-    }
+function countTags(counts: Map<string, number>, item: Zotero.Item): void {
+  for (const { tag } of item.getTags()) {
+    if (!isSourceNoteIdentity(tag)) counts.set(tag, (counts.get(tag) ?? 0) + 1);
   }
-  return [...byName.values()];
 }
 
 function mergeTags(...sources: readonly (readonly TagRecord[])[]): TagRecord[] {
@@ -76,13 +65,9 @@ function candidateName(item: {
   return isSourceNoteIdentity(name) ? '' : name;
 }
 
-function presenceLabel(targets: ItemTargetSet, tag: string): string | undefined {
-  let count = 0;
-  for (const item of targets.items) if (item.hasTag(tag)) count += 1;
+function presenceLabel(count: number | undefined, total: number): string | undefined {
   if (!count) return undefined;
-  return count === targets.items.length
-    ? `Assigned to all ${targets.items.length}`
-    : `Assigned to ${count}/${targets.items.length}`;
+  return count === total ? `Assigned to all ${total}` : `Assigned to ${count}/${total}`;
 }
 
 export interface TagActionHost {
@@ -97,86 +82,23 @@ export interface TagActionHost {
 
 /**
  * Hosts tag candidate choice and Main-only filtering. Each Surface supplies explicit item targets;
- * the shared item-tag Operation owns the Zotero transaction.
+ * the shared item-tag operation owns individual Zotero writes.
  */
 export class TagActions {
   readonly #host: TagActionHost;
+  readonly #isCurrent: () => boolean;
 
-  constructor(host: TagActionHost) {
+  constructor(host: TagActionHost, isCurrent: () => boolean) {
     this.#host = host;
+    this.#isCurrent = isCurrent;
   }
 
   add(input: ItemTargetSet): void {
-    const targets = this.validatedTargets(input);
-    if (!targets) return;
-    const libraryID = targetLibraryID(targets);
-    if (libraryID === null) {
-      this.#host.status('✗ Add Tag requires one library at a time');
-      return;
-    }
-    const language = neoCommandLanguage(this.#host.preferences, Zotero.locale ?? 'en');
-    const separator = tagSeparatorFromPreferences(this.#host.preferences);
-    const source = createTagCandidateProvider({
-      title: t('workflow.tags.addTitle', language).replace(
-        '{target}',
-        targetLabel(targets, language),
-      ),
-      placeholder: '> Search or create a tag…',
-      separator,
-      allowCreate: true,
-      loadTags: async () => mergeTags(await Zotero.Tags.getAll(libraryID), targetTags(targets)),
-      describe: (tag) => presenceLabel(targets, tag),
-    });
-    this.#host.choose({
-      source,
-      confirm: async (item) => {
-        const name = candidateName(item);
-        if (!name) return;
-        const changed = await setItemTag(targets.items, name, true);
-        this.#host.status(
-          changed
-            ? `✓ Added tag “${name}” to ${changed} item${changed === 1 ? '' : 's'}`
-            : `✓ Tag “${name}” already assigned`,
-        );
-      },
-    });
+    this.edit(input, true);
   }
 
   remove(input: ItemTargetSet): void {
-    const targets = this.validatedTargets(input);
-    if (!targets) return;
-    if (targetLibraryID(targets) === null) {
-      this.#host.status('✗ Remove Tag requires one library at a time');
-      return;
-    }
-    const tags = targetTags(targets);
-    if (!tags.length) {
-      this.#host.status('→ No assigned tags to remove');
-      return;
-    }
-    const language = neoCommandLanguage(this.#host.preferences, Zotero.locale ?? 'en');
-    const source = createTagCandidateProvider({
-      title: t('workflow.tags.removeTitle', language).replace(
-        '{target}',
-        targetLabel(targets, language),
-      ),
-      placeholder: '> Search assigned tags…',
-      separator: tagSeparatorFromPreferences(this.#host.preferences),
-      loadTags: async () => tags,
-    });
-    this.#host.choose({
-      source,
-      confirm: async (item) => {
-        const name = candidateName(item);
-        if (!name) return;
-        const changed = await setItemTag(targets.items, name, false);
-        this.#host.status(
-          changed
-            ? `✓ Removed tag “${name}” from ${changed} item${changed === 1 ? '' : 's'}`
-            : `✓ Tag “${name}” is not assigned`,
-        );
-      },
-    });
+    this.edit(input, false);
   }
 
   toggleFilter(): void {
@@ -229,17 +151,82 @@ export class TagActions {
       });
   }
 
-  private validatedTargets(targets: ItemTargetSet): ItemTargetSet | null {
-    if (targets.missing > 0) {
-      this.#host.status(
-        targets.source === 'main'
-          ? '✗ Selection contains unavailable items; refresh before changing tags'
-          : '✗ Context item is unavailable; refresh before changing tags',
-      );
-      return null;
+  private edit(targets: ItemTargetSet, present: boolean): void {
+    const language = neoCommandLanguage(this.#host.preferences, Zotero.locale ?? 'en');
+    const action = present ? 'tagAdd' : 'tagRemove';
+    // The chooser's focus can change the surface selection. Never resolve it again.
+    const items: Zotero.Item[] = [];
+    const assigned = new Map<string, number>();
+    let unavailable = targets.missing;
+    let failed = 0;
+    for (const item of targets.items) {
+      try {
+        if (!isWritableTagItem(item)) {
+          unavailable++;
+          continue;
+        }
+        countTags(assigned, item);
+        items.push(item);
+      } catch (error) {
+        failed++;
+        this.#host.logger.debug(`tag lookup failed for item ${item.id}: ${String(error)}`);
+      }
     }
-    if (targets.items.length) return targets;
-    this.#host.status('✗ No taggable item target');
-    return null;
+    const report = (result: BatchOutcome): void => {
+      if (unavailable) result.unavailable = (result.unavailable ?? 0) + unavailable;
+      if (failed) result.failed = (result.failed ?? 0) + failed;
+      this.#host.status(batchStatus(action, result, language));
+    };
+    if (!items.length) {
+      report({ done: 0 });
+      return;
+    }
+    if (!present && !assigned.size) {
+      report({ done: 0, unchanged: items.length });
+      return;
+    }
+    const tags = [...assigned.keys()].map((tag) => ({ tag }));
+
+    const source = createTagCandidateProvider({
+      title: t(present ? 'workflow.tags.addTitle' : 'workflow.tags.removeTitle', language).replace(
+        '{target}',
+        targetLabel(targets, language),
+      ),
+      placeholder: present ? '> Search or create a tag…' : '> Search assigned tags…',
+      separator: tagSeparatorFromPreferences(this.#host.preferences),
+      allowCreate: present,
+      loadTags: present
+        ? async () => {
+            const ids = new Set(items.map((item) => item.libraryID));
+            const libraries = await Promise.all(
+              [...ids].map(async (id) => {
+                try {
+                  return await Zotero.Tags.getAll(id);
+                } catch (error) {
+                  this.#host.logger.debug(
+                    `tag candidates unavailable for library ${id}: ${String(error)}`,
+                  );
+                  return [];
+                }
+              }),
+            );
+            return mergeTags(...libraries, tags);
+          }
+        : async () => tags,
+      describe: present ? (tag) => presenceLabel(assigned.get(tag), items.length) : undefined,
+    });
+    this.#host.choose({
+      source,
+      confirm: async (item) => {
+        const name = candidateName(item);
+        if (!name || !this.#isCurrent()) return;
+        report(
+          await setItemTag(items, name, present, {
+            isCurrent: this.#isCurrent,
+            logger: this.#host.logger,
+          }),
+        );
+      },
+    });
   }
 }
