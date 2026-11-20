@@ -7,7 +7,7 @@ import { LANGUAGE_PREFERENCE_KEY } from '../../core/preferences';
 import { t } from '../../i18n';
 import type { BindingMap } from '../../input/bindings';
 import type { KeyGuideLanguage } from '../../input/key-guide-config';
-import { alertChromeAction, confirmChromeAction } from '../../platform/chrome-windows';
+import { confirmChromeAction } from '../../platform/chrome-windows';
 import {
   activateMainWindow,
   createTabEnhancementHost,
@@ -28,6 +28,7 @@ export interface TabEnhancementsModuleHost {
   readonly logger: Logger;
   readonly bindings: () => BindingMap;
   readonly language: () => KeyGuideLanguage;
+  readonly status: (message: string) => void;
   readonly themeRoot: (root: HTMLElement) => Cleanup;
   readonly groups: TabGroupManager;
   readonly workspace: WorkspaceModule;
@@ -217,17 +218,13 @@ export function createTabEnhancementsModule(
           hostID: native.id,
           titleFormat: appliedFormat,
           create,
+          logger: ports.logger,
+          status: ports.status,
           isCurrent: current,
         });
       } catch (error) {
-        report(error);
-        if (current()) {
-          alertChromeAction(
-            ports.window,
-            t('tabs.selectionImportTitle', ports.language()),
-            t('tabs.operationFailed', ports.language()),
-          );
-        }
+        ports.logger.debug(`Reading group import failed: ${String(error)}`);
+        if (current()) ports.status(t('tabs.operationFailed', ports.language()));
       }
     };
     const importSelection = host.bind<MainResolvedTargets>(

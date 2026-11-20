@@ -344,22 +344,67 @@ describe('persistent tab groups', () => {
     expect(a.native.open).not.toHaveBeenCalled();
   });
 
-  it('imports only opened views and retains successful earlier imports on failure', async () => {
+  it('groups distinct opened views and continues after a rejected or failed open', async () => {
     const a = host('a');
     const manager = createTabGroupManager(storage());
     manager.registerHost(a.port);
     const first = { document, title: 'Paper' };
     const second = { document: { ...document, key: 'SECOND' }, title: 'Second' };
-    expect(
-      await manager.importDocuments({ name: 'Papers' }, [first, first, second], 'a', () => true),
-    ).toBe(2);
-    const group = manager.view('a', '{title}').groups[0]!;
-    expect(group.entries).toHaveLength(2);
-    a.native.open.mockRejectedValueOnce(new Error('unavailable'));
+    const third = { document: { ...document, key: 'THIRD' }, title: 'Third' };
+    const fourth = { document: { ...document, key: 'FOURTH' }, title: 'Fourth' };
+    const open = a.native.open.getMockImplementation()!;
+    a.native.open
+      .mockImplementationOnce(open)
+      .mockRejectedValueOnce(new Error('unavailable'))
+      .mockResolvedValueOnce(false);
     await expect(
-      manager.importDocuments({ groupID: group.id }, [first], 'a', () => true),
-    ).rejects.toThrow('unavailable');
-    expect(manager.view('a', '{title}').groups[0]?.entries).toHaveLength(2);
+      manager.importDocuments(
+        { name: 'Papers' },
+        [first, first, second, third, fourth],
+        'a',
+        () => true,
+      ),
+    ).resolves.toEqual({ done: 2, unchanged: 1, failed: 2 });
+    expect(manager.view('a', '{title}').groups).toHaveLength(1);
+    expect(manager.view('a', '{title}').groups[0]!.entries).toHaveLength(2);
+    expect(a.native.snapshot().map((tab) => tab.document?.key)).toEqual([
+      document.key,
+      fourth.document.key,
+    ]);
+  });
+
+  it('does not create a reading group if no view opens', async () => {
+    const a = host('a');
+    const store = storage();
+    const manager = createTabGroupManager(store);
+    manager.registerHost(a.port);
+    a.native.open.mockResolvedValueOnce(false);
+    await expect(
+      manager.importDocuments({ name: 'Papers' }, [{ document, title: 'Paper' }], 'a', () => true),
+    ).resolves.toEqual({ done: 0, failed: 1 });
+    expect(store.value()).toBe('');
+    expect(a.native.snapshot()).toEqual([]);
+  });
+
+  it('does not open into another destination if the chosen group has gone away', async () => {
+    const a = host('a');
+    const manager = createTabGroupManager(storage());
+    manager.registerHost(a.port);
+    const removed = manager.createGroup('Papers');
+    const kept = manager.createGroup('Papers');
+    manager.ungroup(removed, 'a');
+    await expect(
+      manager.importDocuments(
+        { groupID: removed },
+        [{ document, title: 'Paper' }],
+        'a',
+        () => true,
+      ),
+    ).resolves.toEqual({ done: 0, unavailable: 1 });
+    expect(manager.view('a', '{title}').groups).toEqual([
+      expect.objectContaining({ id: kept, entries: [] }),
+    ]);
+    expect(a.native.open).not.toHaveBeenCalled();
   });
 
   it('fences delayed imports on cancellation, group close, or host retirement', async () => {
@@ -385,25 +430,74 @@ describe('persistent tab groups', () => {
       else if (cancel === 'close') manager.closeGroup(groupID, 'a');
       else current = false;
       release();
-      expect(await importing).toBe(0);
+      expect(await importing).toEqual({ done: 0, unavailable: 1 });
       expect(a.native.snapshot()).toEqual([]);
     }
   });
 
-  it('closes a newly opened view if saving its membership fails', async () => {
+  it('closes only the uncommitted view if the destination closes during opening', async () => {
+    const a = host('a', [tab('unrelated')]);
+    const manager = createTabGroupManager(storage());
+    manager.registerHost(a.port);
+    const groupID = manager.createGroup('Papers');
+    const { promise: gate, resolve: release } = Promise.withResolvers<void>();
+    const open = a.native.open.getMockImplementation()!;
+    a.native.open.mockImplementationOnce(async (...args) => {
+      const nativeID = await open(...args);
+      await gate;
+      return nativeID;
+    });
+    const importing = manager.importDocuments(
+      { groupID },
+      [
+        { document, title: 'Paper' },
+        { document: { ...document, key: 'ANOTHER' }, title: 'Another' },
+      ],
+      'a',
+      () => true,
+    );
+    expect(a.native.snapshot()).toHaveLength(2);
+    manager.closeGroup(groupID, 'a');
+    release();
+
+    await expect(importing).resolves.toEqual({ done: 0, unavailable: 2 });
+    expect(a.native.snapshot()).toEqual([tab('unrelated')]);
+    expect(a.native.open).toHaveBeenCalledOnce();
+    expect(manager.view('a', '{title}').groups[0]?.entries).toEqual([]);
+  });
+
+  it('closes a newly opened view if its save fails and keeps the other imports', async () => {
     const a = host('a');
+    const store = storage();
+    const write = vi.fn(store.write);
+    write.mockImplementationOnce(store.write).mockImplementationOnce(() => {
+      throw new Error('disk');
+    });
     const manager = createTabGroupManager({
-      ...storage(),
-      write: () => {
-        throw new Error('disk');
-      },
+      ...store,
+      write,
     });
     manager.registerHost(a.port);
+    const second = { ...document, key: 'SECOND' };
+    const third = { ...document, key: 'THIRD' };
     await expect(
-      manager.importDocuments({ name: 'Papers' }, [{ document, title: 'Paper' }], 'a', () => true),
-    ).rejects.toThrow('disk');
-    expect(a.native.snapshot()).toEqual([]);
-    expect(manager.view('a', '{title}').groups).toEqual([]);
+      manager.importDocuments(
+        { name: 'Papers' },
+        [
+          { document, title: 'Paper' },
+          { document: second, title: 'Second' },
+          { document: third, title: 'Third' },
+        ],
+        'a',
+        () => true,
+      ),
+    ).resolves.toEqual({ done: 2, failed: 1 });
+    expect(a.native.snapshot().map((tab) => tab.document?.key)).toEqual([document.key, third.key]);
+    const saved = JSON.parse(store.value());
+    expect(saved.groups).toHaveLength(1);
+    expect(
+      saved.groups[0].members.map((member: { document: TabDocumentRef }) => member.document),
+    ).toEqual([document, third]);
   });
 
   it('does not group or reopen an imported view closed before open returns', async () => {
@@ -422,7 +516,7 @@ describe('persistent tab groups', () => {
         'a',
         () => true,
       ),
-    ).toBe(0);
+    ).toEqual({ done: 0, unavailable: 1 });
     expect(manager.view('a', '{title}').groups).toEqual([]);
     expect(a.native.open).toHaveBeenCalledTimes(1);
   });

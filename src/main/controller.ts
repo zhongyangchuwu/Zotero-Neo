@@ -15,6 +15,7 @@ import type {
   NavigationSurface,
 } from '../navigation/types';
 import type { ItemTargetSet } from '../core/item-target';
+import { t } from '../i18n';
 import { focusDirectionForAction, isActionId, type ActionId } from '../input/actions';
 import {
   MAIN_EXECUTABLE_ACTIONS,
@@ -192,6 +193,8 @@ export class MainWindowController implements MainWindowControllerApi {
           this.#dependencies.preferences.get(LEGACY_TAB_GROUP_STATE_PREFERENCE, ''),
         write: (value) => this.#dependencies.preferences.set(TAB_GROUP_STATE_PREFERENCE, value),
         createID: () => `neo-group-${Zotero.Utilities.randomString(20)}`,
+        onError: (error) =>
+          this.#dependencies.logger.debug(`reading group import: ${String(error)}`),
       });
     }
     return this.#tabGroups;
@@ -260,6 +263,7 @@ export class MainWindowController implements MainWindowControllerApi {
         createCollectionsModule(host, {
           window,
           logger: this.#dependencies.logger,
+          language: () => this.keyGuideLanguage(),
           status: (message) => this.#navigation.status(session, message),
           captureCurrent: () => {
             const generation = session.picker.generation;
@@ -507,6 +511,7 @@ export class MainWindowController implements MainWindowControllerApi {
                 logger: this.#dependencies.logger,
                 bindings: () => this.sessionBindings(session),
                 language: () => this.keyGuideLanguage(),
+                status: (message) => this.#navigation.status(session, message),
                 themeRoot: (root) => session.theme.add(root),
                 groups,
                 workspace,
@@ -1437,7 +1442,7 @@ export class MainWindowController implements MainWindowControllerApi {
       case 'mainOpenPDF': {
         const targets = resolvedTargets ?? NOTE_ITEM_TARGET.resolve(window);
         if (targets.missing || targets.items.length !== 1) {
-          this.#navigation.status(session, '✗ Note item is unavailable');
+          this.#navigation.status(session, t('status.openNoItem', this.keyGuideLanguage()));
           return true;
         }
         this.libraryModule(session)?.openItem(targets.items[0]!, 'note');

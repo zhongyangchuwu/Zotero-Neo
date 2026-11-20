@@ -4,15 +4,18 @@ import { CleanupFailure } from '../../core/cleanup';
 import { ACTION_LABELS } from '../../input/actions';
 import type { KeyGuideLanguage } from '../../input/key-guide-config';
 import { t } from '../../i18n';
+import { batchStatus, type BatchOutcome } from '../../i18n/batch-result';
 import { deleteAnnotation as deleteReaderAnnotation } from '../../operations/delete-annotation';
 import {
   clearAnnotationSelection,
   computeSelectionPosition,
+  readerAnnotationWriteGuard,
   readerOwnerWindow,
   readerSelectionIsFiltered,
   readerSelectionText,
-  validateReaderSelection,
+  selectedAnnotationIDs,
   setAnnotationColorFilter,
+  validateReaderSelection,
 } from '../../toolkit';
 import {
   COLORS,
@@ -88,6 +91,12 @@ interface AnnotationZoteroRuntime {
   };
 }
 
+type RecolorTarget = AnnotationRuntime & {
+  readonly annotationIsExternal?: boolean;
+  isEditable?(): boolean;
+  saveTx(options?: { readonly skipSelect: true }): Promise<unknown>;
+};
+
 function zoteroRuntime(): AnnotationZoteroRuntime {
   return Zotero as unknown as AnnotationZoteroRuntime;
 }
@@ -129,6 +138,47 @@ export function createReaderAnnotationsModule(
             ?.getAnnotations?.()
             .find((item) => item.key === key) ?? null)
         : null;
+    };
+    const statusText = (key: string, duration: number): void =>
+      ports.showStatus(t(key, ports.language()), duration);
+    const selectedForBatch = (result: BatchOutcome): readonly AnnotationRuntime[] => {
+      const keys = new Set<string>();
+      try {
+        const selected = selectedAnnotationIDs(ports.reader);
+        if (selected.length) {
+          // Read primitives from the host array without changing native selection.
+          for (let i = 0; i < selected.length; i++) {
+            const key = selected[i];
+            if (typeof key === 'string' && key) keys.add(key);
+            else result.unavailable = (result.unavailable ?? 0) + 1;
+          }
+        } else {
+          const key = ports.selectedAnnotationKey();
+          if (key) keys.add(key);
+        }
+        if (!keys.size) return [];
+
+        const byKey = new Map<string, AnnotationRuntime>();
+        for (const annotation of ports.itemForReader()?.getAnnotations?.() ?? []) {
+          try {
+            const key = annotation.key;
+            if (keys.has(key)) byKey.set(key, annotation);
+          } catch (error) {
+            ports.debug(`read Reader annotation key failed: ${String(error)}`);
+          }
+        }
+        const targets: AnnotationRuntime[] = [];
+        for (const key of keys) {
+          const target = byKey.get(key);
+          if (target) targets.push(target);
+          else result.unavailable = (result.unavailable ?? 0) + 1;
+        }
+        return targets;
+      } catch (error) {
+        ports.debug(`resolve selected Reader annotations failed: ${String(error)}`);
+        result.failed = keys.size || 1;
+        return [];
+      }
     };
     const resolveAnnotation = async (key: string): Promise<AnnotationRuntime | null> => {
       const attachment = ports.itemForReader();
@@ -201,8 +251,8 @@ export function createReaderAnnotationsModule(
       if (hasDomSelection && (!computed || computed.position === null)) {
         ports.showStatus(
           computed?.failure === 'unsupported-page-span'
-            ? '✗ unsupported page span: select one page or two adjacent pages'
-            : '✗ no complete PDF selection rects',
+            ? t('reader.annotation.unsupportedSpan', ports.language())
+            : t('reader.annotation.invalidGeometry', ports.language()),
           2000,
         );
         return;
@@ -220,7 +270,7 @@ export function createReaderAnnotationsModule(
       if (useNativeParams) ({ text = '', position, sortIndex, pageLabel } = params.annotation);
       else {
         if (!selection || !computed || computed.position === null) {
-          ports.showStatus('✗ no selection', 1500);
+          statusText('reader.selection.none', 1500);
           return;
         }
         text = readerSelectionText(window, selection);
@@ -228,7 +278,7 @@ export function createReaderAnnotationsModule(
       }
       const attachment = ports.itemForReader();
       if (!attachment?.id || attachment.libraryID === undefined) {
-        if (current()) ports.showStatus('✗ no attachment', 2000);
+        if (current()) statusText('reader.annotation.noAttachment', 2000);
         return;
       }
       if (readerSelectionIsFiltered(window)) {
@@ -258,7 +308,7 @@ export function createReaderAnnotationsModule(
         key = item.key;
       } catch (error) {
         ports.debug(`create Reader annotation failed: ${String(error)}`);
-        if (current()) ports.showStatus(`✗ ${String(error).slice(0, 40)}`, 4000);
+        if (current()) statusText('reader.annotation.createFailed', 4000);
         return;
       }
       if (!key || !current()) return;
@@ -268,7 +318,7 @@ export function createReaderAnnotationsModule(
         selection?.removeAllRanges();
         if (!focusComment) ports.setModeNormal();
       }
-      ports.showStatus('✓ annotated', 1200);
+      statusText('reader.annotation.created', 1200);
       if (focusComment && current()) {
         const viewCurrent = captureView(window);
         ports.releaseNativeInput();
@@ -282,7 +332,7 @@ export function createReaderAnnotationsModule(
       const language = ports.language();
       const target = selectedAnnotation();
       if (!target?.eraseTx) {
-        ports.showStatus('✗ select an annotation first', 2000);
+        statusText('reader.annotation.selectFirst', 2000);
         return;
       }
       const owner = readerOwnerWindow(ports.reader);
@@ -327,26 +377,85 @@ export function createReaderAnnotationsModule(
     const recolor = async (window: PdfWindow, color: AnnotationColor): Promise<void> => {
       const current = capturePresentation(window);
       if (!current()) return;
-      const target = selectedAnnotation();
-      if (!target) {
-        ports.showStatus('✗ select an annotation first', 2000);
+      const result: BatchOutcome = { done: 0 };
+      const targets: readonly RecolorTarget[] = selectedForBatch(result);
+      if (!current()) return;
+      let canRecolor: (key: string) => boolean;
+      try {
+        canRecolor = readerAnnotationWriteGuard(ports.reader);
+      } catch (error) {
+        ports.debug(`read Reader annotation permissions failed: ${String(error)}`);
+        result.failed = (result.failed ?? 0) + targets.length;
+        if (current())
+          ports.showStatus(batchStatus('readerAnnotationRecolor', result, ports.language()), 1500);
         return;
       }
-      try {
-        target.annotationColor = color;
-        await target.saveTx();
-        if (current()) ports.showStatus('✓ recolored', 1200);
-      } catch (error) {
-        ports.debug(`recolor Reader annotation failed: ${String(error)}`);
-        if (current()) ports.showStatus(`✗ ${String(error).slice(0, 40)}`, 4000);
+      for (const target of targets) {
+        if (!current()) return;
+        try {
+          if (
+            target.deleted ||
+            target.annotationIsExternal ||
+            target.isEditable?.() === false ||
+            typeof target.saveTx !== 'function' ||
+            !canRecolor(target.key)
+          ) {
+            result.unavailable = (result.unavailable ?? 0) + 1;
+          } else if (target.annotationColor === color) {
+            result.unchanged = (result.unchanged ?? 0) + 1;
+          } else if (current()) {
+            target.annotationColor = color;
+            const saved = await target.saveTx({ skipSelect: true });
+            if (saved === false) result.unchanged = (result.unchanged ?? 0) + 1;
+            else result.done++;
+          }
+        } catch (error) {
+          result.failed = (result.failed ?? 0) + 1;
+          ports.debug(`recolor Reader annotation failed: ${String(error)}`);
+        }
       }
+      if (current())
+        ports.showStatus(batchStatus('readerAnnotationRecolor', result, ports.language()), 1500);
+    };
+    const copyAnnotation = (window: PdfWindow, comment: boolean): void => {
+      const current = capturePresentation(window);
+      if (!current()) return;
+      const result: BatchOutcome = { done: 0 };
+      const parts: string[] = [];
+      for (const annotation of selectedForBatch(result)) {
+        try {
+          if (annotation.deleted) {
+            result.unavailable = (result.unavailable ?? 0) + 1;
+            continue;
+          }
+          const raw = comment ? annotation.annotationComment : annotation.annotationText;
+          const text = raw ? annotationText(raw) : '';
+          if (text) parts.push(text);
+          else result.missingData = (result.missingData ?? 0) + 1;
+        } catch (error) {
+          result.failed = (result.failed ?? 0) + 1;
+          ports.debug(`read Reader annotation for copy failed: ${String(error)}`);
+        }
+      }
+      if (!current()) return;
+      if (parts.length) {
+        try {
+          ports.copyText(parts.join('\n\n'));
+          result.done = parts.length;
+        } catch (error) {
+          result.failed = (result.failed ?? 0) + parts.length;
+          ports.debug(`copy Reader annotations failed: ${String(error)}`);
+        }
+      }
+      if (current())
+        ports.showStatus(batchStatus('readerAnnotationCopy', result, ports.language()), 1500);
     };
     const openComment = async (): Promise<void> => {
       const window = ports.activeWindow();
       if (!window || !capturePresentation(window)()) return;
       const key = ports.selectedAnnotationKey();
       if (!key) {
-        ports.showStatus('✗ select an annotation first', 2000);
+        statusText('reader.annotation.selectFirst', 2000);
         return;
       }
       const viewCurrent = captureView(window);
@@ -399,18 +508,9 @@ export function createReaderAnnotationsModule(
           void highlight(window, ports.defaultHighlightColor(), true);
           return;
         case 'yankAnnotation':
-        case 'yankAnnotationComment': {
-          const annotation = selectedAnnotation();
-          const comment = action === 'yankAnnotationComment';
-          const text = comment ? annotation?.annotationComment : annotation?.annotationText;
-          if (!text)
-            ports.showStatus(
-              comment ? '✗ annotation has no comment' : '✗ annotation has no text',
-              2000,
-            );
-          else ports.copyText(annotationText(text));
+        case 'yankAnnotationComment':
+          copyAnnotation(window, action === 'yankAnnotationComment');
           return;
-        }
         case 'filterYellow':
         case 'filterRed':
         case 'filterGreen':
@@ -431,7 +531,10 @@ export function createReaderAnnotationsModule(
                       : null;
           setAnnotationColorFilter(ports.reader, color ? [color] : []);
           filter = color;
-          ports.showStatus(color ? '✓ filter set' : '✓ filter cleared', 1200);
+          statusText(
+            color ? 'reader.annotation.filterSet' : 'reader.annotation.filterCleared',
+            1200,
+          );
           return;
         }
       }

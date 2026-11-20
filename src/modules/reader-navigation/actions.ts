@@ -1,8 +1,17 @@
 import type { ModuleHost, ModuleScope } from '../../core/module-host';
+import { t } from '../../i18n';
 import type { ActionId } from '../../input/actions';
-import type { NavigationExecution, NavigationIntent } from '../../navigation/types';
+import type {
+  NavigationExecution,
+  NavigationIntent,
+  NavigationOutcome,
+} from '../../navigation/types';
 import type { ItemRuntime, PdfWindow, ReaderRuntime } from '../../reader/types';
-import { selectReaderAnnotation, type ReaderNativeNavigation } from '../../toolkit';
+import {
+  readerLoadedAnnotationIDs,
+  selectReaderAnnotation,
+  type ReaderNativeNavigation,
+} from '../../toolkit';
 import type { ReaderNavigation } from './navigation';
 import type { ReaderMarks } from './marks';
 import type { ReaderNativeSidebar } from './native-sidebar';
@@ -52,6 +61,7 @@ export function bindReaderNavigationActions(
   sidebar: ReaderNativeSidebar,
   captions: ReaderCaptionTargets,
   ports: ReaderNavigationActionPorts,
+  language: () => string,
 ): (action: ReaderNavigationAction, window: PdfWindow, count: number) => boolean {
   const handlers = new Map<ReaderNavigationAction, (request: Request) => boolean>();
   for (const action of READER_NAVIGATION_ACTIONS) {
@@ -61,10 +71,11 @@ export function bindReaderNavigationActions(
         const number = Math.max(1, count || 1);
         const intent = (
           readerPath: NonNullable<NavigationIntent['context']>['readerPath'],
+          isCurrent = () => scope.isCurrent(),
         ): NavigationIntent => ({
           cause: { kind: 'action', action },
           surface: 'reader',
-          context: { readerPath, isCurrent: () => scope.isCurrent() },
+          context: { readerPath, isCurrent },
         });
         const motion = (scroll: () => boolean): void => {
           ports.executeNavigation(window, intent('scroll'), () => scroll(), {
@@ -73,11 +84,15 @@ export function bindReaderNavigationActions(
           });
         };
         switch (action) {
-          case 'toggleReadingMode':
-            void navigation
-              .toggleReadingMode(window)
-              .catch((error: unknown) => ports.showStatus(String(error), 3000));
+          case 'toggleReadingMode': {
+            const current = ports.invocationCurrent(window);
+            void navigation.toggleReadingMode(window).catch((error: unknown) => {
+              ports.debug(`Reader reading mode failed: ${String(error)}`);
+              if (scope.isCurrent() && current())
+                ports.showStatus(t('reader.navigation.readingModeFailed', language()), 3000);
+            });
             break;
+          }
           case 'scrollDown':
           case 'scrollUp':
           case 'scrollLeft':
@@ -191,45 +206,110 @@ export function bindReaderNavigationActions(
             break;
           case 'prevAnnotation':
           case 'nextAnnotation': {
-            let annotations =
-              ports
-                .itemForReader()
-                ?.getAnnotations?.()
-                .filter((annotation) =>
-                  ['highlight', 'underline', 'note', 'text'].includes(
-                    annotation.annotationType ?? '',
-                  ),
-                ) ?? [];
+            const invocationCurrent = ports.invocationCurrent(window);
+            const current = () => scope.isCurrent() && invocationCurrent();
+            if (!current()) break;
             const color = ports.filterColor();
-            if (color)
-              annotations = annotations.filter(
-                (annotation) => annotation.annotationColor === color,
-              );
-            annotations = [...annotations].sort((left, right) =>
-              (left.annotationSortIndex ?? '').localeCompare(right.annotationSortIndex ?? ''),
-            );
-            if (!annotations.length) {
-              ports.showStatus('✗ no annotations', 2000);
+            const annotations: { key: string; sortIndex: string }[] = [];
+            let skipped = 0;
+            try {
+              const loaded = readerLoadedAnnotationIDs(ports.reader);
+              for (const annotation of ports.itemForReader()?.getAnnotations?.() ?? []) {
+                try {
+                  const type = annotation.annotationType;
+                  if (
+                    type !== 'highlight' &&
+                    type !== 'underline' &&
+                    type !== 'note' &&
+                    type !== 'text'
+                  )
+                    continue;
+                  if (color && annotation.annotationColor !== color) continue;
+                  const { key, annotationSortIndex: sortIndex } = annotation;
+                  if (
+                    typeof key !== 'string' ||
+                    !key ||
+                    annotation.deleted ||
+                    (loaded && !loaded.has(key)) ||
+                    (sortIndex != null && typeof sortIndex !== 'string')
+                  ) {
+                    skipped++;
+                    continue;
+                  }
+                  annotations.push({ key, sortIndex: sortIndex ?? '' });
+                } catch (error) {
+                  skipped++;
+                  ports.debug(
+                    `read Reader annotation navigation candidate failed: ${String(error)}`,
+                  );
+                }
+              }
+            } catch (error) {
+              ports.debug(`read Reader annotations for navigation failed: ${String(error)}`);
+              if (current())
+                ports.showStatus(t('reader.annotation.navigationUnavailable', language()), 2000);
               break;
             }
+            if (!current()) break;
+            const locale = language();
+            const skipSuffix = skipped
+              ? t('reader.annotation.navigationSkipped', locale).replace('{count}', String(skipped))
+              : '';
+            if (!annotations.length) {
+              ports.showStatus(t('reader.annotation.navigationEmpty', locale) + skipSuffix, 2000);
+              break;
+            }
+            annotations.sort((left, right) => left.sortIndex.localeCompare(right.sortIndex));
             const key = ports.selectedAnnotationKey();
-            const current = key
+            const previous = key
               ? annotations.findIndex((annotation) => annotation.key === key)
               : -1;
             const direction = action === 'prevAnnotation' ? -1 : 1;
             const index =
-              current < 0
+              previous < 0
                 ? direction > 0
                   ? 0
                   : annotations.length - 1
-                : (current + direction + annotations.length) % annotations.length;
+                : (previous + direction + annotations.length) % annotations.length;
             const target = annotations[index];
-            if (!target) break;
-            ports.rememberAnnotation(target.key);
-            ports.executeNavigation(window, intent('annotation'), (native) =>
-              selectReaderAnnotation(ports.reader, target.key, native),
-            );
-            ports.showStatus(`→ ann ${index + 1}/${annotations.length}`, 1500);
+            if (!target || !current()) break;
+            let execution: NavigationExecution | null = null;
+            const finish = (outcome: NavigationOutcome): void => {
+              if (outcome.kind === 'failed')
+                ports.debug(`Reader annotation navigation failed: ${String(outcome.error)}`);
+              if (
+                !current() ||
+                (execution && !execution.isCurrent()) ||
+                outcome.kind === 'stale' ||
+                outcome.kind === 'cancelled'
+              )
+                return;
+              if (outcome.kind === 'completed') ports.rememberAnnotation(target.key);
+              else if (outcome.kind !== 'unchanged' || target.key !== key) {
+                ports.showStatus(t('reader.annotation.navigationUnavailable', language()), 2000);
+                return;
+              }
+              ports.showStatus(
+                t('reader.annotation.navigationPosition', locale)
+                  .replace('{index}', String(index + 1))
+                  .replace('{total}', String(annotations.length)) + skipSuffix,
+                1500,
+              );
+            };
+            try {
+              execution = ports.executeNavigation(window, intent('annotation', current), (native) =>
+                selectReaderAnnotation(ports.reader, target.key, native),
+              );
+            } catch (error) {
+              finish({ kind: 'failed', error });
+              break;
+            }
+            if (!execution) finish({ kind: 'unavailable' });
+            else if (execution.pending)
+              void execution.result.then(finish, (error: unknown) =>
+                finish({ kind: 'failed', error }),
+              );
+            else finish(execution.result);
             break;
           }
           case 'prevHeading':

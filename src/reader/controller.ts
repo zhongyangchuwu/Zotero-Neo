@@ -102,6 +102,7 @@ import {
   readerRegionPreview,
   readerSelectionIsFiltered,
   isReaderTranslationControl,
+  selectedAnnotationIDs,
 } from '../toolkit/reader';
 import {
   mainItemOpening,
@@ -642,7 +643,11 @@ export class ReaderSession {
     );
     try {
       this.#library = this.#modules.activate('library', () =>
-        createReaderLibraryModule(this.#modules.host, (message) => this.showStatus(message)),
+        createReaderLibraryModule(this.#modules.host, {
+          status: (message) => this.showStatus(message),
+          language: () => this.keyGuideLanguage(),
+          logger: dependencies.controller.dependencies.logger,
+        }),
       );
       this.#hints = this.#modules.activate('reader-hints', () =>
         createReaderHintsModule(this.#modules.host, {
@@ -689,7 +694,7 @@ export class ReaderSession {
             this.#markJumpRevision += 1;
           },
           themeRoot: (root) => this.themeRoot(root),
-          copyText: (text) => this.copyText(text),
+          copyText: copyToClipboard,
           showStatus: (message, duration) => this.showStatus(message, duration),
           language: () => this.keyGuideLanguage(),
           nativeEditableFocused: () => this.nativeEditableFocused(),
@@ -720,7 +725,13 @@ export class ReaderSession {
             )
               return;
             pdfWindow.focus();
-            this.showStatus(saved ? '✓ saved' : '✗ save failed', saved ? 1200 : 2500);
+            this.showStatus(
+              t(
+                saved ? 'reader.annotation.commentSaved' : 'reader.annotation.commentSaveFailed',
+                this.keyGuideLanguage(),
+              ),
+              saved ? 1200 : 2500,
+            );
           },
           debug: (message) => dependencies.controller.dependencies.logger.debug(message),
         }),
@@ -2151,9 +2162,11 @@ export class ReaderSession {
         else this.#hints?.followLink(pdfWindow);
         break;
       case 'recolorBlue': {
+        const { reader } = this.#dependencies;
         if (
           this.#annotations &&
-          this.#annotationNavigation.selectedAnnotationKey(this.#dependencies.reader)
+          (selectedAnnotationIDs(reader).length > 0 ||
+            this.#annotationNavigation.selectedAnnotationKey(reader))
         ) {
           void this.#annotations.recolor(pdfWindow, COLORS.blue);
           break;
@@ -2477,11 +2490,16 @@ export class ReaderSession {
   }
 
   private copyText(text: string): void {
+    const language = this.keyGuideLanguage();
     try {
       copyToClipboard(text);
-      this.showStatus(`✓ copied ${text.length} chars`, 1200);
+      this.showStatus(
+        t('reader.clipboard.copied', language).replace('{count}', String(text.length)),
+        1200,
+      );
     } catch (error) {
       this.#dependencies.controller.dependencies.logger.debug(`copy failed: ${String(error)}`);
+      this.showStatus(t('reader.clipboard.failed', language));
     }
   }
 

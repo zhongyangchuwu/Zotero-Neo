@@ -2063,9 +2063,7 @@ describe('picker admitted confirmation safety', () => {
       expect(mutations).toEqual([]);
       expect(session.picker.open).toBe(true);
       expect(!pickerModel(session).status).toBe(false);
-      expect(pickerModel(session).status).toContain('Alpha');
-      expect(pickerModel(session).status).toContain('native save failed');
-      expect(pickerModel(session).status).not.toContain('Gamma');
+      expect(pickerModel(session).status).toBe('Could not complete the action for “Alpha”');
       expect(diagnostic).toHaveBeenCalledWith(expect.stringContaining('native save failed'));
       picker.onKeyDown(pickerKey('Enter', session.picker.results), window, session);
       await session.picker.queue;
@@ -2405,7 +2403,7 @@ describe('picker committed query and explicit sources', () => {
     await operation;
     expect(session.picker.open).toBe(true);
     expect(pickerModel(session).sourceDisabled).toBe(false);
-    expect(pickerModel(session).status).toContain('write failed');
+    expect(pickerModel(session).status).toBe('Could not complete the action for “Broader note”');
     expect(confirm).toHaveBeenCalledOnce();
     picker.close(session);
     expect(onClose).toHaveBeenCalledOnce();
@@ -2430,7 +2428,7 @@ describe('picker committed query and explicit sources', () => {
     await opening;
     expect(session.picker.open).toBe(true);
     expect(!pickerModel(session).status).toBe(false);
-    expect(pickerModel(session).status).toContain('library unavailable');
+    expect(pickerModel(session).status).toBe('Could not load results');
     expect(diagnostic).toHaveBeenCalledWith(expect.stringContaining('library unavailable'));
     expect(load).toHaveBeenCalledOnce();
     expect(onClose).not.toHaveBeenCalled();
@@ -2595,7 +2593,7 @@ describe('bounded query and continuous confirmation', () => {
     expect(session.picker.open).toBe(true);
     expect(input.value).toBe('paper');
     expect(session.picker.filtered).toEqual(items);
-    expect(pickerModel(session).status).toContain('save failed');
+    expect(pickerModel(session).status).toBe('Could not complete the action for “Paper”');
     picker.onKeyDown(pickerKey('Enter', input), window, session);
     await session.picker.queue;
     expect(confirm).toHaveBeenCalledTimes(2);
@@ -3016,8 +3014,8 @@ describe('picker exact focus handoff', () => {
 
 describe('picker localized async feedback', () => {
   it.each([
-    ['en', 'Loading…', 'Results could not be loaded.', 'Unable to load results: '],
-    ['zh-CN', '正在加载…', '无法加载结果。', '无法加载结果：'],
+    ['en', 'Loading…', 'Results could not be loaded.', 'Could not load results'],
+    ['zh-CN', '正在加载…', '无法加载结果。', '无法加载结果'],
   ] as const)(
     'distinguishes pending, failed and confirmed work in %s without implicit retry',
     async (language, loading, unavailable, failure) => {
@@ -3054,8 +3052,7 @@ describe('picker localized async feedback', () => {
       await opening;
       expect(pickerModel(session).loading).toBe(false);
       expect(pickerModel(session).empty).toBe(unavailable);
-      expect(pickerModel(session).status.startsWith(failure)).toBe(true);
-      expect(pickerModel(session).status).toContain('library unavailable');
+      expect(pickerModel(session).status).toBe(failure);
       expect(pickerModel(session).count).toBe('—');
       const input = session.picker.input as HTMLInputElement & EmittingElement;
       picker.onKeyDown(pickerKey('Enter', input), window, session);
@@ -3077,10 +3074,11 @@ describe('picker localized async feedback', () => {
       expect(session.picker.open).toBe(true);
       saving.reject(new Error('save unavailable'));
       await admitted;
-      expect(pickerModel(session).status).toContain(
-        language === 'zh-CN' ? '无法确认“Paper”：' : 'Unable to confirm “Paper”: ',
+      expect(pickerModel(session).status).toBe(
+        language === 'zh-CN'
+          ? '无法完成对“Paper”的操作'
+          : 'Could not complete the action for “Paper”',
       );
-      expect(pickerModel(session).status).toContain('save unavailable');
       expect(confirm).toHaveBeenCalledOnce();
       picker.close(session);
     },

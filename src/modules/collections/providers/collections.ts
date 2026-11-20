@@ -6,7 +6,7 @@ import type { PickerProvider } from '../../../main/picker/types';
 export interface CollectionCandidateOptions {
   readonly title?: string;
   readonly libraryName?: string;
-  readonly items?: readonly Zotero.Item[];
+  readonly memberships?: readonly (readonly number[])[];
   readonly present?: boolean;
   readonly includeCreate?: boolean;
   readonly includeRoot?: boolean;
@@ -24,18 +24,19 @@ export function createCollectionCandidateProvider(
     placeholder: 'Search collection names or full paths…',
     async load() {
       const coverage = new Map<number, number>();
-      for (const item of options.items ?? []) {
-        for (const id of new Set(item.getCollections()))
-          coverage.set(id, (coverage.get(id) ?? 0) + 1);
+      const itemCount = options.memberships?.length;
+      for (const ids of options.memberships ?? []) {
+        for (const id of new Set(ids)) coverage.set(id, (coverage.get(id) ?? 0) + 1);
       }
       const candidates = mainCollectionRefs(libraryID)
         .filter((collection) => !options.excludeIDs?.has(collection.id))
         .filter((collection) => options.present !== false || coverage.has(collection.id))
         .map((collection): PickerItem => {
           const count = coverage.get(collection.id) ?? 0;
-          const membership = options.items
-            ? `${count}/${options.items.length} direct${count === options.items.length ? ' · Already assigned' : ''}`
-            : '';
+          const membership =
+            itemCount !== undefined
+              ? `${count}/${itemCount} direct${count === itemCount ? ' · Already assigned' : ''}`
+              : '';
           return {
             id: collection.id,
             title: collection.name,
@@ -69,7 +70,7 @@ export function createCollectionCandidateProvider(
           title: 'New collection…',
           search: '',
           collectionCandidate: 'create',
-          preview: `Choose a parent, name the collection, then confirm creating and adding ${options.items?.length ?? 0} items.`,
+          preview: `Choose a parent, name the collection, then confirm creating and adding ${itemCount ?? 0} items.`,
         });
       return candidates;
     },

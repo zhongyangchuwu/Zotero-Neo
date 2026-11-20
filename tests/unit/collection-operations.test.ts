@@ -128,13 +128,6 @@ function host() {
         return isNew ? this.id : true;
       },
     );
-    addItems = vi.fn(async (ids: number[]) => {
-      for (const id of ids) {
-        const item = items.get(id)!;
-        item.addToCollection(this.id);
-        await item.save();
-      }
-    });
     reload = vi.fn(async () => {
       const stored = storedCollections.get(this.id);
       if (stored) Object.assign(this, stored);
@@ -148,6 +141,7 @@ function host() {
       libraryID,
       deleted: false,
       isTopLevelItem: () => true,
+      isEditable: vi.fn(() => true),
       getCollections: (includeTrashed = false) => {
         if (includeTrashed) return [...memberships];
         return [...memberships].filter((collectionID) => {
@@ -158,7 +152,7 @@ function host() {
       },
       addToCollection: vi.fn((collectionID: number) => memberships.add(collectionID)),
       removeFromCollection: vi.fn((collectionID: number) => memberships.delete(collectionID)),
-      save: vi.fn(async () => {
+      save: vi.fn(async (): Promise<boolean | void> => {
         const previous = storedItems.get(id) ?? [];
         const removed = previous.filter((collectionID) => !memberships.has(collectionID));
         const added = [...memberships].filter((collectionID) => !previous.includes(collectionID));
@@ -250,46 +244,60 @@ describe('atomic collection item operations', () => {
     h.addCollection(30);
     const a = h.addItem(1, [10, 30]);
     const b = h.addItem(2, [10, 20]);
-    await expect(moveCollectionItems(targets(a, b, a), 10, 20)).resolves.toBe(2);
+    await expect(moveCollectionItems(targets(a, b, a), 10, 20)).resolves.toEqual({ done: 2 });
     expect(a.getCollections().sort()).toEqual([20, 30]);
     expect(b.getCollections()).toEqual([20]);
     expect(a.save).toHaveBeenCalledTimes(1);
-    expect(h.transaction).toHaveBeenCalledTimes(1);
+    expect(h.transaction).toHaveBeenCalledTimes(2);
   });
 
-  it('refuses recursive-only or mixed source members without partial mutation', async () => {
+  it('moves direct members and skips recursive-only or outside-library targets', async () => {
     const h = host();
     h.addCollection(10);
     h.addCollection(20);
     h.addCollection(11, 'Child', 10);
     const direct = h.addItem(1, [10]);
     const recursive = h.addItem(2, [11]);
-    await expect(moveCollectionItems(targets(direct, recursive), 10, 20)).rejects.toThrow(
-      'direct member',
-    );
-    expect(direct.getCollections()).toEqual([10]);
+    const otherLibrary = h.addItem(3, [], 2);
+    await expect(
+      moveCollectionItems(targets(direct, recursive, otherLibrary), 10, 20),
+    ).resolves.toEqual({ done: 1, missingData: 1, unavailable: 1 });
+    expect(direct.getCollections()).toEqual([20]);
     expect(recursive.getCollections()).toEqual([11]);
-    expect(direct.save).not.toHaveBeenCalled();
+    expect(recursive.save).not.toHaveBeenCalled();
+    expect(otherLibrary.save).not.toHaveBeenCalled();
+    await expect(moveCollectionItems(targets(recursive), 10, 20)).resolves.toEqual({
+      done: 0,
+      missingData: 1,
+    });
   });
 
-  it('restores memberships and keeps inverse caches correct after rollback then an unrelated commit', async () => {
+  it('rolls back both legs of one failed move and commits the remaining item with correct inverse caches', async () => {
     const h = host();
     const source = h.addCollection(10);
     const target = h.addCollection(20);
     h.addCollection(30);
     const a = h.addItem(1, [10, 30]);
     const b = h.addItem(2, [10]);
-    b.save.mockRejectedValueOnce(new Error('disk full'));
-    await expect(moveCollectionItems(targets(a, b), 10, 20)).rejects.toThrow('disk full');
+    const save = a.save.getMockImplementation()!;
+    a.save.mockImplementationOnce(async () => {
+      await save();
+      throw new Error('disk full');
+    });
+    await expect(moveCollectionItems(targets(a, b), 10, 20)).resolves.toEqual({
+      done: 1,
+      failed: 1,
+    });
     expect(a.getCollections().sort()).toEqual([10, 30]);
-    expect(b.getCollections()).toEqual([10]);
+    expect(b.getCollections()).toEqual([20]);
     expect(h.persistedMemberships(1)).toEqual([10, 30]);
+    expect(h.persistedMemberships(2)).toEqual([20]);
     expect(a.reload).toHaveBeenCalled();
-    expect(source.getChildItems(true)).toEqual([1, 2]);
-    expect(target.getChildItems(true)).toEqual([]);
+    expect(source.getChildItems(true)).toEqual([1]);
+    expect(target.getChildItems(true)).toEqual([2]);
     await h.db.executeTransaction(async () => undefined);
-    expect(source.getChildItems(true)).toEqual([1, 2]);
-    expect(target.getChildItems(true)).toEqual([]);
+    expect(source.getChildItems(true)).toEqual([1]);
+    expect(target.getChildItems(true)).toEqual([2]);
   });
 
   it.each(['membership', 'create'] as const)(
@@ -300,9 +308,7 @@ describe('atomic collection item operations', () => {
       h.addCollection(20);
       h.addCollection(30);
       const first = h.addItem(1, [10]);
-      const last = h.addItem(2, [10]);
-      const failure = new Error('first operation failed');
-      last.save.mockRejectedValueOnce(failure);
+      first.save.mockRejectedValueOnce(new Error('first operation failed'));
       const reloadStarted = Promise.withResolvers<void>();
       const releaseReload = Promise.withResolvers<void>();
       const reload = first.reload.getMockImplementation()!;
@@ -311,11 +317,10 @@ describe('atomic collection item operations', () => {
         await releaseReload.promise;
         await reload();
       });
-      const failed = (
+      const failed =
         mode === 'create'
-          ? createCollectionAndAdd(targets(first, last), 1, 'Failed child', 10)
-          : moveCollectionItems(targets(first, last), 10, 20)
-      ).catch((error: unknown) => error);
+          ? createCollectionAndAdd(targets(first), 1, 'Failed child', 10)
+          : moveCollectionItems(targets(first), 10, 20);
       await reloadStarted.promise;
       const saveStarted = Promise.withResolvers<void>();
       const releaseSave = Promise.withResolvers<void>();
@@ -330,11 +335,11 @@ describe('atomic collection item operations', () => {
       // the second mutation reaches its pre-SQL save gate before that barrier.
       await Promise.race([saveStarted.promise, h.db.executeTransaction(async () => undefined)]);
       releaseReload.resolve();
-      expect(await failed).toBe(failure);
+      expect(await failed).toEqual({ done: 0, failed: 1 });
       releaseSave.resolve();
       const changed = await later;
       expect({ changed, durable: h.persistedMemberships(1) }).toEqual({
-        changed: 1,
+        changed: { done: 1 },
         durable: [10, 30],
       });
       expect(first.getCollections()).toEqual([10, 30]);
@@ -359,19 +364,39 @@ describe('atomic collection item operations', () => {
     expect(b.save).not.toHaveBeenCalled();
   });
 
+  it('does not count a native save that declined to write', async () => {
+    const h = host();
+    const target = h.addCollection(10);
+    const item = h.addItem(1);
+    item.save.mockResolvedValueOnce(false);
+    await expect(setCollectionMembership(targets(item), 10, true)).resolves.toEqual({
+      done: 0,
+      failed: 1,
+    });
+    expect(item.getCollections()).toEqual([]);
+    expect(h.persistedMemberships(item.id)).toEqual([]);
+    expect(target.getChildItems(true)).toEqual([]);
+  });
+
   it('adds only uncovered targets and removes only the assigned union', async () => {
     const h = host();
     h.addCollection(10);
     const a = h.addItem(1, [10]);
     const b = h.addItem(2);
-    await expect(setCollectionMembership(targets(a, b), 10, true)).resolves.toBe(1);
+    await expect(setCollectionMembership(targets(a, b), 10, true)).resolves.toEqual({
+      done: 1,
+      unchanged: 1,
+    });
     expect(a.save).not.toHaveBeenCalled();
     expect(b.getCollections()).toEqual([10]);
-    await expect(setCollectionMembership(targets(a, b), 10, false)).resolves.toBe(2);
-    await expect(setCollectionMembership(targets(a, b), 10, false)).resolves.toBe(0);
+    await expect(setCollectionMembership(targets(a, b), 10, false)).resolves.toEqual({ done: 2 });
+    await expect(setCollectionMembership(targets(a, b), 10, false)).resolves.toEqual({
+      done: 0,
+      unchanged: 2,
+    });
   });
 
-  it('rejects stale item objects, readonly targets and cross-library movement', async () => {
+  it('skips stale and unwritable items, but rejects invalid collection scopes', async () => {
     const h = host();
     h.addCollection(10);
     h.addCollection(20, 'Other', false, 2);
@@ -380,31 +405,45 @@ describe('atomic collection item operations', () => {
     h.libraries.get(1)!.editable = false;
     await expect(setCollectionMembership(targets(a), 10, false)).rejects.toThrow('read-only');
     h.libraries.get(1)!.editable = true;
-    h.addItem(1, [10]);
-    await expect(setCollectionMembership(targets(a), 10, false)).rejects.toThrow('unavailable');
+    const replacement = h.addItem(1, [10]);
+    const readOnly = h.addItem(2, [10]);
+    readOnly.isEditable.mockReturnValue(false);
+    await expect(setCollectionMembership(targets(a, readOnly), 10, false)).resolves.toEqual({
+      done: 0,
+      unavailable: 2,
+    });
+    const covered = h.addItem(3, [10]);
+    await expect(
+      setCollectionMembership(targets(a, readOnly, covered), 10, false),
+    ).resolves.toEqual({
+      done: 1,
+      unavailable: 2,
+    });
     expect(a.save).not.toHaveBeenCalled();
+    expect(replacement.getCollections()).toEqual([10]);
+    expect(readOnly.getCollections()).toEqual([10]);
+    expect(covered.getCollections()).toEqual([]);
   });
 
   it.each(['set', 'move'] as const)(
-    'rolls back %s when the final save replaces an earlier target',
+    'does not write a later %s target whose identity changed during a prior save',
     async (mode) => {
       const h = host();
       h.addCollection(10);
       h.addCollection(20);
-      // In set mode the first item is already covered and is never saved.
-      const first = h.addItem(1, mode === 'set' ? [20] : [10]);
+      const first = h.addItem(1, mode === 'set' ? [] : [10]);
       const last = h.addItem(2, mode === 'set' ? [] : [10]);
-      const saveLast = last.save.getMockImplementation()!;
-      last.save.mockImplementationOnce(async () => {
-        await saveLast();
-        h.items.set(first.id, { ...first });
+      const saveFirst = first.save.getMockImplementation()!;
+      first.save.mockImplementationOnce(async () => {
+        await saveFirst();
+        h.items.set(last.id, { ...last });
       });
       const operation =
         mode === 'set'
           ? setCollectionMembership(targets(first, last), 20, true)
           : moveCollectionItems(targets(first, last), 10, 20);
-      await expect(operation).rejects.toThrow('Item target changed');
-      expect(first.getCollections()).toEqual(mode === 'set' ? [20] : [10]);
+      await expect(operation).resolves.toEqual({ done: 1, unavailable: 1 });
+      expect(first.getCollections()).toEqual([20]);
       expect(last.getCollections()).toEqual(mode === 'set' ? [] : [10]);
       expect(h.persistedMemberships(last.id)).toEqual(mode === 'set' ? [] : [10]);
     },
@@ -416,7 +455,9 @@ describe('collection structure operations', () => {
     const h = host();
     h.addCollection(10);
     const a = h.addItem(1, [10]);
-    const id = await createCollectionAndAdd(targets(a), 1, '  New child  ', 10);
+    const result = await createCollectionAndAdd(targets(a), 1, '  New child  ', 10);
+    expect(result).toEqual({ done: 1, collectionID: expect.any(Number) });
+    const id = result.collectionID!;
     expect(h.collections.get(id)).toMatchObject({ name: 'New child', parentID: 10 });
     expect(h.collections.get(id)!.save).toHaveBeenCalledWith({ skipSelect: true });
     expect(a.getCollections()).toEqual([10, id]);
@@ -435,7 +476,9 @@ describe('collection structure operations', () => {
         if (mode === 'throw') throw failure;
         return Promise.reject(failure);
       });
-      const createdID = await createCollectionAndAdd(targets(item), 1, 'Committed child', 10);
+      const result = await createCollectionAndAdd(targets(item), 1, 'Committed child', 10);
+      expect(result).toEqual({ done: 1, collectionID: expect.any(Number) });
+      const createdID = result.collectionID!;
       expect(report).toHaveBeenCalledWith(
         expect.any(logging.ZoteroLogger),
         'Collection SQL committed; native callback failed',
@@ -460,7 +503,7 @@ describe('collection structure operations', () => {
     },
   );
 
-  it('does not report a successful receipt or rollback SQL when an owned commit callback fails', async () => {
+  it('reports durable SQL with a cache warning when an owned commit callback fails', async () => {
     const h = host();
     h.addCollection(10);
     const item = h.addItem(1);
@@ -473,7 +516,10 @@ describe('collection structure operations', () => {
       await save();
     });
     const report = vi.spyOn(logging, 'reportDiagnosticError').mockImplementation(() => undefined);
-    await expect(setCollectionMembership(targets(item), 10, true)).rejects.toBe(failure);
+    await expect(setCollectionMembership(targets(item), 10, true)).resolves.toEqual({
+      done: 1,
+      cacheWarning: true,
+    });
     expect(h.persistedMemberships(1)).toEqual([10]);
     expect(item.getCollections()).toEqual([10]);
     expect(item.reload).not.toHaveBeenCalled();
@@ -504,7 +550,10 @@ describe('collection structure operations', () => {
       await save();
     });
     const report = vi.spyOn(logging, 'reportDiagnosticError').mockImplementation(() => undefined);
-    await expect(setCollectionMembership(targets(item), 10, true)).rejects.toBe(foreignFailure);
+    await expect(setCollectionMembership(targets(item), 10, true)).resolves.toEqual({
+      done: 1,
+      cacheWarning: true,
+    });
     expect(h.persistedMemberships(1)).toEqual([10]);
     expect(item.reload).not.toHaveBeenCalled();
     expect(report).toHaveBeenCalledWith(
@@ -522,48 +571,77 @@ describe('collection structure operations', () => {
     expect(h.collections.get(10)!.getChildItems(true)).toEqual([]);
   });
 
-  it('reloads dangling memberships after native rollback unloads the newly created collection', async () => {
+  it('rolls back a failed creation attempt, then creates one collection for writable assignments', async () => {
     const h = host();
-    h.addCollection(10);
-    const a = h.addItem(1, [10]);
-    const b = h.addItem(2);
-    const failure = new Error('assignment failed');
-    b.save.mockRejectedValueOnce(failure);
-    await expect(createCollectionAndAdd(targets(a, b), 1, 'New', 10)).rejects.toBe(failure);
-    expect(h.persistedCollectionIDs()).toEqual([10]);
-    expect([...h.collections.keys()]).toEqual([10]);
-    expect(a.getCollections()).toEqual([10]);
-    expect(b.getCollections()).toEqual([]);
-    expect(h.persistedMemberships(1)).toEqual([10]);
+    const parent = h.addCollection(10);
+    const first = h.addItem(1, [10]);
+    const second = h.addItem(2);
+    const otherLibrary = h.addItem(3, [], 2);
+    const save = first.save.getMockImplementation()!;
+    first.save.mockImplementationOnce(async () => {
+      await save();
+      throw new Error('assignment failed');
+    });
+    const result = await createCollectionAndAdd(targets(first, otherLibrary, second), 1, 'New', 10);
+    expect(result).toEqual({
+      done: 1,
+      collectionID: expect.any(Number),
+      failed: 1,
+      unavailable: 1,
+    });
+    const id = result.collectionID!;
+    expect(h.persistedCollectionIDs()).toEqual([10, id]);
+    expect([...h.collections.keys()]).toEqual([10, id]);
+    expect(first.getCollections()).toEqual([10]);
+    expect(h.persistedMemberships(first.id)).toEqual([10]);
+    expect(second.getCollections()).toEqual([id]);
+    expect(h.persistedMemberships(second.id)).toEqual([id]);
+    expect(otherLibrary.save).not.toHaveBeenCalled();
     await h.db.executeTransaction(async () => undefined);
-    expect(h.collections.get(10)!.getChildCollections(true)).toEqual([]);
-    expect(h.collections.get(10)!.getChildItems(true)).toEqual([1]);
+    expect(parent.getChildCollections(true)).toEqual([id]);
+    expect(parent.getChildItems(true)).toEqual([1]);
+    expect(h.collections.get(id)!.getChildItems(true)).toEqual([2]);
   });
 
-  it('attempts every rollback reload and library refresh while preserving all recovery failures', async () => {
+  it('leaves no orphan if no item can be assigned', async () => {
     const h = host();
     const first = h.addItem(1);
-    const last = h.addItem(2);
-    const failure = new Error('assignment failed');
+    const readOnly = h.addItem(2);
+    readOnly.isEditable.mockReturnValue(false);
+    first.save.mockRejectedValueOnce(new Error('assignment failed'));
+    await expect(createCollectionAndAdd(targets(first, readOnly), 1, 'New')).resolves.toEqual({
+      done: 0,
+      unavailable: 1,
+      failed: 1,
+    });
+    expect(first.getCollections()).toEqual([]);
+    expect(readOnly.save).not.toHaveBeenCalled();
+    expect(h.libraries.get(1)!.updateCollections).toHaveBeenCalledTimes(1);
+    expect(h.persistedCollectionIDs()).toEqual([]);
+  });
+
+  it('attempts library refresh even when an item cannot be reloaded after rollback', async () => {
+    const h = host();
+    const first = h.addItem(1);
+    first.save.mockRejectedValueOnce(new Error('assignment failed'));
     const recoveryFailure = new Error('item reload failed');
-    last.save.mockRejectedValueOnce(failure);
     first.reload.mockRejectedValueOnce(recoveryFailure);
-    let rejected: unknown;
-    try {
-      await createCollectionAndAdd(targets(first, last), 1, 'New');
-    } catch (error) {
-      rejected = error;
-    }
-    expect(rejected).toBeInstanceOf(AggregateError);
-    expect((rejected as AggregateError).cause).toBe(failure);
-    expect((rejected as AggregateError).errors).toEqual([failure, recoveryFailure]);
-    expect(last.reload).toHaveBeenCalledTimes(1);
+    const report = vi.spyOn(logging, 'reportDiagnosticError').mockImplementation(() => undefined);
+    await expect(createCollectionAndAdd(targets(first), 1, 'New')).resolves.toEqual({
+      done: 0,
+      failed: 1,
+    });
+    expect(report).toHaveBeenCalledWith(
+      expect.any(logging.ZoteroLogger),
+      'Collection rollback state restoration failed',
+      recoveryFailure,
+    );
     expect(h.libraries.get(1)!.updateCollections).toHaveBeenCalledTimes(1);
     expect(h.persistedCollectionIDs()).toEqual([]);
   });
 
   it.each(['item', 'collection', 'parent'] as const)(
-    'rolls back create-and-add when the final save deletes its %s',
+    'rolls back only the in-flight create-and-add assignment when its %s disappears',
     async (target) => {
       const h = host();
       const parent = h.addCollection(10);
@@ -572,17 +650,17 @@ describe('collection structure operations', () => {
       const saveLast = last.save.getMockImplementation()!;
       last.save.mockImplementationOnce(async () => {
         await saveLast();
-        if (target === 'item') first.deleted = true;
+        if (target === 'item') last.deleted = true;
         else if (target === 'parent') parent.deleted = true;
         else h.collections.get(last.getCollections(true)[0]!)!.deleted = true;
       });
-      await expect(createCollectionAndAdd(targets(first, last), 1, 'New', 10)).rejects.toThrow(
-        target === 'item' ? 'Item target changed' : 'Collection target is unavailable',
-      );
-      expect(h.persistedCollectionIDs()).toEqual([10]);
-      expect(first.getCollections(true)).toEqual([10]);
+      const result = await createCollectionAndAdd(targets(first, last), 1, 'New', 10);
+      expect(result).toEqual({ done: 1, collectionID: expect.any(Number), unavailable: 1 });
+      const id = result.collectionID!;
+      expect(h.persistedCollectionIDs()).toEqual([10, id]);
+      expect(first.getCollections(true)).toEqual([10, id]);
       expect(last.getCollections(true)).toEqual([]);
-      expect(h.persistedMemberships(first.id)).toEqual([10]);
+      expect(h.persistedMemberships(first.id)).toEqual([10, id]);
       expect(h.persistedMemberships(last.id)).toEqual([]);
     },
   );

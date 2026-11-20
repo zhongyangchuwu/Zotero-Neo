@@ -1,28 +1,10 @@
 import { executeCollectionTransaction } from '../toolkit/main/collection-transactions';
-
-function writableLibrary(libraryID: number): void {
-  const library = Zotero.Libraries.get(libraryID);
-  if (!library || !library.editable || library.archived || library.libraryType === 'feed')
-    throw new Error('Collection library is read-only');
-}
-
-function currentCollection(collectionID: number): Zotero.Collection {
-  const collection = Zotero.Collections.get(collectionID);
-  if (!collection || collection.deleted) throw new Error('Collection target is unavailable');
-  writableLibrary(collection.libraryID);
-  // A collection below a trashed ancestor is not a usable target, either.
-  const seen = new Set<number>([collection.id]);
-  let parentID = collection.parentID;
-  while (parentID) {
-    if (seen.has(parentID)) throw new Error('Collection ancestry is invalid');
-    seen.add(parentID);
-    const parent = Zotero.Collections.get(parentID);
-    if (!parent || parent.deleted || parent.libraryID !== collection.libraryID)
-      throw new Error('Collection target is unavailable');
-    parentID = parent.parentID;
-  }
-  return collection;
-}
+import {
+  applyCollectionMembership,
+  type CollectionBatchOutcome,
+  writableCollection as currentCollection,
+  writableLibrary,
+} from './item-collections';
 
 function validateParent(libraryID: number, parentID: number | false, collectionID?: number): void {
   writableLibrary(libraryID);
@@ -42,49 +24,31 @@ function collectionName(name: string): string {
   return value;
 }
 
-async function create(
+async function saveNewCollection(
+  collection: Zotero.Collection,
+  parentID: number | false,
+): Promise<number> {
+  if (parentID) collection.parentID = parentID;
+  // Creation must not change the user's current library scope.
+  const id = await collection.save({ skipSelect: true });
+  if (typeof id !== 'number' || id <= 0) throw new Error('Collection was not created');
+  return id;
+}
+
+export async function createCollection(
   libraryID: number,
   name: string,
-  parentID: number | false,
-  items: readonly Zotero.Item[],
-  isCurrent: () => boolean,
+  parentID: number | false = false,
+  isCurrent: () => boolean = () => true,
 ): Promise<number> {
-  const touchedItems: Zotero.Item[] = [];
-  let createdCollection: Zotero.Collection | undefined;
+  let collection: Zotero.Collection | undefined;
   return executeCollectionTransaction(
     async () => {
       if (!isCurrent()) throw new Error('Collection action is no longer current');
       validateParent(libraryID, parentID);
       const parent = parentID ? currentCollection(parentID) : undefined;
-      const uniqueItems = new Map<number, Zotero.Item>();
-      for (const item of items) {
-        if (!item.id || Zotero.Items.get(item.id) !== item || item.deleted)
-          throw new Error('Item target is unavailable');
-        if (item.libraryID !== libraryID)
-          throw new Error('Collection membership requires one library');
-        if (!item.isTopLevelItem())
-          throw new Error('Collection membership requires top-level items');
-        uniqueItems.set(item.id, item);
-      }
-      const collection = new Zotero.Collection({ libraryID, name: collectionName(name) });
-      createdCollection = collection;
-      if (parentID) collection.parentID = parentID;
-      // Never let a membership helper change the user's current library scope.
-      const id = await collection.save({ skipSelect: true });
-      if (typeof id !== 'number' || id <= 0) throw new Error('Collection was not created');
-      if (!isCurrent()) throw new Error('Collection action is no longer current');
-      validateParent(libraryID, parentID);
-      for (const item of uniqueItems.values()) {
-        if (
-          Zotero.Items.get(item.id) !== item ||
-          item.deleted ||
-          item.libraryID !== libraryID ||
-          !item.isTopLevelItem()
-        )
-          throw new Error('Item target changed');
-        touchedItems.push(item);
-      }
-      if (uniqueItems.size) await collection.addItems([...uniqueItems.keys()]);
+      collection = new Zotero.Collection({ libraryID, name: collectionName(name) });
+      const id = await saveNewCollection(collection, parentID);
       if (!isCurrent()) throw new Error('Collection action is no longer current');
       validateParent(libraryID, parentID);
       if (
@@ -94,61 +58,64 @@ async function create(
         (parent && currentCollection(parent.id) !== parent)
       )
         throw new Error('Collection target changed');
-      for (const item of uniqueItems.values()) {
-        if (
-          Zotero.Items.get(item.id) !== item ||
-          item.deleted ||
-          item.libraryID !== libraryID ||
-          !item.isTopLevelItem()
-        )
-          throw new Error('Item target changed');
-      }
       return id;
     },
     {
       reportCommittedError: true,
       onRollback: async (error) => {
-        // Actual SQL rollback unloads the new collection before restoration.
-        // Reload directly: filtered getCollections() would dereference that unloaded ID.
-        const recovery = touchedItems.map((item) =>
-          item.reload(['primaryData', 'collections'], true),
-        );
         const library = Zotero.Libraries.get(libraryID);
-        if (createdCollection?.id && library) recovery.push(library.updateCollections());
-        const outcomes = await Promise.allSettled(recovery);
-        const failures = outcomes
-          .filter((outcome): outcome is PromiseRejectedResult => outcome.status === 'rejected')
-          .map((outcome) => outcome.reason);
-        if (failures.length)
+        if (!collection?.id || !library) return;
+        try {
+          await library.updateCollections();
+        } catch (recoveryError) {
           throw new AggregateError(
-            [error, ...failures],
-            `Collection creation failed (${String(error)}); rollback state restoration also failed`,
+            [error, recoveryError],
+            'Collection creation and rollback state restoration both failed',
             { cause: error },
           );
+        }
       },
     },
   );
 }
 
-export async function createCollection(
-  libraryID: number,
-  name: string,
-  parentID: number | false = false,
-  isCurrent: () => boolean = () => true,
-): Promise<number> {
-  return create(libraryID, name, parentID, [], isCurrent);
-}
-
-/** Creation and assignment share one SQL transaction; rollback cannot leave an empty orphan. */
+/** The first successful assignment commits with creation; a zero-write batch leaves no collection. */
 export async function createCollectionAndAdd(
   items: readonly Zotero.Item[],
   libraryID: number,
   name: string,
   parentID: number | false = false,
   isCurrent: () => boolean = () => true,
-): Promise<number> {
-  if (!items.length) throw new Error('No item target');
-  return create(libraryID, name, parentID, items, isCurrent);
+): Promise<CollectionBatchOutcome> {
+  const value = collectionName(name);
+  const parent = parentID ? currentCollection(parentID) : undefined;
+  let collection: Zotero.Collection | undefined;
+  return applyCollectionMembership(
+    items,
+    {
+      libraryID,
+      checkParent: () => {
+        validateParent(libraryID, parentID);
+        if (parent && currentCollection(parent.id) !== parent)
+          throw new Error('Collection parent changed');
+        if (collection && (collection.parentID || false) !== parentID)
+          throw new Error('Collection target changed');
+      },
+      createTarget: async () => {
+        collection = new Zotero.Collection({ libraryID, name: value });
+        const id = await saveNewCollection(collection, parentID);
+        if (collection.id !== id) throw new Error('Collection target changed');
+        return collection;
+      },
+      recoverCreation: async () => {
+        const failed = collection;
+        collection = undefined;
+        const library = Zotero.Libraries.get(libraryID);
+        if (failed?.id && library) await library.updateCollections();
+      },
+    },
+    isCurrent,
+  );
 }
 
 export async function moveCollection(

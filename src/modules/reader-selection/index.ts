@@ -227,7 +227,7 @@ export function createReaderSelectionModule(
         case 'openSelectionActions': {
           const snapshot = context();
           if (!snapshot) {
-            showStatus('✗ no selection', 1500);
+            showStatus(t('reader.selection.none', ports.language()), 1500);
             return;
           }
           ports.noteOwner();

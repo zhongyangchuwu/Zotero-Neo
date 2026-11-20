@@ -1,5 +1,6 @@
 import type { Cleanup } from '../../core/cleanup';
 import type { MainWindow } from '../../core/contracts';
+import type { BatchOutcome } from '../../i18n/batch-result';
 import type { BindingMap } from '../../input/bindings';
 import type { KeyGuideLanguage } from '../../input/key-guide-config';
 import type { TabDocumentRef, TabEnhancementHost } from '../../toolkit/main/tab-enhancements-types';
@@ -52,6 +53,7 @@ export interface TabGroupManagerOptions {
   read(): string;
   write(value: string): void;
   createID(): string;
+  onError?(error: unknown): void;
 }
 
 export interface TabGroupManager {
@@ -66,7 +68,7 @@ export interface TabGroupManager {
     documents: readonly { readonly document: TabDocumentRef; readonly title: string }[],
     hostID: string,
     isCurrent: () => boolean,
-  ): Promise<number>;
+  ): Promise<BatchOutcome>;
   renameGroup(groupID: string, name: string): void;
   setGroupColor(groupID: string, color: string): void;
   toggleGroup(groupID: string): void;

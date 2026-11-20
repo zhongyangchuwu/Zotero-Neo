@@ -1,6 +1,7 @@
 import { afterEach, describe, expect, it, vi } from 'vitest';
 import { createCollectionTransactionDB } from '../fixtures/collection-transactions';
 import type { ItemTargetSet } from '../../src/core/item-target';
+import type { AppLanguage } from '../../src/i18n';
 import { MAIN_ITEM_TARGET } from '../../src/main/main-item-target';
 import { ModuleHost } from '../../src/core/module-host';
 import { createCollectionsModule } from '../../src/modules/collections';
@@ -19,7 +20,7 @@ afterEach(() => {
   vi.useRealTimers();
 });
 
-function workflowHarness() {
+function workflowHarness(language: AppLanguage = 'en') {
   vi.useFakeTimers();
   const { window, session, cleanups } = createPickerHarness();
   session.activePanel = 'items';
@@ -32,6 +33,7 @@ function workflowHarness() {
     libraryType: 'user',
     updateCollections: vi.fn(async () => undefined),
   };
+  const libraries = new Map([[1, library]]);
   const collections = new Map<number, NativeCollection>();
   let nextID = 30;
   class NativeCollection {
@@ -43,13 +45,6 @@ function workflowHarness() {
     constructor(values?: { libraryID: number; name: string }) {
       Object.assign(this, values);
     }
-    addItems = vi.fn(async (ids: number[]) => {
-      for (const id of ids) {
-        const item = items.get(id)!;
-        item.addToCollection(this.id);
-        await item.save();
-      }
-    });
     getDescendents() {
       return [...collections.values()].filter((collection) => collection.parentID === this.id);
     }
@@ -76,6 +71,7 @@ function workflowHarness() {
       libraryID: 1,
       deleted: false,
       isTopLevelItem: () => true,
+      isEditable: () => true,
       isRegularItem: () => true,
       getCollections: () => [...direct],
       getCreators: () => [],
@@ -162,7 +158,7 @@ function workflowHarness() {
       getAll,
       loadDataTypes: vi.fn(async () => undefined),
     },
-    Libraries: { get: (id: number) => (id === 1 ? library : false) },
+    Libraries: { get: (id: number) => libraries.get(id) ?? false },
     Search: NativeSearch,
     DB: Object.assign(database, { columnQueryAsync }),
     getString: () => 'Name',
@@ -196,6 +192,7 @@ function workflowHarness() {
   const actions = createCollectionsModule(host, {
     window,
     logger,
+    language: () => language,
     status: (message) => status(session, message),
     navigate,
     captureCurrent,
@@ -268,6 +265,7 @@ function workflowHarness() {
     items,
     collections,
     library,
+    libraries,
     scopeSelection,
     scopeRows,
     prompt,
@@ -320,6 +318,7 @@ describe('collection workflows', () => {
 
     expect(h.first.getCollections()).toEqual([10, 20]);
     expect(h.second.getCollections()).toEqual([11, 20]);
+    expect(h.status).toHaveBeenLastCalledWith(h.session, '✓ Items added to collection: 2');
     const cursor = Zotero.Items.get(3);
     expect(cursor && cursor.getCollections()).toEqual([]);
   });
@@ -429,7 +428,7 @@ describe('collection workflows', () => {
     expect(h.second.getCollections()).toEqual([11]);
     expect(h.session.picker.open).toBe(true);
     expect(h.session.picker.input?.value).toBe('Paper 2');
-    expect(pickerModel(h.session).status).toContain('no longer available');
+    expect(pickerModel(h.session).status).toContain('Could not complete the action for “Paper 2”');
   });
 
   it('retains query and candidate on a failed addition and rejects changed permissions before save', async () => {
@@ -444,32 +443,21 @@ describe('collection workflows', () => {
     expect(h.second.getCollections()).toEqual([11]);
     expect(h.session.picker.open).toBe(true);
     expect(h.session.picker.input?.value).toBe('Paper 2');
-    expect(pickerModel(h.session).status).toContain('disk unavailable');
+    expect(pickerModel(h.session).status).toBe(
+      '✗ No items added to the collection · Skipped 1 (1 failed)',
+    );
     h.library.editable = false;
     await h.confirm(2);
     expect(h.second.save).toHaveBeenCalledTimes(1);
     expect(pickerModel(h.session).status).toContain('read-only');
   });
 
-  it('requires actual direct source membership for movement and refuses a changed source at confirmation', async () => {
+  it('moves only direct source members and refuses a changed active source at confirmation', async () => {
     const h = workflowHarness();
     h.targets({
       source: 'main',
       items: [h.first, h.second],
       total: 2,
-      missing: 0,
-      presentation: { origin: 'selection', outsideCurrentList: 0 },
-    });
-    h.actions.moveItems(h.request);
-    expect(h.opened).not.toHaveBeenCalled();
-    expect(h.status).toHaveBeenLastCalledWith(
-      h.session,
-      expect.stringContaining('directly assigned'),
-    );
-    h.targets({
-      source: 'main',
-      items: [h.first],
-      total: 1,
       missing: 0,
       presentation: { origin: 'selection', outsideCurrentList: 0 },
     });
@@ -479,7 +467,73 @@ describe('collection workflows', () => {
     await h.confirm(20);
     expect(h.first.getCollections()).toEqual([10]);
     expect(h.session.picker.open).toBe(true);
-    expect(pickerModel(h.session).status).toContain('unchanged targets');
+    expect(pickerModel(h.session).status).toContain('The source collection changed');
+    h.scopeSelection.selected = new Set([0]);
+    h.scopeSelection.focused = 0;
+    await h.confirm(20);
+    expect(h.first.getCollections()).toEqual([20]);
+    expect(h.second.getCollections()).toEqual([11]);
+    expect(h.status).toHaveBeenLastCalledWith(
+      h.session,
+      '→ Items moved: 1 · Skipped 1 (1 not directly assigned to the source)',
+    );
+  });
+
+  it('scopes a mixed-library add to the writable active library and reports the skipped items', async () => {
+    const h = workflowHarness();
+    h.libraries.set(2, { ...h.library, libraryID: 2, name: 'Group Library', libraryType: 'group' });
+    Reflect.set(h.second, 'libraryID', 2);
+    h.targets({
+      source: 'main',
+      items: [h.second, h.first],
+      total: 3,
+      missing: 1,
+      presentation: { origin: 'selection', outsideCurrentList: 1 },
+    });
+    await h.start(() => h.actions.add(h.request));
+    expect(h.session.picker.provider?.title).toContain('Library: My library');
+    await h.confirm(20);
+    expect(h.first.getCollections()).toEqual([10, 20]);
+    expect(h.second.getCollections()).toEqual([11]);
+    expect(h.second.save).not.toHaveBeenCalled();
+    expect(h.status).toHaveBeenLastCalledWith(
+      h.session,
+      '→ Items added to collection: 1 · Skipped 2 (2 unavailable or read-only)',
+    );
+  });
+
+  it('reports a localized all-skipped result without opening a picker or saving', () => {
+    const h = workflowHarness('zh-CN');
+    h.library.editable = false;
+    h.actions.add(h.request);
+    expect(h.opened).not.toHaveBeenCalled();
+    expect(h.transaction).not.toHaveBeenCalled();
+    expect(h.status).toHaveBeenLastCalledWith(
+      h.session,
+      '✗ 未将条目加入分类，跳过 1 项（1 项不可用或只读）',
+    );
+  });
+
+  it('keeps healthy items actionable when another item’s membership inventory throws', async () => {
+    const h = workflowHarness();
+    Reflect.set(h.second, 'getCollections', () => {
+      throw new Error('private diagnostic detail');
+    });
+    h.targets({
+      source: 'main',
+      items: [h.first, h.second],
+      total: 2,
+      missing: 0,
+      presentation: { origin: 'selection', outsideCurrentList: 0 },
+    });
+    await h.start(() => h.actions.add(h.request));
+    await h.confirm(20);
+    expect(h.first.getCollections()).toEqual([10, 20]);
+    expect(h.second.save).not.toHaveBeenCalled();
+    expect(h.status).toHaveBeenLastCalledWith(
+      h.session,
+      '→ Items added to collection: 1 · Skipped 1 (1 failed)',
+    );
   });
 
   it('keeps explicit creation mutation-free on cancel and restores the original membership query', async () => {
@@ -544,6 +598,35 @@ describe('collection workflows', () => {
     expect(h.session.picker.open).toBe(false);
   });
 
+  it('creates and adds the live subset when an original target disappears during confirmation', async () => {
+    const h = workflowHarness();
+    h.targets({
+      source: 'main',
+      items: [h.first, h.second],
+      total: 2,
+      missing: 0,
+      presentation: { origin: 'selection', outsideCurrentList: 0 },
+    });
+    h.nativeConfirm.mockImplementationOnce(() => {
+      expect(h.collections.size).toBe(3);
+      h.items.delete(h.second.id);
+      return true;
+    });
+    await h.start(() => h.actions.add(h.request));
+    await h.confirm('create');
+    await h.confirm(20);
+    const created = [...h.collections.values()].find(
+      (collection) => collection.name === 'Created collection',
+    );
+    expect(created?.parentID).toBe(20);
+    expect(h.first.getCollections()).toEqual([10, created!.id]);
+    expect(h.second.save).not.toHaveBeenCalled();
+    expect(h.status).toHaveBeenLastCalledWith(
+      h.session,
+      '→ Items added to collection: 1 · Skipped 1 (1 unavailable or read-only)',
+    );
+  });
+
   it('rejects a source-surface change even when item IDs are unchanged', async () => {
     const h = workflowHarness();
     await h.start(() => h.actions.add(h.request));
@@ -551,7 +634,7 @@ describe('collection workflows', () => {
     await h.confirm(20);
     expect(h.first.save).not.toHaveBeenCalled();
     expect(h.session.picker.open).toBe(true);
-    expect(pickerModel(h.session).status).toContain('target changed');
+    expect(pickerModel(h.session).status).toContain('The selection changed');
   });
 
   it('finds read-only collections without navigating on preview or cancel, and navigates only on confirmation', async () => {
@@ -724,7 +807,10 @@ describe('collection workflows', () => {
     vi.mocked(h.collections.get(10)!.save).mockRejectedValueOnce(new Error('disk unavailable'));
     h.actions.rename();
     await vi.waitFor(() =>
-      expect(h.status).toHaveBeenCalledWith(h.session, expect.stringContaining('disk unavailable')),
+      expect(h.status).toHaveBeenCalledWith(
+        h.session,
+        '✗ The collection action could not be completed.',
+      ),
     );
     expect(h.collections.get(10)?.name).toBe('Source');
     h.prompt.mockImplementationOnce((_window, _title, _label, value) => {
@@ -759,7 +845,9 @@ describe('collection workflows', () => {
     await h.confirm(20);
     expect(h.session.picker.open).toBe(true);
     expect(h.session.picker.filtered[h.session.picker.selected]?.id).toBe(20);
-    expect(pickerModel(h.session).status).toContain('transaction unavailable');
+    expect(pickerModel(h.session).status).toBe(
+      '✗ No items added to the collection · Skipped 1 (1 failed)',
+    );
     expect(h.collections.size).toBe(3);
     expect(h.first.getCollections()).toEqual([10]);
     h.prompt.mockImplementationOnce((_window, _title, _label, value) => {

@@ -1,29 +1,30 @@
 import type { ItemTargetSet } from '../core/item-target';
+import type { Logger } from '../core/logging';
+import type { BatchOutcome } from '../i18n/batch-result';
 import { citationKey } from '../platform/better-bibtex';
 import { copyToClipboard } from '../platform/clipboard';
 
-/** Copy all resolved citation keys atomically; return the action feedback for the owning Surface. */
-export function copyCitekeys(targets: ItemTargetSet): string {
-  try {
-    if (targets.missing > 0)
-      return targets.source === 'main'
-        ? '✗ Selection contains unavailable items; refresh before citekey copy'
-        : '✗ Context item is unavailable; refresh before citekey copy';
-    if (!targets.total || !targets.items.length) return '✗ No item target';
-
-    const keys: string[] = [];
-    let missing = 0;
-    for (const item of targets.items) {
+/** Copies available citekeys in target order, leaving the clipboard untouched if none are found. */
+export function copyCitekeys(targets: ItemTargetSet, logger: Logger): BatchOutcome {
+  const outcome = { done: 0, unavailable: targets.missing, missingData: 0, failed: 0 };
+  const keys: string[] = [];
+  for (const item of targets.items) {
+    try {
       const key = citationKey(item);
       if (key) keys.push(key);
-      else missing += 1;
+      else outcome.missingData++;
+    } catch (error) {
+      logger.debug(`citekey lookup failed for item ${item.id}: ${String(error)}`);
+      outcome.failed++;
     }
-    if (missing)
-      return `✗ ${missing} target${missing === 1 ? '' : 's'} without citekey (BBT not ready?)`;
-
-    copyToClipboard(keys.join(' '));
-    return keys.length === 1 ? `✓ @${keys[0]}` : `✓ Copied ${keys.length} citekeys`;
-  } catch (error) {
-    return `✗ ${String(error).slice(0, 40)}`;
   }
+  if (!keys.length) return outcome;
+  try {
+    copyToClipboard(keys.join(' '));
+    outcome.done = keys.length;
+  } catch (error) {
+    logger.debug(`citekey clipboard write failed: ${String(error)}`);
+    outcome.failed += keys.length;
+  }
+  return outcome;
 }

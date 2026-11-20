@@ -9,6 +9,28 @@ export function selectedAnnotationIDs(reader: ReaderRuntime): readonly string[] 
   return (reader as NativeReaderRuntime)._internalReader?._state?.selectedAnnotationIDs ?? [];
 }
 
+/** Returns the native catalog, or null before the host has published it. */
+export function readerLoadedAnnotationIDs(reader: ReaderRuntime): ReadonlySet<string> | null {
+  const annotations = (reader as NativeReaderRuntime)._internalReader?._state?.annotations;
+  if (!annotations) return null;
+  const ids = new Set<string>();
+  for (const annotation of annotations) {
+    if (annotation.id) ids.add(annotation.id);
+  }
+  return ids;
+}
+
+/** Captures Zotero's document and per-annotation write restrictions for the admitted action. */
+export function readerAnnotationWriteGuard(reader: ReaderRuntime): (key: string) => boolean {
+  const state = (reader as NativeReaderRuntime)._internalReader?._state;
+  if (state?.readOnly) return () => false;
+  const readOnly = new Set<string>();
+  for (const annotation of state?.annotations ?? []) {
+    if (annotation.id && annotation.readOnly) readOnly.add(annotation.id);
+  }
+  return (key) => !readOnly.has(key);
+}
+
 export function setSelectedAnnotationIDs(reader: ReaderRuntime, keys: readonly string[]): void {
   const window = readerWindow(reader);
   const internal = (reader as NativeReaderRuntime)._internalReader;

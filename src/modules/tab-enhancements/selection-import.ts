@@ -1,5 +1,7 @@
 import type { MainWindow } from '../../core/contracts';
+import type { Logger } from '../../core/logging';
 import { t } from '../../i18n';
+import { batchStatus, type BatchOutcome } from '../../i18n/batch-result';
 import type { KeyGuideLanguage } from '../../input/key-guide-config';
 import type { MainResolvedTargets } from '../../main/action-targets';
 import {
@@ -7,7 +9,6 @@ import {
   type ReadingGroupDocument,
 } from '../../operations/reading-group-documents';
 import {
-  alertChromeAction,
   chooseChromeAction,
   confirmChromeAction,
   promptChromeText,
@@ -22,16 +23,27 @@ export async function importReadingSelection(options: {
   hostID: string;
   titleFormat: string;
   create: boolean;
+  logger: Logger;
+  status(message: string): void;
   isCurrent(): boolean;
 }): Promise<void> {
-  const { window, language, groups, hostID, titleFormat, isCurrent } = options;
-  const snapshot = snapshotReadingGroupDocuments(options.targets.items, options.targets.missing);
+  const { window, language, groups, hostID, titleFormat, isCurrent, status } = options;
+  if (!isCurrent()) return;
+  const snapshot = snapshotReadingGroupDocuments(
+    options.targets.items,
+    options.targets.missing,
+    options.logger,
+  );
   const title = t('tabs.selectionImportTitle', language);
-  const alert = (message: string) => {
-    if (isCurrent()) alertChromeAction(window, title, message);
+  const result: BatchOutcome = {
+    done: 0,
+    unavailable: snapshot.missing,
+    missingData: snapshot.missingData,
+    failed: snapshot.failed,
   };
-  if (snapshot.missing)
-    alert(t('tabs.selectionMissing', language).replace('{count}', String(snapshot.missing)));
+  const report = () => {
+    if (isCurrent()) status(batchStatus('readingGroup', result, language));
+  };
   if (!isCurrent()) return;
   const documents: ReadingGroupDocument[] = [];
   for (const candidate of snapshot.candidates) {
@@ -45,13 +57,16 @@ export async function importReadingSelection(options: {
       `${t('tabs.choosePdf', language)}\n${candidate.title}`,
       candidate.documents.map((entry) => entry.choiceLabel),
     );
-    if (selected === null || !isCurrent()) return;
-    const document = candidate.documents[selected];
-    if (!document) return;
+    if (!isCurrent()) return;
+    const document = selected === null ? undefined : candidate.documents[selected];
+    if (!document) {
+      result.unchanged = (result.unchanged ?? 0) + 1;
+      continue;
+    }
     documents.push(document);
   }
   if (!documents.length) {
-    alert(t('tabs.selectionEmpty', language));
+    report();
     return;
   }
   let destination: { name: string } | { groupID: string };
@@ -59,14 +74,14 @@ export async function importReadingSelection(options: {
     const name = promptChromeText(window, title, t('tabs.selectionGroupName', language));
     if (name === null || !isCurrent()) return;
     if (!name.trim()) {
-      alert(t('tabs.emptyName', language));
+      status(t('tabs.emptyName', language));
       return;
     }
     destination = { name };
   } else {
     const choices = groups.view(hostID, titleFormat).groups;
     if (!choices.length) {
-      alert(t('tabs.selectionNoGroups', language));
+      if (isCurrent()) status(t('tabs.selectionNoGroups', language));
       return;
     }
     const names = new Map<string, number>();
@@ -88,6 +103,10 @@ export async function importReadingSelection(options: {
   if (!isCurrent()) return;
   if (!confirmChromeAction(window, title, t('tabs.selectionOpensTabs', language)) || !isCurrent())
     return;
-  const count = await groups.importDocuments(destination, documents, hostID, isCurrent);
-  alert(t('tabs.selectionAdded', language).replace('{count}', String(count)));
+  const opened = await groups.importDocuments(destination, documents, hostID, isCurrent);
+  result.done = opened.done;
+  result.unchanged = (result.unchanged ?? 0) + (opened.unchanged ?? 0);
+  result.unavailable = (result.unavailable ?? 0) + (opened.unavailable ?? 0);
+  result.failed = (result.failed ?? 0) + (opened.failed ?? 0);
+  report();
 }

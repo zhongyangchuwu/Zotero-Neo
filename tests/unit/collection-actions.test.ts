@@ -4,11 +4,9 @@ import { createCollectionTransactionDB } from '../fixtures/collection-transactio
 import type { MainWindow } from '../../src/core/contracts';
 import {
   CollectionMembershipActions,
-  resolveCollectionMembershipTargets,
+  type CollectionConfirmation,
 } from '../../src/modules/collections/actions';
-import type { CollectionConfirmation } from '../../src/modules/collections/actions';
 import { MAIN_ITEM_TARGET } from '../../src/main/main-item-target';
-import { READER_ITEM_TARGET } from '../../src/reader/item-target';
 import { setCollectionMembership } from '../../src/operations/item-collections';
 import { SelectionStore } from '../../src/modules/worksets/selection-store';
 import type { MainWindowSession } from '../../src/main/session';
@@ -27,6 +25,7 @@ function item(id: number, libraryID = 1, collections: number[] = []): Zotero.Ite
     id,
     libraryID,
     isTopLevelItem: () => true,
+    isEditable: () => true,
     getCollections: () => [...current],
     addToCollection: vi.fn((collectionID: number) => {
       current.add(collectionID);
@@ -46,12 +45,13 @@ function targetHarness(
   visibleIDs: readonly number[] = items.map((x) => x.id),
 ) {
   const byID = new Map(items.map((value) => [value.id, value]));
+  const collection = { id: 10, libraryID: 1, name: 'Inbox', parentID: false };
   vi.stubGlobal('Zotero', {
     Items: {
       get: (id: number) => byID.get(id) ?? false,
       keepTopLevel: (values: Zotero.Item[]) => values,
     },
-    Collections: { get: (id: number) => ({ id, libraryID: 1, name: 'Inbox', parentID: false }) },
+    Collections: { get: (id: number) => (id === 10 ? collection : false) },
     Libraries: { get: () => ({ editable: true, archived: false, libraryType: 'user' }) },
     DB: createCollectionTransactionDB(),
   });
@@ -85,60 +85,8 @@ function targetHarness(
     picker: new PickerRuntime(),
     cleanup: { disposed: false },
   } as unknown as MainWindowSession;
-  return { window, session, selection };
+  return { window, session, selection, byID };
 }
-
-describe('collection membership targets', () => {
-  it('uses explicit Selection instead of Cursor and requires one library', () => {
-    const a = item(1, 1);
-    const c = item(3, 1);
-    const f = item(6, 1);
-    const h = targetHarness([f, a, c], [6, 1, 3]);
-    h.selection.add({ libraryID: 1, itemID: 1 });
-    h.selection.add({ libraryID: 1, itemID: 3 });
-
-    const resolved = resolveCollectionMembershipTargets(
-      MAIN_ITEM_TARGET.resolve(h.window, h.selection),
-    );
-
-    expect(resolved.items.map((value) => value.id)).toEqual([1, 3]);
-    expect(resolved.libraryID).toBe(1);
-    expect(resolved.signature).toBe('1:1|1:3');
-  });
-
-  it('refuses unavailable or cross-library targets before mutation', () => {
-    const a = item(1, 1);
-    const b = item(2, 2);
-    const h = targetHarness([a, b]);
-    h.selection.add({ libraryID: 1, itemID: 1 });
-    h.selection.add({ libraryID: 2, itemID: 2 });
-
-    expect(() =>
-      resolveCollectionMembershipTargets(MAIN_ITEM_TARGET.resolve(h.window, h.selection)),
-    ).toThrow('Collection membership requires one library');
-
-    h.selection.clear();
-    h.selection.add({ libraryID: 1, itemID: 99 });
-    expect(() =>
-      resolveCollectionMembershipTargets(MAIN_ITEM_TARGET.resolve(h.window, h.selection)),
-    ).toThrow('Selection contains unavailable items');
-  });
-
-  it('Reader uses only the active Reader item and ignores Main Selection', () => {
-    const main = item(1, 7);
-    const reader = item(2, 7);
-    const h = targetHarness([main, reader], [main.id]);
-    h.selection.add({ libraryID: 7, itemID: main.id });
-
-    const resolved = resolveCollectionMembershipTargets(
-      READER_ITEM_TARGET.resolve({ itemID: reader.id }),
-    );
-
-    expect(resolved.items.map((value) => value.id)).toEqual([reader.id]);
-    expect(resolved.libraryID).toBe(7);
-    expect(resolved.signature).toBe('7:2');
-  });
-});
 
 describe('collection membership mutation', () => {
   it('changes only the requested membership and does not save existing members again', async () => {
@@ -153,7 +101,10 @@ describe('collection membership mutation', () => {
       Libraries: { get: () => ({ editable: true, archived: false, libraryType: 'user' }) },
     });
 
-    await expect(setCollectionMembership([first, second], 10, true)).resolves.toBe(1);
+    await expect(setCollectionMembership([first, second], 10, true)).resolves.toEqual({
+      done: 1,
+      unchanged: 1,
+    });
     expect(first.save).not.toHaveBeenCalled();
     expect(first.getCollections()).toEqual([10, 11]);
     expect(second.getCollections()).toEqual([12, 10]);
@@ -162,14 +113,14 @@ describe('collection membership mutation', () => {
     vi.mocked(first.save).mockClear();
     vi.mocked(second.save).mockClear();
 
-    await expect(setCollectionMembership([first, second], 10, false)).resolves.toBe(2);
+    await expect(setCollectionMembership([first, second], 10, false)).resolves.toEqual({ done: 2 });
     expect(first.getCollections()).toEqual([11]);
     expect(second.getCollections()).toEqual([12]);
     expect(first.save).toHaveBeenCalledTimes(1);
     expect(second.save).toHaveBeenCalledTimes(1);
   });
 
-  it('restores every in-memory membership when one item fails to save', async () => {
+  it('restores a failed item without undoing another successful membership', async () => {
     const first = item(1);
     const failed = item(2);
     vi.mocked(failed.save).mockRejectedValueOnce(new Error('save failed'));
@@ -181,15 +132,18 @@ describe('collection membership mutation', () => {
       Libraries: { get: () => ({ editable: true, archived: false, libraryType: 'user' }) },
     });
 
-    await expect(setCollectionMembership([first, failed], 10, true)).rejects.toThrow('save failed');
+    await expect(setCollectionMembership([first, failed], 10, true)).resolves.toEqual({
+      done: 1,
+      failed: 1,
+    });
 
-    expect(first.getCollections()).toEqual([]);
+    expect(first.getCollections()).toEqual([10]);
     expect(failed.getCollections()).toEqual([]);
   });
 });
 
 describe('CollectionMembershipActions', () => {
-  it('revalidates target signature before confirming a collection', async () => {
+  it('rejects a different selection but saves the still-live subset when an original disappears', async () => {
     const first = item(1, 1);
     const second = item(2, 1);
     const h = targetHarness([first, second]);
@@ -200,6 +154,7 @@ describe('CollectionMembershipActions', () => {
     const actions = new CollectionMembershipActions({
       window: h.window,
       logger: { debug: vi.fn() } as never,
+      language: () => 'en',
       isCurrent: () => true,
       status,
       navigate: vi.fn(async () => undefined),
@@ -221,18 +176,25 @@ describe('CollectionMembershipActions', () => {
     expect(confirm).toBeDefined();
     await expect(
       confirm!({ id: 10, title: 'Inbox', search: 'Inbox' }, () => true, ''),
-    ).rejects.toThrow('Collection target changed; retry');
+    ).resolves.toEqual({
+      keepOpen: true,
+      message: 'The selection changed. Select the items again.',
+    });
     expect(first.addToCollection).not.toHaveBeenCalled();
     expect(second.addToCollection).not.toHaveBeenCalled();
 
     h.selection.clear();
     h.selection.add({ libraryID: 1, itemID: 1 });
+    h.selection.add({ libraryID: 1, itemID: 2 });
     actions.open(request, true);
-    h.selection.clear();
-    h.selection.add({ libraryID: 1, itemID: 99 });
+    h.byID.delete(first.id);
     await expect(
       confirm!({ id: 10, title: 'Inbox', search: 'Inbox' }, () => true, ''),
-    ).rejects.toThrow('Selection contains unavailable items');
+    ).resolves.toBeUndefined();
     expect(first.addToCollection).not.toHaveBeenCalled();
+    expect(second.getCollections()).toEqual([10]);
+    expect(status).toHaveBeenLastCalledWith(
+      '→ Items added to collection: 1 · Skipped 1 (1 unavailable or read-only)',
+    );
   });
 });

@@ -777,9 +777,7 @@ export class FuzzyPicker {
       })
       .catch((error) => {
         this.failure(`picker confirm scope=${scope}`, error);
-        const message = this.text('confirmFailed')
-          .replace('{title}', itemTitle)
-          .replace('{error}', String(error).slice(0, 160));
+        const message = this.text('confirmFailed').replace('{title}', itemTitle);
         if (this.isCurrentSource(session, generation, sourceRevision, provider))
           this.setOperationStatus(session, message);
         else if (closeBeforeConfirm && !picker.open && picker.generation === generation + 1)
@@ -824,10 +822,7 @@ export class FuzzyPicker {
       void this.loadSource(session, provider, picker.generation, sourceRevision, selectedID);
     } catch (error) {
       this.failure(`picker switch source scope=${picker.scope}`, error);
-      this.setOperationStatus(
-        session,
-        this.text('switchFailed').replace('{error}', String(error).slice(0, 160)),
-      );
+      this.setOperationStatus(session, this.text('switchFailed'));
     }
   }
 
@@ -880,10 +875,7 @@ export class FuzzyPicker {
       this.failure(`picker load scope=${scope}`, error);
       session.picker.loadingText = '';
       session.picker.loadError = this.text('unavailable');
-      this.setOperationStatus(
-        session,
-        this.text('loadFailed').replace('{error}', String(error).slice(0, 160)),
-      );
+      this.setOperationStatus(session, this.text('loadFailed'));
     }
   }
 

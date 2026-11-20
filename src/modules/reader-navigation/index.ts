@@ -187,6 +187,7 @@ export function createReaderNavigationModule(
       sidebar,
       captions,
       ports.actions,
+      ports.sidebar.language,
     );
     const startSmooth: ReaderNavigationModule['startSmooth'] = (
       window,
