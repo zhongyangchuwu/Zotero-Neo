@@ -163,6 +163,11 @@ export const PICKER_REACT_CSS = `
   cursor: pointer;
 }
 .picker-source:where(:disabled) { cursor: not-allowed; color: var(--picker-muted); }
+.picker-scope {
+  max-width: min(28%, 18ch);
+  color: var(--picker-muted);
+  font-size: .85em;
+}
 .picker-count {
   max-width: min(27%, 13em);
   color: var(--picker-muted);
@@ -232,7 +237,7 @@ export const PICKER_REACT_CSS = `
   font-family: var(--picker-font-title);
 }
 .picker-cell-title-text, .picker-row-text, .picker-cell-citekey, .picker-cell-author,
-.picker-cell-year, .picker-cell-detail, .picker-source, .picker-count,
+.picker-cell-year, .picker-cell-detail, .picker-source, .picker-scope, .picker-count,
 .picker-status, .picker-shortcut-help {
   min-width: 0;
   overflow: hidden;
@@ -309,6 +314,13 @@ export const PICKER_REACT_CSS = `
 .picker-preview-bibliographic .picker-preview-title { margin-block-end: .45em; font-size: 1.62em; }
 .picker-preview-body { white-space: pre-wrap; }
 .picker-preview-meta { margin: 0 0 1.25em; color: var(--picker-muted); }
+.picker-preview-meta:has(+ .picker-preview-citekey) { margin-block-end: .3em; }
+.picker-preview-citekey {
+  margin: 0 0 1.25em;
+  color: var(--picker-muted);
+  font: .9em/1.4 ui-monospace, SFMono-Regular, Consolas, monospace;
+  overflow-wrap: anywhere;
+}
 .picker-preview-card {
   margin-block: .85em;
   padding: 10px 12px;

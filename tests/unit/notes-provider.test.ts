@@ -240,11 +240,13 @@ describe('notes provider item and library sources', () => {
     const window = windowForPicker({ Zotero_Tabs: { selectedID: 'reader' } });
     const provider = createNotesProvider(window, logger);
 
+    expect(provider.title).toBe('Current item notes');
     expect(provider.alternateSource?.label).toBe('Browse library');
     readerItemID = 6;
     const libraryProvider = provider.alternateSource!.provider();
     const libraryItems = await libraryProvider.load();
 
+    expect(libraryProvider.title).toBe('Library notes');
     expect(libraryProvider.alternateSource?.label).toBe('Current item');
     expect(fixture.conditions).toContainEqual(['libraryID', 'is', 7]);
     expect(fixture.conditions).toContainEqual(['itemType', 'is', 'note']);

@@ -142,9 +142,12 @@ describe('fuzzy picker bibliographic items', () => {
     const { window } = createPickerHarness();
     Object.assign(window, { ZoteroPane: { getSelectedItems: () => [] } });
 
-    await createItemsProvider(window, 'collection').load();
+    const provider = createItemsProvider(window, 'collection');
+    await provider.load();
 
     expect(getAll).toHaveBeenCalledWith(7, true, false);
+    expect(provider.title).toBe('All items');
+    expect(provider.placeholder).toBe('Search all items…');
   });
 
   it('keeps a long citation key out of the highlighted title cell', () => {
@@ -245,10 +248,12 @@ describe('bibliographic picker previews', () => {
       getDisplayTitle: () => 'Methods note',
       getField: () => '',
     } as unknown as Zotero.Item;
+    const citekey = 'Author2026ABibliographicCitationKeyTooLongForTheResultsColumn';
     const item = {
       id: 1,
       isRegularItem: () => true,
-      getField: (field: string) => ({ title: 'Preview item', year: '2026' })[field] ?? '',
+      getField: (field: string) =>
+        ({ title: 'Preview item', year: '2026', citationKey: citekey })[field] ?? '',
       getItemTypeIconName: () => 'journalArticle',
       getCreators: () => [{ lastName: 'Author' }],
       getAttachments: () => [attachment.id],
@@ -288,6 +293,7 @@ describe('bibliographic picker previews', () => {
       rows: [{ cells: { title: 'Preview item', author: 'Author', year: '2026', icon } }],
       previewTitle: 'Preview item',
       previewMeta: 'Author · 2026',
+      previewCitekey: citekey,
       previewBody: '',
       previewSections: [
         { title: 'Attachments', count: 1, names: ['paper.pdf'] },
@@ -624,6 +630,10 @@ describe('command palette provider', () => {
     const find = mainItems.find((item) => item.id === 'findAllItems');
     if (!find) throw new Error('Expected bound Find Action');
     expect(find.meta).toBe('<Space>ff');
+    expect(main.preview(find).body).toContain('Action: findAllItems');
+    expect(createCommandsProvider({ ...context, language: 'zh-CN' }).preview(find).body).toContain(
+      '操作: findAllItems',
+    );
     expect(mainItems.find((item) => item.id === 'openNeoSettings')?.meta).toBe('Unbound');
 
     const readerItems = await createCommandsProvider({

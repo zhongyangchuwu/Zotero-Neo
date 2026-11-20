@@ -118,6 +118,11 @@ function PickerSurface({ model }: { model: PickerReactModel }): React.ReactNode 
           aria-controls={resultsID}
           placeholder={model.placeholder}
         />
+        {model.title && (
+          <span className="picker-scope" title={model.title}>
+            {model.title}
+          </span>
+        )}
         <span className="picker-count" data-neo-ui-part="count" title={model.count}>
           {model.count}
         </span>
@@ -172,9 +177,12 @@ function PickerSurface({ model }: { model: PickerReactModel }): React.ReactNode 
           <h2 className="picker-preview-title" data-neo-ui-part="preview-title" id={previewTitleID}>
             {model.previewTitle}
           </h2>
+          {model.previewMeta && <p className="picker-preview-meta">{model.previewMeta}</p>}
+          {model.previewCitekey && (
+            <p className="picker-preview-citekey">@{model.previewCitekey}</p>
+          )}
           {hasStructuredPreview ? (
             <>
-              {model.previewMeta && <p className="picker-preview-meta">{model.previewMeta}</p>}
               {model.previewSections?.map((section, index) => (
                 <div className="picker-preview-card" key={index}>
                   <h3 className="picker-preview-card-title">

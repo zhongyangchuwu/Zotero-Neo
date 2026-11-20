@@ -69,18 +69,20 @@ export function createItemsProvider(
   scope: Extract<PickerScope, 'all' | 'collection'>,
   language: AppLanguage = 'en',
 ): PickerProvider {
+  let inCollection = scope === 'collection';
   return {
-    title: t(scope === 'collection' ? 'picker.collectionItems' : 'picker.allItems', language),
-    placeholder: t(
-      scope === 'collection' ? 'picker.searchCollection' : 'picker.searchLibrary',
-      language,
-    ),
+    get title() {
+      return t(inCollection ? 'picker.collectionItems' : 'picker.allItems', language);
+    },
+    get placeholder() {
+      return t(inCollection ? 'picker.searchCollection' : 'picker.searchLibrary', language);
+    },
     async load() {
-      const collection = mainSelectedCollection(window);
-      const source =
-        scope === 'collection' && collection
-          ? collection.getChildItems(false, false)
-          : await Zotero.Items.getAll(Zotero.Libraries.userLibraryID, true, false);
+      const collection = scope === 'collection' ? mainSelectedCollection(window) : undefined;
+      inCollection = Boolean(collection);
+      const source = collection
+        ? collection.getChildItems(false, false)
+        : await Zotero.Items.getAll(Zotero.Libraries.userLibraryID, true, false);
       return source.filter(isFuzzyPickerItem).map((item) => {
         const citekey = citationKey(item);
         const creator = item.getCreators?.()[0];

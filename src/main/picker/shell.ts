@@ -684,6 +684,7 @@ export class FuzzyPicker {
         : this.text('preview'),
       previewBody: item ? (preview?.body ?? item.title) : this.text('noSelection'),
       previewMeta: preview?.meta,
+      previewCitekey: item?.bibliography ? item.citekey : undefined,
       previewSections: preview?.sections,
       shortcutHelp: sourceHelp ? `${shortcuts} · ${sourceHelp}` : shortcuts,
       status: picker.status,

@@ -30,6 +30,7 @@ export interface PickerReactModel {
   previewTitle: string;
   previewBody: string;
   previewMeta?: string;
+  previewCitekey?: string;
   previewSections?: readonly PickerPreviewSection[];
   shortcutHelp: string;
   status: string;

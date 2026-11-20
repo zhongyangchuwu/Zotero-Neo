@@ -169,7 +169,7 @@ export function createNotesProvider(
 
   function forScope(scope: NotesScope): PickerProvider {
     return {
-      title: t('picker.notes', language),
+      title: t(scope === 'item' ? 'picker.notesOnItem' : 'picker.notesInLibrary', language),
       placeholder: t('picker.searchNotes', language),
       alternateSource: {
         label: t(scope === 'item' ? 'picker.browseLibrary' : 'picker.currentItem', language),
