@@ -702,7 +702,7 @@ export class CollectionMembershipActions {
       ? `${summary} · ${t('workflow.collections.savedRefreshWarning', locale)}`
       : summary;
     if (incomplete || missing) return { keepOpen: true, message };
-    this.#host.status(message);
+    this.#host.status(`${updated ? '✓' : '→'} ${message}`);
   }
 
   private finishMembership(

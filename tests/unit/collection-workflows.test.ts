@@ -409,7 +409,7 @@ describe('collection workflows', () => {
       expect(h.status).toHaveBeenCalledTimes(1);
       expect(h.status).toHaveBeenLastCalledWith(
         h.session,
-        `Collections: 2 · Memberships updated: ${add ? 3 : 4} · Skipped: ${add ? 1 : 0} · Failed: 0`,
+        `✓ Collections: 2 · Memberships updated: ${add ? 3 : 4} · Skipped: ${add ? 1 : 0} · Failed: 0`,
       );
       expect(h.session.picker.open).toBe(false);
       expect(h.selection.values()).toEqual(selection);
