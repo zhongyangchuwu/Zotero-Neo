@@ -113,6 +113,7 @@ export class PluginManagerPanel {
       const overlay = create('div');
       pendingOverlay = overlay;
       overlay.id = 'zv-plugin-manager';
+      overlay.className = 'neo-appearance neo-extensions';
       overlay.tabIndex = -1;
       overlay.style.cssText = CENTERED_MONOSPACE_OVERLAY_STYLE;
 

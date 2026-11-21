@@ -203,7 +203,7 @@ export const SETTINGS_REACT_CSS = `
 /* Gecko can report rectangles for closed details descendants; exclude them from modal Tab. */
 .neo-settings-disclosure:not([open]) > :not(summary) { display:none; }
 .neo-settings-group-heading h3 { margin-bottom:5px; }
-.neo-settings-fields { border:1px solid var(--zotero-neo-border); border-radius:6px; overflow:hidden; }
+.neo-settings-fields { border:1px solid var(--zotero-neo-border); border-radius:var(--neo-radius-small); overflow:hidden; }
 .neo-settings-field-body { display:flex; flex-direction:column; gap:5px; min-width:0; max-width:420px; }
 .neo-settings-field-body input:not([type=checkbox]), .neo-settings-field-body select, .neo-settings-field-body textarea { width:100%; }
 .neo-settings-field-body textarea { min-width:280px; min-height:70px; }

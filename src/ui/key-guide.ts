@@ -47,6 +47,7 @@ export class KeyGuide {
     }
     const root = document.createElement('div');
     root.id = 'zotero-neo-key-guide';
+    root.className = 'neo-appearance neo-hints';
     root.setAttribute('aria-live', 'polite');
     (document.body ?? document.documentElement).appendChild(root);
     this.#element = root;

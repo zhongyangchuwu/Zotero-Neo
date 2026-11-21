@@ -117,7 +117,13 @@ interface TextSpec {
 }
 
 function createFlashWindow(specs: readonly TextSpec[], focusIndex = 0) {
-  const bodyChildren: HTMLElement[] = [];
+  const roots: HTMLElement[] = [];
+  const parents = new Map<HTMLElement, HTMLElement[]>();
+  const appendTo = (children: HTMLElement[], element: HTMLElement): HTMLElement => {
+    children.push(element);
+    parents.set(element, children);
+    return element;
+  };
   const geometry = new Map<Text, TextSpec>();
   const spans = specs.map((spec) => {
     const node = textNode(spec.value);
@@ -135,15 +141,17 @@ function createFlashWindow(specs: readonly TextSpec[], focusIndex = 0) {
   const document = {
     documentElement: { clientWidth: 800, clientHeight: 600 },
     body: {
-      appendChild: (element: HTMLElement) => bodyChildren.push(element),
+      appendChild: (element: HTMLElement) => appendTo(roots, element),
     },
     querySelectorAll: (selector: string) =>
       selector === '.textLayer span' ? spans.map((entry) => entry.span) : [],
     createElement: (tag: string) => {
       const listeners = new Map<string, EventListener[]>();
+      const children: HTMLElement[] = [];
       const element = {
         listeners,
         tagName: tag.toUpperCase(),
+        className: '',
         dataset: {} as Record<string, string>,
         style: { cssText: '', left: '', top: '' },
         hidden: false,
@@ -153,6 +161,8 @@ function createFlashWindow(specs: readonly TextSpec[], focusIndex = 0) {
         autocomplete: '',
         spellcheck: false,
         placeholder: '',
+        children,
+        appendChild: (child: HTMLElement) => appendTo(children, child),
         addEventListener: (type: string, listener: EventListener) => {
           listeners.set(type, [...(listeners.get(type) ?? []), listener]);
         },
@@ -168,8 +178,11 @@ function createFlashWindow(specs: readonly TextSpec[], focusIndex = 0) {
         },
         focus: vi.fn(),
         remove: vi.fn(() => {
-          const index = bodyChildren.indexOf(element as unknown as HTMLElement);
-          if (index >= 0) bodyChildren.splice(index, 1);
+          const node = element as unknown as HTMLElement;
+          const siblings = parents.get(node);
+          const index = siblings?.indexOf(node) ?? -1;
+          if (index >= 0) siblings!.splice(index, 1);
+          parents.delete(node);
         }),
       };
       return element as unknown as HTMLElement & {
@@ -201,7 +214,13 @@ function createFlashWindow(specs: readonly TextSpec[], focusIndex = 0) {
     getSelection: () => selection,
     focus: vi.fn(),
   } as unknown as PdfWindow;
-  return { pdfWindow, spans, bodyChildren };
+  return {
+    pdfWindow,
+    spans,
+    get bodyChildren() {
+      return roots.flatMap((root) => [root, ...Array.from(root.children)] as HTMLElement[]);
+    },
+  };
 }
 
 function flashKey(
@@ -276,14 +295,22 @@ function createFlash(
   const activations: { intent: string; target: FlashSelectionTarget }[] = [];
   const statuses: string[] = [];
   const debug: string[] = [];
+  const registered = new Set<HTMLElement>();
+  const themeRoot = vi.fn((root: HTMLElement) => {
+    registered.add(root);
+    return () => {
+      registered.delete(root);
+    };
+  });
   const flash = new ReaderFlash({
     isCurrent,
     captureView,
+    themeRoot,
     activate: (intent, _window, target) => activations.push({ intent, target }),
     showStatus: (message) => statuses.push(message),
     debug: (message) => debug.push(message),
   });
-  return { flash, activations, statuses, debug };
+  return { flash, activations, statuses, debug, themeRoot, registered };
 }
 
 function createSelectedFlashWindow() {
@@ -310,10 +337,48 @@ function createSelectedFlashWindow() {
       });
     return element;
   });
-  return { ...created, node, selection };
+  return {
+    ...created,
+    get bodyChildren() {
+      return created.bodyChildren;
+    },
+    node,
+    selection,
+  };
 }
 
 describe('Reader Flash lifecycle', () => {
+  it('registers one themed PDF root for the input, prompt and changing badges until its view retires', () => {
+    const source = createFlashWindow([{ value: 'first target', left: 20, top: 20 }]);
+    const other = createFlashWindow([{ value: 'other target', left: 20, top: 20 }]);
+    const { flash, themeRoot, registered } = createFlash();
+    flash.open(source.pdfWindow, 'visual-start');
+    const root = themeRoot.mock.calls[0]![0];
+    expect(root.className.split(' ')).toEqual(
+      expect.arrayContaining(['neo-appearance', 'neo-hints']),
+    );
+    setFlashQuery(source.bodyChildren, 'first');
+    expect(flashHints(source.bodyChildren)).toHaveLength(1);
+    expect(Array.from(root.children)).toContain(flashHints(source.bodyChildren)[0]);
+    setFlashQuery(source.bodyChildren, 'target');
+    expect(themeRoot).toHaveBeenCalledOnce();
+    expect(Array.from(root.children)).toContain(flashInput(source.bodyChildren));
+    expect(Array.from(root.children)).toContain(flashPrompt(source.bodyChildren));
+    flash.releaseView(other.pdfWindow);
+    expect(registered).toEqual(new Set([root]));
+    flash.releaseView(source.pdfWindow);
+    expect(registered.size).toBe(0);
+    expect(source.bodyChildren).toEqual([]);
+
+    flash.open(other.pdfWindow, 'visual-start');
+    flash.releaseView(source.pdfWindow);
+    expect(registered.size).toBe(1);
+    expect(flashInput(other.bodyChildren)).toBeDefined();
+    flash.dispose();
+    expect(registered.size).toBe(0);
+    expect(other.bodyChildren).toEqual([]);
+  });
+
   it('restores the directed PDF selection on Escape after Gecko input focus clears it', () => {
     const created = createSelectedFlashWindow();
     const { flash } = createFlash();
@@ -700,14 +765,14 @@ describe('Reader Flash lifecycle', () => {
     expect(created.bodyChildren).toHaveLength(0);
   });
 
-  it('removes a prompt appended after its opening was reentrantly cancelled', () => {
+  it('removes a root appended after its opening was reentrantly cancelled', () => {
     const created = createFlashWindow([{ value: 'target', left: 20, top: 20 }]);
     const { flash } = createFlash();
     const body = created.pdfWindow.document.body;
+    const append = body.appendChild.bind(body);
     Reflect.set(body, 'appendChild', (element: HTMLElement) => {
       flash.cancel();
-      created.bodyChildren.push(element);
-      return element;
+      return append(element);
     });
     flash.open(created.pdfWindow, 'visual-start');
     expect(flash.isOpen).toBe(false);

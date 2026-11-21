@@ -66,6 +66,7 @@ export interface ReaderNativeSidebarHost {
   ) => boolean;
   readonly onInput: () => void;
   readonly schedule: (delay: number, task: () => void) => ReaderTimer;
+  readonly themeRoot: (root: HTMLElement) => () => void;
   readonly clearTimer: (timer: ReaderTimer | null) => void;
   readonly log: (message: string) => void;
 }
@@ -89,6 +90,8 @@ export class ReaderNativeSidebar {
   readonly #decoration = new ReaderSidebarDecoration();
   #marksRoot: HTMLElement | null = null;
   #captionsRoot: HTMLElement | null = null;
+  #marksThemeCleanup: (() => void) | null = null;
+  #captionsThemeCleanup: (() => void) | null = null;
   #marksView: NativeReactView<ReaderSidebarViewModel> | null = null;
   #captionsView: NativeReactView<ReaderSidebarViewModel> | null = null;
   #captionEntries: readonly ReaderCaptionTarget[] | null = null;
@@ -448,18 +451,25 @@ export class ReaderNativeSidebar {
     };
     visit(readerSidebarState(this.#host.reader)?.outline ?? [], 0, null, true);
     const wrapper = this.#decoration.update(document, rows);
-    if (!wrapper) return;
+    if (!wrapper) {
+      const failure = new CleanupFailure();
+      failure.run(() => this.#releaseSection('captions'));
+      failure.run(() => this.#releaseSection('marks'));
+      failure.rethrow();
+      return;
+    }
     this.refreshCaptions();
     if (!this.#marksRoot || this.#marksRoot.parentElement !== wrapper) {
-      this.#marksView?.dispose();
-      this.#marksView = null;
-      if (this.#marksRoot && !isDeadObject(this.#marksRoot)) this.#marksRoot.remove();
-      this.#marksRoot = document.createElement('section');
-      this.#marksRoot.id = 'zv-reader-marks';
-      this.#marksRoot.setAttribute('role', 'group');
-      this.#marksRoot.dataset.tabstop = '1';
-      this.#marksRoot.tabIndex = -1;
-      wrapper.appendChild(this.#marksRoot);
+      this.#releaseSection('marks');
+      const root = document.createElement('section');
+      this.#marksRoot = root;
+      root.id = 'zv-reader-marks';
+      root.className = 'neo-appearance neo-sidebar';
+      root.setAttribute('role', 'group');
+      root.dataset.tabstop = '1';
+      root.tabIndex = -1;
+      wrapper.appendChild(root);
+      this.#marksThemeCleanup = this.#host.themeRoot(root);
       this.#marksSignature = '';
       this.refreshMarks();
     }
@@ -477,14 +487,16 @@ export class ReaderNativeSidebar {
     const document = this.#document;
     if (!this.isCurrent() || !document || isDeadObject(document)) return;
     const wrapper = readerOutlineContainer(document);
-    if (!wrapper) return;
+    if (!wrapper) {
+      this.#releaseSection('captions');
+      return;
+    }
     if (!this.#captionsRoot || this.#captionsRoot.parentElement !== wrapper) {
-      this.#captionsView?.dispose();
-      this.#captionsView = null;
-      this.#captionsRoot?.remove();
+      this.#releaseSection('captions');
       const root = document.createElement('section');
       this.#captionsRoot = root;
       root.id = 'zv-reader-captions';
+      root.className = 'neo-appearance neo-sidebar';
       root.setAttribute('role', 'group');
       root.addEventListener(
         'toggle',
@@ -499,6 +511,7 @@ export class ReaderNativeSidebar {
         root,
         this.#marksRoot?.parentElement === wrapper ? this.#marksRoot : null,
       );
+      this.#captionsThemeCleanup = this.#host.themeRoot(root);
       this.#captionEntries = null;
     }
     const root = this.#captionsRoot;
@@ -695,25 +708,32 @@ export class ReaderNativeSidebar {
     failure.run(() => {
       if (observer && !isDeadObject(observer)) observer.disconnect();
     });
-    const marks = this.#marksRoot;
-    const captions = this.#captionsRoot;
-    const marksView = this.#marksView;
-    const captionsView = this.#captionsView;
-    this.#marksView = null;
-    this.#captionsView = null;
-    failure.run(() => captionsView?.dispose());
-    failure.run(() => marksView?.dispose());
-    this.#captionsRoot = null;
+    failure.run(() => this.#releaseSection('captions'));
+    failure.run(() => this.#releaseSection('marks'));
     this.#captionEntries = null;
-    failure.run(() => {
-      if (captions && !isDeadObject(captions)) captions.remove();
-    });
-    this.#marksRoot = null;
     this.#document = null;
     failure.run(() => this.#decoration.dispose());
-    failure.run(() => {
-      if (marks && !isDeadObject(marks)) marks.remove();
-    });
+    failure.rethrow();
+  }
+
+  #releaseSection(kind: 'marks' | 'captions'): void {
+    const failure = new CleanupFailure();
+    const marks = kind === 'marks';
+    const root = marks ? this.#marksRoot : this.#captionsRoot;
+    const view = marks ? this.#marksView : this.#captionsView;
+    const untheme = marks ? this.#marksThemeCleanup : this.#captionsThemeCleanup;
+    if (marks) {
+      this.#marksRoot = null;
+      this.#marksView = null;
+      this.#marksThemeCleanup = null;
+    } else {
+      this.#captionsRoot = null;
+      this.#captionsView = null;
+      this.#captionsThemeCleanup = null;
+    }
+    failure.run(() => view?.dispose());
+    failure.run(() => untheme?.());
+    if (root && !isDeadObject(root)) failure.run(() => root.remove());
     failure.rethrow();
   }
 

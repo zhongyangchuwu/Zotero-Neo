@@ -1,3 +1,8 @@
+import {
+  APPEARANCE_CUSTOM_CSS_KEY,
+  APPEARANCE_PRESET_KEY,
+  isAppearancePreset,
+} from '../../core/appearance-preferences';
 import { READER_SCROLL_NUMBER_SPECS, KEY_GUIDE_NUMBER_SPECS } from '../../core/preferences';
 import { OPTIONAL_MODULE_IDS } from '../../modules';
 import { TAB_ENHANCEMENT_PREFERENCES } from '../../modules/tab-enhancements/config';
@@ -25,6 +30,14 @@ export const NEO_PREFERENCE_FIELDS: readonly TransferField[] = [
     'language tags.separator defaultHighlightColor scroll.mode appearance.theme appearance.interaction.colorPreset appearance.interaction.markerWeight appearance.interaction.statusStyle appearance.interaction.customThemes',
   ),
   ...fields('number', 'Interaction', 'appearance.interaction.markerWidth'),
+  {
+    key: APPEARANCE_PRESET_KEY,
+    label: APPEARANCE_PRESET_KEY,
+    type: 'string',
+    category: 'Appearance',
+    validate: isAppearancePreset,
+  },
+  ...fields('string', 'Appearance', APPEARANCE_CUSTOM_CSS_KEY),
   ...Object.values(READER_SCROLL_NUMBER_SPECS).map(({ key, minimum, maximum }) => ({
     key,
     label: key,

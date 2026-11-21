@@ -142,13 +142,22 @@ describe('local template field selection', () => {
     catalog.dispose();
   });
 
-  it('excludes retired ItemAttributes controls from the built-in Neo template', async () => {
+  it('exposes global appearance fields but excludes retired Neo preferences from the template', async () => {
     const catalog = createSettingsTemplateCatalog(() => '1.0');
     const neo = (await catalog.list(context())).find(({ adapterID }) => adapterID === 'zotero-neo');
     const keys = neo?.fields.map(({ key }) => key);
+    expect(neo?.fields).toEqual(
+      expect.arrayContaining([
+        expect.objectContaining({ key: 'appearance.theme', type: 'string', supported: true }),
+        expect.objectContaining({ key: 'appearance.preset', type: 'string', supported: true }),
+        expect.objectContaining({ key: 'appearance.customCss', type: 'string', supported: true }),
+      ]),
+    );
     expect(keys).toContain('language');
     expect(keys).not.toContain('itemAttributes.fields.v1');
     expect(keys).not.toContain('modules.item-attributes.enabled');
+    expect(keys).not.toContain('picker.theme');
+    expect(keys).not.toContain('picker.customCss');
     catalog.dispose();
   });
 

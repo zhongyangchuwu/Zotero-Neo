@@ -119,6 +119,7 @@ export class SettingsCenter {
     backdrop.style.cssText = SETTINGS_BACKDROP_STYLE;
     const panel = doc.createElementNS(H, 'aside');
     panel.id = 'zotero-neo-settings-center';
+    panel.className = 'neo-appearance neo-settings';
     panel.setAttribute('role', 'dialog');
     panel.setAttribute('aria-modal', 'true');
     panel.tabIndex = -1;

@@ -27,7 +27,7 @@
 
 ## 调整外观和语言
 
-Neo 面板默认使用 Zotero 的颜色，并随宿主明暗切换。**交互配色**只调整 Neo 的交互标记和状态提示，不改变选择器主题或 Zotero 原生批注颜色。
+Neo 界面默认随 Zotero 切换明暗。**交互配色**另管 Neo 的选区标记和着色状态，不改 Zotero 原生批注颜色。
 
 | 设置 | 新配置默认值 | 可调整内容 |
 | --- | --- | --- |
@@ -36,30 +36,27 @@ Neo 面板默认使用 Zotero 的颜色，并随宿主明暗切换。**交互配
 | 状态样式 | 中性 | 可切换为着色。 |
 | 语言 | 跟随 Zotero | 在**高级**中可改为 English 或中文；影响设置界面和本地化命令标签。 |
 
-### 自定义选择器外观
+### 界面外观与自定义 CSS
 
-在 **Neo 设置 → 外观 → 选择器外观**中选择 **Classic**（默认）、**Terminal** 或 **Modern**，也可在**自定义选择器 CSS** 中粘贴多行样式。两项都自动保存，已打开的选择器会立即更新，不需要重启。对应偏好为 `extensions.zotero-neo.picker.theme` 和 `extensions.zotero-neo.picker.customCss`。
+在 **Neo 设置 → 外观 → 界面外观**选择 **Classic**（默认）、**Terminal** 或 **Modern**。Terminal 在浅色 Zotero 中用浅灰白底、直角、细线与等宽字体；切换到深色时自动改用深底。预设和**自定义 CSS**自动保存，已打开的 Neo 界面立即更新。两项分别保存为 `extensions.zotero-neo.appearance.preset` 和 `extensions.zotero-neo.appearance.customCss`，随工作区备份和文库同步一起导出，可在另一台设备上恢复。
 
-如果更习惯用编辑器，请在当前 [Zotero 配置文件目录](https://www.zotero.org/support/kb/profile_directory)下创建 `docs/custom-picker.css`，即 `<Zotero profile>/docs/custom-picker.css`。这不是 Zotero 数据目录，也不是插件源码目录。Neo 每次打开选择器时读取该文件；修改文件后要重新打开选择器。设置里的 CSS 有非空白内容时，以设置为准，不与文件合并。清空后恢复使用本次打开时读取的文件；没有文件时只用所选预设。
+也可在 [Zotero 配置文件目录](https://www.zotero.org/support/kb/profile_directory)中编辑 `docs/custom-neo.css`；仅当该文件不存在时，才读取旧的 `docs/custom-picker.css`。打开一个新的 Neo 面板可刷新所在窗口的文件样式。设置里非空的 CSS 优先，不与文件合并；只同步设置里的 CSS，不同步文件本身。
 
-CSS 只匹配选择器及其内部元素。可使用普通选择器和 `@media`，但不加载 `@import`、`url()` 等外部样式或资源。`.picker-root` 用于整块选择器，`.picker-row[selected]` 匹配当前选中的一行；也可分别调整 `.picker-cell-title`、`.picker-cell-citekey`、`.picker-list-container`、`.picker-preview-panel`、`.picker-input-wrapper`、`.picker-prompt`、`.picker-count` 和 `.picker-status-bar`。
+用 `.neo-appearance` 设置所有受支持的 Neo 界面，也可单独选 `.picker-root`（选择器）、`.neo-extensions`（扩展）、`.neo-find`（行内查找）、`.neo-settings` / `.neo-snapshots`（设置和快照）、`.neo-sidebar`（标签与阅读器侧栏）、`.neo-hints`（按键与阅读器提示）、`.neo-statusbar`（状态条）、`.neo-toast`（通知）或 `.neo-reader-overlay`（图表选择器、选区操作及批注评论）。这些选择器只影响 Neo 自有容器，不影响 Zotero 原生控件或 PDF 纸面。可使用 `@media` 和 `@supports`，不加载 `@import`、`url()` 等外部资源。
 
-下面让 Terminal 使用青色强调和深粉色选中行，并隐藏底部状态栏：
+常用令牌：`--neo-bg`、`--neo-surface`、`--neo-surface-subtle`、`--neo-border`、`--neo-fg`、`--neo-muted`、`--neo-accent`、`--neo-selected-bg`、`--neo-selected-fg`、`--neo-radius`、`--neo-shadow`、`--neo-font-ui`、`--neo-font-mono`。
 
 ```css
-.picker-root[data-picker-theme="terminal"] {
-  --picker-accent: #22d3ee;
-  --picker-selected-bg: #831843;
-  --picker-selected-fg: #fff;
-  --picker-selected-left-border: 1px solid var(--picker-accent);
+.neo-appearance[data-zotero-neo-preset="terminal"][data-zotero-neo-theme="light"] {
+  --neo-accent: #1557a2;
 }
 
-.picker-root[data-picker-theme="terminal"] .picker-status-bar {
-  display: none;
+.picker-root[data-picker-theme="terminal"] {
+  --picker-row-height: 30px;
 }
 ```
 
-去掉 `[data-picker-theme="terminal"]` 即可把样式用于所有预设。其他常用变量包括 `--picker-bg`、`--picker-border`（边框颜色）、`--picker-font-title`（标题字体）、`--picker-row-height` 和 `--picker-preview-bg`。
+原有 `.picker-*`、`data-picker-theme` 和 `--picker-*` 写法仍可用。
 
 ## 调整阅读器控制
 

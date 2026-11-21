@@ -8,6 +8,7 @@ import type { PdfWindow, ReaderRuntime, ReaderViewRuntime } from '../../reader/t
 interface CopyHintsHost extends Logger {
   readonly reader: ReaderRuntime;
   readonly viewForWindow: (window: PdfWindow) => ReaderViewRuntime | null;
+  readonly themeRoot: (root: HTMLElement) => () => void;
   readonly copyText: (text: string) => void;
   readonly text: (key: string) => string;
   readonly showStatus: (message: string, duration?: number) => void;
@@ -25,6 +26,7 @@ export class ReaderCopyHints {
     this.#host = host;
     this.#hints = new ReaderTargetHints({
       attribute: 'zoteroNeoCopyHint',
+      themeRoot: host.themeRoot,
       isCurrent: (window) => this.#isCurrent(window),
       choose: (window, target) => {
         const view = this.#view;

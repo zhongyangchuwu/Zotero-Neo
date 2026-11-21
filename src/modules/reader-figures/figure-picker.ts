@@ -72,6 +72,7 @@ export class ReaderFigurePicker {
     const doc = outer.document;
     const originalFocus = window.document.activeElement as HTMLElement | null;
     const backdrop = doc.createElementNS(H, 'div') as HTMLElement;
+    backdrop.className = 'neo-appearance neo-reader-overlay neo-reader-figure-picker';
     backdrop.style.cssText = FIGURES_BACKDROP_STYLE;
     const root = doc.createElementNS(H, 'div') as HTMLElement;
     backdrop.append(root);

@@ -8,10 +8,10 @@ import type {
 } from '../../../modules/extensions/react-model';
 
 export const EXTENSIONS_REACT_CSS = `
-.neo-extensions-panel{width:min(960px,calc(100vw - 80px));height:min(640px,calc(100vh - 80px));min-width:620px;min-height:420px;display:flex;flex-direction:column;overflow:hidden;background:${THEME_VARS.surface};border:1px solid ${THEME_VARS.border};border-radius:8px;box-shadow:0 24px 70px ${THEME_VARS.shadow}}
+.neo-extensions-panel{width:min(960px,calc(100vw - 80px));height:min(640px,calc(100vh - 80px));min-width:620px;min-height:420px;display:flex;flex-direction:column;overflow:hidden;background:${THEME_VARS.surface};border:1px solid ${THEME_VARS.border};border-radius:var(--neo-radius);box-shadow:var(--neo-shadow);font-family:var(--neo-font-ui)}
 .neo-extensions-header{display:flex;align-items:center;gap:14px;padding:12px 14px;background:${THEME_VARS.elevated};border-bottom:1px solid ${THEME_VARS.border}}
 .neo-extensions-header strong{font-size:14px;white-space:nowrap}.neo-extensions-count{color:${THEME_VARS.muted};white-space:nowrap}
-.neo-extensions-input{flex:1;min-width:140px;padding:6px 9px;color:${THEME_VARS.text};background:${THEME_VARS.input};border:1px solid ${THEME_VARS.border};border-radius:5px;outline:none;font:inherit}
+.neo-extensions-input{flex:1;min-width:140px;padding:6px 9px;color:${THEME_VARS.text};background:${THEME_VARS.input};border:1px solid ${THEME_VARS.border};border-radius:var(--neo-radius-small);outline:none;font:inherit}
 .neo-extensions-input::placeholder{color:${THEME_VARS.muted} !important;opacity:1}
 .neo-extensions-content{display:grid;grid-template-columns:minmax(260px,42%) minmax(320px,58%);flex:1;min-height:0}
 .neo-extensions-list{overflow:auto;min-height:0;padding:7px 0;border-right:1px solid ${THEME_VARS.border};outline:none}

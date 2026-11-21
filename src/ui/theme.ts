@@ -1,4 +1,7 @@
 import type { PreferenceReader } from '../core/preferences';
+import { isDeadObject } from '../platform/cross-compartment';
+import { attachNeoAppearance } from './appearance';
+import { appearanceHostPalette } from './appearance-styles';
 
 export const APPEARANCE_PREFERENCE_KEY = 'appearance.theme' as const;
 
@@ -266,7 +269,7 @@ export function applyTheme(
 export class ThemeManager {
   readonly #window: Window;
   readonly #preferences: ThemePreferenceSource;
-  readonly #roots = new Set<ThemeRoot>();
+  readonly #roots = new Map<ThemeRoot, (() => void) | null>();
   readonly #listeners = new Set<(theme: ResolvedTheme) => void>();
   readonly #media: MediaQueryList | null;
   readonly #mediaListener = (): void => this.refresh();
@@ -274,6 +277,7 @@ export class ThemeManager {
   readonly #preferenceCleanup: (() => void) | null;
   #theme: ResolvedTheme;
   #palette: Readonly<Record<string, string>>;
+  #appearancePalette: Readonly<Record<string, string>> | undefined;
   #disposed = false;
 
   constructor(window: Window, preferences: ThemePreferenceSource) {
@@ -291,11 +295,25 @@ export class ThemeManager {
     this.#preferenceCleanup = this.createPreferenceObserver();
   }
 
-  add(root: ThemeRoot): () => void {
+  add(root: ThemeRoot, onAppearanceChange?: () => void): () => void {
     if (this.#disposed) return () => undefined;
-    this.#roots.add(root);
-    applyTheme(root, this.#theme, this.#palette);
-    return () => this.#roots.delete(root);
+    if (!this.#roots.has(root)) {
+      const optedIn = root.classList?.contains('neo-appearance');
+      applyTheme(root, this.#theme, optedIn ? this.#neoPalette() : this.#palette);
+      this.#roots.set(
+        root,
+        optedIn ? attachNeoAppearance(root, this.#preferences, onAppearanceChange) : null,
+      );
+    }
+    return () => {
+      const cleanup = this.#roots.get(root);
+      this.#roots.delete(root);
+      cleanup?.();
+    };
+  }
+
+  #neoPalette(): Readonly<Record<string, string>> {
+    return (this.#appearancePalette ??= appearanceHostPalette(this.#palette));
   }
 
   observe(listener: (theme: ResolvedTheme) => void): () => void {
@@ -310,7 +328,11 @@ export class ThemeManager {
     const changed = nextTheme !== this.#theme;
     this.#theme = nextTheme;
     this.#palette = hostPalette(this.#window, this.#theme);
-    for (const root of this.#roots) applyTheme(root, this.#theme, this.#palette);
+    this.#appearancePalette = undefined;
+    for (const [root, appearance] of this.#roots) {
+      if (!isDeadObject(root))
+        applyTheme(root, this.#theme, appearance ? this.#neoPalette() : this.#palette);
+    }
     if (changed) {
       for (const listener of this.#listeners) {
         try {
@@ -332,6 +354,11 @@ export class ThemeManager {
     try {
       this.#preferenceCleanup?.();
     } catch {}
+    for (const cleanup of this.#roots.values()) {
+      try {
+        cleanup?.();
+      } catch {}
+    }
     this.#roots.clear();
     this.#listeners.clear();
   }

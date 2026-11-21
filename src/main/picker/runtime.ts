@@ -40,5 +40,4 @@ export class PickerRuntime {
   previousElement: Element | null = null;
   previousWindow: Window | null = null;
   themeCleanup: (() => void) | null = null;
-  appearanceCleanup: (() => void) | null = null;
 }

@@ -322,6 +322,7 @@ export class ReaderCommentEditor {
         : 'saved';
     const overlay = document.createElement('div');
     overlay.id = 'zv-annotation-comment';
+    overlay.className = 'neo-appearance neo-reader-overlay';
     overlay.style.cssText = ANNOTATION_COMMENT_OVERLAY_STYLE;
     this.#overlay = overlay;
     document.body?.appendChild(overlay);

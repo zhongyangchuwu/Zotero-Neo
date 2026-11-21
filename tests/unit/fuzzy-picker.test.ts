@@ -1414,12 +1414,15 @@ describe('Picker owner lifetime', () => {
     const bindingFailure = new Error('binding disposal failed');
     const inputFailure = new Error('input cleanup failed');
     const themeFailure = new Error('theme cleanup failed');
-    let themeReleaseCount = 0;
-    const releaseTheme = vi.fn(() => {
-      themeReleaseCount += 1;
-      if (themeReleaseCount === 1) throw themeFailure;
-    });
-    session.theme.add = () => releaseTheme;
+    const themeLeases = new Map<Element, () => void>();
+    session.theme.add = (root) => {
+      const fail = themeLeases.size === 1;
+      const release = vi.fn(() => {
+        if (fail) throw themeFailure;
+      });
+      themeLeases.set(root, release);
+      return release;
+    };
     let replacementOpening: Promise<void> | undefined;
     const onClose = vi.fn(() => {
       replacementOpening = picker.open(window, session, 'notes', {
@@ -1456,7 +1459,8 @@ describe('Picker owner lifetime', () => {
     expect(onClose).toHaveBeenCalledOnce();
     expect(bindings.dispose).toHaveBeenCalledOnce();
     expect(cleanupInput).toHaveBeenCalledOnce();
-    expect(releaseTheme).toHaveBeenCalledTimes(2);
+    expect(themeLeases.size).toBe(4); // Both the first and the reentrant Picker own a backdrop and panel.
+    for (const release of themeLeases.values()) expect(release).toHaveBeenCalledOnce();
     expect(overlay.isConnected).toBe(false);
     expect(bodyChildren.every((child) => !child.isConnected)).toBe(true);
     expect(restoreFocus).not.toHaveBeenCalled();
@@ -2136,8 +2140,12 @@ describe('picker admitted confirmation safety', () => {
     vi.useFakeTimers();
     vi.stubGlobal('Services', { focus: { focusedWindow: null } });
     const { window, session, cleanups } = createPickerHarness();
-    const releaseTheme = vi.fn();
-    session.theme.add = () => releaseTheme;
+    const themeLeases = new Map<Element, () => void>();
+    session.theme.add = (root) => {
+      const release = vi.fn();
+      themeLeases.set(root, release);
+      return release;
+    };
     const picker = createFuzzyPicker(
       { debug: vi.fn(), diagnostic: vi.fn() },
       new MainNavigation({ debug: vi.fn(), diagnostic: vi.fn() }, () => {}),
@@ -2165,13 +2173,14 @@ describe('picker admitted confirmation safety', () => {
     overlay.emit('mousedown');
     expect(session.picker.open).toBe(true);
     expect(onClose).not.toHaveBeenCalled();
-    expect(releaseTheme).not.toHaveBeenCalled();
+    expect(themeLeases.size).toBe(2);
+    for (const release of themeLeases.values()) expect(release).not.toHaveBeenCalled();
     // Session teardown uses the public force-close path, even while the host owns an admitted save.
     cleanups[0]!();
     expect(session.picker.open).toBe(false);
     expect(overlay.isConnected).toBe(false);
     expect(dispose).toHaveBeenCalledOnce();
-    expect(releaseTheme).toHaveBeenCalledOnce();
+    for (const release of themeLeases.values()) expect(release).toHaveBeenCalledOnce();
     expect(onClose).toHaveBeenCalledOnce();
     picker.close(session);
     retiredInput.value = 'beta';

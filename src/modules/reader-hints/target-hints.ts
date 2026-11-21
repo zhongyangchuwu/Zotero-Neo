@@ -29,6 +29,7 @@ interface HintBox {
 interface TargetHintsHost<Value> {
   readonly attribute: 'zoteroNeoLinkHint' | 'zoteroNeoCopyHint';
   readonly isCurrent: (window: PdfWindow) => boolean;
+  readonly themeRoot: (root: HTMLElement) => () => void;
   readonly choose: (window: PdfWindow, value: Value) => void;
   readonly failed?: (error: unknown) => void;
   readonly closed?: (reason: 'cancelled' | 'confirmed') => void;
@@ -39,6 +40,8 @@ const GAP = 3;
 export class ReaderTargetHints<Value> {
   readonly #host: TargetHintsHost<Value>;
   #badges: HintBadge<Value>[] = [];
+  #root: HTMLElement | null = null;
+  #untheme: (() => void) | null = null;
   #prompt: HTMLElement | null = null;
   #buffer = '';
   #window: PdfWindow | null = null;
@@ -58,20 +61,23 @@ export class ReaderTargetHints<Value> {
     this.cancel();
     if (!this.#host.isCurrent(window)) return;
     this.#window = window;
-    const body = window.document.body;
-    if (!this.#host.isCurrent(window)) {
+    if (!targets.length) {
       this.cancel();
       return;
     }
+    const document = window.document;
+    const body = document.body;
+    if (!this.#host.isCurrent(window)) return;
     if (!body) throw new Error('PDF hint root unavailable');
+    const root = document.createElement('div');
+    root.className = 'neo-appearance neo-hints';
+    // The fixed-position badges still use the PDF viewport, not a new containing block.
+    root.style.display = 'contents';
+    this.#root = root;
     const labels = hintLabels(targets.length);
     const geometry = new Map<HintBadge<Value>, readonly number[]>();
     for (const [index, target] of targets.entries()) {
-      const element = window.document.createElement('span');
-      if (!this.#host.isCurrent(window)) {
-        this.cancel();
-        return;
-      }
+      const element = document.createElement('span');
       element.dataset[this.#host.attribute] = '1';
       if (target.group) element.dataset.zoteroNeoHintGroup = target.group;
       const label = labels[index]!;
@@ -80,38 +86,32 @@ export class ReaderTargetHints<Value> {
       const badge = { element, label, target };
       this.#badges.push(badge);
       geometry.set(badge, target.rect);
-      body.appendChild(element);
-      if (!this.#host.isCurrent(window)) {
-        const failure = new CleanupFailure();
-        failure.run(() => this.cancel());
-        if (!isDeadObject(element)) failure.run(() => element.remove());
-        failure.rethrow();
-        return;
-      }
-    }
-    if (!this.isOpen) {
-      this.cancel();
-      return;
+      root.appendChild(element);
     }
     if (prompt) {
-      const element = window.document.createElement('span');
-      if (!this.#host.isCurrent(window)) {
-        this.cancel();
-        return;
-      }
+      const element = document.createElement('span');
       this.#prompt = element;
       element.dataset.zoteroNeoHintPrompt = '1';
       element.textContent = prompt;
       element.style.cssText = PDF_HINT_PROMPT_STYLE;
-      body.appendChild(element);
-      if (!this.#host.isCurrent(window)) {
-        const failure = new CleanupFailure();
-        failure.run(() => this.cancel());
-        if (!isDeadObject(element)) failure.run(() => element.remove());
-        failure.rethrow();
-        return;
-      }
+      root.appendChild(element);
     }
+    try {
+      body.appendChild(root);
+    } finally {
+      if (this.#root !== root && !isDeadObject(root)) root.remove();
+    }
+    if (this.#root !== root) return;
+    if (!this.#host.isCurrent(window)) {
+      this.cancel();
+      return;
+    }
+    const untheme = this.#host.themeRoot(root);
+    if (this.#root !== root) {
+      untheme();
+      return;
+    }
+    this.#untheme = untheme;
     if (!this.#host.isCurrent(window)) {
       this.cancel();
       return;
@@ -199,11 +199,13 @@ export class ReaderTargetHints<Value> {
 
   /** Retires all owners before attempting every live DOM/frame cleanup. */
   cancel(reason: 'cancelled' | 'confirmed' = 'cancelled'): void {
-    const badges = this.#badges,
-      owner = this.#window,
+    const owner = this.#window,
       frame = this.#frame,
-      prompt = this.#prompt;
+      root = this.#root,
+      untheme = this.#untheme;
     this.#badges = [];
+    this.#root = null;
+    this.#untheme = null;
     this.#prompt = null;
     this.#window = null;
     this.#buffer = '';
@@ -212,14 +214,8 @@ export class ReaderTargetHints<Value> {
     if (owner) failure.run(() => this.#host.closed?.(reason));
     if (owner && !isDeadObject(owner) && frame !== null)
       failure.run(() => owner.cancelAnimationFrame(frame));
-    if (prompt)
-      failure.run(() => {
-        if (!isDeadObject(prompt)) prompt.remove();
-      });
-    for (const badge of badges)
-      failure.run(() => {
-        if (!isDeadObject(badge.element)) badge.element.remove();
-      });
+    failure.run(() => untheme?.());
+    if (root && !isDeadObject(root)) failure.run(() => root.remove());
     failure.rethrow();
   }
 

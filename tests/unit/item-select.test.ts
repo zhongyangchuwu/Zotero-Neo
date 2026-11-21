@@ -183,6 +183,8 @@ function selectedIDs(store: SelectionStore): number[] {
     .sort((left, right) => left - right);
 }
 
+const themeRoot = () => () => {};
+
 describe('Main Selection retirement ownership', () => {
   it('keeps persistent Selection visible when an older transient status timer is delivered', () => {
     const host = harness();
@@ -193,7 +195,7 @@ describe('Main Selection retirement ownership', () => {
       () => {},
       () => true,
     );
-    feature.addWindow(host.window, store, appearanceSource());
+    feature.addWindow(host.window, store, appearanceSource(), themeRoot);
     feature.clearSelection(host.window, store);
     const timer = vi
       .mocked(host.window.setTimeout)
@@ -230,7 +232,7 @@ describe('Main Selection retirement ownership', () => {
       () => {},
       () => true,
     );
-    feature.addWindow(host.window, oldSelection, appearance);
+    feature.addWindow(host.window, oldSelection, appearance, themeRoot);
     feature.refresh(host.window, oldSelection);
     let observed: unknown;
     try {
@@ -241,7 +243,7 @@ describe('Main Selection retirement ownership', () => {
     expect(observed).toBe(failure);
     const selection = new SelectionStore();
     selection.add({ libraryID: 1, itemID: 12 });
-    feature.addWindow(host.window, selection, appearanceSource());
+    feature.addWindow(host.window, selection, appearanceSource(), themeRoot);
     feature.refresh(host.window, selection);
     const status = badgeStatus(host.badge);
     oldSelection.add({ libraryID: 1, itemID: 11 });
@@ -424,7 +426,7 @@ describe('Main Visual Selection', () => {
         () => {},
         () => true,
       );
-      feature.addWindow(host.window, store, appearance);
+      feature.addWindow(host.window, store, appearance, themeRoot);
 
       expect(feature.enter(host.window, store)).toBe('entered');
       expect(badgeStatus(host.badge)).toEqual({
@@ -452,7 +454,7 @@ describe('Main Visual Selection', () => {
         () => {},
         () => true,
       );
-      feature.addWindow(host.window, store, appearance);
+      feature.addWindow(host.window, store, appearance, themeRoot);
 
       expect(feature.enter(host.window, store)).toBe('entered');
       feature[exit](host.window, store);
@@ -499,7 +501,7 @@ describe('Main Visual Selection', () => {
       () => {},
       () => true,
     );
-    feature.addWindow(host.window, store, appearanceSource());
+    feature.addWindow(host.window, store, appearanceSource(), themeRoot);
     expect(feature.isVisual(host.window)).toBe(false);
     expect(feature.enter(host.window, store)).toBe('entered');
     expect(feature.isVisual(host.window)).toBe(true);

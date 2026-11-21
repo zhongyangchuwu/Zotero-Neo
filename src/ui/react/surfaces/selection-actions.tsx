@@ -7,14 +7,14 @@ import type {
 } from '../../../modules/reader-selection/react-model';
 
 export const SELECTION_ACTIONS_REACT_CSS = `
-.neo-selection-actions { font:menu; line-height:1.4; }
+.neo-selection-actions { font:menu; font-family:var(--neo-font-ui); line-height:1.4; }
 .neo-selection-actions .title { font-weight:700; color:var(--zotero-neo-text); margin-bottom:6px; }
 .neo-selection-actions .result-title { letter-spacing:.04em; margin-bottom:8px; }
-.neo-selection-actions .preview { padding:6px 8px; margin-bottom:8px; border-radius:5px; background:var(--zotero-neo-elevated); color:var(--zotero-neo-muted); white-space:normal; }
+.neo-selection-actions .preview { padding:6px 8px; margin-bottom:8px; border-radius:var(--neo-radius-small); background:var(--zotero-neo-elevated); color:var(--zotero-neo-muted); white-space:normal; }
 .neo-selection-actions .status { padding:8px; color:var(--zotero-neo-text); }
-.neo-selection-actions .row { padding:5px 8px; border-radius:4px; color:var(--zotero-neo-text); }
+.neo-selection-actions .row { padding:5px 8px; border-radius:var(--neo-radius-small); color:var(--zotero-neo-text); }
 .neo-selection-actions .row.selected { background:var(--zotero-neo-selected); color:var(--zotero-neo-selected-text); font-weight:600; }
-.neo-selection-actions .result { white-space:pre-wrap; user-select:text; -moz-user-select:text; padding:8px; border-radius:5px; background:var(--zotero-neo-elevated); color:var(--zotero-neo-text); }
+.neo-selection-actions .result { white-space:pre-wrap; user-select:text; -moz-user-select:text; padding:8px; border-radius:var(--neo-radius-small); background:var(--zotero-neo-elevated); color:var(--zotero-neo-text); }
 .neo-selection-actions .help { margin-top:8px; color:var(--zotero-neo-muted); }
 `;
 

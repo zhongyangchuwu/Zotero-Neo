@@ -14,7 +14,7 @@ export function nativeObjectIdentity<T extends object>(value: T): T {
 
 /** Detects chrome wrappers invalidated when their content iframe is destroyed. */
 export function isDeadObject(value: object): boolean {
-  return Components.utils.isDeadWrapper(value);
+  return (typeof Components !== 'undefined' && Components.utils?.isDeadWrapper?.(value)) || false;
 }
 
 /** Restores Xrays so native DOM calls retain ChromeOnly options on waived host targets. */

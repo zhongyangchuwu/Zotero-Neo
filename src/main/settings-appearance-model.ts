@@ -1,9 +1,9 @@
+import type { AppearancePreset } from '../core/appearance-preferences';
 import type {
   InteractionPalette8,
   InteractionStatusColors,
   InteractionStatusStyle,
 } from './interaction-appearance';
-import type { PickerTheme } from './picker/appearance';
 import type { SettingsLanguage } from './settings-i18n';
 
 export type AppearancePaletteMode = 'light' | 'dark';
@@ -21,8 +21,8 @@ export interface AppearancePageModel {
   view: 'library' | 'editor';
   markerWidth: number;
   statusStyle: InteractionStatusStyle;
-  pickerTheme: PickerTheme;
-  pickerCustomCss: string;
+  appearancePreset: AppearancePreset;
+  appearanceCustomCss: string;
   themes: AppearanceThemeModel[];
   confirmedDelete: string | null;
   status: string;
@@ -47,8 +47,8 @@ export interface AppearancePageModel {
 export type AppearancePageCommand =
   | { type: 'marker-width'; value: number }
   | { type: 'status-style'; value: InteractionStatusStyle }
-  | { type: 'picker-theme'; value: string }
-  | { type: 'picker-custom-css'; value: string }
+  | { type: 'appearance-preset'; value: string }
+  | { type: 'appearance-custom-css'; value: string }
   | { type: 'select'; id: string }
   | { type: 'edit'; id: string }
   | { type: 'delete'; id: string }

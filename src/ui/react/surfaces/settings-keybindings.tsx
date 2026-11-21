@@ -435,7 +435,7 @@ export const KEYBINDINGS_REACT_CSS = `
 .neo-settings-keybindings .kb-toolbar, .neo-settings-keybindings .kb-row { display:flex; align-items:center; flex-wrap:wrap; gap:.55em; }
 .neo-settings-keybindings .kb-toolbar input { width:min(32em, 100%); }
 .neo-settings-keybindings .kb-scroll { max-height:55vh; overflow:auto; scrollbar-gutter:stable; }
-.neo-settings-keybindings .kb-action, .neo-settings-keybindings .kb-invalid, .neo-settings-keybindings .kb-recorder { margin:.25em 0; padding:.45em .6em; border:1px solid var(--zotero-neo-border); border-radius:5px; }
+.neo-settings-keybindings .kb-action, .neo-settings-keybindings .kb-invalid, .neo-settings-keybindings .kb-recorder { margin:.25em 0; padding:.45em .6em; border:1px solid var(--zotero-neo-border); border-radius:var(--neo-radius-small); }
 .neo-settings-keybindings summary { cursor:pointer; }
 .neo-settings-keybindings .kb-action summary > * { margin-inline-end:.55em; }
 .neo-settings-keybindings .kb-detail { padding:.55em 0; border-top:1px solid var(--zotero-neo-border); }

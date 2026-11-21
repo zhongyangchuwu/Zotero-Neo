@@ -1087,6 +1087,14 @@ function createUnstartedHistorySession(...args: Parameters<typeof createHistoryS
   return createHistorySession(args[0], args[1], args[2], args[3], args[4], args[5], args[6], false);
 }
 
+function pdfOverlayNodes({
+  bodyChildren,
+}: {
+  bodyChildren: readonly HTMLElement[];
+}): HTMLElement[] {
+  return bodyChildren.flatMap((node) => [node, ...Array.from(node.children)] as HTMLElement[]);
+}
+
 function configureAnnotationPersistence(
   readers: readonly ReaderHistoryHarness[],
   save: () => Promise<void> = async () => {},
@@ -1612,7 +1620,9 @@ describe('Reader annotation creation ownership', () => {
       controller.rescan(first.ownerWindow);
       service.dispatch('renderTextSelectionPopup', { reader: first.reader, params: nativeParams });
       controller.forwardKey(readerKey('v').event, second.ownerWindow);
-      const input = second.bodyChildren.find((node) => node.dataset.zoteroNeoFlashInput === '1');
+      const input = pdfOverlayNodes(second).find(
+        (node) => node.dataset.zoteroNeoFlashInput === '1',
+      );
       if (!input) throw new Error('Expected Flash query input');
       Reflect.set(input, 'value', 'beta');
       const changed = vi
@@ -2262,7 +2272,15 @@ function configureLinkView(
 }
 
 function linkHintElements(created: ReturnType<typeof createHistorySession>): HTMLElement[] {
-  return created.bodyChildren.filter((node) => node.dataset.zoteroNeoLinkHint === '1');
+  return pdfOverlayNodes(created).filter((node) => node.dataset.zoteroNeoLinkHint === '1');
+}
+
+function linkHintRoot(created: { bodyChildren: readonly HTMLElement[] }): HTMLElement {
+  return created.bodyChildren.find((node) =>
+    Array.from(node.children).some(
+      (child) => (child as HTMLElement).dataset.zoteroNeoLinkHint === '1',
+    ),
+  )!;
 }
 
 function destinationCueElement(
@@ -2393,9 +2411,9 @@ describe('Reader module configuration', () => {
     view._onKeyDown = native;
     created.session.start();
     created.session.focusAndHandle(readerKey('f').event);
-    const badge = linkHintElements(created)[0]!;
+    const root = linkHintRoot(created);
     const original = new Error('live module cleanup failed');
-    vi.mocked(badge.remove).mockImplementationOnce(() => {
+    vi.mocked(root.remove).mockImplementationOnce(() => {
       throw original;
     });
     expect(() => created.session.dispose()).toThrow(original);
@@ -2408,7 +2426,7 @@ describe('Reader module configuration', () => {
     created.session.focusAndHandle(key.event);
     expect(key.preventDefault).not.toHaveBeenCalled();
     created.session.dispose();
-    badge.remove();
+    root.remove();
   });
 
   it('keeps core Reader selection, navigation and native input with legacy module requests off', () => {
@@ -2936,7 +2954,7 @@ describe('Reader Flash input ownership', () => {
     const created = createFlashSession();
     created.session.start();
     created.session.focusAndHandle(readerKey('v').event);
-    const input = created.bodyChildren.find((node) => node.dataset.zoteroNeoFlashInput === '1');
+    const input = pdfOverlayNodes(created).find((node) => node.dataset.zoteroNeoFlashInput === '1');
     if (!input) throw new Error('Expected Flash query input');
     const listener = vi
       .mocked(input.addEventListener)
@@ -2946,8 +2964,8 @@ describe('Reader Flash input ownership', () => {
       Reflect.set(created.pdfWindow, 'document', { ...created.pdfWindow.document });
       Reflect.set(input, 'value', 'target');
       listener({ target: input } as unknown as Event);
-      expect(created.bodyChildren).not.toContain(input);
-      expect(created.bodyChildren.some((node) => node.dataset.zoteroNeoFlashHint === '1')).toBe(
+      expect(pdfOverlayNodes(created)).not.toContain(input);
+      expect(pdfOverlayNodes(created).some((node) => node.dataset.zoteroNeoFlashHint === '1')).toBe(
         false,
       );
     } finally {
@@ -2976,11 +2994,11 @@ describe('Reader Flash input ownership', () => {
       created.session.start();
       created.session.focusAndHandle(readerKey('v').event);
       expect(
-        created.bodyChildren.some((element) => element.dataset.zoteroNeoFlashInput === '1'),
+        pdfOverlayNodes(created).some((element) => element.dataset.zoteroNeoFlashInput === '1'),
       ).toBe(true);
       blur.listener?.({ target: created.pdfWindow, relatedTarget: null } as unknown as FocusEvent);
       expect(
-        created.bodyChildren.some((element) => element.dataset.zoteroNeoFlashInput === '1'),
+        pdfOverlayNodes(created).some((element) => element.dataset.zoteroNeoFlashInput === '1'),
       ).toBe(false);
     } finally {
       created.session.dispose();
@@ -5506,7 +5524,7 @@ describe('PDF follow-link hints', () => {
     created.session.dispose();
   });
 
-  it('retires hint ownership even when a live badge cannot be removed', () => {
+  it('retires hint ownership even when the live group cannot be removed', () => {
     const created = createUnstartedHistorySession();
     const { view } = configureLinkView(created, [
       internalLink([10, 10, 80, 30]),
@@ -5516,9 +5534,10 @@ describe('PDF follow-link hints', () => {
     view._onKeyDown = native;
     created.session.start();
     created.session.focusAndHandle(readerKey('f').event);
-    const badge = linkHintElements(created)[0]!;
-    const failure = new Error('live badge removal failed');
-    vi.mocked(badge.remove).mockImplementationOnce(() => {
+    const root = linkHintRoot(created);
+    const badges = linkHintElements(created);
+    const failure = new Error('live hint group removal failed');
+    vi.mocked(root.remove).mockImplementationOnce(() => {
       throw failure;
     });
     try {
@@ -5527,15 +5546,15 @@ describe('PDF follow-link hints', () => {
     } catch (error) {
       expect(error).toBe(failure);
     }
-    expect(linkHintElements(created)).toEqual([badge]);
+    expect(linkHintElements(created)).toEqual(badges);
     const key = readerKey('x').event;
     view._onKeyDown?.(key);
     expect(native).toHaveBeenCalledExactlyOnceWith(key);
-    badge.remove();
+    root.remove();
     created.session.dispose();
   });
 
-  it('releases a destroyed view without touching its dead badges, cue or RAF boundary', () => {
+  it('releases a destroyed view without touching its dead hint group, cue or RAF boundary', () => {
     const created = createUnstartedHistorySession();
     const { view } = configureLinkView(created, [internalLink([10, 10, 80, 30])]);
     const originalKey = vi.fn();
@@ -5547,11 +5566,11 @@ describe('PDF follow-link hints', () => {
     created.session.focusAndHandle(readerKey('a').event);
     const cue = destinationCueElement(created)!;
     created.session.focusAndHandle(readerKey('f').event);
-    const badge = linkHintElements(created)[0]!;
-    const dead = new Set<object>([created.pdfWindow, cue, badge]);
+    const root = linkHintRoot(created);
+    const dead = new Set<object>([created.pdfWindow, cue, root]);
     const utils = Reflect.get(globalThis, 'Components').utils;
     utils.isDeadWrapper = (value: object) => dead.has(value);
-    for (const node of [cue, badge]) {
+    for (const node of [cue, root]) {
       Object.defineProperty(node, 'remove', {
         get: () => {
           throw new Error('cannot access dead object');
@@ -6084,8 +6103,8 @@ describe('Reader copy target actions', () => {
     Reflect.set(created.reader._internalReader!, '_primaryView', { ...view });
     created.session.focusAndHandle(readerKey('a').event);
     expect(copyString).not.toHaveBeenCalled();
-    expect(created.bodyChildren.filter((node) => node.dataset.zoteroNeoCopyHint === '1')).toEqual(
-      [],
+    expect(pdfOverlayNodes(created).some((node) => node.dataset.zoteroNeoCopyHint === '1')).toBe(
+      false,
     );
     created.session.dispose();
   });

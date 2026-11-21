@@ -322,6 +322,7 @@ export class ReaderSelectionActions {
     const overlay = document.createElement('div');
     this.#overlay = overlay;
     overlay.id = 'zv-selection-actions';
+    overlay.className = 'neo-appearance neo-reader-overlay';
     overlay.dataset.zoteroNeoSelectionActions = '1';
     overlay.style.cssText = SELECTION_ACTIONS_OVERLAY_STYLE;
     document.body?.appendChild(overlay);

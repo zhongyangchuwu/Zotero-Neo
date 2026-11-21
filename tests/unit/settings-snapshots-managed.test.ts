@@ -16,9 +16,18 @@ import type {
   SettingsTemplateCatalogPort,
   SnapshotPluginTemplate,
 } from '../../src/settings-snapshots/ports';
-import { SettingsSnapshotService } from '../../src/settings-snapshots/service';
+import { SettingsSnapshotService, settingsChangeID } from '../../src/settings-snapshots/service';
 import { createManagedSettingsSnapshots } from '../../src/settings-snapshots/managed';
-import { serializeSettingsDocument } from '../../src/settings-snapshots/document';
+import {
+  parseSettingsDocument,
+  serializeSettingsDocument,
+} from '../../src/settings-snapshots/document';
+import { createSettingsAdapters } from '../../src/settings-snapshots/registry';
+import {
+  prepareWorkspacePreferences,
+  restoreWorkspacePreferences,
+} from '../../src/settings-snapshots/workspace-preferences';
+import { settingsSnapshotHostFixture } from './settings-snapshots-host-fixture';
 
 const host = vi.hoisted(() => ({
   initialize: vi.fn<() => Promise<void>>(),
@@ -71,7 +80,10 @@ const context = (): SettingsCryptoContext => ({
   isCurrent: () => true,
   window: { setTimeout, clearTimeout, AbortController } as unknown as Window,
 });
-function fixture(extensions?: () => Promise<WorkspaceExtensionManifest>) {
+function fixture(
+  extensions?: () => Promise<WorkspaceExtensionManifest>,
+  neoAdapter?: SettingsAdapter,
+) {
   let value = 1;
   const capture = vi.fn(async (ctx?: SettingsCaptureContext) => ({
     section: {
@@ -107,7 +119,7 @@ function fixture(extensions?: () => Promise<WorkspaceExtensionManifest>) {
     reviewedKeys: ['flag'],
     issues: [],
   };
-  const neo: SettingsAdapter = {
+  const neo: SettingsAdapter = neoAdapter ?? {
     ...adapter,
     id: neoID,
     label: 'Zotero Neo',
@@ -157,6 +169,7 @@ function fixture(extensions?: () => Promise<WorkspaceExtensionManifest>) {
   return {
     managed,
     codec,
+    catalog,
     capture,
     list,
     template,
@@ -211,6 +224,7 @@ beforeEach(() => {
 });
 afterEach(() => {
   vi.useRealTimers();
+  vi.unstubAllGlobals();
 });
 
 it('rejects encrypted auto-update or plaintext secrets before capture/publication', async () => {
@@ -281,6 +295,54 @@ it('creates one workspace and common JSON snapshot for Neo and a locally reviewe
       { adapterID: pluginID, entries: [{ key: 'flag', state: { kind: 'set', value: 1 } }] },
     ],
   });
+  managed.dispose();
+});
+
+it('publishes and restores global appearance through a Zotero library workspace', async () => {
+  const t = settingsSnapshotHostFixture();
+  const prefix = 'extensions.zotero-neo.';
+  const css = '.neo-picker {\n  --neo-accent: teal;\n}\n';
+  t.user.set(prefix + 'appearance.preset', 'modern');
+  t.user.set(prefix + 'appearance.customCss', css);
+  t.user.set(prefix + 'picker.theme', 'terminal');
+  t.user.set(prefix + 'picker.customCss', 'old styles');
+  const adapter = createSettingsAdapters(() => '1')[1]!;
+  const { managed, service, catalog } = fixture(async () => ({ version: 1, addons: [] }), adapter);
+  const operation = { ...context(), container: 'json' as const };
+
+  const target = await managed.create({ ...request, adapterIDs: [neoID] }, '', operation);
+  expect(target).toMatchObject({ kind: 'workspace', status: 'ready' });
+  const document = parseSettingsDocument(host.attachments.create.mock.lastCall![1]);
+  expect(document.extensions).toEqual({ version: 1, addons: [] });
+  expect(document.sections[0]?.entries).toEqual([
+    { key: 'appearance.preset', state: { kind: 'set', value: 'modern' } },
+    { key: 'appearance.customCss', state: { kind: 'set', value: css } },
+  ]);
+
+  t.user.delete(prefix + 'appearance.preset');
+  t.user.delete(prefix + 'appearance.customCss');
+  const preview = await prepareWorkspacePreferences(document, catalog, operation);
+  const plan = await service.plan(preview.document, operation);
+  const selected = new Set(
+    ['appearance.preset', 'appearance.customCss'].map((key) => settingsChangeID(neoID, key)),
+  );
+  const result = await restoreWorkspacePreferences(
+    document,
+    catalog,
+    service,
+    plan,
+    preview.deferred,
+    selected,
+    operation,
+    async () => {},
+  );
+  expect(result.skipped).toEqual([]);
+  expect(result.receipt?.entries).toMatchObject([
+    { key: 'appearance.preset', status: 'applied' },
+    { key: 'appearance.customCss', status: 'applied' },
+  ]);
+  expect(t.user.get(prefix + 'appearance.preset')).toBe('modern');
+  expect(t.user.get(prefix + 'appearance.customCss')).toBe(css);
   managed.dispose();
 });
 
