@@ -1,7 +1,7 @@
 {
   "manifest_version": 2,
   "name": "Zotero Neo",
-  "version": "0.5.0",
+  "version": "0.6.0",
   "description": "A collection of tools for reading, annotating, and organizing in Zotero, with Vim-inspired keyboard controls.",
   "author": "ZorroStardust, Alex Fink (original author)",
   "homepage_url": "https://github.com/zhongyangchuwu/Zotero-Neo",
