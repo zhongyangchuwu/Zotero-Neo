@@ -4,6 +4,7 @@ import {
   ReaderCommentEditor,
   type AnnotationCommentTarget,
 } from '../../src/modules/reader-annotations/comment-editor';
+import type { AppLanguage } from '../../src/i18n';
 import type {
   AnnotationRuntime,
   PdfWindow,
@@ -157,7 +158,7 @@ function createView() {
   };
 }
 
-function createHarness() {
+function createHarness(language: AppLanguage = 'en') {
   vi.useFakeTimers();
   const preferences = new Map<string, string>();
   Reflect.set(globalThis, 'Services', {
@@ -242,7 +243,7 @@ function createHarness() {
     onInputOwnerChanged,
     onExit,
     debug,
-    locale: () => 'en-US',
+    language: () => language,
   });
   return {
     editor,
@@ -347,6 +348,16 @@ async function settleJobs(): Promise<void> {
 }
 
 describe('ReaderCommentEditor input ownership', () => {
+  it.each([
+    ['en', 'Enter newline · Esc save & close', 'Saved'],
+    ['zh-CN', 'Enter 换行 · Esc 保存并关闭', '已保存'],
+  ] as const)('uses the Neo locale %s for hints and save state', async (language, hint, status) => {
+    const h = createHarness(language);
+    await h.editor.open('ANN');
+    expect(commentBridge.model).toMatchObject({ hint, status });
+    h.editor.dispose();
+  });
+
   it('does not save or mount a retired draft when React is still loading', async () => {
     const h = createHarness();
     const load = Promise.withResolvers<void>();

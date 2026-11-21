@@ -1,3 +1,4 @@
+import { t } from '../../../i18n';
 import { React } from '../runtime';
 import { createReactView } from '../view';
 import type { ReactView } from '../types';
@@ -29,13 +30,15 @@ export function mountSelectionActionsReactView(
       <div className="neo-selection-actions">
         {model.stage === 'result' ? (
           <>
-            <div className="title result-title">{model.resultTitle || 'RESULT'}</div>
+            <div className="title result-title">
+              {model.resultTitle || t('reader.selection.actions.result', model.language)}
+            </div>
             <div className="result">{model.resultText}</div>
-            <div className="help">y copy result · Enter/Esc close</div>
+            <div className="help">{t('reader.selection.actions.resultHints', model.language)}</div>
           </>
         ) : (
           <>
-            <div className="title">SELECT ACTIONS</div>
+            <div className="title">{t('reader.selection.actions.title', model.language)}</div>
             <div className="preview">{model.preview}</div>
             {model.stage === 'busy' ? (
               <div className="status">{model.message}</div>
@@ -48,7 +51,7 @@ export function mountSelectionActionsReactView(
                     {label}
                   </div>
                 ))}
-                <div className="help">j/k move · 1–9 run · Enter run · Esc close</div>
+                <div className="help">{t('reader.selection.actions.hints', model.language)}</div>
               </>
             )}
           </>

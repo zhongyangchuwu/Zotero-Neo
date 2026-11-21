@@ -26,7 +26,7 @@ export const EXTENSIONS_REACT_CSS = `
 .neo-extensions-report{margin:4px 0 0;padding-inline-start:22px;overflow-wrap:anywhere}
 .neo-extensions-restart{font-weight:600;color:${THEME_VARS.accent}}
 .neo-extensions-row{display:flex;align-items:center;gap:10px;padding:7px 12px;cursor:pointer;border-left:3px solid transparent}.neo-extensions-row.selected{color:${THEME_VARS.selectedText};background:${THEME_VARS.selected};border-left-color:${THEME_VARS.accent}}
-.neo-extensions-footer{padding:7px 12px;color:${THEME_VARS.muted};border-top:1px solid ${THEME_VARS.border};white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
+.neo-extensions-footer{flex-shrink:0;padding:7px 12px;color:${THEME_VARS.muted};border-top:1px solid ${THEME_VARS.border};overflow-wrap:anywhere}
 .neo-extensions-links{margin-top:18px;display:flex;flex-wrap:wrap;gap:8px 14px;color:${THEME_VARS.muted}}.neo-extensions-links button{padding:0;border:0;background:none;color:${THEME_VARS.accent};font:inherit;text-decoration:underline;cursor:pointer}
 `;
 

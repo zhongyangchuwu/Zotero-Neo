@@ -1,4 +1,5 @@
 import { CleanupFailure } from '../../core/cleanup';
+import { t, type AppLanguage, type TranslationKey } from '../../i18n';
 import { compositionOwnsKey } from '../../input/composition';
 import { isDeadObject } from '../../platform/cross-compartment';
 import { mountNativeReactView } from '../../platform/native-ui';
@@ -21,6 +22,7 @@ export interface ReaderSelectionActionHost {
     pdfWindow: PdfWindow,
     isCurrent: () => boolean,
   ) => readonly ReaderSelectionActionDefinition[];
+  readonly language: () => AppLanguage;
   readonly themeRoot: (root: HTMLElement) => () => void;
   readonly copyText: (text: string) => void;
   readonly showStatus: (message: string, duration?: number) => void;
@@ -80,7 +82,7 @@ export class ReaderSelectionActions {
     const actions = this.#host.actions(snapshot, pdfWindow, isCurrent);
     if (!isCurrent()) return false;
     if (!actions.length) {
-      this.#host.showStatus('No actions for selection', 1500);
+      this.#host.showStatus(this.#text('reader.selection.actions.empty'), 1500);
       return false;
     }
     this.#window = pdfWindow;
@@ -228,7 +230,9 @@ export class ReaderSelectionActions {
     if (!this.#canComplete(generation, pdfWindow, isPresentationCurrent)) return;
     this.#stage = 'busy';
     this.#selected = index;
-    this.#render(`Running ${action.label}…`);
+    this.#render(
+      this.#text('reader.selection.actions.running').replace('{action}', () => action.label),
+    );
     if (!this.#canComplete(generation, pdfWindow, isPresentationCurrent)) return;
     try {
       const outcome = await action.run(context);
@@ -261,7 +265,7 @@ export class ReaderSelectionActions {
       if (outcome && typeof outcome === 'object' && 'body' in outcome && outcome.body) {
         this.#stage = 'result';
         this.#resultText = outcome.body;
-        this.#resultTitle = outcome.title || 'RESULT';
+        this.#resultTitle = outcome.title ?? '';
         this.#renderResult(outcome);
         return;
       }
@@ -287,7 +291,10 @@ export class ReaderSelectionActions {
         !isPresentationCurrent()
       )
         return;
-      this.#host.showStatus(`✗ ${action.label} failed`, 2500);
+      this.#host.showStatus(
+        this.#text('reader.selection.actions.failed').replace('{action}', () => action.label),
+        2500,
+      );
       if (
         this.#generation === generation + 1 &&
         !isDeadObject(pdfWindow) &&
@@ -343,8 +350,8 @@ export class ReaderSelectionActions {
         this.#overlay === overlay &&
         pdfWindow.document === document &&
         !!this.#viewCurrent?.(),
-      loadingText: 'Loading selection actions…',
-      errorText: 'Selection actions unavailable.',
+      loadingText: this.#text('reader.selection.actions.loading'),
+      errorText: this.#text('reader.selection.actions.unavailable'),
       onError: (error) => {
         this.#host.debug(`Selection actions view failed: ${String(error)}`);
         if (this.#overlay === overlay) this.close();
@@ -362,6 +369,7 @@ export class ReaderSelectionActions {
   #model(message = ''): SelectionActionsReactModel {
     const compact = (this.#context?.text ?? '').replace(/\s+/g, ' ').trim();
     return {
+      language: this.#host.language(),
       stage: this.#stage,
       preview: compact.length > 120 ? `${compact.slice(0, 117)}…` : compact,
       actions: this.#actions.map((action) => action.label),
@@ -374,6 +382,10 @@ export class ReaderSelectionActions {
 
   #render(message?: string): void {
     this.#view?.update(this.#model(message));
+  }
+
+  #text(key: TranslationKey): string {
+    return t(key, this.#host.language());
   }
 
   #renderResult(_outcome: Extract<ReaderSelectionActionOutcome, { body: string }>): void {

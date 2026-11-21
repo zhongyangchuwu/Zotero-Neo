@@ -702,7 +702,6 @@ export class ReaderSession {
           onNativeEditorFocus: () => {
             void this.handOverNativeEditor();
           },
-          locale: () => zoteroRuntime().locale ?? '',
           onInputOwnerChanged: () => {
             this.#interactionRevision += 1;
             if (!this.#commentEditor?.ownsInput)
@@ -2276,12 +2275,13 @@ export class ReaderSession {
     if (!indicator) return;
     const pdfWindow = this.#navigationHost.activePdfWindow();
     const inputOwner = this.#nativeInput.ownsInput
-      ? 'NATIVE'
+      ? 'reader.mode.native'
       : pdfWindow && this.#commentEditor?.ownsView(pdfWindow)
-        ? 'COMMENT'
+        ? 'reader.mode.comment'
         : null;
     if (inputOwner) {
-      this.renderIndicator({ visible: true, text: `-- ${inputOwner} --`, kind: 'insert' });
+      const label = t(inputOwner, this.keyGuideLanguage());
+      this.renderIndicator({ visible: true, text: `-- ${label} --`, kind: 'insert' });
       return;
     }
     if (this.mode === 'normal' && !this.input.keyBuffer && !this.input.countBuffer) {
@@ -2289,14 +2289,22 @@ export class ReaderSession {
       return;
     }
     if (this.mode === 'visual') {
-      const selected = annotationText(
-        this.#navigationHost.activePdfWindow()?.getSelection()?.toString() ?? '',
+      const selected = annotationText(pdfWindow?.getSelection()?.toString() ?? '');
+      const language = this.keyGuideLanguage();
+      const pending = `${this.input.countBuffer}${this.input.keyBuffer}`;
+      const label = t(
+        readerSelectionIsFiltered(pdfWindow)
+          ? 'reader.selection.bodyMode'
+          : 'reader.selection.mode',
+        language,
       );
-      const pending = this.input.countBuffer || this.input.keyBuffer;
-      const body = readerSelectionIsFiltered(this.#navigationHost.activePdfWindow()) ? ' BODY' : '';
+      const hints = t('reader.selection.modeHints', language).replace(
+        '{count}',
+        String(selected.length),
+      );
       this.renderIndicator({
         visible: true,
-        text: `SELECT${body} · ${selected.length} chars · y copy · Enter actions · s Flash · Esc cancel${pending ? `  ${this.input.countBuffer}${this.input.keyBuffer}` : ''}`,
+        text: `${label} · ${hints}${pending ? `  ${pending}` : ''}`,
         kind: 'visual',
       });
       return;

@@ -34,7 +34,7 @@ Neo 界面默认随 Zotero 切换明暗。**交互配色**另管 Neo 的选区�
 | 交互配色 | Zotero | 可选 Catppuccin、Tokyo Night、Gruvbox 或自定义配色。 |
 | 标记宽度 | 3 px | 主窗口条目标记宽度，范围 1–4 px。 |
 | 状态样式 | 中性 | 可切换为着色。 |
-| 语言 | 跟随 Zotero | 在**高级**中可改为 English 或中文；影响设置界面和本地化命令标签。 |
+| 语言 | 跟随 Zotero | 在**高级**中可改为 English 或中文；影响 Neo 设置、命令标签及阅读器提示，不改变 Zotero 界面语言。 |
 
 ### 界面外观与自定义 CSS
 

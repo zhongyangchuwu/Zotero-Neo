@@ -116,6 +116,9 @@ export const TAB_SIDEBAR_REACT_CSS = `
 .neo-tab-sidebar__group { border-inline-start:4px solid transparent; }
 .neo-tab-sidebar__members { padding-inline-start:18px; }
 .neo-tab-sidebar__row { display:flex; align-items:center; gap:5px; min-height:32px; margin:2px 0; padding:2px 6px; border-radius:var(--neo-radius-small); }
+.neo-tab-sidebar__entry-row { box-sizing:border-box; border-inline-start:2px solid transparent; }
+.neo-tab-sidebar__entry-row.is-selected { border-inline-start-color:${THEME_VARS.accent}; }
+:where([data-zotero-neo-preset='classic']) .neo-tab-sidebar__entry-row.is-selected { border-inline-start-color:${THEME_VARS.selectedText}; }
 .neo-tab-sidebar__row[hidden] { display:none; }
 .neo-tab-sidebar__row:hover { background:${THEME_VARS.elevated}; }
 .neo-tab-sidebar__row:focus-visible { outline:2px solid ${THEME_VARS.focusRing}; outline-offset:-2px; }

@@ -18,7 +18,6 @@ import { createExtensionAbortController } from '../../platform/extension-sources
 import { mountNativeReactView } from '../../platform/native-ui';
 import type { NativeReactView } from '../../ui/react/types';
 import type { ExtensionsReactCommand, ExtensionsReactModel } from './react-model';
-import { PLUGINS_INPUT_ACTIONS, PLUGINS_LIST_ACTIONS } from './capabilities';
 import { CENTERED_MONOSPACE_OVERLAY_STYLE } from '../../ui/react/shells/main';
 import { fuzzyMatchScore } from '../../ui/fuzzy';
 import {
@@ -166,7 +165,11 @@ export class PluginManagerPanel {
       const focus = (): void => {
         if (!current()) return;
         deactivate();
-        this.renderFooter();
+        // Gecko may dispatch focus before document.activeElement reflects the new input.
+        this.renderFooter('plugins-input');
+      };
+      const blur = (): void => {
+        if (current()) this.renderFooter('plugins-list');
       };
       const view = mountNativeReactView<ExtensionsReactModel, ExtensionsReactCommand>({
         surface: 'extensions',
@@ -211,12 +214,14 @@ export class PluginManagerPanel {
           input.addEventListener('compositionstart', deactivate);
           overlay.addEventListener('focusout', deactivate);
           input.addEventListener('focus', focus);
+          input.addEventListener('blur', blur);
           input.addEventListener('input', onInput);
           state.inputCleanup = () => {
             compositionCleanup();
             input.removeEventListener('input', onInput);
             input.removeEventListener('compositionstart', deactivate);
             input.removeEventListener('focus', focus);
+            input.removeEventListener('blur', blur);
             overlay.removeEventListener('focusout', deactivate);
           };
           this.render();
@@ -1208,7 +1213,7 @@ export class PluginManagerPanel {
       shortcuts: actions.length
         ? `${this.text('Shortcuts', '快捷键')}\n${actions.join('  ·  ')}`
         : this.text('No additional shortcuts available', '没有其他快捷键'),
-      footer: this.footer(bindings, actions, context),
+      footer: this.footer(bindings, context),
     };
   }
 
@@ -1216,11 +1221,7 @@ export class PluginManagerPanel {
     this.#view?.update(this.model(context));
   }
 
-  private footer(
-    bindings: BindingMap,
-    actions: readonly string[],
-    context?: BindingContext,
-  ): string {
+  private footer(bindings: BindingMap, context?: BindingContext): string {
     const state = this.#host.state;
     if (state.inline) {
       return state.inline.kind === 'choose'
@@ -1230,25 +1231,23 @@ export class PluginManagerPanel {
     const ownedContext =
       context ??
       (this.#host.window.document.activeElement === state.input ? 'plugins-input' : 'plugins-list');
-    const navigation =
-      ownedContext === 'plugins-input'
-        ? PLUGINS_INPUT_ACTIONS
-        : PLUGINS_LIST_ACTIONS.filter(
-            (action) =>
-              !action.startsWith('plugins') ||
-              action === 'pluginsRefresh' ||
-              action === 'pluginsInstall' ||
-              action === 'pluginsUpdateAll',
-          );
-    const hints = navigation
-      .map((action) => this.hint(bindings, ownedContext, action))
-      .filter(Boolean);
-    const filter = state.query.trim();
+    const key = (action: ActionId, preferred?: string): string | undefined => {
+      const keys = shortcutsForAction(bindings, ownedContext, action);
+      return preferred && keys.includes(preferred) ? preferred : keys[0];
+    };
+    const hint = (shortcut: string | undefined, english: string, chinese: string) =>
+      shortcut ? `${shortcut} ${this.text(english, chinese)}` : '';
+    if (ownedContext === 'plugins-input')
+      return hint(key('uiFocusList', '<Esc>'), 'List', '返回列表');
+    const move = [key('uiPrevious', 'k'), key('uiNext', 'j')].filter(Boolean).join('/');
     return [
-      ...hints,
-      ...(ownedContext === 'plugins-list' ? actions : []),
-      ...(filter ? [this.text(`filter: ${filter}`, `筛选：${filter}`)] : []),
-    ].join(' · ');
+      hint(move, 'Move', '移动'),
+      hint(key('uiSearch', '/'), 'Filter', '筛选'),
+      hint(key('pluginsInstall', 'i'), 'Install', '安装'),
+      hint(key('uiCancel', '<Esc>'), 'Close', '关闭'),
+    ]
+      .filter(Boolean)
+      .join(' · ');
   }
 
   private hint(bindings: BindingMap, context: BindingContext, action: ActionId): string | null {
