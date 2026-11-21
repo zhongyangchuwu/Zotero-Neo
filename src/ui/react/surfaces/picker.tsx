@@ -90,7 +90,11 @@ function StructuredColumns({ columns }: { columns: readonly PickerColumn[] }): R
             style={column.weight === undefined ? undefined : { flexGrow: column.weight }}
             title={column.text}
           >
-            {column.role === 'badge' ? <span className="picker-column-badge">{text}</span> : text}
+            {column.role === 'badge' && column.text ? (
+              <span className="picker-column-badge">{text}</span>
+            ) : (
+              text
+            )}
           </span>
         );
       })}

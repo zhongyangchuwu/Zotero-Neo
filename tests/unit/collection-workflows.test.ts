@@ -156,7 +156,7 @@ function workflowHarness(language: AppLanguage = 'en') {
       getAll,
       loadDataTypes: vi.fn(async () => undefined),
     },
-    Libraries: { get: (id: number) => libraries.get(id) ?? false },
+    Libraries: { userLibraryID: 1, get: (id: number) => libraries.get(id) ?? false },
     Search: NativeSearch,
     DB: Object.assign(database, { columnQueryAsync }),
     getString: () => 'Name',
@@ -310,6 +310,19 @@ describe('collection workflows', () => {
     await h.confirm(20);
     expect(h.second.getCollections()).toEqual([11, 20]);
     expect(h.first.getCollections()).toEqual([10]);
+  });
+
+  it('shows only key hints when organizing the current item in the personal library', async () => {
+    const h = workflowHarness();
+    h.targets({
+      source: 'main',
+      items: [h.first],
+      total: 1,
+      missing: 0,
+      presentation: { origin: 'cursor', outsideCurrentList: 0 },
+    });
+    await h.start(() => h.actions.add(h.request));
+    expect(pickerModel(h.session).shortcutHelp).toBe('↑↓ Move · Tab Mark · Enter Activate · Esc Close');
   });
   it('shows normalized Main selection context and writes it instead of the different cursor target', async () => {
     const h = workflowHarness();

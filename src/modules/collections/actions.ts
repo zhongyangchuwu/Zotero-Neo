@@ -254,7 +254,7 @@ export class CollectionMembershipActions {
         count === 1 ? 'workflow.collections.oneTarget' : 'workflow.collections.manyTargets',
         locale,
       ).replace('{count}', String(count));
-      const context = targetContext(initial, locale);
+      const showContext = initial.source !== 'main' || initial.presentation.origin !== 'cursor';
       const outside = initial.source === 'main' ? initial.presentation.outsideCurrentList : 0;
       const outsideHint =
         outside > 0
@@ -263,11 +263,16 @@ export class CollectionMembershipActions {
               String(Math.min(count, outside)),
             )
           : '';
-      const help = scopeTitle(
-        outsideHint ? `${outsideHint} · ${context}` : context,
-        libraryName,
-        locale,
-      );
+      const showLibrary =
+        libraryID !== Zotero.Libraries.userLibraryID ||
+        items.some((item) => item.libraryID !== libraryID);
+      const help = [
+        outsideHint,
+        showContext ? targetContext(initial, locale) : '',
+        showLibrary ? t('picker.libraryLabel', locale).replace('{library}', () => libraryName) : '',
+      ]
+        .filter(Boolean)
+        .join(' · ');
       let memberships = matching;
       const source = createCollectionCandidateProvider(libraryID, {
         title: t(
@@ -275,7 +280,7 @@ export class CollectionMembershipActions {
           locale,
         ).replace('{target}', () => titleTarget),
         presentation: 'compact',
-        help: { query: help, list: help },
+        help: help ? { query: help, list: help } : undefined,
         libraryName,
         language: locale,
         get memberships() {

@@ -99,7 +99,11 @@ describe('collection candidate provider', () => {
         { text: '✓ 已归属', role: 'badge', align: 'end' },
       ],
     });
-    expect(added[0]?.columns?.map((column) => column.text)).toEqual(['Project', '']);
+    expect(added[0]?.columns).toEqual([
+      expect.objectContaining({ text: 'Project', role: 'primary' }),
+      expect.objectContaining({ text: '', role: 'muted' }),
+      { text: '', role: 'badge', align: 'end' },
+    ]);
     expect(add.filterItems!(added, 'Project').map(({ id }) => id)).toContain(11);
     expect(add.preview(added[1]!).body).toBe('Project\n✓ 已归属');
     expect(added.at(-1)).toMatchObject({

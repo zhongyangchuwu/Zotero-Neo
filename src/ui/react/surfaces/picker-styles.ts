@@ -260,6 +260,7 @@ export const PICKER_REACT_CSS = `
 .picker-column:where([data-column-role='mono']) {
   font: .9em/1.4 ui-monospace, SFMono-Regular, Consolas, monospace;
 }
+.picker-column:where([data-column-role='badge']) { flex: 0 1 min(24%, 8em); }
 .picker-column-badge {
   display: inline-block;
   max-width: 100%;

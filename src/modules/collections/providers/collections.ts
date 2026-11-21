@@ -36,6 +36,10 @@ export function createCollectionCandidateProvider(
       const coverage = new Map<number, number>();
       const memberships = options.memberships;
       const itemCount = options.targetCount ?? memberships?.length;
+      const badgeTotal =
+        itemCount !== undefined && (itemCount > 1 || options.present === true)
+          ? itemCount
+          : undefined;
       for (const ids of memberships ?? []) {
         for (const id of new Set(ids)) coverage.set(id, (coverage.get(id) ?? 0) + 1);
       }
@@ -48,19 +52,19 @@ export function createCollectionCandidateProvider(
             const parentPath = collection.parentID
               ? collection.path.slice(0, -(collection.name.length + ' / '.length))
               : '';
-            const badge =
-              itemCount === undefined
-                ? ''
-                : itemCount > 1
-                  ? `${count}/${itemCount}${count === itemCount ? ' ✓' : ''}`
-                  : options.present && count === 1
-                    ? `✓ ${text('collectionAssigned')}`
-                    : '';
             const columns: PickerColumn[] = [
               { text: collection.name, role: 'primary', weight: 2 },
               { text: parentPath, role: 'muted', weight: 1 },
             ];
-            if (badge) columns.push({ text: badge, role: 'badge', align: 'end' });
+            if (badgeTotal !== undefined) {
+              const textValue =
+                badgeTotal > 1
+                  ? `${count}/${badgeTotal}${count === badgeTotal ? ' ✓' : ''}`
+                  : count === 1
+                    ? `✓ ${text('collectionAssigned')}`
+                    : '';
+              columns.push({ text: textValue, role: 'badge', align: 'end' });
+            }
             return {
               id: collection.id,
               title: collection.name,

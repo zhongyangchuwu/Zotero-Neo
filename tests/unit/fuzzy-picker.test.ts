@@ -788,6 +788,8 @@ describe('command palette provider', () => {
       execute: () => {},
     };
     const main = createCommandsProvider(context);
+    expect(main.placeholder).toBe('Run command…');
+    expect(createCommandsProvider({ ...context, language: 'zh-CN' }).placeholder).toBe('运行命令…');
     const mainItems = await main.load();
     expect(mainItems.map((item) => item.id).sort()).toEqual(
       ['nextTab', 'openNeoSettings', 'findAllItems'].sort(),
