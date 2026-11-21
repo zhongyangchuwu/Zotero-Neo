@@ -58,6 +58,8 @@ Neo 界面默认随 Zotero 切换明暗。**交互配色**另管 Neo 的选区�
 
 原有 `.picker-*`、`data-picker-theme` 和 `--picker-*` 写法仍可用。
 
+用 `.picker-root[data-picker-panes="1"]` 或 `.picker-root[data-picker-panes="2"]` 分别调整单栏或双栏选择器，例如设置 `--picker-width`。`.picker-check` 是勾选标记，`.picker-row[data-marked="true"]` 匹配已勾选行，`.picker-row[data-row-kind="action"]` 匹配新建分类等动作行。
+
 ## 调整阅读器控制
 
 在**阅读器**中选择滚动模式；界面只显示当前模式的参数。步进按固定距离移动，恒速按住时保持速度，加速模式按住时改变速度。

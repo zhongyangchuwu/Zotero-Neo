@@ -5,8 +5,6 @@ import type { AppLanguage } from '../../src/i18n';
 import { MAIN_ITEM_TARGET } from '../../src/main/main-item-target';
 import { ModuleHost } from '../../src/core/module-host';
 import { createCollectionsModule } from '../../src/modules/collections';
-import type { CollectionConfirmation } from '../../src/modules/collections/actions';
-import type { PickerProvider } from '../../src/main/picker/types';
 import type { MainNavigation } from '../../src/main/navigation';
 import { FuzzyPicker } from '../../src/main/picker';
 import { SelectionStore } from '../../src/modules/worksets/selection-store';
@@ -196,10 +194,16 @@ function workflowHarness(language: AppLanguage = 'en') {
     status: (message) => status(session, message),
     navigate,
     captureCurrent,
-    choose: (source: PickerProvider, confirm: CollectionConfirmation) => {
+    choose: (source, confirm, options) => {
       if (session.picker.open) return null;
+      const confirmMany = options?.confirmMany;
       const opening = picker.open(window, session, 'collections', {
         source,
+        layout: options?.layout,
+        multiSelect: options?.multiSelect,
+        confirmMany: confirmMany
+          ? (candidates) => confirmMany(candidates, isCurrent, session.picker.committedQuery)
+          : undefined,
         confirm: (candidate) => confirm(candidate, isCurrent, session.picker.committedQuery),
       });
       const generation = session.picker.generation;
@@ -237,12 +241,18 @@ function workflowHarness(language: AppLanguage = 'en') {
     field.value = text;
     field.emit('input');
   };
-  const confirm = async (id: string | number) => {
+  const highlight = async (id: string | number) => {
     await vi.waitFor(() =>
       expect(session.picker.filtered.some((candidate) => candidate.id === id)).toBe(true),
     );
-    const index = session.picker.filtered.findIndex((candidate) => candidate.id === id);
-    session.picker.selected = index;
+    session.picker.selected = session.picker.filtered.findIndex((candidate) => candidate.id === id);
+  };
+  const mark = async (id: number) => {
+    await highlight(id);
+    picker.onKeyDown(pickerKey('Tab', session.picker.input), window, session);
+  };
+  const confirm = async (id: string | number) => {
+    await highlight(id);
     picker.onKeyDown(pickerKey('Enter', session.picker.input), window, session);
     await session.picker.queue;
   };
@@ -257,6 +267,7 @@ function workflowHarness(language: AppLanguage = 'en') {
     picker,
     start,
     input,
+    mark,
     confirm,
     navigate,
     status,
@@ -293,8 +304,9 @@ describe('collection workflows', () => {
         resolveTargets: h.resolveTargets,
       }),
     );
-    expect(h.session.picker.provider?.title).toContain('Current Reader item · Items: 1');
-    expect(h.session.picker.provider?.title).not.toContain('Neo work set');
+    expect(h.session.picker.provider?.title).toBe('Add to collection · 1 item');
+    expect(pickerModel(h.session).shortcutHelp).toContain('Current Reader item');
+    expect(pickerModel(h.session).shortcutHelp).not.toContain('Neo work set');
     await h.confirm(20);
     expect(h.second.getCollections()).toEqual([11, 20]);
     expect(h.first.getCollections()).toEqual([10]);
@@ -311,9 +323,8 @@ describe('collection workflows', () => {
     h.targets(targets);
 
     await h.start(() => h.actions.add(h.request));
-    expect(h.session.picker.provider?.title).toContain(
-      'Neo work set · Items: 2 · Outside current list: 1',
-    );
+    expect(h.session.picker.provider?.title).toBe('Add to collection · 2 items selected');
+    expect(pickerModel(h.session).shortcutHelp).toContain('Outside current list: 1 · Neo work set');
     await h.confirm(20);
 
     expect(h.first.getCollections()).toEqual([10, 20]);
@@ -339,7 +350,9 @@ describe('collection workflows', () => {
     });
     h.targets(targets);
     await h.start(() => h.actions.add(h.request));
-    expect(h.session.picker.provider?.title).toContain('Items: 1 · Outside current list: 0');
+    expect(h.session.picker.provider?.title).toBe('Add to collection · 1 item');
+    expect(pickerModel(h.session).shortcutHelp).toContain('Neo work set');
+    expect(pickerModel(h.session).shortcutHelp).not.toContain('Outside current list:');
     await h.confirm(20);
 
     expect(h.first.getCollections()).toEqual([10, 20]);
@@ -355,15 +368,85 @@ describe('collection workflows', () => {
     h.targets(MAIN_ITEM_TARGET.resolve(h.window, h.selection));
 
     await h.start(() => h.actions.remove(h.request));
-    expect(h.session.picker.provider?.title).toContain(
-      'Remove from collection · Neo work set · Items: 2 · Outside current list: 1',
-    );
+    expect(h.session.picker.provider?.title).toBe('Remove from collection · 2 items selected');
+    expect(pickerModel(h.session).shortcutHelp).toContain('Outside current list: 1 · Neo work set');
     await h.confirm(20);
 
     expect(h.first.getCollections()).toEqual([10]);
     expect(h.second.getCollections()).toEqual([11]);
     const cursor = Zotero.Items.get(3);
     expect(cursor && cursor.getCollections()).toEqual([]);
+  });
+
+  it.each(['add', 'remove'] as const)(
+    'applies %s to all marked collections and keeps the Neo selection',
+    async (action) => {
+      const h = workflowHarness();
+      if (action === 'remove') {
+        h.first.addToCollection(11);
+        h.first.addToCollection(20);
+        h.second.addToCollection(20);
+      }
+      h.selection.add({ libraryID: 1, itemID: h.first.id });
+      h.selection.add({ libraryID: 1, itemID: h.second.id });
+      h.targets(MAIN_ITEM_TARGET.resolve(h.window, h.selection));
+      const selection = h.selection.values();
+
+      await h.start(() => h.actions[action](h.request));
+      expect(pickerModel(h.session)).toMatchObject({ panes: 1, multiSelect: true });
+      const root = h.session.picker.overlay?.children[0] as HTMLElement | undefined;
+      expect(root?.dataset.pickerCompact).toBe('true');
+      await h.mark(11);
+      await h.mark(20);
+      await h.confirm(10);
+
+      const add = action === 'add';
+      expect(h.first.getCollections()).toEqual(add ? [10, 11, 20] : [10]);
+      expect(h.second.getCollections()).toEqual(add ? [11, 20] : []);
+      expect(h.first.save).toHaveBeenCalledTimes(2);
+      expect(h.second.save).toHaveBeenCalledTimes(add ? 1 : 2);
+      expect(h.nativeConfirm).not.toHaveBeenCalled();
+      expect(h.status).toHaveBeenCalledTimes(1);
+      expect(h.status).toHaveBeenLastCalledWith(
+        h.session,
+        `Collections: 2 · Memberships updated: ${add ? 3 : 4} · Skipped: ${add ? 1 : 0} · Failed: 0`,
+      );
+      expect(h.session.picker.open).toBe(false);
+      expect(h.selection.values()).toEqual(selection);
+    },
+  );
+
+  it('reports one partial summary and continues after an item save and destination fail', async () => {
+    const h = workflowHarness();
+    h.first.removeFromCollection(10);
+    h.selection.add({ libraryID: 1, itemID: h.first.id });
+    h.selection.add({ libraryID: 1, itemID: h.second.id });
+    h.targets(MAIN_ITEM_TARGET.resolve(h.window, h.selection));
+    const selection = h.selection.values();
+
+    await h.start(() => h.actions.add(h.request));
+    await h.mark(10);
+    await h.mark(11);
+    await h.mark(20);
+    vi.mocked(h.second.save).mockRejectedValueOnce(new Error('write failed'));
+    h.collections.delete(11);
+    await h.confirm(20);
+
+    expect(h.first.getCollections()).toEqual([10, 20]);
+    expect(h.second.getCollections()).toEqual([11, 20]);
+    expect(h.status).not.toHaveBeenCalled();
+    expect(pickerModel(h.session).status).toBe(
+      'Collections: 3 · Memberships updated: 3 · Skipped: 2 · Failed: 1',
+    );
+    expect(h.session.picker.open).toBe(true);
+    await vi.waitFor(() =>
+      expect(h.session.picker.filtered.map(({ id }) => id)).toEqual([10, 20, 'create']),
+    );
+    const model = pickerModel(h.session);
+    expect(model.marked).toEqual([0, 1]);
+    expect(model.rows[0]?.columns?.[2]?.text).toBe('1/2');
+    expect(model.rows[1]?.columns?.[2]?.text).toBe('2/2 ✓');
+    expect(h.selection.values()).toEqual(selection);
   });
 
   it('cancels collection target choice without writing to the Main selection', async () => {
@@ -491,7 +574,7 @@ describe('collection workflows', () => {
       presentation: { origin: 'selection', outsideCurrentList: 1 },
     });
     await h.start(() => h.actions.add(h.request));
-    expect(h.session.picker.provider?.title).toContain('Library: My library');
+    expect(pickerModel(h.session).shortcutHelp).toContain('Library: My library');
     await h.confirm(20);
     expect(h.first.getCollections()).toEqual([10, 20]);
     expect(h.second.getCollections()).toEqual([11]);
@@ -543,10 +626,12 @@ describe('collection workflows', () => {
     h.input('Destination');
     await h.confirm('create');
     expect(h.session.picker.provider?.title).toContain('choose parent');
+    expect(pickerModel(h.session)).toMatchObject({ panes: 1, multiSelect: false });
     await h.confirm('root');
     expect(h.collections.size).toBe(3);
     expect(h.transaction).not.toHaveBeenCalled();
     expect(h.session.picker.input?.value).toBe('Destination');
+    expect(pickerModel(h.session)).toMatchObject({ panes: 1, multiSelect: true });
     expect(h.session.picker.filtered.map((candidate) => candidate.id)).toEqual([20, 'create']);
     expect(h.first.getCollections()).toEqual([10]);
   });
@@ -658,6 +743,7 @@ describe('collection workflows', () => {
       recordedPanels.push(h.session.activePanel);
     });
     await h.start(() => h.actions.find());
+    expect(pickerModel(h.session)).toMatchObject({ panes: 2, multiSelect: false });
     h.input('Destination');
     expect(h.navigate).not.toHaveBeenCalled();
     h.picker.onKeyDown(pickerKey('Escape', h.session.picker.input), h.window, h.session);
@@ -680,6 +766,7 @@ describe('collection workflows', () => {
     tree.focus();
     h.scopeSelection.selected = new Set([1]);
     await h.start(() => h.actions.move());
+    expect(pickerModel(h.session)).toMatchObject({ panes: 1, multiSelect: false });
     expect(h.session.picker.filtered.map((candidate) => candidate.id)).toEqual(['root', 20]);
     await h.confirm(20);
     expect(h.collections.get(10)?.parentID).toBe(20);
@@ -707,38 +794,53 @@ describe('collection workflows', () => {
     expect(h.second.save).not.toHaveBeenCalled();
   });
 
-  it('rejects a retained confirmation after retirement without writing', async () => {
-    const h = workflowHarness();
-    await h.start(() => h.actions.add(h.request));
-    const confirm = h.session.picker.confirm!;
-    const candidate = h.session.picker.filtered.find((item) => item.id === 20)!;
-    h.host.dispose();
-    await expect(Promise.resolve().then(() => confirm(candidate, false))).rejects.toThrow();
-    expect(h.transaction).not.toHaveBeenCalled();
-    expect(h.first.getCollections()).toEqual([10]);
-    expect(h.actions.add(h.request)).toBe(false);
-  });
+  it.each(['direct', 'batch'] as const)(
+    'rejects a retained %s confirmation after retirement without writing',
+    async (mode) => {
+      const h = workflowHarness();
+      await h.start(() => h.actions.add(h.request));
+      const { confirm, confirmMany, filtered } = h.session.picker;
+      const candidate = filtered.find((item) => item.id === 20)!;
+      const other = filtered.find((item) => item.id === 11)!;
+      h.host.dispose();
+      await expect(
+        Promise.resolve().then(() =>
+          mode === 'batch' ? confirmMany!([candidate, other], false) : confirm!(candidate, false),
+        ),
+      ).rejects.toThrow();
+      expect(h.transaction).not.toHaveBeenCalled();
+      expect(h.first.getCollections()).toEqual([10]);
+      expect(h.actions.add(h.request)).toBe(false);
+    },
+  );
 
-  it('rolls back membership when retired while a save is in progress', async () => {
-    const h = workflowHarness();
-    const entered = Promise.withResolvers<void>();
-    const saving = Promise.withResolvers<void>();
-    const save = vi.mocked(h.first.save).getMockImplementation()!;
-    vi.mocked(h.first.save).mockImplementationOnce(async () => {
-      entered.resolve();
-      await saving.promise;
-      return save();
-    });
-    await h.start(() => h.actions.add(h.request));
-    const confirmation = h.confirm(20);
-    await entered.promise;
-    h.host.dispose();
-    saving.resolve();
-    await confirmation;
-    expect(h.first.getCollections()).toEqual([10]);
-    expect(h.first.reload).toHaveBeenCalled();
-    expect(h.transaction).toHaveBeenCalledTimes(1);
-  });
+  it.each(['direct', 'batch'] as const)(
+    'rolls back a %s membership save on retirement without starting another',
+    async (mode) => {
+      const h = workflowHarness();
+      const entered = Promise.withResolvers<void>();
+      const saving = Promise.withResolvers<void>();
+      const save = vi.mocked(h.first.save).getMockImplementation()!;
+      vi.mocked(h.first.save).mockImplementationOnce(async () => {
+        entered.resolve();
+        await saving.promise;
+        return save();
+      });
+      await h.start(() => h.actions.add(h.request));
+      if (mode === 'batch') {
+        await h.mark(20);
+        await h.mark(11);
+      }
+      const confirmation = h.confirm(20);
+      await entered.promise;
+      h.host.dispose();
+      saving.resolve();
+      await confirmation;
+      expect(h.first.getCollections()).toEqual([10]);
+      expect(h.first.reload).toHaveBeenCalled();
+      expect(h.transaction).toHaveBeenCalledTimes(1);
+    },
+  );
 
   it('retains ownership of an open picker when another request finds it busy', async () => {
     const h = workflowHarness();

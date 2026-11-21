@@ -1,6 +1,7 @@
 import { React } from '../runtime';
 import { createReactView } from '../view';
 import type { ReactView } from '../types';
+import type { PickerColumn } from '../../../main/picker/model';
 import type {
   PickerReactCommand,
   PickerReactModel,
@@ -55,16 +56,68 @@ function markSelected(row: HTMLDivElement | null): (() => void) | void {
   return () => row.removeAttribute('selected');
 }
 
-function BibliographicCells({ cells }: { cells: PickerRowCells }): React.ReactNode {
+function PickerRowIcon({ icon }: { icon: 'folder' | 'plus' }): React.ReactNode {
+  return (
+    <svg
+      className="picker-item-icon picker-row-icon"
+      data-picker-icon={icon}
+      viewBox="0 0 24 24"
+      aria-hidden="true"
+    >
+      <path
+        d={icon === 'folder' ? 'M3 6h6l2 2h10v11H3z' : 'M12 5v14 M5 12h14'}
+        fill="none"
+        stroke="currentColor"
+        strokeWidth="1.7"
+        strokeLinecap="round"
+        strokeLinejoin="round"
+      />
+    </svg>
+  );
+}
+
+function StructuredColumns({ columns }: { columns: readonly PickerColumn[] }): React.ReactNode {
+  return (
+    <span className="picker-structured-columns">
+      {columns.map((column, index) => {
+        const text = titleWithMatches(column.text, column.matches);
+        return (
+          <span
+            key={index}
+            className="picker-column"
+            data-column-role={column.role}
+            data-column-align={column.align}
+            style={column.weight === undefined ? undefined : { flexGrow: column.weight }}
+            title={column.text}
+          >
+            {column.role === 'badge' ? <span className="picker-column-badge">{text}</span> : text}
+          </span>
+        );
+      })}
+    </span>
+  );
+}
+
+function BibliographicCells({
+  cells,
+  check,
+  icon,
+}: {
+  cells: PickerRowCells;
+  check: React.ReactNode;
+  icon: React.ReactNode;
+}): React.ReactNode {
   const citekey = cells.citekey ? `@${cells.citekey}` : undefined;
   return (
     <>
       <span className="picker-cell-title">
-        {cells.icon ? (
-          <img className="picker-item-icon" src={cells.icon} alt="" draggable={false} />
-        ) : (
-          <span className="picker-item-icon" aria-hidden="true" />
-        )}
+        {check}
+        {icon ??
+          (cells.icon ? (
+            <img className="picker-item-icon" src={cells.icon} alt="" draggable={false} />
+          ) : (
+            <span className="picker-item-icon" aria-hidden="true" />
+          ))}
         <span className="picker-cell-title-text" title={cells.title}>
           {titleWithMatches(cells.title, cells.matches)}
         </span>
@@ -90,8 +143,7 @@ function PickerSurface({ model }: { model: PickerReactModel }): React.ReactNode 
   const resultsID = `${id}-results`;
   const previewTitleID = `${id}-preview-title`;
   const hasRows = !model.loading && model.rows.length > 0;
-  const hasStructuredPreview =
-    model.previewSections !== undefined || model.previewMeta !== undefined;
+  const marked = model.multiSelect && model.marked.length > 0 ? new Set(model.marked) : undefined;
 
   return (
     <div className="picker-container">
@@ -136,76 +188,58 @@ function PickerSurface({ model }: { model: PickerReactModel }): React.ReactNode 
           role={hasRows ? 'listbox' : 'region'}
           tabIndex={-1}
           aria-label={model.title}
+          aria-multiselectable={hasRows && model.multiSelect ? true : undefined}
           aria-busy={model.loading}
           aria-activedescendant={
             hasRows && model.rows[model.selected] ? `${resultsID}-${model.selected}` : undefined
           }
         >
           {hasRows ? (
-            model.rows.map((row, index) => (
-              <div
-                key={index}
-                id={`${resultsID}-${index}`}
-                data-zv-picker-row="1"
-                data-zv-picker-index={index}
-                className={`picker-row${row.boundary ? ' boundary' : ''}${row.cells ? ' picker-row-bibliographic' : ''}`}
-                role="option"
-                aria-selected={index === model.selected}
-                ref={index === model.selected ? markSelected : undefined}
-                data-picker-clickable={model.mouseEnabled ? '' : undefined}
-              >
-                {row.cells ? (
-                  <BibliographicCells cells={row.cells} />
-                ) : (
-                  <span className="picker-cell-title picker-row-text" title={row.text}>
-                    {row.text}
-                  </span>
-                )}
-              </div>
-            ))
+            model.rows.map((row, index) => {
+              const active = index === model.selected;
+              const markable = model.multiSelect && row.selectable !== false;
+              const isMarked = markable && (marked?.has(index) ?? false);
+              const check = markable ? <span className="picker-check" aria-hidden="true" /> : null;
+              const icon = row.icon ? <PickerRowIcon icon={row.icon} /> : null;
+              const columns = row.columns?.length ? row.columns : undefined;
+              const cells = columns ? undefined : row.cells;
+              return (
+                <div
+                  key={index}
+                  id={`${resultsID}-${index}`}
+                  data-zv-picker-row="1"
+                  data-zv-picker-index={index}
+                  data-row-kind={row.kind ?? 'item'}
+                  data-marked={isMarked ? 'true' : undefined}
+                  className={`picker-row${row.boundary ? ' boundary' : ''}${cells ? ' picker-row-bibliographic' : ''}`}
+                  role="option"
+                  aria-selected={model.multiSelect ? (markable ? isMarked : undefined) : active}
+                  ref={active ? markSelected : undefined}
+                  data-picker-clickable={model.mouseEnabled ? '' : undefined}
+                >
+                  {cells ? (
+                    <BibliographicCells cells={cells} check={check} icon={icon} />
+                  ) : (
+                    <>
+                      {check}
+                      {icon}
+                      {columns ? (
+                        <StructuredColumns columns={columns} />
+                      ) : (
+                        <span className="picker-cell-title picker-row-text" title={row.text}>
+                          {row.text}
+                        </span>
+                      )}
+                    </>
+                  )}
+                </div>
+              );
+            })
           ) : (
             <div className="picker-empty">{model.empty}</div>
           )}
         </div>
-        <section
-          className={`picker-preview-panel${hasStructuredPreview ? ' picker-preview-bibliographic' : ''}`}
-          data-neo-ui-part="preview"
-          data-picker-focused={model.focusPane === 'preview' ? '' : undefined}
-          tabIndex={-1}
-          aria-labelledby={previewTitleID}
-        >
-          <h2 className="picker-preview-title" data-neo-ui-part="preview-title" id={previewTitleID}>
-            {model.previewTitle}
-          </h2>
-          {model.previewMeta && <p className="picker-preview-meta">{model.previewMeta}</p>}
-          {model.previewCitekey && (
-            <p className="picker-preview-citekey">@{model.previewCitekey}</p>
-          )}
-          {hasStructuredPreview ? (
-            <>
-              {model.previewSections?.map((section, index) => (
-                <div className="picker-preview-card" key={index}>
-                  <h3 className="picker-preview-card-title">
-                    {section.title}{' '}
-                    <span className="picker-preview-card-count">{section.count}</span>
-                  </h3>
-                  {section.names.length > 0 && (
-                    <ul className="picker-preview-names">
-                      {section.names.map((name, index) => (
-                        <li className="picker-preview-name" key={index}>
-                          {name}
-                        </li>
-                      ))}
-                    </ul>
-                  )}
-                  {section.more && <p className="picker-preview-more">{section.more}</p>}
-                </div>
-              ))}
-            </>
-          ) : (
-            <div className="picker-preview-body">{model.previewBody}</div>
-          )}
-        </section>
+        {model.panes === 2 && <PickerPreview model={model} titleID={previewTitleID} />}
       </div>
       <footer className="picker-status-bar" hidden={!model.status && !model.shortcutHelp}>
         <div
@@ -225,6 +259,53 @@ function PickerSurface({ model }: { model: PickerReactModel }): React.ReactNode 
         )}
       </footer>
     </div>
+  );
+}
+
+function PickerPreview({
+  model,
+  titleID,
+}: {
+  model: PickerReactModel;
+  titleID: string;
+}): React.ReactNode {
+  const hasStructuredPreview =
+    model.previewSections !== undefined || model.previewMeta !== undefined;
+  return (
+    <section
+      className={`picker-preview-panel${hasStructuredPreview ? ' picker-preview-bibliographic' : ''}`}
+      data-neo-ui-part="preview"
+      data-picker-focused={model.focusPane === 'preview' ? '' : undefined}
+      tabIndex={-1}
+      aria-labelledby={titleID}
+    >
+      <h2 className="picker-preview-title" data-neo-ui-part="preview-title" id={titleID}>
+        {model.previewTitle}
+      </h2>
+      {model.previewMeta && <p className="picker-preview-meta">{model.previewMeta}</p>}
+      {model.previewCitekey && <p className="picker-preview-citekey">@{model.previewCitekey}</p>}
+      {hasStructuredPreview ? (
+        model.previewSections?.map((section, index) => (
+          <div className="picker-preview-card" key={index}>
+            <h3 className="picker-preview-card-title">
+              {section.title} <span className="picker-preview-card-count">{section.count}</span>
+            </h3>
+            {section.names.length > 0 && (
+              <ul className="picker-preview-names">
+                {section.names.map((name, index) => (
+                  <li className="picker-preview-name" key={index}>
+                    {name}
+                  </li>
+                ))}
+              </ul>
+            )}
+            {section.more && <p className="picker-preview-more">{section.more}</p>}
+          </div>
+        ))
+      ) : (
+        <div className="picker-preview-body">{model.previewBody}</div>
+      )}
+    </section>
   );
 }
 

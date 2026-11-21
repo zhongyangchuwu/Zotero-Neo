@@ -420,6 +420,172 @@ describe('item picker target resolution', () => {
   });
 });
 
+describe('configurable picker', () => {
+  const alpha = { id: 'a', title: 'Alpha', search: 'Alpha' };
+  const beta = { id: 'b', title: 'Beta', search: 'Beta' };
+  const action = {
+    id: 'create',
+    title: 'New collection',
+    search: 'New collection',
+    kind: 'action',
+    selectable: false,
+  };
+
+  function setup() {
+    vi.stubGlobal('Services', { focus: { focusedWindow: null } });
+    const harness = createPickerHarness();
+    const logger = { debug: vi.fn(), diagnostic: vi.fn() };
+    return {
+      ...harness,
+      picker: createFuzzyPicker(logger, new MainNavigation(logger, () => {}), () => true),
+    };
+  }
+
+  it('projects configured columns without evaluating preview for a single pane', async () => {
+    const { picker, window, session, bodyChildren } = setup();
+    const preview = vi.fn(() => ({ title: 'Alpha', body: 'Preview' }));
+    const source = {
+      title: 'Collections',
+      placeholder: 'Search collections',
+      async load() {
+        return [
+          {
+            ...alpha,
+            columns: [
+              { text: 'Alpha', role: 'primary', weight: 2 },
+              { text: '2/2', role: 'badge', align: 'end' },
+            ],
+            icon: 'folder',
+          },
+        ];
+      },
+      rowText: (item) => item.title,
+      preview,
+    } satisfies PickerProvider;
+    await picker.open(window, session, 'collections', { source, layout: { panes: 1 } });
+    const input = session.picker.input as HTMLInputElement & EmittingElement;
+    input.value = 'Alp';
+    input.emit('input');
+    expect(bodyChildren[0]?.children[0]).toHaveProperty('dataset.pickerPanes', '1');
+    expect(preview).not.toHaveBeenCalled();
+    expect(pickerModel(session).rows[0]).toMatchObject({
+      columns: [
+        { text: 'Alpha', role: 'primary', weight: 2, matches: [0, 1, 2] },
+        { text: '2/2', role: 'badge', align: 'end' },
+      ],
+      icon: 'folder',
+    });
+    expect(pickerModel(session).shortcutHelp).not.toContain('Tab');
+    picker.close(session);
+
+    await picker.open(window, session, 'collections', { source });
+    expect(bodyChildren[1]?.children[0]).toHaveProperty('dataset.pickerPanes', '2');
+    expect(pickerModel(session).previewBody).toBe('Preview');
+    expect(pickerModel(session).shortcutHelp).toContain('Tab Focus');
+    picker.close(session);
+  });
+
+  it('marks in both directions, skips action rows and submits marks hidden by filtering', async () => {
+    const { picker, window, session } = setup();
+    const confirm = vi.fn();
+    const confirmMany = vi.fn();
+    await picker.open(window, session, 'collections', {
+      source: candidateSource([alpha, beta, action]),
+      layout: { panes: 1 },
+      multiSelect: true,
+      confirm,
+      confirmMany,
+    });
+    const input = session.picker.input as HTMLInputElement & EmittingElement;
+    const press = (key: string, shift = false) => {
+      const event = pickerKey(key, input, { shift });
+      picker.onKeyDown(event, window, session);
+      return event;
+    };
+    expect(press('Tab').preventDefault).toHaveBeenCalled();
+    expect(pickerModel(session)).toMatchObject({
+      selected: 1,
+      marked: [0],
+      count: '1 marked · 3/3',
+    });
+    press('Tab', true);
+    expect(pickerModel(session)).toMatchObject({ selected: 0, marked: [0, 1] });
+    press('ArrowDown');
+    press('ArrowDown');
+    press('Tab', true);
+    expect(pickerModel(session)).toMatchObject({ selected: 1, marked: [0, 1] });
+    input.value = 'New collection';
+    input.emit('input');
+    expect(pickerModel(session)).toMatchObject({ marked: [], count: '2 marked · 1/3' });
+    press('Enter');
+    await session.picker.queue;
+    expect(confirmMany).toHaveBeenCalledExactlyOnceWith([alpha, beta], false);
+    expect(confirm).not.toHaveBeenCalled();
+  });
+
+  it('treats one mouse mark as a batch and an unmarked action as a direct confirmation', async () => {
+    const { picker, window, session } = setup();
+    const confirm = vi.fn();
+    const confirmMany = vi.fn();
+    const options = {
+      source: candidateSource([alpha, beta, action]),
+      multiSelect: true,
+      confirm,
+      confirmMany,
+    };
+    await picker.open(window, session, 'collections', options);
+    const check = session.picker.results?.children[1]?.children[0] as HTMLElement & EmittingElement;
+    check.className = 'picker-check';
+    check.emit('click');
+    expect(pickerModel(session)).toMatchObject({ selected: 0, marked: [1] });
+    picker.onKeyDown(pickerKey('Enter', session.picker.input), window, session);
+    await session.picker.queue;
+    expect(confirmMany).toHaveBeenCalledExactlyOnceWith([beta], false);
+
+    await picker.open(window, session, 'collections', options);
+    const input = session.picker.input as HTMLInputElement & EmittingElement;
+    input.value = 'New collection';
+    input.emit('input');
+    picker.onKeyDown(pickerKey('Tab', input), window, session);
+    expect(pickerModel(session).marked).toEqual([]);
+    picker.onKeyDown(pickerKey('Enter', input), window, session);
+    await session.picker.queue;
+    expect(confirm).toHaveBeenCalledExactlyOnceWith(action, false);
+    expect(confirmMany).toHaveBeenCalledTimes(1);
+  });
+
+  it('drops marks removed by an authoritative refresh while keeping other marked rows', async () => {
+    const { picker, window, session } = setup();
+    let items = [alpha, beta];
+    const confirmMany = vi.fn(() => {
+      items = [beta];
+      return { keepOpen: true as const, message: 'Some were unavailable' };
+    });
+    await picker.open(window, session, 'collections', {
+      source: { ...candidateSource(items), load: async () => items },
+      multiSelect: true,
+      confirmMany,
+    });
+    for (const key of ['Tab', 'Tab', 'Enter']) {
+      picker.onKeyDown(pickerKey(key, session.picker.input), window, session);
+    }
+    await vi.waitFor(() =>
+      expect(pickerModel(session)).toMatchObject({
+        marked: [0],
+        count: '1 marked · 1/1',
+        status: 'Some were unavailable',
+      }),
+    );
+    picker.onKeyDown(pickerKey('Enter', session.picker.input), window, session);
+    await session.picker.queue;
+    expect(confirmMany.mock.calls).toEqual([
+      [[alpha, beta], false],
+      [[beta], false],
+    ]);
+    picker.close(session);
+  });
+});
+
 describe('picker IME boundary', () => {
   it('defers filtering and command keys until composition commits', async () => {
     const first = {

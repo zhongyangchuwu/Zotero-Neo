@@ -26,6 +26,7 @@ export function createPickerHarness(width = 1200): {
       style: {} as CSSStyleDeclaration,
       children,
       dataset: {} as DOMStringMap,
+      className: '',
       value: '',
       type: '',
       placeholder: '',
@@ -73,6 +74,8 @@ export function createPickerHarness(width = 1200): {
       },
       closest: (selector: string) => {
         if (selector === '[data-zv-picker-row="1"]' && element.dataset.zvPickerRow === '1')
+          return element as unknown as HTMLElement;
+        if (selector === '.picker-check' && element.className.split(' ').includes('picker-check'))
           return element as unknown as HTMLElement;
         return element.parentElement?.closest?.(selector) ?? null;
       },
