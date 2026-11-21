@@ -1158,10 +1158,9 @@ export class FuzzyPicker {
     const close = key('uiCancel', '<Esc>');
     return [
       move && `${move} ${this.text('shortcutMove')}`,
+      multiSelect && `Tab ${this.text('shortcutMultiSelect')}`,
       confirm && `${confirm} ${this.text('shortcutConfirm')}`,
-      multiSelect
-        ? `Tab ${this.text('shortcutMultiSelect')}`
-        : panes === 2 && `Tab ${this.text('shortcutFocus')}`,
+      !multiSelect && panes === 2 && `Tab ${this.text('shortcutFocus')}`,
       close && `${close} ${this.text('shortcutClose')}`,
     ]
       .filter(Boolean)
