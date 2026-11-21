@@ -54,7 +54,6 @@ export interface ReaderAnnotationsModulePorts {
   readonly onInputOwnerChanged: () => void;
   readonly onCommentExit: (saved: boolean, window: PdfWindow) => void;
   readonly language: () => KeyGuideLanguage;
-  readonly locale: () => string;
   readonly copyText: (text: string) => void;
   readonly beginSelectionAction: () => void;
   readonly showStatus: (message: string, duration?: number) => void;
@@ -233,7 +232,7 @@ export function createReaderAnnotationsModule(
       onInputOwnerChanged: ports.onInputOwnerChanged,
       onExit: ports.onCommentExit,
       debug: ports.debug,
-      locale: ports.locale,
+      language: ports.language,
     });
     scope.add(() => commentEditor.dispose());
     const highlight = async (

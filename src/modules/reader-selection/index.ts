@@ -196,6 +196,7 @@ export function createReaderSelectionModule(
       isCurrent,
       captureView: ports.captureView,
       capturePresentation: ports.capturePresentation,
+      language: ports.language,
       actions: (snapshot, window, queryCurrent) => {
         if (!queryCurrent()) return [];
         const language = ports.language();

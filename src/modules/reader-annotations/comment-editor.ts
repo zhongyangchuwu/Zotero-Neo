@@ -18,7 +18,7 @@ import {
   AnnotationCommentDraft,
   type DraftSaveResult,
 } from '../../platform/annotation-comment-drafts';
-import { t } from '../../i18n';
+import { t, type AppLanguage } from '../../i18n';
 import type { NativeReactView } from '../../ui/react/types';
 import type { AnnotationCommentReactCommand, AnnotationCommentReactModel } from './react-model';
 import { ANNOTATION_COMMENT_OVERLAY_STYLE } from '../../ui/react/shells/reader';
@@ -47,7 +47,7 @@ export interface ReaderCommentEditorHost {
   readonly onInputOwnerChanged: () => void;
   readonly onExit: (saved: boolean, pdfWindow: PdfWindow) => void;
   readonly debug: (message: string) => void;
-  readonly locale: () => string;
+  readonly language: () => AppLanguage;
 }
 
 function excerptText(value: string): string {
@@ -334,19 +334,18 @@ export class ReaderCommentEditor {
       return;
     }
     this.#themeCleanup = cleanup;
+    const language = this.#host.language();
     const view = mountNativeReactView<AnnotationCommentReactModel, AnnotationCommentReactCommand>({
       surface: 'annotation-comment',
       root: overlay,
       model: (this.#model = {
         comment: draft.text,
         excerpt: excerptText(quote).slice(0, 200),
-        hint: /^zh/i.test(this.#host.locale())
-          ? 'Enter 换行 · Esc 保存并关闭'
-          : 'Enter newline · Esc save & close',
-        status: t(`comment.status.${this.#status}`, this.#host.locale()),
-        retry: t('comment.retry', this.#host.locale()),
-        overwrite: t('comment.overwrite', this.#host.locale()),
-        discard: t('comment.discard', this.#host.locale()),
+        hint: t('comment.hint', language),
+        status: t(`comment.status.${this.#status}`, language),
+        retry: t('comment.retry', language),
+        overwrite: t('comment.overwrite', language),
+        discard: t('comment.discard', language),
         canRetry: this.#status === 'draft' || this.#status === 'storageFailed',
         canOverwrite: this.#status === 'conflict',
         canDiscard: this.#status !== 'saved',
@@ -358,8 +357,8 @@ export class ReaderCommentEditor {
         this.#isCurrent(generation, pdfWindow) &&
         this.#overlay === overlay &&
         pdfWindow.document === document,
-      loadingText: 'Loading comment editor…',
-      errorText: 'Comment editor unavailable.',
+      loadingText: t('comment.loading', language),
+      errorText: t('comment.unavailable', language),
       onError: (error) => this.#host.debug(`Annotation comment view failed: ${String(error)}`),
     });
     this.#view = view;
@@ -406,7 +405,7 @@ export class ReaderCommentEditor {
     if (!this.#model || !this.#view) return;
     this.#model = {
       ...this.#model,
-      status: t(`comment.status.${status}`, this.#host.locale()),
+      status: t(`comment.status.${status}`, this.#host.language()),
       canRetry: status === 'draft' || status === 'failed' || status === 'storageFailed',
       canOverwrite: status === 'conflict',
       canDiscard: status !== 'saved' && status !== 'saving',
@@ -551,7 +550,7 @@ export class ReaderCommentEditor {
         promptChromeText(
           null,
           'Zotero Neo',
-          t('comment.storageRetired', this.#host.locale()),
+          t('comment.storageRetired', this.#host.language()),
           unsavedText,
         );
     });

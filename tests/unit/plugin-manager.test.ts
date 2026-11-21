@@ -293,7 +293,8 @@ describe('configurable plugin manager contexts', () => {
       expect(event.preventDefault).not.toHaveBeenCalled();
     }
     expect(host.alpha.enable).not.toHaveBeenCalled();
-    expect(state.footer?.textContent).toContain('<F1>');
+    expect(state.footer?.textContent).not.toContain('<F1>');
+    expect(state.footer?.textContent).toBe('k/j Move · / Filter · i Install · <Esc> Close');
     expect(state.details?.textContent).toContain('<F1>');
     key('F1');
     await vi.waitFor(() => expect(state.busy).toBe(false));
@@ -343,6 +344,7 @@ describe('configurable plugin manager contexts', () => {
     const { window, state, panel } = createPanelFixture(() => bindings);
     panel.open();
     await vi.waitFor(() => expect(state.loading).toBe(false));
+    expect(state.footer?.textContent).toBe('k/n Move · <F3> Filter · i Install · <F5> Close');
     for (const retired of ['j', 'ArrowDown', '/', 'Escape', 'q']) {
       const event = pickerKey(retired, state.overlay);
       panel.handleKey(event);

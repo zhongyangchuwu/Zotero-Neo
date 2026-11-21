@@ -1,4 +1,7 @@
+import type { AppLanguage } from '../../i18n';
+
 export interface SelectionActionsReactModel {
+  language: AppLanguage;
   stage: 'menu' | 'busy' | 'result';
   preview: string;
   actions: string[];

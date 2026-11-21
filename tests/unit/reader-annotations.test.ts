@@ -89,7 +89,6 @@ function annotationFixture(language: KeyGuideLanguage = 'en') {
     onInputOwnerChanged: vi.fn(),
     onCommentExit: vi.fn(),
     language: () => language,
-    locale: () => 'en',
     copyText: vi.fn(),
     beginSelectionAction: vi.fn(),
     showStatus: status,

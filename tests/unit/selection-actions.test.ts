@@ -38,13 +38,22 @@ vi.mock('../../src/platform/native-ui', () => ({
 }));
 
 function createPalette(
-  host: Omit<ReaderSelectionActionHost, 'isCurrent' | 'captureView' | 'capturePresentation'> &
-    Partial<Pick<ReaderSelectionActionHost, 'isCurrent' | 'captureView' | 'capturePresentation'>>,
+  host: Omit<
+    ReaderSelectionActionHost,
+    'isCurrent' | 'captureView' | 'capturePresentation' | 'language'
+  > &
+    Partial<
+      Pick<
+        ReaderSelectionActionHost,
+        'isCurrent' | 'captureView' | 'capturePresentation' | 'language'
+      >
+    >,
 ) {
   return new ReaderSelectionActions({
     isCurrent: () => true,
     captureView: () => () => true,
     capturePresentation: () => () => true,
+    language: () => 'en',
     ...host,
   });
 }
