@@ -1,7 +1,7 @@
 import type { LocalBindingRuntime } from '../../input/local-binding-runtime';
 import type { CompositionState } from '../../input/composition';
 import type { PickerItem, PickerScope } from './model';
-import type { PickerCloseReason, PickerConfirm, PickerProvider } from './types';
+import type { PickerCloseReason, PickerConfirm, PickerConfirmMany, PickerProvider } from './types';
 import type { NativeReactView } from '../../ui/react/types';
 import type { PickerReactModel } from './react-model';
 
@@ -27,11 +27,15 @@ export class PickerRuntime {
   items: PickerItem[] = [];
   filtered: PickerItem[] = [];
   selected = 0;
+  panes: 1 | 2 = 2;
+  /** IDs survive filtering; the snapshots support providers whose queries return only visible rows. */
+  marked: Map<PickerItem['id'], PickerItem> | null = null;
   /** Selected identity retained until the current source/query produces authoritative results. */
   pendingSelectionID: PickerItem['id'] | undefined;
   focusPane: 'search' | 'list' | 'preview' = 'search';
   provider: PickerProvider | null = null;
   confirm: PickerConfirm | null = null;
+  confirmMany: PickerConfirmMany | null = null;
   closeBeforeConfirm = false;
   onClose: ((reason: PickerCloseReason) => void) | null = null;
   queue: Promise<void> = Promise.resolve();

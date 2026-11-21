@@ -14,7 +14,7 @@ import { MainNavigation } from '../navigation';
 import type { PickerItem, PickerScope } from './model';
 import type { PickerCloseReason, PickerOpenOptions, PickerPane, PickerProvider } from './types';
 import { fuzzyMatchScore } from '../../ui/fuzzy';
-import { itemRowCells } from './item-row';
+import { itemRowCells, pickerTitleMatches } from './item-row';
 import { mountNativeReactView } from '../../platform/native-ui';
 import type { PickerReactCommand, PickerReactModel, PickerReactRow } from './react-model';
 import { createCommandsProvider } from './providers/commands';
@@ -135,8 +135,14 @@ export class FuzzyPicker {
     try {
       this.trace(`picker open scope=${scope}`);
       const provider = options.source ?? this.provider(scope, options.commandContext);
+      const panes = options.layout?.panes ?? 2;
+      const initialPane = provider.initialFocusPane ?? 'search';
+      const openPane = panes === 1 && initialPane === 'preview' ? 'search' : initialPane;
+      session.picker.panes = panes;
+      session.picker.marked = options.multiSelect ? new Map() : null;
       session.picker.provider = provider;
       session.picker.confirm = options.confirm ?? null;
+      session.picker.confirmMany = options.confirmMany ?? null;
       session.picker.closeBeforeConfirm = options.closeBeforeConfirm ?? false;
       session.picker.onClose = options.onClose ?? null;
       session.picker.queue = Promise.resolve();
@@ -152,6 +158,8 @@ export class FuzzyPicker {
       overlay.style.cssText = PICKER_OVERLAY_STYLE;
       const modal = create('div');
       modal.className = 'picker-root neo-appearance';
+      modal.dataset.pickerPanes = String(panes);
+      if (options.layout?.compact ?? panes === 1) modal.dataset.pickerCompact = 'true';
       overlay.append(modal);
       (doc.body ?? doc.documentElement).append(overlay);
       const backdropCleanup = session.theme.add(overlay);
@@ -182,7 +190,7 @@ export class FuzzyPicker {
         pendingSelectionID: undefined,
         filtered: [],
         items: [],
-        focusPane: provider.initialFocusPane ?? 'search',
+        focusPane: openPane,
         previousElement,
         previousWindow: focusedWindow,
         themeCleanup,
@@ -204,9 +212,9 @@ export class FuzzyPicker {
       if (!this.isCurrent(session, generation)) return;
       const input = view.getElement('query') as HTMLInputElement | null;
       const results = view.getElement('results');
-      const preview = view.getElement('preview');
+      const preview = panes === 2 ? view.getElement('preview') : null;
       const sourceButton = view.getElement('source') as HTMLButtonElement | null;
-      if (!input || !results || !preview || !sourceButton)
+      if (!input || !results || (panes === 2 && !preview) || !sourceButton)
         throw new Error('Picker view is missing required parts');
       Object.assign(session.picker, { input, results, preview, sourceButton });
       session.picker.localBindings = new LocalBindingRuntime({
@@ -248,7 +256,7 @@ export class FuzzyPicker {
       input.addEventListener('focus', focusSearch);
       input.addEventListener('click', focusSearch);
       results.addEventListener('focus', focusList);
-      preview.addEventListener('focus', focusPreview);
+      preview?.addEventListener('focus', focusPreview);
       const pointerRowHandler = (event: Event): void => {
         if (!this.isCurrent(session, generation)) return;
         if (!this.#mouseEnabled() || !isPrimaryMouseEvent(event)) return;
@@ -257,6 +265,10 @@ export class FuzzyPicker {
         session.picker.localBindings?.deactivate();
         event.preventDefault();
         event.stopPropagation();
+        if (asElement(event.target)?.closest?.('.picker-check')) {
+          this.toggleMark(session, index);
+          return;
+        }
         this.focusPane(session, 'list');
         this.selectRow(session, index);
       };
@@ -266,6 +278,7 @@ export class FuzzyPicker {
         const index = pickerRowIndex(event, results);
         const item = index === null ? undefined : session.picker.filtered[index];
         if (index === null || !item) return;
+        if (asElement(event.target)?.closest?.('.picker-check')) return;
         session.picker.localBindings?.deactivate();
         // Selection previews may change while a previously admitted operation is pending.
         event.preventDefault();
@@ -298,7 +311,7 @@ export class FuzzyPicker {
         input.removeEventListener('focus', focusSearch);
         input.removeEventListener('click', focusSearch);
         results.removeEventListener('focus', focusList);
-        preview.removeEventListener('focus', focusPreview);
+        preview?.removeEventListener('focus', focusPreview);
         results.removeEventListener('click', pointerRowHandler);
         results.removeEventListener('dblclick', doubleClickRowHandler);
         sourceButton?.removeEventListener('click', sourceHandler);
@@ -311,7 +324,7 @@ export class FuzzyPicker {
           !samePickerFocus(initialFocus, capturePickerFocus(doc))
         )
           return;
-        this.focusPane(session, session.picker.provider?.initialFocusPane ?? 'search');
+        this.focusPane(session, openPane);
       }, 30);
       await this.loadSource(session, provider, generation, sourceRevision);
     } catch (error) {
@@ -475,6 +488,14 @@ export class FuzzyPicker {
       picker.localBindings?.deactivate();
       return;
     }
+    if (picker.marked && event.key === 'Tab' && !event.ctrlKey && !event.altKey && !event.metaKey) {
+      picker.localBindings?.deactivate();
+      event.preventDefault();
+      event.stopImmediatePropagation?.();
+      event.stopPropagation();
+      if (!event.repeat) this.toggleMark(session, picker.selected, event.shiftKey ? -1 : 1);
+      return;
+    }
     const context = target === picker.input || sourceButtonFocused ? 'picker-input' : 'picker-list';
     const key = keyString(event);
     if (key && nativeReservation(context, serializeBindingTokens([key])) === 'exclusive') {
@@ -539,8 +560,9 @@ export class FuzzyPicker {
       }
       case 'uiNextPane':
       case 'uiPreviousPane': {
-        const panes: readonly PickerPane[] = ['search', 'list', 'preview'];
-        const offset = action === 'uiNextPane' ? 1 : 2;
+        const panes: readonly PickerPane[] =
+          picker.panes === 1 ? ['search', 'list'] : ['search', 'list', 'preview'];
+        const offset = action === 'uiNextPane' ? 1 : panes.length - 1;
         this.focusPane(session, panes[(panes.indexOf(picker.focusPane) + offset) % panes.length]!);
         break;
       }
@@ -630,6 +652,19 @@ export class FuzzyPicker {
     this.render(session);
   }
 
+  /** Mark candidates by source identity without coupling them to the current filter or cursor. */
+  private toggleMark(session: MainWindowSession, index: number, direction?: -1 | 1): void {
+    const picker = session.picker;
+    if (!picker.marked || picker.confirming || picker.loadingText || picker.loadError) return;
+    const item = picker.filtered[index];
+    if (!item) return;
+    if (item.selectable !== false && !picker.marked.delete(item.id)) {
+      picker.marked.set(item.id, item);
+    }
+    if (direction) this.moveSelection(session, direction);
+    else this.render(session);
+  }
+
   /** Format and highlight once per result set, not once per cursor movement. */
   private projectRows(session: MainWindowSession): readonly PickerReactRow[] {
     const { filtered, committedQuery, provider } = session.picker;
@@ -637,12 +672,23 @@ export class FuzzyPicker {
     if (cached) return cached;
     const query = committedQuery.trim();
     const untitled = this.text('untitled');
-    const rows = filtered.map((row, index) => {
-      const cells = row.bibliography ? itemRowCells(row, query, untitled) : undefined;
+    const rows = filtered.map((row, index): PickerReactRow => {
+      const columns = row.columns?.map((column) => {
+        if (column.role !== 'primary' || column.matches) return column;
+        const matches = pickerTitleMatches(column.text, query);
+        return matches ? { ...column, matches } : column;
+      });
+      const cells = !columns && row.bibliography ? itemRowCells(row, query, untitled) : undefined;
       const previous = filtered[index - 1];
       return {
-        text: cells?.title ?? (provider?.rowText(row, index) || row.title || untitled),
+        text: columns
+          ? row.title
+          : (cells?.title ?? (provider?.rowText(row, index) || row.title || untitled)),
         cells,
+        columns,
+        icon: row.icon,
+        kind: row.kind === 'action' ? 'action' : 'item',
+        selectable: row.selectable,
         boundary: Boolean(row.group && previous?.group && row.group !== previous.group),
       };
     });
@@ -654,21 +700,36 @@ export class FuzzyPicker {
     const picker = session.picker;
     const provider = picker.provider;
     const item = picker.filtered[picker.selected];
-    const preview = item ? provider?.preview(item) : undefined;
+    const preview = picker.panes === 2 && item ? provider?.preview(item) : undefined;
     const searching = picker.focusPane === 'search';
     const sourceHelp = searching ? provider?.help?.query : provider?.help?.list;
-    const shortcuts = this.shortcutReference(searching ? 'picker-input' : 'picker-list');
+    const shortcuts = this.shortcutReference(
+      searching ? 'picker-input' : 'picker-list',
+      picker.panes,
+      picker.marked !== null,
+    );
+    const marked: number[] = [];
+    if (picker.marked?.size) {
+      const marks = picker.marked;
+      picker.filtered.forEach((row, index) => {
+        if (marks.has(row.id)) marked.push(index);
+      });
+    }
+    const count = picker.loadingText
+      ? picker.loadingText
+      : picker.loadError
+        ? '—'
+        : (provider?.countText?.(picker.filtered.length, picker.items.length) ??
+          `${picker.filtered.length}/${picker.items.length}`);
     return {
+      panes: picker.panes,
+      multiSelect: picker.marked !== null,
+      marked,
       title: provider?.title ?? '',
       placeholder: provider?.placeholder ?? '',
       sourceLabel: provider?.alternateSource?.label ?? null,
       sourceDisabled: picker.confirming || picker.composition.active,
-      count: picker.loadingText
-        ? picker.loadingText
-        : picker.loadError
-          ? '—'
-          : (provider?.countText?.(picker.filtered.length, picker.items.length) ??
-            `${picker.filtered.length}/${picker.items.length}`),
+      count: picker.marked?.size ? `${this.markedCount(picker.marked.size)} · ${count}` : count,
       rows: picker.loadError ? [] : this.projectRows(session),
       selected: picker.selected,
       empty:
@@ -700,16 +761,20 @@ export class FuzzyPicker {
     const picker = session.picker;
     if (picker.confirming || picker.composition.active || picker.loadingText || picker.loadError)
       return;
+    const many = picker.marked?.size ? Array.from(picker.marked.values()) : undefined;
     const candidate = picker.filtered[picker.selected];
     const provider = picker.provider;
-    if (!candidate || !provider) return;
-    // Admission is synchronous: later previews and repeated activation cannot change this target.
-    const itemID = candidate.id;
-    const itemTitle = candidate.title || this.text('untitled');
+    if ((!candidate && !many) || !provider) return;
+    // Admission is synchronous: later previews and repeated activation cannot change the targets.
+    const itemID = candidate?.id;
+    const itemTitle = many
+      ? this.markedCount(many.length)
+      : candidate?.title || this.text('untitled');
     const generation = picker.generation;
     const sourceRevision = picker.sourceRevision;
     const queryRevision = picker.queryRevision;
     const confirm = picker.confirm;
+    const confirmMany = picker.confirmMany;
     const closeBeforeConfirm = picker.closeBeforeConfirm;
     const scope = picker.scope;
     picker.confirming = true;
@@ -726,36 +791,47 @@ export class FuzzyPicker {
           this.setOperationStatus(session, this.text('resultUnavailable'));
           return;
         }
-        const item = picker.filtered.find((candidate) => candidate.id === itemID);
-        if (!item) {
+        const item = many
+          ? undefined
+          : picker.filtered.find((candidate) => candidate.id === itemID);
+        if (!many && !item) {
           this.setOperationStatus(session, this.text('resultUnavailable'));
           return;
         }
         this.trace('picker action start action=select result');
-        const refinement = provider.refineQuery?.(item);
-        if (refinement !== undefined && refinement !== null) {
-          const input = picker.input;
-          if (!input) return;
-          input.value = refinement;
-          picker.committedQuery = refinement;
-          picker.selected = 0;
-          this.filter(session, refinement);
-          this.focusPane(session, 'search');
-          input.select();
-          this.setOperationStatus(session, '');
-          return;
+        if (item) {
+          const refinement = provider.refineQuery?.(item);
+          if (refinement !== undefined && refinement !== null) {
+            const input = picker.input;
+            if (!input) return;
+            input.value = refinement;
+            picker.committedQuery = refinement;
+            picker.selected = 0;
+            this.filter(session, refinement);
+            this.focusPane(session, 'search');
+            input.select();
+            this.setOperationStatus(session, '');
+            return;
+          }
         }
-        if (!confirm) {
+        const run = many
+          ? confirmMany && (() => confirmMany(many, openInWindow))
+          : item && confirm && (() => confirm(item, openInWindow));
+        if (!run) {
           this.setOperationStatus(session, '');
           return;
         }
         if (closeBeforeConfirm) this.close(session, 'confirm');
-        const continuation = await confirm(item, openInWindow);
+        const continuation = await run();
         if (closeBeforeConfirm || !this.isCurrent(session, generation)) return;
         if (continuation?.keepOpen) {
           if (continuation.source) {
             picker.provider = continuation.source;
+            picker.marked?.clear();
             picker.sourceRevision += 1;
+          }
+          if (continuation.multiSelect !== undefined) {
+            picker.marked = continuation.multiSelect ? (picker.marked ?? new Map()) : null;
           }
           if (continuation.query !== undefined && picker.input) {
             picker.input.value = continuation.query;
@@ -823,6 +899,7 @@ export class FuzzyPicker {
       const provider = alternate.provider();
       picker.localBindings?.deactivate();
       picker.provider = provider;
+      picker.marked?.clear();
       const sourceRevision = ++picker.sourceRevision;
       picker.items = [];
       picker.filtered = [];
@@ -864,6 +941,24 @@ export class FuzzyPicker {
       }
       session.picker.loadingText = '';
       session.picker.items = items;
+      if (session.picker.marked?.size) {
+        const marked = session.picker.marked;
+        const loaded = provider.query ? undefined : new Set<PickerItem['id']>();
+        for (const item of items) {
+          if (!marked.has(item.id)) continue;
+          if (item.selectable === false) marked.delete(item.id);
+          else {
+            marked.set(item.id, item);
+            loaded?.add(item.id);
+          }
+        }
+        // Only a complete provider load can tell that a marked candidate no longer exists.
+        if (loaded && loaded.size !== marked.size) {
+          for (const id of marked.keys()) {
+            if (!loaded.has(id)) marked.delete(id);
+          }
+        }
+      }
       if (provider.query) {
         this.replaceResults(session, items.slice(0, 100), selectedID);
       } else {
@@ -1010,9 +1105,12 @@ export class FuzzyPicker {
     picker.items = [];
     picker.filtered = [];
     picker.selected = 0;
+    picker.panes = 2;
+    picker.marked = null;
     picker.pendingSelectionID = undefined;
     picker.provider = null;
     picker.confirm = null;
+    picker.confirmMany = null;
     picker.closeBeforeConfirm = false;
     picker.onClose = null;
     picker.queue = Promise.resolve();
@@ -1035,7 +1133,11 @@ export class FuzzyPicker {
     return t(`picker.${key}`, this.#language());
   }
 
-  private shortcutReference(context: BindingContext): string {
+  private markedCount(count: number): string {
+    return this.text('markedCount').replace('{count}', String(count));
+  }
+
+  private shortcutReference(context: BindingContext, panes: 1 | 2, multiSelect: boolean): string {
     const bindings = this.#bindings();
     const key = (action: ActionId, preferred: string): string => {
       const sequence =
@@ -1056,8 +1158,9 @@ export class FuzzyPicker {
     const close = key('uiCancel', '<Esc>');
     return [
       move && `${move} ${this.text('shortcutMove')}`,
+      multiSelect && `Tab ${this.text('shortcutMultiSelect')}`,
       confirm && `${confirm} ${this.text('shortcutConfirm')}`,
-      `Tab ${this.text('shortcutFocus')}`,
+      !multiSelect && panes === 2 && `Tab ${this.text('shortcutFocus')}`,
       close && `${close} ${this.text('shortcutClose')}`,
     ]
       .filter(Boolean)

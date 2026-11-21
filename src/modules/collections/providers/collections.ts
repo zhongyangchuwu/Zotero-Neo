@@ -1,13 +1,16 @@
 import { mainCollectionRefs } from '../../../toolkit/main';
 import { t, type AppLanguage } from '../../../i18n';
 import { fuzzyMatchScore } from '../../../ui/fuzzy';
-import type { PickerItem } from '../../../main/picker/model';
+import type { PickerColumn, PickerItem } from '../../../main/picker/model';
 import type { PickerProvider } from '../../../main/picker/types';
 
 export interface CollectionCandidateOptions {
   readonly title?: string;
+  readonly presentation?: 'compact';
+  readonly help?: PickerProvider['help'];
   readonly libraryName?: string;
   readonly memberships?: readonly (readonly number[])[];
+  readonly targetCount?: number;
   readonly present?: boolean;
   readonly includeCreate?: boolean;
   readonly includeRoot?: boolean;
@@ -24,13 +27,20 @@ export function createCollectionCandidateProvider(
   const language = options.language ?? 'en';
   const text = (key: string): string => t(`picker.${key}`, language);
   const library = options.libraryName ?? text('libraryName').replace('{id}', String(libraryID));
+  const compact = options.presentation === 'compact';
   return {
     title: options.title ?? `${text('collections')} · ${library}`,
     placeholder: text('searchCollections'),
+    help: options.help,
     async load() {
       const coverage = new Map<number, number>();
-      const itemCount = options.memberships?.length;
-      for (const ids of options.memberships ?? []) {
+      const memberships = options.memberships;
+      const itemCount = options.targetCount ?? memberships?.length;
+      const badgeTotal =
+        itemCount !== undefined && (itemCount > 1 || options.present === true)
+          ? itemCount
+          : undefined;
+      for (const ids of memberships ?? []) {
         for (const id of new Set(ids)) coverage.set(id, (coverage.get(id) ?? 0) + 1);
       }
       const candidates = mainCollectionRefs(libraryID)
@@ -38,6 +48,32 @@ export function createCollectionCandidateProvider(
         .filter((collection) => options.present !== false || coverage.has(collection.id))
         .map((collection): PickerItem => {
           const count = coverage.get(collection.id) ?? 0;
+          if (compact) {
+            const parentPath = collection.parentID
+              ? collection.path.slice(0, -(collection.name.length + ' / '.length))
+              : '';
+            const columns: PickerColumn[] = [
+              { text: collection.name, role: 'primary', weight: 2 },
+              { text: parentPath, role: 'muted', weight: 1 },
+            ];
+            if (badgeTotal !== undefined) {
+              const textValue =
+                badgeTotal > 1
+                  ? `${count}/${badgeTotal}${count === badgeTotal ? ' ✓' : ''}`
+                  : count === 1
+                    ? `✓ ${text('collectionAssigned')}`
+                    : '';
+              columns.push({ text: textValue, role: 'badge', align: 'end' });
+            }
+            return {
+              id: collection.id,
+              title: collection.name,
+              search: collection.path,
+              collectionCandidate: 'collection',
+              icon: 'folder',
+              columns,
+            };
+          }
           const membership =
             itemCount !== undefined
               ? `${text('directMembership').replace('{count}', String(count)).replace('{total}', String(itemCount))}${count === itemCount ? ` · ${text('alreadyAssigned')}` : ''}`
@@ -65,22 +101,41 @@ export function createCollectionCandidateProvider(
         candidates.sort(
           (a, b) => Number(b.id === options.preferredID) - Number(a.id === options.preferredID),
         );
-      if (options.includeRoot)
+      if (options.includeRoot) {
+        const title = compact ? text('libraryRoot') : `${library} / ${text('libraryRoot')}`;
         candidates.unshift({
           id: 'root',
-          title: `${library} / ${text('libraryRoot')}`,
+          title,
           search: 'root',
           collectionCandidate: 'root',
-          preview: text('useLibraryRoot'),
+          ...(compact
+            ? {
+                icon: 'folder',
+                columns: [
+                  { text: title, role: 'primary', weight: 2 },
+                  { text: library, role: 'muted', weight: 1 },
+                ],
+              }
+            : { preview: text('useLibraryRoot') }),
         });
-      if (options.includeCreate)
+      }
+      if (options.includeCreate) {
+        const title = text('newCollection');
         candidates.push({
           id: 'create',
-          title: text('newCollection'),
+          title,
           search: '',
           collectionCandidate: 'create',
-          preview: text('newCollectionSteps').replace('{count}', String(itemCount ?? 0)),
+          ...(compact
+            ? {
+                kind: 'action',
+                selectable: false,
+                icon: 'plus',
+                columns: [{ text: title, role: 'primary' }],
+              }
+            : { preview: text('newCollectionSteps').replace('{count}', String(itemCount ?? 0)) }),
         });
+      }
       return candidates;
     },
     filterItems(items, query) {
@@ -100,13 +155,16 @@ export function createCollectionCandidateProvider(
       return item.meta ? `${item.title} · ${item.meta}` : item.title;
     },
     preview(item) {
-      return {
-        title: item.title,
-        body: [
-          item.preview ?? item.title,
-          text('collectionId').replace('{id}', String(item.id)),
-        ].join('\n'),
-      };
+      const body = compact
+        ? item.columns
+            ?.slice(1)
+            .map((column) => column.text)
+            .filter(Boolean)
+            .join('\n') || item.title
+        : [item.preview ?? item.title, text('collectionId').replace('{id}', String(item.id))].join(
+            '\n',
+          );
+      return { title: item.title, body };
     },
     emptyText: (query) =>
       options.present === false

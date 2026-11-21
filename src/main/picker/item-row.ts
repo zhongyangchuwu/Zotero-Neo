@@ -2,6 +2,10 @@ import { single } from '../../../vendor/fuzzysort/fuzzysort.js';
 import type { PickerItem } from './model';
 import type { PickerRowCells } from './react-model';
 
+export function pickerTitleMatches(title: string, query: string): readonly number[] | undefined {
+  return query && title ? single(query, title)?.indexes : undefined;
+}
+
 /** Match only the visible title for presentation; result ranking still uses item.search. */
 export function itemRowCells(item: PickerItem, query: string, untitled: string): PickerRowCells {
   return {
@@ -11,6 +15,6 @@ export function itemRowCells(item: PickerItem, query: string, untitled: string):
     citekey: item.citekey || undefined,
     icon: item.bibliography?.icon,
     detail: item.meta,
-    matches: query && item.title ? single(query, item.title)?.indexes : undefined,
+    matches: pickerTitleMatches(item.title, query),
   };
 }

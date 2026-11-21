@@ -4,12 +4,17 @@ import {
   CollectionMembershipActions,
   type CollectionActionHost,
   type CollectionConfirmation,
+  type CollectionPickerOptions,
   type CollectionTargetRequest,
 } from './actions';
 import type { PickerProvider } from '../../main/picker/types';
 
 export interface CollectionsModuleHost extends Omit<CollectionActionHost, 'isCurrent' | 'choose'> {
-  readonly choose: (source: PickerProvider, confirm: CollectionConfirmation) => Cleanup | null;
+  readonly choose: (
+    source: PickerProvider,
+    confirm: CollectionConfirmation,
+    options?: CollectionPickerOptions,
+  ) => Cleanup | null;
 }
 
 export interface CollectionsModule {
@@ -42,13 +47,20 @@ export function createCollectionsModule(
         const current = ports.captureCurrent();
         return () => scope.isCurrent() && current();
       },
-      choose: (source, confirm) => {
+      choose: (source, confirm, options) => {
         if (!scope.isCurrent()) return;
-        const release = ports.choose(source, (candidate, pickerCurrent, query) => {
-          const isCurrent = () => scope.isCurrent() && pickerCurrent();
-          if (!isCurrent()) throw new Error('Collection workflow expired');
-          return confirm(candidate, isCurrent, query);
-        });
+        const guard =
+          <T>(callback: CollectionConfirmation<T>): CollectionConfirmation<T> =>
+          (candidate, pickerCurrent, query) => {
+            const isCurrent = () => scope.isCurrent() && pickerCurrent();
+            if (!isCurrent()) throw new Error('Collection workflow expired');
+            return callback(candidate, isCurrent, query);
+          };
+        const release = ports.choose(
+          source,
+          guard(confirm),
+          options?.confirmMany ? { ...options, confirmMany: guard(options.confirmMany) } : options,
+        );
         if (!release) return;
         if (scope.isCurrent()) releaseChooser = release;
         else release();

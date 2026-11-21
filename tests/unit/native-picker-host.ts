@@ -44,6 +44,7 @@ export function mountNativeReactView(options: {
     'query-help',
     'list-help',
   ]) {
+    if (options.model.panes === 1 && part.startsWith('preview')) continue;
     const element = create(part === 'query' ? 'input' : part === 'source' ? 'button' : 'div');
     parts.set(part, element);
     root.append(element);

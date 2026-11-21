@@ -20,6 +20,8 @@ export interface PickerPreviewSection {
 export interface PickerContinuation {
   readonly keepOpen: true;
   readonly source?: PickerProvider;
+  /** A new source can switch between a multi-select step and a single-choice step. */
+  readonly multiSelect?: boolean;
   readonly query?: string;
   readonly message?: string;
 }
@@ -27,6 +29,10 @@ export type PickerConfirmationResult = void | PickerContinuation;
 
 export type PickerConfirm = (
   item: PickerItem,
+  openInWindow: boolean,
+) => Promise<PickerConfirmationResult> | PickerConfirmationResult;
+export type PickerConfirmMany = (
+  items: readonly PickerItem[],
   openInWindow: boolean,
 ) => Promise<PickerConfirmationResult> | PickerConfirmationResult;
 export type PickerCloseReason = 'cancel' | 'confirm' | 'retire';
@@ -39,6 +45,9 @@ export type PickerCloseReason = 'cancel' | 'confirm' | 'retire';
  */
 export interface PickerOpenOptions {
   readonly confirm?: PickerConfirm;
+  readonly layout?: { readonly panes?: 1 | 2; readonly compact?: boolean };
+  readonly multiSelect?: boolean;
+  readonly confirmMany?: PickerConfirmMany;
   readonly closeBeforeConfirm?: boolean;
   readonly commandContext?: CommandPaletteContext;
   readonly source?: PickerProvider;

@@ -265,7 +265,7 @@ export class MainWindowController implements MainWindowControllerApi {
               session.picker.generation === generation &&
               !window.closed;
           },
-          choose: (source, confirm) => {
+          choose: (source, confirm, options) => {
             if (session.picker.open) return null;
             const previous = session.picker.generation;
             let generation = -1;
@@ -275,8 +275,14 @@ export class MainWindowController implements MainWindowControllerApi {
               session.picker.open &&
               session.picker.generation === generation &&
               !window.closed;
+            const confirmMany = options?.confirmMany;
             void this.#picker.open(window, session, 'collections', {
               source,
+              layout: options?.layout,
+              multiSelect: options?.multiSelect,
+              confirmMany: confirmMany
+                ? (candidates) => confirmMany(candidates, isCurrent, session.picker.committedQuery)
+                : undefined,
               confirm: (candidate) => confirm(candidate, isCurrent, session.picker.committedQuery),
             });
             generation = session.picker.generation;
