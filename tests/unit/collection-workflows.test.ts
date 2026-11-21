@@ -322,7 +322,9 @@ describe('collection workflows', () => {
       presentation: { origin: 'cursor', outsideCurrentList: 0 },
     });
     await h.start(() => h.actions.add(h.request));
-    expect(pickerModel(h.session).shortcutHelp).toBe('↑↓ Move · Tab Mark · Enter Activate · Esc Close');
+    expect(pickerModel(h.session).shortcutHelp).toBe(
+      '↑↓ Move · Tab Mark · Enter Activate · Esc Close',
+    );
   });
   it('shows normalized Main selection context and writes it instead of the different cursor target', async () => {
     const h = workflowHarness();
