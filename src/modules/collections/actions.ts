@@ -474,37 +474,61 @@ export class CollectionMembershipActions {
   move(): void {
     const { window } = this.#host;
     this.start(() => {
-      const target = this.target(window);
+      const preferred = mainTreeFocused(window, 'collections')
+        ? mainCursorCollection(window)
+        : mainActiveCollection(window);
+      const scope = mainCollectionLibrary(window);
+      const libraryID = preferred?.libraryID ?? scope?.libraryID;
+      if (libraryID === undefined) throw new CollectionWorkflowError('chooseLibrary');
+      writable(libraryID);
       const language = this.#host.language();
-      const library = Zotero.Libraries.get(target.libraryID);
-      const excluded = new Set([target.id]);
-      const refs = mainCollectionRefs(target.libraryID);
-      let changed = true;
-      while (changed) {
-        changed = false;
-        for (const ref of refs) {
-          if (ref.parentID && excluded.has(ref.parentID) && !excluded.has(ref.id)) {
-            excluded.add(ref.id);
-            changed = true;
-          }
-        }
-      }
+      const library = Zotero.Libraries.get(libraryID);
+      const libraryName = library ? library.name : undefined;
+      let moving: { id: number; original: Zotero.Collection } | undefined;
       this.openPicker(
-        createCollectionCandidateProvider(target.libraryID, {
-          title: `${t('picker.moveCollection', language)} · ${target.path}`,
+        createCollectionCandidateProvider(libraryID, {
+          title: t('picker.moveCollectionSource', language),
           presentation: 'compact',
-          libraryName: library ? library.name : undefined,
+          libraryName,
           language,
-          includeRoot: true,
-          excludeIDs: excluded,
+          preferredID: preferred?.id,
         }),
         async (candidate, isCurrent) => {
-          currentCollection(target.id, target.libraryID);
+          if (!moving) {
+            const id = candidateID(candidate, libraryID);
+            const original = Zotero.Collections.get(id);
+            if (!original) throw new CollectionWorkflowError('collectionUnavailable');
+            const target = currentCollection(id, libraryID);
+            const excluded = new Set([id]);
+            const refs = mainCollectionRefs(libraryID);
+            let previousSize: number;
+            do {
+              previousSize = excluded.size;
+              for (const ref of refs) {
+                if (ref.parentID && excluded.has(ref.parentID)) excluded.add(ref.id);
+              }
+            } while (excluded.size !== previousSize);
+            moving = { id, original };
+            return {
+              keepOpen: true,
+              query: '',
+              source: createCollectionCandidateProvider(libraryID, {
+                title: `${t('picker.moveCollection', language)} · ${target.path}`,
+                presentation: 'compact',
+                libraryName,
+                language,
+                includeRoot: true,
+                excludeIDs: excluded,
+              }),
+            };
+          }
+          const { id, original } = moving;
+          if (Zotero.Collections.get(id) !== original)
+            throw new CollectionWorkflowError('collectionUnavailable');
+          const target = currentCollection(id, libraryID);
           const parentID =
-            candidate.collectionCandidate === 'root'
-              ? false
-              : candidateID(candidate, target.libraryID);
-          await moveCollection(target.id, parentID, isCurrent);
+            candidate.collectionCandidate === 'root' ? false : candidateID(candidate, libraryID);
+          await moveCollection(id, parentID, isCurrent);
           this.#host.status(`✓ Moved collection ${target.name}`);
         },
         { layout: compactLayout },

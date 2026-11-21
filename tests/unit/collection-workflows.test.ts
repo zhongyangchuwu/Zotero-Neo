@@ -756,7 +756,7 @@ describe('collection workflows', () => {
     expect(recordedPanels).toEqual(['items']);
   });
 
-  it('binds collection moves to the focused tree cursor and excludes its descendants', async () => {
+  it('chooses a source and then a destination without including the source or its descendants', async () => {
     const h = workflowHarness();
     const tree = h.window.document.createElementNS(
       'http://www.w3.org/1999/xhtml',
@@ -766,7 +766,15 @@ describe('collection workflows', () => {
     tree.focus();
     h.scopeSelection.selected = new Set([1]);
     await h.start(() => h.actions.move());
+    expect(pickerModel(h.session)).toMatchObject({
+      panes: 1,
+      multiSelect: false,
+      title: 'Move collection · choose source',
+    });
+    expect(pickerModel(h.session).rows[0]?.text).toBe('Source');
+    await h.confirm(10);
     expect(pickerModel(h.session)).toMatchObject({ panes: 1, multiSelect: false });
+    expect(h.collections.get(10)?.parentID).toBeFalsy();
     expect(h.session.picker.filtered.map((candidate) => candidate.id)).toEqual(['root', 20]);
     await h.confirm(20);
     expect(h.collections.get(10)?.parentID).toBe(20);
