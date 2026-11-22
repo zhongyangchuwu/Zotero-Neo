@@ -185,7 +185,7 @@ function SettingsForm({
 }
 
 export const SETTINGS_REACT_CSS = `
-.neo-settings { display:grid; grid-template-columns:190px minmax(0,1fr); height:100%; min-height:0; background:var(--zotero-neo-surface); }
+.neo-ui.neo-settings { display:grid; grid-template-columns:190px minmax(0,1fr); height:100%; min-height:0; background:var(--zotero-neo-surface); }
 .neo-settings-navigation { display:flex; flex-direction:column; gap:4px; padding:20px 12px; border-right:1px solid var(--zotero-neo-border); background:var(--zotero-neo-elevated); min-width:0; overflow:auto; }
 .neo-settings-brand { padding:0 10px 17px; font-weight:700; font-size:1.1em; }
 .neo-settings-navigation button { display:block; width:100%; text-align:start; border:1px solid transparent; background:transparent; padding:8px 10px; min-height:34px; }
@@ -210,7 +210,7 @@ export const SETTINGS_REACT_CSS = `
 .neo-settings-action { padding:11px 14px; border-bottom:1px solid var(--zotero-neo-border); }
 .neo-settings-action:last-child { border-bottom:0; }
 .neo-settings-action p { margin:5px 0 0; }
-@media(max-width:760px) { .neo-settings { grid-template-columns:145px minmax(0,1fr); } .neo-settings-page { padding:14px; } .neo-settings .neo-field { align-items:flex-start; flex-direction:column; gap:8px; } .neo-settings-field-body { width:100%; } .neo-settings-field-body textarea { min-width:0; } }
+@media(max-width:760px) { .neo-ui.neo-settings { grid-template-columns:145px minmax(0,1fr); } .neo-settings-page { padding:14px; } .neo-settings .neo-field { align-items:flex-start; flex-direction:column; gap:8px; } .neo-settings-field-body { width:100%; } .neo-settings-field-body textarea { min-width:0; } }
 ${APPEARANCE_REACT_CSS}
 ${KEYBINDINGS_REACT_CSS}
 ${READER_REACT_CSS}
