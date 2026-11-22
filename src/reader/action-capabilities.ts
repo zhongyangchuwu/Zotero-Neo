@@ -179,6 +179,7 @@ export const READER_NORMAL_ACTIONS = Object.freeze([
   'findNotes',
   'mainAddByIdentifier',
   ...EXTENSIONS_SURFACE_ACTIONS,
+  'openZoteroBases',
   'openNeoSettings',
   'navigateBack',
   'navigateForward',

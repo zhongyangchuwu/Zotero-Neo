@@ -103,6 +103,7 @@ const BASE_ACTION_IDS = [
   'mainQuickSearch',
   'mainAdvancedSearch',
   'managePlugins',
+  'openZoteroBases',
   'manageSelection',
   'navigateBack',
   'navigateForward',

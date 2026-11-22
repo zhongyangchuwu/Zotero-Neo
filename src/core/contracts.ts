@@ -84,6 +84,10 @@ export interface ReaderMainOperations {
   openCollectionItemsPicker(ownerWindow: MainWindow | null): void;
   openNotesPicker(ownerWindow: MainWindow | null): void;
   openPluginManager(ownerWindow: MainWindow | null): void;
+  openZoteroBasesFromReader(
+    ownerWindow: MainWindow | null,
+    showStatus: (message: string) => void,
+  ): void;
   openSettingsFromReader(ownerWindow: MainWindow | null): void;
   navigateBackFromReader(ownerWindow: MainWindow | null, count?: number): void;
   navigateForwardFromReader(ownerWindow: MainWindow | null, count?: number): void;

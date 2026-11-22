@@ -15,7 +15,7 @@ import type {
   NavigationSurface,
 } from '../navigation/types';
 import type { ItemTargetSet } from '../core/item-target';
-import { t } from '../i18n';
+import { t, type TranslationKey } from '../i18n';
 import { focusDirectionForAction, isActionId, type ActionId } from '../input/actions';
 import {
   MAIN_EXECUTABLE_ACTIONS,
@@ -47,6 +47,7 @@ import type { InputRuntime } from '../input/runtime';
 import { keyString } from '../input/keys';
 import { asElement, isEditableElement } from '../platform/dom';
 import { runActionsTagsAction } from '../platform/actions-tags';
+import { zoteroBasesApi, ZOTERO_BASES_PLUGIN_ID } from '../platform/zotero-bases';
 import { resolveActiveSurface } from './active-surface';
 import { MainWindowSession } from './session';
 import { MainNavigation } from './navigation';
@@ -87,6 +88,7 @@ import {
   closeMainAdvancedSearch,
   prepareTabEnhancementData,
   mainActiveCollection,
+  mainPluginActive,
 } from '../toolkit/main';
 import { mainCursorItem, resolveMainEffectiveTargets } from './action-targets';
 import { resolveMainDocumentAttachments, MAIN_ITEM_TARGET } from './main-item-target';
@@ -939,6 +941,45 @@ export class MainWindowController implements MainWindowControllerApi {
     );
   }
 
+  openZoteroBasesFromReader(
+    ownerWindow: MainWindow | null,
+    showStatus: (message: string) => void,
+  ): void {
+    this.withReaderWindow(ownerWindow, 'openZoteroBases', (window, session) =>
+      this.launchZoteroBases(window, session, showStatus),
+    );
+  }
+
+  private launchZoteroBases(
+    window: MainWindow,
+    session: MainWindowSession,
+    showStatus: (message: string) => void,
+  ): void {
+    const isCurrent = () => this.#sessions.get(window) === session && !session.cleanup.disposed;
+    const open = async (): Promise<TranslationKey | undefined> => {
+      try {
+        const active = await mainPluginActive(ZOTERO_BASES_PLUGIN_ID);
+        if (!isCurrent()) return;
+        if (active === null) return 'status.zoteroBasesInstall';
+        if (!active) return 'status.zoteroBasesEnable';
+
+        const api = zoteroBasesApi();
+        if (!api) return 'status.zoteroBasesUpdate';
+        await api.open({ window });
+      } catch (error) {
+        reportDiagnosticError(this.#dependencies.logger, 'Could not open Zotero Bases', error);
+        return 'status.zoteroBasesOpenFailed';
+      }
+    };
+    void open()
+      .then((notice) => {
+        if (notice && isCurrent()) showStatus(t(notice, this.keyGuideLanguage()));
+      })
+      .catch((error: unknown) =>
+        reportDiagnosticError(this.#dependencies.logger, 'Zotero Bases status failed', error),
+      );
+  }
+
   openSettingsFromReader(ownerWindow: MainWindow | null): void {
     this.withReaderWindow(ownerWindow, 'openNeoSettings', (window) => this.openSettings(window));
   }
@@ -1678,6 +1719,11 @@ export class MainWindowController implements MainWindowControllerApi {
         break;
       case 'managePlugins':
         this.extensionsModule(session)?.open('main-normal');
+        break;
+      case 'openZoteroBases':
+        this.launchZoteroBases(window, session, (message) =>
+          this.#navigation.status(session, message),
+        );
         break;
       case 'navigateBack':
       case 'navigateForward':

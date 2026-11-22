@@ -174,6 +174,27 @@ describe('Settings keybindings controller', () => {
     page.dispose();
   });
 
+  it.each(['main-normal', 'reader-normal'] as const)(
+    'rebinds and unbinds the Bases launcher in %s through Settings',
+    (context) => {
+      const { page, preferences } = setup();
+      const launch = { context, action: 'openZoteroBases' } as const;
+      page.dispatch({ type: 'record', ...launch, previous: '<Space>ob' });
+      page.dispatch({ type: 'record-key', event: { key: 'F8' } });
+      page.dispatch({ type: 'save-edit' });
+      expect(
+        shortcutsForAction(bindingsFromPreferences(preferences), context, launch.action),
+      ).toEqual(['<F8>']);
+      page.dispatch({ type: 'unbind', ...launch });
+      expect(
+        shortcutsForAction(bindingsFromPreferences(preferences), context, launch.action),
+      ).toEqual([]);
+      const other = context === 'main-normal' ? 'reader-normal' : 'main-normal';
+      expect(bindingsFromPreferences(preferences)[`${other}:<Space>ob`]).toBe('openZoteroBases');
+      page.dispose();
+    },
+  );
+
   it('reports failed Prefix Guide writes and clamps numeric values', () => {
     const { page, preferences } = setup();
     page.dispatch({ type: 'guide-number', setting: 'delayMs', value: -50 });

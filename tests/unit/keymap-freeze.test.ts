@@ -104,6 +104,27 @@ describe('0.1.0 default keymap freeze', () => {
     }
   });
 
+  it('opens Zotero Bases under Space o without changing item or tab-enhancement bindings', () => {
+    const bindings = resolveBindings('{"main-normal:q":"openCommandPalette"}');
+    const nodes = bindingNodesFromActions(bindings);
+    for (const mode of ['main-normal', 'reader-normal'] as const) {
+      expect(nodes[`${mode}:<Space>o`]).toEqual({
+        kind: 'prefix',
+        label: { en: 'Open', 'zh-CN': '打开' },
+      });
+      expect(bindings[`${mode}:<Space>ob`]).toBe('openZoteroBases');
+    }
+    expect(bindings['note-normal:<Space>o']).toBe('mainOpenPDF');
+    expect(bindings['note-normal:<Space>ob']).toBeUndefined();
+    expect(bindings['main-normal:o']).toBe('mainOpenPDF');
+    expect(bindings['main-normal:<Space>bb']).toBe('tabFocusSidebar');
+    expect(bindings['main-normal:<Space>bt']).toBe('tabToggleSidebar');
+    expect(bindings['main-normal:<Space>bc']).toBe('mainCreateReadingGroup');
+    expect(bindings['main-normal:<Space>ba']).toBe('mainAppendReadingGroup');
+    expect(bindings['reader-normal:<Space>bb']).toBe('tabFocusSidebar');
+    expect(bindings['reader-normal:<Space>bt']).toBe('tabToggleSidebar');
+  });
+
   it('keeps newly added defaults on first resolution with existing compact overrides', () => {
     const bindings = resolveBindings('{"main-normal:q":"openCommandPalette"}');
     expect(bindings['main-normal:<Space>ps']).toBe('openNeoSettings');

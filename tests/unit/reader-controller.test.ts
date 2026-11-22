@@ -113,6 +113,7 @@ const noopReaderMainOperations: ReaderMainOperations = {
   openCollectionItemsPicker: () => {},
   openNotesPicker: () => {},
   openPluginManager: () => {},
+  openZoteroBasesFromReader: () => {},
   openSettingsFromReader: () => {},
   navigateBackFromReader: () => {},
   navigateForwardFromReader: () => {},
@@ -3293,6 +3294,50 @@ describe('Reader Main surface operations', () => {
     expect(settings.preventDefault).toHaveBeenCalledOnce();
     expect(openSettingsFromReader).toHaveBeenCalledWith(created.reader._window);
     created.session.dispose();
+  });
+
+  it.each([false, true])('uses the exact Main window for Bases (standalone: %s)', (standalone) => {
+    const openZoteroBasesFromReader = vi.fn<ReaderMainOperations['openZoteroBasesFromReader']>();
+    const palette = vi.fn<ReaderMainOperations['openCommandPalette']>();
+    const created = createHistorySession(
+      {},
+      { openZoteroBasesFromReader },
+      DEFAULT_BINDINGS,
+      palette,
+    );
+    if (standalone)
+      Reflect.set(created.reader, '_window', {
+        location: { href: 'chrome://zotero/content/reader.xhtml' },
+        opener: created.ownerWindow,
+      });
+
+    try {
+      for (const value of [' ', 'o', 'b']) {
+        const key = readerKey(value);
+        created.session.focusAndHandle(key.event);
+        expect(key.preventDefault).toHaveBeenCalledOnce();
+      }
+      expect(openZoteroBasesFromReader).toHaveBeenCalledExactlyOnceWith(
+        created.ownerWindow,
+        expect.any(Function),
+      );
+      const showStatus = openZoteroBasesFromReader.mock.calls[0]![1];
+      showStatus('→ Enable Zotero Bases');
+      expect(created.indicator.textContent).toBe('→ Enable Zotero Bases');
+
+      created.session.focusAndHandle(readerKey(':').event);
+      expect(palette.mock.calls[0]?.[0]).toBe(created.ownerWindow);
+      const context = palette.mock.calls[0]![1];
+      expect(context.actions).toContain('openZoteroBases');
+      context.execute('openZoteroBases', 0);
+      expect(openZoteroBasesFromReader).toHaveBeenCalledTimes(2);
+      expect(openZoteroBasesFromReader).toHaveBeenLastCalledWith(
+        created.ownerWindow,
+        expect.any(Function),
+      );
+    } finally {
+      created.session.dispose();
+    }
   });
 });
 

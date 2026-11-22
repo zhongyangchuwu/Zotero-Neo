@@ -37,4 +37,13 @@ describe('action capability ownership', () => {
     expect(isReaderActionForMode('normal', 'flashText')).toBe(false);
     expect(isReaderActionForMode('normal', 'not-an-action')).toBe(false);
   });
+
+  it('offers the Zotero Bases launcher only in Main and Reader Normal', () => {
+    expect(isMainExecutableAction('openZoteroBases')).toBe(true);
+    expect(isReaderActionForMode('normal', 'openZoteroBases')).toBe(true);
+    expect(actionsForBindingMode('main-normal')).toContain('openZoteroBases');
+    expect(actionsForBindingMode('reader-normal')).toContain('openZoteroBases');
+    for (const mode of ['main-select', 'reader-select', 'note-normal', 'note-insert'] as const)
+      expect(actionsForBindingMode(mode)).not.toContain('openZoteroBases');
+  });
 });
