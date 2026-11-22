@@ -5,7 +5,7 @@
         {
           "version": "0.5.3",
           "update_link": "https://github.com/zhongyangchuwu/Zotero-Neo/releases/download/v0.5.3/zotero-neo.xpi",
-          "update_hash": "sha256:b1cd366b747d49e065ed33d27d1240ff1f4e37012487e6e0d72aa56f0cabecf1",
+          "update_hash": "sha256:bcc229df4ad97d6aa376fa30afe7b74110a2d37e1f27127b710873018534b8ba",
           "applications": {
             "zotero": {
               "strict_min_version": "10.0",
