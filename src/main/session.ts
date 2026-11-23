@@ -1,6 +1,7 @@
 import { CleanupScope } from '../core/cleanup';
 import { InputRuntime } from '../input/runtime';
 import type { MainWindow } from '../core/contracts';
+import { mainStartupFocus } from '../core/preferences';
 import type { PreferenceStore } from '../core/preference-store';
 import type { BuiltinModuleRuntime } from '../core/module-runtime';
 import { PrefixGuideRuntime } from '../ui/key-guide-runtime';
@@ -45,7 +46,11 @@ export class MainWindowSession {
     this.input = new InputRuntime(window);
     this.prefixGuide = new PrefixGuideRuntime(window);
     this.note = new NoteSurfaceRuntime(window);
-    this.focusOwnership = new MainFocusOwnership(window, this, mayClaimInitialLibraryFocus);
+    this.focusOwnership = new MainFocusOwnership(
+      window,
+      this,
+      mayClaimInitialLibraryFocus && mainStartupFocus(preferences) === 'items',
+    );
     this.cleanup.add(() => this.focusOwnership.dispose());
     const doc = window.document;
     this.status = doc.createElementNS('http://www.w3.org/1999/xhtml', 'div');
