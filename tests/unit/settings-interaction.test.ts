@@ -1,6 +1,7 @@
 import { describe, expect, it } from 'vitest';
 import type { PreferenceStore } from '../../src/core/preference-store';
 import {
+  MAIN_STARTUP_FOCUS_PREFERENCE_KEY as STARTUP_FOCUS,
   NOTE_EDITOR_ENABLED_PREFERENCE_KEY as NOTE,
   PICKER_MOUSE_ENABLED_PREFERENCE_KEY as PICKER,
   noteEditorEnabled,
@@ -77,6 +78,28 @@ function field(page: SettingsInteraction, id: string) {
 }
 
 describe('Interaction Settings controller', () => {
+  it('defaults to the item list and persists only supported startup focus targets', () => {
+    const test = mount({ [STARTUP_FOCUS]: 'invalid' }, 'zh-CN');
+    expect(field(test.page, 'mainStartupFocus')).toMatchObject({
+      label: '启动焦点',
+      kind: 'choice',
+      value: 'items',
+      options: [
+        { value: 'items', label: '条目列表' },
+        { value: 'quickSearch', label: 'Zotero 快速搜索' },
+      ],
+    });
+
+    test.page.dispatch({ type: 'value', id: 'mainStartupFocus', value: 'collection' });
+    expect(test.preferences.writes).toHaveLength(0);
+    test.page.dispatch({ type: 'value', id: 'mainStartupFocus', value: 'quickSearch' });
+    expect(test.preferences.writes).toEqual([[STARTUP_FOCUS, 'quickSearch']]);
+    expect(field(test.page, 'mainStartupFocus')).toMatchObject({ value: 'quickSearch' });
+    test.preferences.clear(STARTUP_FOCUS);
+    expect(field(test.page, 'mainStartupFocus')).toMatchObject({ value: 'items' });
+    test.page.dispose();
+  });
+
   it('writes only whitelisted boolean commands immediately and keeps live helpers aligned', () => {
     const test = mount({ [PICKER]: false, [NOTE]: true });
 
@@ -122,7 +145,7 @@ describe('Interaction Settings controller', () => {
     expect(test.page.model().status).toBeUndefined();
 
     const changesBeforeDispose = test.changes();
-    expect(test.preferences.listenerCount()).toBe(2);
+    expect(test.preferences.listenerCount()).toBe(3);
     test.page.dispose();
     expect(test.preferences.listenerCount()).toBe(0);
     test.preferences.set(NOTE, true);

@@ -60,6 +60,18 @@ export function noteEditorEnabled(preferences: PreferenceReader): boolean {
   return preferences.get(NOTE_EDITOR_ENABLED_PREFERENCE_KEY, false);
 }
 
+export const MAIN_STARTUP_FOCUS_PREFERENCE_KEY = 'main.startupFocus' as const;
+export type MainStartupFocus = 'items' | 'quickSearch';
+
+export function isMainStartupFocus(value: unknown): value is MainStartupFocus {
+  return value === 'items' || value === 'quickSearch';
+}
+
+export function mainStartupFocus(preferences: PreferenceReader): MainStartupFocus {
+  const value = preferences.get(MAIN_STARTUP_FOCUS_PREFERENCE_KEY, 'items');
+  return isMainStartupFocus(value) ? value : 'items';
+}
+
 export type ReaderModePreference = 'visual';
 export type ScrollMode = 'step' | 'follow' | 'trapezoid';
 export type HighlightColorName = 'yellow' | 'red' | 'green' | 'blue' | 'purple';

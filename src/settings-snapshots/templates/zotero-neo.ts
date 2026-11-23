@@ -3,7 +3,12 @@ import {
   APPEARANCE_PRESET_KEY,
   isAppearancePreset,
 } from '../../core/appearance-preferences';
-import { READER_SCROLL_NUMBER_SPECS, KEY_GUIDE_NUMBER_SPECS } from '../../core/preferences';
+import {
+  READER_SCROLL_NUMBER_SPECS,
+  KEY_GUIDE_NUMBER_SPECS,
+  MAIN_STARTUP_FOCUS_PREFERENCE_KEY,
+  isMainStartupFocus,
+} from '../../core/preferences';
 import { OPTIONAL_MODULE_IDS } from '../../modules';
 import { TAB_ENHANCEMENT_PREFERENCES } from '../../modules/tab-enhancements/config';
 import type { SettingsValue } from '../contracts';
@@ -19,6 +24,13 @@ import {
 } from '../adapters/fields';
 
 export const NEO_PREFERENCE_FIELDS: readonly TransferField[] = [
+  {
+    key: MAIN_STARTUP_FOCUS_PREFERENCE_KEY,
+    label: 'Startup focus',
+    type: 'string',
+    category: 'Interaction',
+    validate: isMainStartupFocus,
+  },
   ...fields(
     'boolean',
     'Interaction',
