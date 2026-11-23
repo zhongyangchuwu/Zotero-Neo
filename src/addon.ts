@@ -152,6 +152,8 @@ export class ZoteroNeoAddon implements ZoteroNeoController {
         openCollectionItemsPicker: (ownerWindow) => main?.openCollectionItemsPicker(ownerWindow),
         openNotesPicker: (ownerWindow) => main?.openNotesPicker(ownerWindow),
         openPluginManager: (ownerWindow) => main?.openPluginManager(ownerWindow),
+        openZoteroBasesFromReader: (ownerWindow, showStatus) =>
+          main?.openZoteroBasesFromReader(ownerWindow, showStatus),
         openSettingsFromReader: (ownerWindow) => main?.openSettingsFromReader(ownerWindow),
         navigateBackFromReader: (ownerWindow, count) =>
           main?.navigateBackFromReader(ownerWindow, count),

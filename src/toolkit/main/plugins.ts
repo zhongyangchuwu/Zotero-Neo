@@ -189,6 +189,12 @@ export async function mainPluginInstalled(pluginID: string): Promise<boolean> {
   return addon?.type === 'extension';
 }
 
+/** Look up one extension's running state without enumerating plugins or their preferences. */
+export async function mainPluginActive(pluginID: string): Promise<boolean | null> {
+  const addon = await addonManager().getAddonByID(pluginID);
+  return addon?.type === 'extension' ? addon.isActive !== false : null;
+}
+
 /** AddonManager is the platform registry; preference pane discovery remains a private seam. */
 export async function mainInstalledPlugins(): Promise<MainPluginSnapshot[]> {
   const manager = addonManager();

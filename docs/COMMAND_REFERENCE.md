@@ -24,6 +24,7 @@
 | 默认按键 | 操作 |
 | --- | --- |
 | `:` / `<Space>ps` / `<Space>pp` | 打开命令面板、设置或 Plugin Manager。 |
+| `<Space>ob` | 打开或聚焦 Zotero Bases 工作区（仅 Main 和 Reader Normal）。 |
 | `<Space>ff` / `<Space>fc` / `<Space>fn` | 查找文库条目、当前分类条目或笔记。 |
 | `<Space>,` / `H` / `L` / `<Space>q` | 选择标签页、切换上一个/下一个标签页、关闭当前标签页；`H` / `L` 忽略计数。关闭已分组的标签页会移除其成员关系。 |
 | `<C-o>` / `<C-i>` | 沿共享跳转历史后退/前进；支持计数，例如 `2<C-o>`。 |
@@ -31,6 +32,8 @@
 | `<Space>ta` / `<Space>tr` | 为当前上下文目标添加/移除标签。 |
 | `<Space>yy` | 复制当前上下文目标的 citekey。 |
 | `<Space>bb` / `<Space>bt` | 聚焦或收起/展开标签页侧栏；须启用标签页增强。 |
+
+也可按 `:` 搜索「打开 Zotero Bases」。Zotero Bases 是独立插件，工作区按其自身偏好在标签页或窗口中打开。尚未安装时，按 `<Space>pp` 打开 Plugin Manager，再按 `i` 安装；已安装但未启用或版本过旧时，在 Plugin Manager 中启用或更新。
 
 关于哪些位置会记入历史、关闭 PDF 后如何返回，见[切换标签页和返回](MAIN_GUIDE.md#切换标签页和返回)。
 

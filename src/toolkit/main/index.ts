@@ -81,6 +81,7 @@ export {
 export {
   mainInstalledPlugins,
   mainPluginInstalled,
+  mainPluginActive,
   setMainPluginEnabled,
   installMainPlugin,
   updateMainPlugin,

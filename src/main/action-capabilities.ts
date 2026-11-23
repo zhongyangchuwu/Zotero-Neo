@@ -17,6 +17,7 @@ export const MAIN_NORMAL_ACTIONS = Object.freeze([
   'mainQuickSearch',
   'mainAdvancedSearch',
   ...EXTENSIONS_SURFACE_ACTIONS,
+  'openZoteroBases',
   ...TAB_ENHANCEMENT_MAIN_ACTIONS,
   'openNeoSettings',
   'openSettingsSnapshots',

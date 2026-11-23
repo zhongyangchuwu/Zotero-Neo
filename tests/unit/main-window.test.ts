@@ -2379,6 +2379,135 @@ describe('Main Settings Center shell', () => {
   });
 });
 
+describe('Open Zotero Bases', () => {
+  const pluginID = 'zotero-bases@zhongyangchuwu.github.io';
+  const getAddonByID = vi.fn();
+  const active = { id: pluginID, type: 'extension', isActive: true };
+  const bases: { api?: unknown } = {};
+  let originalChromeUtils: PropertyDescriptor | undefined;
+  let originalZotero: PropertyDescriptor | undefined;
+
+  beforeEach(() => {
+    originalChromeUtils = Object.getOwnPropertyDescriptor(globalThis, 'ChromeUtils');
+    originalZotero = Object.getOwnPropertyDescriptor(globalThis, 'Zotero');
+    Reflect.set(globalThis, 'ChromeUtils', {
+      importESModule: () => ({ AddonManager: { getAddonByID } }),
+    });
+    Reflect.set(globalThis, 'Zotero', { ...originalZotero?.value, ZoteroBases: bases });
+    getAddonByID.mockReset().mockResolvedValue(active);
+    bases.api = undefined;
+  });
+
+  afterEach(() => {
+    if (originalChromeUtils) Object.defineProperty(globalThis, 'ChromeUtils', originalChromeUtils);
+    else Reflect.deleteProperty(globalThis, 'ChromeUtils');
+    if (originalZotero) Object.defineProperty(globalThis, 'Zotero', originalZotero);
+    else Reflect.deleteProperty(globalThis, 'Zotero');
+  });
+
+  describe.each(['en', 'zh-CN'] as const)('default shortcut in %s', (language) => {
+    it.each([
+      {
+        state: 'missing',
+        en: '→ Install Zotero Bases with <Space>pp, then i',
+        zh: '→ 按 <Space>pp，再按 i 安装 Zotero Bases',
+      },
+      {
+        state: 'disabled',
+        en: '→ Enable Zotero Bases in Plugin Manager (<Space>pp)',
+        zh: '→ 在 Plugin Manager（<Space>pp）中启用 Zotero Bases',
+      },
+      {
+        state: 'no API',
+        en: '→ Update Zotero Bases in Plugin Manager (<Space>pp)',
+        zh: '→ 在 Plugin Manager（<Space>pp）中更新 Zotero Bases',
+      },
+      {
+        state: 'wrong version',
+        en: '→ Update Zotero Bases in Plugin Manager (<Space>pp)',
+        zh: '→ 在 Plugin Manager（<Space>pp）中更新 Zotero Bases',
+      },
+      {
+        state: 'rejected',
+        en: 'Could not open Zotero Bases',
+        zh: '无法打开 Zotero Bases',
+      },
+      { state: 'available', en: null, zh: null },
+    ])('handles $state', async ({ state, en, zh }) => {
+      const open = vi.fn(async () => {
+        if (state === 'rejected') throw new Error('Bases launch rejected');
+      });
+      if (state === 'missing') getAddonByID.mockResolvedValue(null);
+      if (state === 'disabled') getAddonByID.mockResolvedValue({ ...active, isActive: false });
+      if (state !== 'no API') bases.api = { version: state === 'wrong version' ? 2 : 1, open };
+      const host = settingsMainHost({ [LANGUAGE_PREFERENCE_KEY]: language });
+      try {
+        for (const key of [' ', 'o', 'b'])
+          expect(host.press(key).preventDefault).toHaveBeenCalledOnce();
+
+        expect(getAddonByID).toHaveBeenCalledExactlyOnceWith(pluginID);
+        if (state === 'available') {
+          await vi.waitFor(() =>
+            expect(open).toHaveBeenCalledExactlyOnceWith({ window: host.window }),
+          );
+          expect(nativeNotices.size).toBe(0);
+        } else {
+          await vi.waitFor(() =>
+            expect([...nativeNotices.values()]).toContainEqual({
+              text: language === 'en' ? en : zh,
+              visible: true,
+              kind: state === 'rejected' ? 'error' : 'info',
+            }),
+          );
+          if (state === 'rejected')
+            expect(open).toHaveBeenCalledExactlyOnceWith({ window: host.window });
+          else expect(open).not.toHaveBeenCalled();
+        }
+      } finally {
+        host.controller.shutdown();
+      }
+    });
+  });
+
+  it.each([
+    { language: 'en', title: 'Open Zotero Bases', unbound: 'Unbound' },
+    { language: 'zh-CN', title: '打开 Zotero Bases', unbound: '未绑定' },
+  ])(
+    'finds and executes the unbound action in $language palette',
+    async ({ language, title, unbound }) => {
+      const open = vi.fn(async () => {});
+      bases.api = { version: 1, open };
+      const host = settingsMainHost({
+        [LANGUAGE_PREFERENCE_KEY]: language,
+        bindings: '{"main-normal:<Space>ob":null}',
+      });
+      try {
+        host.press(':');
+        const findPicker = () =>
+          nativeHosts.find((entry) => entry.root.parentElement?.id === 'zv-picker-overlay');
+        await vi.waitFor(() => expect(findPicker()?.parts.has('query')).toBe(true));
+        const picker = findPicker()!;
+        const input = picker.parts.get('query') as HTMLInputElement & { emit(type: string): void };
+        input.value = title;
+        input.emit('input');
+        await vi.waitFor(() => {
+          const model = picker.model as PickerReactModel;
+          expect(model.previewTitle).toBe(title);
+          expect(model.rows[model.selected]?.text).toContain(unbound);
+        });
+
+        host.press('Enter', picker.parts.get('results'));
+        await vi.waitFor(() =>
+          expect(open).toHaveBeenCalledExactlyOnceWith({ window: host.window }),
+        );
+        expect(picker.disposed).toBe(true);
+      } finally {
+        host.controller.shutdown();
+      }
+    },
+  );
+});
+
 describe('Main command palette', () => {
   it('opens through the canonical ActionId path in the owner window', async () => {
     vi.stubGlobal('Services', { focus: { focusedWindow: null } });
@@ -2671,6 +2800,8 @@ describe('Reader to Main command palette integration', () => {
         openCollectionItemsPicker: (ownerWindow) => main?.openCollectionItemsPicker(ownerWindow),
         openNotesPicker: (ownerWindow) => main?.openNotesPicker(ownerWindow),
         openPluginManager: (ownerWindow) => main?.openPluginManager(ownerWindow),
+        openZoteroBasesFromReader: (ownerWindow, showStatus) =>
+          main?.openZoteroBasesFromReader(ownerWindow, showStatus),
         openSettingsFromReader: (ownerWindow) => main?.openSettingsFromReader(ownerWindow),
         navigateBackFromReader: (ownerWindow) => main?.navigateBackFromReader(ownerWindow),
         navigateForwardFromReader: (ownerWindow) => main?.navigateForwardFromReader(ownerWindow),

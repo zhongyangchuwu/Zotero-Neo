@@ -2071,6 +2071,16 @@ export class ReaderSession {
       case 'managePlugins':
         main.openPluginManager(ownerWindow);
         return;
+      case 'openZoteroBases': {
+        const isCurrent = this.invocationCurrent(pdfWindow, null);
+        main.openZoteroBasesFromReader(
+          readerMainWindow(this.#dependencies.reader) ?? null,
+          (message) => {
+            if (isCurrent()) this.showStatus(message);
+          },
+        );
+        return;
+      }
       case 'prepareDocuments': {
         const window = readerWindow(this.#dependencies.reader);
         if (window)
