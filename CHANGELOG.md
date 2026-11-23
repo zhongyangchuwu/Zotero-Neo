@@ -6,6 +6,8 @@
 
 ## [未发布]
 
+## [0.6.0] - 2026-11-23
+
 ### 新增
 
 - Main 和 Reader 可按 `<Space>ob`，或在 `:` 命令面板选择「打开 Zotero Bases」，打开或聚焦已有工作区。需要启用 Zotero Bases 0.3.0 或兼容版本；缺失、停用或版本过旧时会提示如何处理。可在 `<Space>pp` 选中 Bases 后按 `p` 打开其原生偏好页。([#347])
@@ -107,7 +109,8 @@
 - 首批 Zotero Neo 键盘工作流，包括 PDF 阅读历史、链接跳转、Flash 文本选择，以及主窗口条目选择和标签工作区。
 - 提供主题感知界面和快捷键自定义，并支持 Unicode 与输入法文本输入。
 
-[未发布]: https://github.com/zhongyangchuwu/Zotero-Neo/compare/v0.5.3...main
+[未发布]: https://github.com/zhongyangchuwu/Zotero-Neo/compare/v0.6.0...main
+[0.6.0]: https://github.com/zhongyangchuwu/Zotero-Neo/releases/tag/v0.6.0
 [0.5.3]: https://github.com/zhongyangchuwu/Zotero-Neo/releases/tag/v0.5.3
 [0.5.2]: https://github.com/zhongyangchuwu/Zotero-Neo/releases/tag/v0.5.2
 [0.5.1]: https://github.com/zhongyangchuwu/Zotero-Neo/releases/tag/v0.5.1
