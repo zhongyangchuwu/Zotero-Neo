@@ -1,7 +1,11 @@
 import type { MainWindow } from '../core/contracts';
 import {
+  MAIN_STARTUP_FOCUS_PREFERENCE_KEY,
   NOTE_EDITOR_ENABLED_PREFERENCE_KEY,
   PICKER_MOUSE_ENABLED_PREFERENCE_KEY,
+  isMainStartupFocus,
+  mainStartupFocus,
+  type MainStartupFocus,
   noteEditorEnabled,
   pickerMouseEnabled,
 } from '../core/preferences';
@@ -11,8 +15,15 @@ import type { SettingsFormCommand, SettingsFormModel } from './settings-form-mod
 
 const PICKER_MOUSE_FIELD_ID = 'pickerMouseEnabled';
 const NOTE_EDITOR_FIELD_ID = 'noteEditorEnabled';
+const MAIN_STARTUP_FOCUS_FIELD_ID = 'mainStartupFocus';
 
-/** Owns the two live cross-surface Interaction controls for one open Settings page. */
+type InteractionValues = {
+  [MAIN_STARTUP_FOCUS_PREFERENCE_KEY]: MainStartupFocus;
+  [PICKER_MOUSE_ENABLED_PREFERENCE_KEY]: boolean;
+  [NOTE_EDITOR_ENABLED_PREFERENCE_KEY]: boolean;
+};
+
+/** Owns the Interaction preferences for one open Settings page. */
 export class SettingsInteraction {
   readonly #preferences: PreferenceStore;
   readonly #language: SettingsLanguage;
@@ -31,7 +42,11 @@ export class SettingsInteraction {
     this.#language = language;
     this.#changed = changed;
 
-    for (const key of [PICKER_MOUSE_ENABLED_PREFERENCE_KEY, NOTE_EDITOR_ENABLED_PREFERENCE_KEY]) {
+    for (const key of [
+      MAIN_STARTUP_FOCUS_PREFERENCE_KEY,
+      PICKER_MOUSE_ENABLED_PREFERENCE_KEY,
+      NOTE_EDITOR_ENABLED_PREFERENCE_KEY,
+    ]) {
       const cleanup = preferences.observe?.(key, () => {
         if (this.#disposed) return;
         this.#status = undefined;
@@ -45,8 +60,28 @@ export class SettingsInteraction {
     const language = this.#language;
     return {
       title: settingsText(language, 'Interaction'),
-      description: language === 'zh-CN' ? '更改立即生效。' : 'Changes take effect immediately.',
+      description: settingsText(language, 'Changes are saved immediately.'),
       groups: [
+        {
+          id: 'main-window',
+          title: settingsText(language, 'Main window'),
+          fields: [
+            {
+              id: MAIN_STARTUP_FOCUS_FIELD_ID,
+              label: settingsText(language, 'Startup focus'),
+              description: settingsText(
+                language,
+                'Applies the next time Zotero starts in the library.',
+              ),
+              kind: 'choice',
+              value: mainStartupFocus(this.#preferences),
+              options: [
+                { value: 'items', label: settingsText(language, 'Item list') },
+                { value: 'quickSearch', label: settingsText(language, 'Zotero Quick Search') },
+              ],
+            },
+          ],
+        },
         {
           id: 'picker',
           title: settingsText(language, 'Picker'),
@@ -97,6 +132,10 @@ export class SettingsInteraction {
     if (this.#disposed || !command || typeof command !== 'object') return;
     if (command.type !== 'value') return;
     switch (command.id) {
+      case MAIN_STARTUP_FOCUS_FIELD_ID:
+        if (isMainStartupFocus(command.value))
+          this.#save(MAIN_STARTUP_FOCUS_PREFERENCE_KEY, command.value);
+        return;
       case PICKER_MOUSE_FIELD_ID:
         if (typeof command.value === 'boolean')
           this.#save(PICKER_MOUSE_ENABLED_PREFERENCE_KEY, command.value);
@@ -108,12 +147,9 @@ export class SettingsInteraction {
     }
   }
 
-  #save(
-    key: typeof PICKER_MOUSE_ENABLED_PREFERENCE_KEY | typeof NOTE_EDITOR_ENABLED_PREFERENCE_KEY,
-    enabled: boolean,
-  ): void {
+  #save<K extends keyof InteractionValues>(key: K, value: InteractionValues[K]): void {
     try {
-      this.#preferences.set(key, enabled);
+      this.#preferences.set(key, value);
       this.#status = undefined;
     } catch {
       this.#status = {
