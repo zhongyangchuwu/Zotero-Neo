@@ -20,7 +20,6 @@ export function moduleStartupFlags(preferences: PreferenceReader): ModuleFlags {
       translation: previous.translation === true,
       'ai-qa': previous['ai-qa'] === true,
       references: previous.references === true,
-      'tab-enhancements': previous['tab-enhancements'] === true,
     });
   }
   const flags = Object.freeze(

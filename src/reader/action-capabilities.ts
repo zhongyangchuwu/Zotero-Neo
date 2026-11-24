@@ -3,7 +3,6 @@ import { TAG_ITEM_ACTIONS } from '../modules/tags/capabilities';
 import { EXTENSIONS_SURFACE_ACTIONS } from '../modules/extensions/capabilities';
 import { COLLECTION_MEMBERSHIP_ACTIONS } from '../modules/collections/capabilities';
 import { READER_HINT_ACTIONS } from '../modules/reader-hints/capabilities';
-import { TAB_ENHANCEMENT_SURFACE_ACTIONS } from '../modules/tab-enhancements/capabilities';
 
 export type ReaderCapabilityMode = 'normal' | 'visual';
 
@@ -85,7 +84,6 @@ export const READER_LOCAL_NORMAL_ACTIONS = Object.freeze([
   ...COLLECTION_MEMBERSHIP_ACTIONS,
   'mainYankCitekey',
   'showInLibrary',
-  ...TAB_ENHANCEMENT_SURFACE_ACTIONS,
   'openCommandPalette',
 ] as const satisfies readonly ActionId[]);
 

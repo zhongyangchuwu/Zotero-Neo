@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest';
-import { ACTION_IDS, ACTION_LABELS, type ActionId } from '../../src/input/actions';
+import { ACTION_IDS, ACTION_LABELS, isActionId, type ActionId } from '../../src/input/actions';
 
 import {
   DEFAULT_BINDINGS,
@@ -73,6 +73,38 @@ describe('keyString', () => {
 });
 
 describe('binding parsing and overrides', () => {
+  it('ignores removed tab enhancement bindings while retaining Workspace actions', () => {
+    for (const action of [
+      'tabFocusSidebar',
+      'tabToggleSidebar',
+      'mainCreateReadingGroup',
+      'mainAppendReadingGroup',
+      'tabCreateGroup',
+      'tabRenameGroup',
+      'tabCloseEntry',
+      'tabToggleGroup',
+      'tabCloseGroup',
+      'tabUngroup',
+      'tabRemoveFromGroup',
+    ]) {
+      expect(isActionId(action)).toBe(false);
+    }
+    expect(parseBindingKey('tabs-input:<Enter>')).toBeNull();
+    expect(parseBindingKey('tabs-list:j')).toBeNull();
+    expect(
+      parseBindingOverrides(
+        JSON.stringify({
+          'tabs-list:j': 'uiNext',
+          'main-normal:<Space>bb': 'tabFocusSidebar',
+          'main-normal:q': 'switchTab',
+        }),
+      ),
+    ).toEqual({ 'main-normal:q': 'switchTab' });
+    for (const action of ['switchTab', 'closeCurrentTab', 'previousTab', 'nextTab']) {
+      expect(isActionId(action)).toBe(true);
+    }
+  });
+
   it('executes token defaults while keeping separate character fallback actions', () => {
     const bindings = resolveBindings('');
     for (const [key, action] of [

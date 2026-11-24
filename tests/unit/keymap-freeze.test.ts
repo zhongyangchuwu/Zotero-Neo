@@ -104,7 +104,7 @@ describe('0.1.0 default keymap freeze', () => {
     }
   });
 
-  it('opens Zotero Bases under Space o without changing item or tab-enhancement bindings', () => {
+  it('opens Zotero Bases under Space o without changing item bindings', () => {
     const bindings = resolveBindings('{"main-normal:q":"openCommandPalette"}');
     const nodes = bindingNodesFromActions(bindings);
     for (const mode of ['main-normal', 'reader-normal'] as const) {
@@ -117,12 +117,6 @@ describe('0.1.0 default keymap freeze', () => {
     expect(bindings['note-normal:<Space>o']).toBe('mainOpenPDF');
     expect(bindings['note-normal:<Space>ob']).toBeUndefined();
     expect(bindings['main-normal:o']).toBe('mainOpenPDF');
-    expect(bindings['main-normal:<Space>bb']).toBe('tabFocusSidebar');
-    expect(bindings['main-normal:<Space>bt']).toBe('tabToggleSidebar');
-    expect(bindings['main-normal:<Space>bc']).toBe('mainCreateReadingGroup');
-    expect(bindings['main-normal:<Space>ba']).toBe('mainAppendReadingGroup');
-    expect(bindings['reader-normal:<Space>bb']).toBe('tabFocusSidebar');
-    expect(bindings['reader-normal:<Space>bt']).toBe('tabToggleSidebar');
   });
 
   it('keeps newly added defaults on first resolution with existing compact overrides', () => {
