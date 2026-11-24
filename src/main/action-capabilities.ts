@@ -3,7 +3,6 @@ import { TAG_MAIN_ACTIONS } from '../modules/tags/capabilities';
 import { EXTENSIONS_SURFACE_ACTIONS } from '../modules/extensions/capabilities';
 import { COLLECTION_MAIN_ACTIONS } from '../modules/collections/capabilities';
 import { WORKSETS_SELECT_ACTIONS } from '../modules/worksets/capabilities';
-import { TAB_ENHANCEMENT_MAIN_ACTIONS } from '../modules/tab-enhancements/capabilities';
 
 /** Actions exposed by the ordinary Main-window interaction mode. */
 export const MAIN_NORMAL_ACTIONS = Object.freeze([
@@ -18,7 +17,6 @@ export const MAIN_NORMAL_ACTIONS = Object.freeze([
   'mainAdvancedSearch',
   ...EXTENSIONS_SURFACE_ACTIONS,
   'openZoteroBases',
-  ...TAB_ENHANCEMENT_MAIN_ACTIONS,
   'openNeoSettings',
   'openSettingsSnapshots',
   'prepareDocuments',

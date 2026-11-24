@@ -4,10 +4,6 @@ import type { MainWindow } from '../../src/core/contracts';
 import { BuiltinModuleRuntime, modulePreferenceKey } from '../../src/core/module-runtime';
 import type { PreferenceStore } from '../../src/core/preference-store';
 import { OPTIONAL_MODULES, type OptionalModuleId } from '../../src/modules';
-import {
-  TAB_ENHANCEMENT_PREFERENCES as tabs,
-  TAB_GROUP_STATE_PREFERENCE,
-} from '../../src/modules/tab-enhancements/config';
 import { SettingsModules } from '../../src/main/settings-modules';
 import { mountSettingsReactView } from '../../src/ui/react/surfaces/settings';
 import type { SettingsReactModel } from '../../src/main/settings-react-model';
@@ -206,13 +202,13 @@ describe('headless module settings', () => {
     const test = mount({
       [modulePreferenceKey('translation')]: true,
       [modulePreferenceKey('ai-qa')]: true,
-      [modulePreferenceKey('tab-enhancements')]: true,
+      [modulePreferenceKey('references')]: false,
     });
     test.preferences.failSetKey = modulePreferenceKey('translation');
     test.page.dispatch({ type: 'action', id: 'modules.restore' });
     expect(field(test.page, 'modules.request.translation')).toMatchObject({ value: true });
     expect(test.preferences.has(modulePreferenceKey('ai-qa'))).toBe(false);
-    expect(test.preferences.has(modulePreferenceKey('tab-enhancements'))).toBe(false);
+    expect(test.preferences.has(modulePreferenceKey('references'))).toBe(false);
     expect(test.page.model().status?.error).toBe(true);
     test.page.dispose();
   });
@@ -253,43 +249,22 @@ describe('headless module settings', () => {
     expect(preferences.listenerCount()).toBe(0);
   });
 
-  it('validates commands, edits live tab options and leaves saved groups on reset', () => {
-    const test = mount({ [TAB_GROUP_STATE_PREFERENCE]: 'saved' });
+  it('ignores invalid and unknown module commands without writing preferences', () => {
+    const legacy = {
+      'modules.tab-enhancements.enabled': true,
+      'tabEnhancements.side': 'right',
+      'tabEnhancements.groups.v2': 'saved',
+    };
+    const test = mount(legacy);
     test.page.dispatch({ type: 'value', id: 'modules.request.library', value: false });
-    test.page.dispatch({ type: 'value', id: 'tabs.side', value: 'middle' });
-    test.page.dispatch({ type: 'value', id: 'tabs.width', value: Infinity });
+    test.page.dispatch({ type: 'value', id: 'modules.request.references', value: 'invalid' });
+    test.page.dispatch({ type: 'value', id: 'modules.request.tab-enhancements', value: false });
+    test.page.dispatch({ type: 'action', id: 'tabs.restore' });
     expect(test.preferences.writes).toEqual([]);
-    test.page.dispatch({ type: 'value', id: 'tabs.side', value: 'right' });
-    test.page.dispatch({ type: 'value', id: 'tabs.width', value: 999 });
-    expect(test.preferences.values.get(tabs.width)).toBe(520);
-    test.page.dispatch({ type: 'value', id: 'tabs.collapsed', value: true });
-    expect(field(test.page, 'tabs.width').disabled).toBe(true);
-    test.page.dispatch({ type: 'value', id: 'tabs.width', value: 200 });
-    expect(test.preferences.values.get(tabs.width)).toBe(520);
-    test.page.dispatch({ type: 'value', id: 'tabs.titleFormat', value: '{unknown}' });
-    expect(field(test.page, 'tabs.titleFormat')).toMatchObject({
-      invalid: true,
-      value: '{unknown}',
-    });
-    expect(test.preferences.has(tabs.titleFormat)).toBe(false);
-    test.page.dispatch({ type: 'value', id: 'tabs.titleFormat', value: '{author}' });
-    expect(test.preferences.values.get(tabs.titleFormat)).toBe('{author}');
-    test.page.dispatch({ type: 'action', id: 'tabs.restore' });
-    expect(test.preferences.values.get(TAB_GROUP_STATE_PREFERENCE)).toBe('saved');
-    expect(field(test.page, 'tabs.width')).toMatchObject({ value: 260, disabled: false });
-    test.page.dispose();
-  });
-
-  it('reflects external tab changes and reports partial reset failures', () => {
-    const test = mount({ [tabs.side]: 'right', [tabs.width]: 300 });
-    test.preferences.set(tabs.width, 320);
-    expect(field(test.page, 'tabs.width')).toMatchObject({ value: 320 });
-    expect(test.changed).toHaveBeenCalled();
-    test.preferences.failClearKey = tabs.width;
-    test.page.dispatch({ type: 'action', id: 'tabs.restore' });
-    expect(field(test.page, 'tabs.side')).toMatchObject({ value: 'left' });
-    expect(field(test.page, 'tabs.width')).toMatchObject({ value: 320 });
-    expect(test.page.model().status?.error).toBe(true);
+    expect(JSON.stringify(test.page.model())).not.toContain('tab-enhancements');
+    test.page.dispatch({ type: 'action', id: 'modules.restore' });
+    for (const [key, value] of Object.entries(legacy))
+      expect(test.preferences.values.get(key)).toBe(value);
     test.page.dispose();
   });
 });

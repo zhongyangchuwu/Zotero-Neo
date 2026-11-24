@@ -11,7 +11,7 @@ describe('application module startup flags', () => {
     const legacy = Object.fromEntries(BUILTIN_MODULES.map(({ id }) => [id, false]));
     delete legacy.translation;
     delete legacy.references;
-    delete legacy['tab-enhancements'];
+    legacy['tab-enhancements'] = true;
     legacy['item-attributes'] = true;
     legacy.extensions = true;
     legacy['reader-ai'] = true;
@@ -25,7 +25,6 @@ describe('application module startup flags', () => {
       [modulePreferenceKey('reader-hints'), true],
       [modulePreferenceKey('extensions'), false],
       [modulePreferenceKey('ai-qa'), true],
-      [modulePreferenceKey('tab-enhancements'), true],
       ['modules.item-attributes.enabled', true],
     ]);
     const preferences = {
@@ -41,7 +40,6 @@ describe('application module startup flags', () => {
       translation: false,
       'ai-qa': false,
       references: false,
-      'tab-enhancements': false,
     });
     expect(reloaded.applied).toEqual(first.applied);
     expect(reloaded.requested()).toEqual({
@@ -50,7 +48,6 @@ describe('application module startup flags', () => {
       translation: true,
       'ai-qa': true,
       references: true,
-      'tab-enhancements': true,
     });
     const owner = {};
     const main = reloaded.createScope('main', owner, () => true);
@@ -73,7 +70,6 @@ describe('application module startup flags', () => {
     expect(reader.activate('references', vi.fn())).toBeNull();
     expect(reader.available('reader-normal', 'openReferences')).toBe(false);
     expect(main.activate('extensions', () => ({}))).not.toBeNull();
-    expect(main.activate('tab-enhancements', vi.fn())).toBeNull();
     const inspected = reloaded.inspect(owner);
     expect(
       inspected.filter(({ id }) => isOptionalModule(id)).every((state) => state.pendingRestart),
@@ -95,7 +91,6 @@ describe('application module startup flags', () => {
       translation: true,
       'ai-qa': true,
       references: true,
-      'tab-enhancements': true,
     });
     expect(restarted.inspect({}).every((state) => !state.pendingRestart)).toBe(true);
     const reopened = restarted.createScope('reader', {}, () => true);

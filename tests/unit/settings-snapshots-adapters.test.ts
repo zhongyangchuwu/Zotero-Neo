@@ -121,7 +121,7 @@ describe('standalone built-in settings adapters at the native OS boundary', () =
     expect(captured.issues.some((issue) => issue.code === 'excluded-or-unknown')).toBe(true);
   });
 
-  it('captures Neo settings, canonical binding schema, module and display options but no per-document state', async () => {
+  it('captures Neo settings, canonical binding schema, module and appearance options but no per-document state', async () => {
     const t = settingsSnapshotHostFixture();
     const config = {
       api: 'openai-responses',
@@ -136,8 +136,7 @@ describe('standalone built-in settings adapters at the native OS boundary', () =
       'keyGuide.delayMs': 0,
       'smoothScroll.stopOnRelease': false,
       'modules.translation.enabled': false,
-      'tabEnhancements.side': 'right',
-      'tabEnhancements.width': 300,
+      'appearance.preset': 'terminal',
       'documentAnalysis.provider': 'mineru',
       'documentAnalysis.local.rules': '{"version":1,"rules":{"unruledTables":{"enabled":false}}}',
       'ai.configuration': JSON.stringify(config),
@@ -146,7 +145,8 @@ describe('standalone built-in settings adapters at the native OS boundary', () =
     };
     for (const [key, value] of Object.entries(values))
       t.user.set(`extensions.zotero-neo.${key}`, value);
-    t.user.set('extensions.zotero-neo.tabEnhancements.groups.v2', 'private-groups');
+    t.user.set('extensions.zotero-neo.tabEnhancements.side', 'right');
+    t.user.set('extensions.zotero-neo.modules.tab-enhancements.enabled', true);
     t.user.set('extensions.zotero-neo.marks.document.123', 'private-marks');
     t.user.set('extensions.zotero-neo.runtime.trace', 'private-trace');
     const adapter = createSettingsAdapters(() => 'neo-target')[1]!;
@@ -162,8 +162,13 @@ describe('standalone built-in settings adapters at the native OS boundary', () =
     expect(entries['tags.separator']).toEqual({ kind: 'set', value: '' });
     expect(entries['keyGuide.delayMs']).toEqual({ kind: 'set', value: 0 });
     expect(entries['modules.translation.enabled']).toEqual({ kind: 'set', value: false });
+    expect(entries['appearance.preset']).toEqual({ kind: 'set', value: 'terminal' });
+    expect(entries['tabEnhancements.side']).toBeUndefined();
+    expect(entries['modules.tab-enhancements.enabled']).toBeUndefined();
+    expect(t.user.get('extensions.zotero-neo.tabEnhancements.side')).toBe('right');
+    expect(t.user.get('extensions.zotero-neo.modules.tab-enhancements.enabled')).toBe(true);
     expect(entries['ai.configuration']).toEqual({ kind: 'set', value: JSON.stringify(config) });
-    expect(JSON.stringify(captured)).not.toMatch(/private-groups|private-marks|private-trace/);
+    expect(JSON.stringify(captured)).not.toMatch(/private-marks|private-trace/);
   });
 
   it.each(['.neo-settings {\n  --neo-radius: 3px; /* 自定义 */\n}\n', ''])(
@@ -410,7 +415,6 @@ describe('standalone built-in settings adapters at the native OS boundary', () =
     expect(JSON.stringify(nativePlan.issues)).not.toContain('sensitive-value');
     const neoPlan = await neo!.plan(
       section('zotero-neo', [
-        set('tabEnhancements.groups.v2', 'sensitive-value'),
         set('bindings.schemaVersion', 99),
         set('bindings', { schemaVersion: BINDING_SCHEMA_VERSION + 1, overrides: '{}' }),
         set('ai.configuration', '{"endpoint":"https://api.example","apiKey":"sensitive-value"}'),
@@ -418,6 +422,15 @@ describe('standalone built-in settings adapters at the native OS boundary', () =
       context(),
     );
     expect(neoPlan.changes).toEqual([]);
+    const retiredPlan = await neo!.plan(
+      section('zotero-neo', [
+        set('tabEnhancements.side', 'right'),
+        set('modules.tab-enhancements.enabled', true),
+      ]),
+      context(),
+    );
+    expect(retiredPlan.changes).toEqual([]);
+    expect(retiredPlan.issues.map(({ code }) => code)).toEqual(['foreign-field', 'foreign-field']);
     await expect(
       native!.plan({ ...section('zotero', []), schemaVersion: 2 }, context()),
     ).rejects.toMatchObject({ code: 'unsupported-schema' });

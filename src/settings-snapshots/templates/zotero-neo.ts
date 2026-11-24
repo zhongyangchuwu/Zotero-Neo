@@ -10,7 +10,6 @@ import {
   isMainStartupFocus,
 } from '../../core/preferences';
 import { OPTIONAL_MODULE_IDS } from '../../modules';
-import { TAB_ENHANCEMENT_PREFERENCES } from '../../modules/tab-enhancements/config';
 import type { SettingsValue } from '../contracts';
 import { parseAIConfiguration } from '../../ai/configuration-policy';
 import { SettingsSnapshotError } from '../contracts';
@@ -65,17 +64,6 @@ export const NEO_PREFERENCE_FIELDS: readonly TransferField[] = [
     category: 'Key guide',
     validate: (value: SettingsValue) =>
       typeof value === 'number' && value >= minimum && value <= maximum,
-  })),
-  ...Object.entries(TAB_ENHANCEMENT_PREFERENCES).map(([name, key]) => ({
-    key,
-    label: key,
-    category: 'Tab display',
-    type:
-      name === 'width'
-        ? ('number' as const)
-        : name === 'collapsed'
-          ? ('boolean' as const)
-          : ('string' as const),
   })),
   ...OPTIONAL_MODULE_IDS.map((id) => ({
     key: `modules.${id}.enabled`,

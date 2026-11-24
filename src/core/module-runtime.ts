@@ -69,7 +69,6 @@ export class BuiltinModuleRuntime {
       translation: flags.translation === true,
       'ai-qa': flags['ai-qa'] === true,
       references: flags.references === true,
-      'tab-enhancements': flags['tab-enhancements'] === true,
     });
   }
 

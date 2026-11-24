@@ -218,7 +218,7 @@ export class BuiltinSettingsAdapter implements SettingsAdapter {
       issues.push(
         this.#issue(
           'neo-exclusions',
-          'Per-document marks, navigation history, tab groups, analysis/AI artifacts, caches, diagnostics, and third-party translation provider preferences/credentials are not settings transferred by Neo',
+          'Per-document marks, navigation history, analysis/AI artifacts, caches, diagnostics, and third-party translation provider preferences/credentials are not settings transferred by Neo',
         ),
       );
     }
