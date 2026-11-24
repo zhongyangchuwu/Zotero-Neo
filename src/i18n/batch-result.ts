@@ -16,7 +16,6 @@ type BatchAction =
   | 'collectionAdd'
   | 'collectionRemove'
   | 'collectionMove'
-  | 'readingGroup'
   | 'restore'
   | 'readerAnnotationCopy'
   | 'readerAnnotationRecolor';
@@ -39,17 +38,10 @@ export function batchStatus(
   const reasons: string[] = [];
   if (missingData) reasons.push(count(`batch.${action}.missingData`, missingData));
   if (unavailable) {
-    const read =
-      action === 'citekeys' || action === 'readingGroup' || action === 'readerAnnotationCopy';
+    const read = action === 'citekeys' || action === 'readerAnnotationCopy';
     reasons.push(count(read ? 'batch.readUnavailable' : 'batch.unavailable', unavailable));
   }
-  if (unchanged)
-    reasons.push(
-      count(
-        action === 'readingGroup' ? 'batch.readingGroup.unchanged' : 'batch.unchanged',
-        unchanged,
-      ),
-    );
+  if (unchanged) reasons.push(count('batch.unchanged', unchanged));
   if (failed) reasons.push(count('batch.failed', failed));
   return (prefix + t('batch.summary', language))
     .replace('{done}', lead)

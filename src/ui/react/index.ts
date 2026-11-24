@@ -13,8 +13,6 @@ import {
   SELECTION_PANEL_REACT_CSS,
 } from './surfaces/selection-panel';
 import type { SelectionPanelReactModel } from '../../modules/worksets/react-model';
-import { mountTabSidebarReactView, TAB_SIDEBAR_REACT_CSS } from './surfaces/tab-sidebar';
-import type { TabSidebarReactModel } from '../../modules/tab-enhancements/react-model';
 import { mountLocalFindReactView, LOCAL_FIND_REACT_CSS } from './surfaces/local-find';
 import type { LocalFindReactModel } from '../../modules/library/local-find-react-model';
 import { mountExtensionsReactView, EXTENSIONS_REACT_CSS } from './surfaces/extensions';
@@ -74,7 +72,6 @@ const runtime: NativeUIRuntime = {
         PICKER_REACT_CSS +
         REFERENCES_REACT_CSS +
         SELECTION_PANEL_REACT_CSS +
-        TAB_SIDEBAR_REACT_CSS +
         LOCAL_FIND_REACT_CSS +
         EXTENSIONS_REACT_CSS +
         SEARCH_DIALOG_REACT_CSS +
@@ -130,12 +127,6 @@ const runtime: NativeUIRuntime = {
         return mountSelectionPanelReactView(
           root,
           model as SelectionPanelReactModel,
-          () => {},
-        ) as ReactView<unknown>;
-      case 'tab-sidebar':
-        return mountTabSidebarReactView(
-          root,
-          model as TabSidebarReactModel,
           () => {},
         ) as ReactView<unknown>;
       case 'local-find':

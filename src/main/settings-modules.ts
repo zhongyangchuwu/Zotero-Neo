@@ -9,7 +9,6 @@ import type {
   SettingsFormModel,
 } from './settings-form-model';
 import { settingsText, type SettingsLanguage } from './settings-i18n';
-import { SettingsTabs } from './settings-tabs';
 
 const MODULE_DESCRIPTIONS: Record<OptionalModuleId, { en: string; 'zh-CN': string }> = {
   'reader-hints': {
@@ -32,10 +31,6 @@ const MODULE_DESCRIPTIONS: Record<OptionalModuleId, { en: string; 'zh-CN': strin
     en: 'Browse references from the reader.',
     'zh-CN': '在阅读器中浏览参考文献。',
   },
-  'tab-enhancements': {
-    en: 'Use a tab sidebar and save groups of reading tabs.',
-    'zh-CN': '使用标签页侧栏，并保存阅读标签页分组。',
-  },
 };
 
 /** Saves feature requests immediately while retaining startup-applied state. */
@@ -46,7 +41,6 @@ export class SettingsModules {
   readonly #language: SettingsLanguage;
   readonly #changed: () => void;
   readonly #cleanups = new CleanupScope();
-  readonly #tabs: SettingsTabs;
   #status = '';
   #disposed = false;
 
@@ -62,8 +56,6 @@ export class SettingsModules {
     this.#modules = modules;
     this.#language = language;
     this.#changed = changed;
-    this.#tabs = new SettingsTabs(preferences, language, () => this.#notify());
-    this.#cleanups.add(() => this.#tabs.dispose());
     try {
       for (const { id } of OPTIONAL_MODULES) {
         const cleanup = preferences.observe?.(modulePreferenceKey(id), () => this.#notify());
@@ -123,7 +115,6 @@ export class SettingsModules {
       };
       if (descriptor.id === 'translation' || descriptor.id === 'ai-qa') extras.push(group);
       else groups.push(group);
-      if (descriptor.id === 'tab-enhancements') groups.push(this.#tabs.group());
     }
     groups.push({
       id: 'module-extras',
@@ -132,14 +123,13 @@ export class SettingsModules {
       fields: [],
       groups: extras,
     });
-    const status = this.#status || this.#tabs.status;
     return {
       title: settingsText(language, 'Optional enhancements'),
       ...(OPTIONAL_MODULES.some(({ id }) => requested[id] !== this.#modules.applied[id])
         ? { notice: settingsText(language, 'Restart Zotero to apply these changes') }
         : {}),
       groups,
-      ...(status ? { status: { text: status, error: true } } : {}),
+      ...(this.#status ? { status: { text: this.#status, error: true } } : {}),
     };
   }
 
@@ -165,7 +155,6 @@ export class SettingsModules {
       this.#restoreDefaults();
       return;
     }
-    this.#tabs.dispatch(command);
   }
 
   #restoreDefaults(): void {

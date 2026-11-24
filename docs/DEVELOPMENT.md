@@ -291,30 +291,17 @@ node tools/replay-local-rules.mjs \
 
 `src/core/module-host.ts` 提供按 MainWindow 或 ReaderSession 隔离的模块宿主及独立模块作用域。同步激活失败会释放部分资源并保留原错误；动作贡献按 `(BindingContext, ActionId)` 唯一登记，返回有类型的调用入口。退出先使全部回调失效，再完成其余释放，即使某次清理失败也不会中断其他模块。
 
-`src/modules/index.ts` 是静态内置清单，启动校验 ID、依赖图和精确上下文贡献；可选增强为 `reader-hints`、`extensions`、`translation`、`references`、`ai-qa` 与 `tab-enhancements`。`ai-qa` 依赖核心 `reader-selection`，`references` 不依赖 AI 问答，`tab-enhancements` 依赖核心 `workspace`。
+`src/modules/index.ts` 是静态内置清单，启动校验 ID、依赖图和精确上下文贡献；可选增强为 `reader-hints`、`extensions`、`translation`、`references` 与 `ai-qa`。`ai-qa` 依赖核心 `reader-selection`，`references` 不依赖 AI 问答。
 
-MainWindow 组合标签、扩展、分类、工作集、Library、Notes、Workspace、文档准备与配置迁移入口；启用时，标签页增强会在 Zotero 初始化完成后按该窗口的有效 session 延迟激活。ReaderSession 直接组合导航、章节查找、图表浏览、解析对照、选择、批注、对象摘录、章节笔记、文档准备、hints、引用增强、可选翻译与 AI 问答、独立 Library citekey 贡献及 Workspace 分屏/焦点。各模块仅接收具名端口；Operations 与 Toolkit 保持各自负责方。
+MainWindow 组合标签、扩展、分类、工作集、Library、Notes、Workspace、文档准备与配置迁移入口。ReaderSession 直接组合导航、章节查找、图表浏览、解析对照、选择、批注、对象摘录、章节笔记、文档准备、hints、引用增强、可选翻译与 AI 问答、独立 Library citekey 贡献及 Workspace 分屏/焦点。各模块仅接收具名端口；Operations 与 Toolkit 保持各自负责方。
 
-`src/core/module-runtime.ts` 根据六项可选请求应用增强；`reader-hints`、`extensions` 与 `references` 默认开启，其余三项对新配置默认关闭。`src/platform/module-startup.ts` 在 Zotero 应用对象上保留请求的 JSON 快照，因此 Neo 热重载不会应用新请求，完全退出并重启 Zotero 后才会应用。旧启动快照缺少可选字段时，已应用值按关闭处理；旧版 `reader-ai` 启用偏好不构成启用 `ai-qa` 的同意；旧核心键 `extensions.zotero-neo.modules.<core>.enabled=false` 不会关闭核心功能。
+`src/core/module-runtime.ts` 根据五项可选请求应用增强；`reader-hints`、`extensions` 与 `references` 默认开启，`translation` 与 `ai-qa` 默认关闭。`src/platform/module-startup.ts` 在 Zotero 应用对象上保留请求的 JSON 快照，因此 Neo 热重载不会应用新请求，完全退出并重启 Zotero 后才会应用。旧启动快照缺少可选字段时，已应用值按关闭处理；旧版 `reader-ai` 启用偏好不构成启用 `ai-qa` 的同意；旧核心键 `extensions.zotero-neo.modules.<core>.enabled=false` 不会关闭核心功能。
 
-实机核对模块配置时使用专用 profile 和自有数据，确认六项可选请求保存、Neo 热重载与 Zotero 完全退出／重启的差异；确认默认引用增强已启用、其本地分析和文库查找不发起元数据请求，只有用户明确查询才访问来源；确认默认状态下 AI 问答无入口／选区动作，且不挂载面板 runtime、不读取凭据或发送请求；确认新配置默认关闭翻译和标签页增强。手动启用 `ai-qa` 并重启后入口可用，关闭再重启后入口撤除且既有成果仍保留。恢复默认后 `reader-hints`、`extensions`、`references` 开启，其余三项关闭，其中 `translation=false` 显式保留；关闭全部六项后核心模块仍须可用，旧核心 `false` 偏好无效，恢复默认不改变行为偏好（包括 `noteEditor.enabled`）。故障只注入自有宿主并恢复原方法；回读自有数据与偏好，确认进程状态。不要把“关闭全部模块”作为配置场景。完整用户状态说明见[模块设置](SETTINGS_GUIDE.md#开关可选功能)。
+实机核对模块配置时使用专用 profile 和自有数据，确认五项可选请求保存、Neo 热重载与 Zotero 完全退出／重启的差异。默认引用增强已启用，本地分析和文库查找不发起元数据请求，只有用户明确查询才访问来源。新配置默认关闭翻译与 AI 问答；AI 问答无入口或选区动作，不挂载面板 runtime、不读取凭据或发送请求。手动启用 `ai-qa` 并重启后入口可用，关闭再重启后入口撤除且既有成果仍保留。恢复默认后 `reader-hints`、`extensions`、`references` 开启，其余两项关闭，其中 `translation=false` 显式保留；关闭全部五项可选增强后核心模块仍须可用，旧核心 `false` 偏好无效，恢复默认不改变行为偏好（包括 `noteEditor.enabled`）。故障只注入自有宿主并恢复原方法；回读自有数据与偏好，确认进程状态。完整用户状态说明见[模块设置](SETTINGS_GUIDE.md#开关可选功能)。
 
 #### 翻译与安装手动核对
 
 在隔离 profile 中使用真实 Translate for Zotero 2.4.8，覆盖 Extras 首次准备的确认／取消、校验失败、已有用户偏好保留及原生更新确认。检查手动 Extra 默认关闭、即时启停，以及不启用 Extra 即可准备自动保存依赖；再保存 `translation` 模块请求并完全重启。确认自动译文完成后保存用户修订内容，原生便签位于发起选区；主／次分屏、Reading Mode、相同原文的任务复用、替换 popup、关闭视图及外部修改 PDF 均不得写错来源。重开 Reader 后核对原生持久化、侧栏角色与原有颜色筛选；未实际执行的路径不记录通过。
-
-#### 标签页增强手动核对
-
-使用专用 profile，按实际界面核对下列行为：
-
-- 默认关闭时，原生标签栏、工具栏与核心 Workspace 操作仍可用。保存启用请求后只热重载 Neo，标签页增强仍沿用原已应用状态；完全退出并重启 Zotero 后才应用新请求。保存停用请求并再次完整重启后，原生标签栏和工具栏恢复。
-- 在已启用的模块卡片中选择**最左侧**、**最右侧**和**上方**；确认默认位置为左侧，位置切换立即生效，当前 Reader／Note、活动视图和分组不丢失，Reader、PDF 和 Note 不重挂或重载。上方模式由 Neo 绘制标签栏并保留 Zotero 原生工具栏；验证挂载失败时原生界面恢复。
-- 在上方模式用鼠标执行最终界面提供的基础标签／分组操作；核对原生键盘输入仍由 Zotero 处理，且没有新增顶部模式快捷键。原生标签操作逐项适配；未实际验证的拖放、菜单或其他操作不记录为已支持。
-- 左／右侧栏宽度下限为 `180`、上限为 `520`，默认 `260`；确认原有宽度和收起设置仍适用于侧栏模式。
-- 核对标题模板保留现有字段、citekey 与空值回退行为；切换位置和停用模块都不改 Zotero 原生标签标题、条目标题或文献元数据。
-- 建立阅读组后，从原生路径关闭成员并核对其立即移除、空组仍保留；解散组不关闭文档。相同 PDF 的两个视图保持独立；两窗口中激活转到所属窗口，关闭组只影响发起窗口，不在当前窗口伪造其他窗口的原生标签。
-- 完全退出并重启 Zotero 后，核对原生会话恢复的视图可关联分组，旧 `tabEnhancements.groups.v1` 备份不变，当前分组只保存在 `tabEnhancements.groups.v2`。停用并重启后再次确认原生界面恢复且分组、标题设置仍保留。
-- 在 Main 普通模式验证 `<Space>bc`／`<Space>ba` 固定发起时的目标，多 PDF 时明确选择，缺失目标显示数量。取消各提示不改变分组；确认后核对成功打开并分组的视图及成功数量，不修改 Zotero 标签、分类或元数据。
 
 结构不可用的绑定在 matcher/count/前缀、Guide 和 Palette 前过滤，不能改写保存的用户绑定或全局删除同名动作。Navigation 的 marks/侧栏获取必须在激活事务内，Base 启动失败释放未完成 session；失败实例不由定时重扫循环重建。模块清理错误通过显式 `CleanupFailure` 收集，不登记到会吞异常的通用清理层。
 
@@ -343,7 +330,6 @@ Workspace 按 MainWindow 拥有标签页来源、确认与 Reader/Note 的 Show 
 | 能力 | Toolkit 负责方 | 边界与原因 |
 | --- | --- | --- |
 | Main 条目、标签页、Note 上下文与过滤 | `src/toolkit/main/host.ts` | 提供宿主事实与操作，不选择 Surface 目标。只在恰好一个原生 Scope 时调用 `getSelectedCollection()`；零个或多个 Scope 先用外层复数 API，再回退到原生 tree 的复数 API。分离的 Scope Cursor 不代替已选分类。 |
-| Main 原生标签与外层侧栏布局 | `src/toolkit/main/tab-enhancements/` | 从当前 MainWindow 的原生清单投影标签页，并在 Toolkit 内适配私有 Tab API；合并原生 `_update` 与 `Notifier` 的 `item`/`tab` 通知。只在受支持布局中将侧栏放在整个 `#appcontent` 外侧，并以可逆租约移动原生工具栏；不重挂内容 deck 或 Reader/PDF iframe。 |
 | Main tree 焦点、ScopeSet 与行 Cursor | `src/toolkit/main/tree.ts`、`host.ts` | 保留原生 Scope 选择与仅焦点的条目行操作；generation 令牌隔离替换或尚未稳定的行视图回调。 |
 | 分类身份、条目搜索与 Scope 选择 | `src/toolkit/main/collections.ts` | 提供稳定分类 ID、路径与库可写性；先限制原生搜索 ID 数量再加载候选；等待 `onCollectionSelected()` 和 Main 条目视图加载，并核对已选及已渲染 Scope ID 后才报告完成。 |
 | 分类事务回调屏障 | `src/toolkit/main/collection-transactions.ts` | 只在进入的事务体内捕获回调，按实际所属 ID 分发一次。局部观察原生 10.0.6 在 SQL 提交后的 `_commitCount` 增量，在共享回调执行前确认该事务结果，区分 SQL 回滚与提交后回调失败。仅恢复自有临时 registrar/counter descriptor，保留外部替换，不清空共享队列，也不安装宿主常驻 patch。 |

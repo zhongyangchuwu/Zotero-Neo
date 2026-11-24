@@ -17,8 +17,8 @@ features:
     details: Flash 按屏幕上的词句选中文字，不必拖过整段。沿批注定位上下文，顺着引文找参考文献和文库里的副本。
     link: /docs/READER_GUIDE#从一段文字开始
     linkText: 阅读和批注 PDF
-  - title: 标签页不打结，换设备不用重配
-    details: 把正在读的论文收进侧栏分组，集中管理已装扩展，用工作区同步与备份把配置带到另一台设备。
-    link: /docs/MAIN_GUIDE#用标签页增强管理阅读分组
+  - title: 切换阅读标签页，换设备不用重配
+    details: 用选择器查找已打开的标签页，沿跳转历史回到阅读位置。集中管理已装扩展，用工作区同步与备份把配置带到另一台设备。
+    link: /docs/MAIN_GUIDE#切换标签页和返回
     linkText: 管理标签页与工作区
 ---

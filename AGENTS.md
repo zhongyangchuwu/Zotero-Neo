@@ -99,7 +99,7 @@ src/
   i18n/                    共享应用本地化、动作标签和语言目录
   bootstrap.ts             Gecko Bootstrap 全局生命周期入口
   input/                   规范绑定、动作和匹配器
-  modules/                 内置能力模块；可选模块 `reader-hints`、`extensions`、`translation`、`references`、`ai-qa`、`tab-enhancements`
+  modules/                 内置能力模块；可选模块 `reader-hints`、`extensions`、`translation`、`references`、`ai-qa`
   reader/                  Reader 生命周期与功能
   toolkit/                 内部 Main（含 Note pane）及 Reader 宿主能力，包含 Main 标签页宿主接缝
   platform/                窄范围的宿主边界适配器
@@ -168,7 +168,7 @@ Main 选择器也遵守相同原则。`src/main/picker/` 负责候选搜索、�
 
 在发起操作的 Surface 中解析条目目标：`src/main/main-item-target.ts` 应用 Main EffectiveSelection（Persistent Selection 优先于 CurrentTarget），`src/reader/item-target.ts` 解析活动 Reader 条目，`src/main/note-item-target.ts` 解析活动 Note 上下文。只在 `src/core/item-target.ts` 共享结果形状，并在 `src/platform/zotero-items.ts` 共享查找／顶层身份归一化；`src/operations/` 中的具体 Operation 接收明确解析过的条目或 ID。Reader 和 Note 不借用 Main Selection。调用方直接导入类型化的 Surface resolver；不保留共享兼容分发器／重导出。
 
-可选标签页增强由 `src/modules/tab-enhancements/` 按 MainWindow 拥有侧栏、标题格式与窗口级作用域；应用共享分组管理器通过已登记宿主处理跨窗口激活，核心 `workspace` 继续负责原生标签页激活与共享历史。Zotero 原生标签页清单是唯一事实来源：版本化 `viewID` 存在原生 `tab.data`，区分重复的 PDF 视图；`nativeID` 只用于当前原生操作，不作为持久身份。分组保存在 profile-local 键 `tabEnhancements.groups.v1`，与显示偏好分开，不写入 Zotero 标签或分类。Toolkit 的 `src/toolkit/main/tab-enhancements/` 负责私有 Tab API、外层布局、原生工具栏可逆租约及合并后的原生更新和 `item`/`tab` 通知；侧栏位于 `#appcontent` 外侧，不重挂 content deck 或 Reader/PDF iframe，不支持的原生布局保留原生标签页界面。MainWindow controller 等待 `Zotero.initializationPromise` 后再激活，并在回调中核对原 session 是否仍有效。详细设计见 `docs/internal/ARCHITECTURE.md#标签页增强`、`docs/internal/MODULE_DESIGN.md#标签页增强与原生标签页` 和 `docs/DEVELOPMENT.md#标签页增强手动核对`。
+核心 `workspace` 按 MainWindow 使用 Zotero 原生标签页清单进行查找、激活和关闭，并复用共享导航历史。私有原生标签 API 由 Main Toolkit 封装，Workspace 不接管原生标签栏布局。
 
 ## 关键文件
 
@@ -192,9 +192,7 @@ Main 选择器也遵守相同原则。`src/main/picker/` 负责候选搜索、�
 | `src/operations/references.ts` | 本地引用匹配及明确的 Zotero 添加操作 |
 | `src/toolkit/reader/references.ts` | 原生全文快照和 PDF 来源校验 |
 | `src/platform/reference-credentials.ts` | 通过 Zotero Login Manager 保存可选 Semantic Scholar key |
-| `src/modules/tab-enhancements/` | 可选标签页增强：MainWindow 侧栏、标题格式和可恢复分组 |
-| `src/toolkit/main/tab-enhancements/` | 原生 Tab 适配、外层布局及工具栏可逆租约 |
-| `src/main/controller.ts` | MainWindow 按键分发与生命周期，包括延迟附着的标签页增强 |
+| `src/main/controller.ts` | MainWindow 按键分发与生命周期 |
 | `src/preferences/index.ts` | 旧式 Preferences 注册与行为 |
 | `tools/build.mjs` | esbuild/XPI 打包流水线 |
 | `tools/check-package.mjs` | 生成 XPI 的成员契约 |
