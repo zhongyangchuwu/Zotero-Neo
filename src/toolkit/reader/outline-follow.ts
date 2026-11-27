@@ -386,23 +386,39 @@ class OutlineSurface {
 
   #watch(presentation: Presentation): void {
     const { window, document, view, primary } = presentation;
+    const sections = document.querySelector('body > .sections');
+    let refresh: number | undefined;
     const listener = (): void => {
       if (
-        this.#presentation === owned &&
-        this.#current() &&
-        !isDeadObject(window) &&
-        window.document === document &&
-        readerPresentationView(this.reader, primary) === view
+        this.#presentation !== owned ||
+        !this.#current() ||
+        isDeadObject(window) ||
+        window.document !== document ||
+        readerPresentationView(this.reader, primary) !== view
       )
-        this.#request();
+        return;
+      this.#request();
+      if (sections) {
+        // Scrolled EPUB publishes a debounced native start range after the DOM scroll.
+        if (refresh !== undefined) window.clearTimeout(refresh);
+        refresh = window.setTimeout(() => {
+          refresh = undefined;
+          if (this.#presentation === owned) this.#request();
+        }, 240);
+      }
     };
     const observerWindow = window as Window & typeof globalThis;
     let resize: ResizeObserver | undefined;
+    let pagination: MutationObserver | undefined;
     const owned = {
       ...presentation,
       dispose: (): void => {
         const failure = new CleanupFailure();
         failure.run(() => resize?.disconnect());
+        failure.run(() => pagination?.disconnect());
+        failure.run(() => {
+          if (refresh !== undefined && !isDeadObject(window)) window.clearTimeout(refresh);
+        });
         failure.run(() => {
           if (!isDeadObject(window)) window.removeEventListener('scroll', listener, true);
         });
@@ -424,6 +440,14 @@ class OutlineSurface {
         resize.observe(document.getElementById('viewer') ?? document.body);
         const container = document.getElementById('viewerContainer');
         if (container) resize.observe(container);
+      }
+      if (sections) {
+        // Paginated EPUB moves its sections with CSS offsets, without a DOM scroll event.
+        pagination = new observerWindow.MutationObserver(listener);
+        pagination.observe(
+          sections,
+          cloneInto({ childList: true, attributes: true, attributeFilter: ['style'] }, window),
+        );
       }
       this.#presentation = owned;
     } catch (error) {

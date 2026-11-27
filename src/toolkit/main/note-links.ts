@@ -104,6 +104,13 @@ export function installNoteLinks(window: Window, open: (uri: SafeURI) => boolean
     event.preventDefault();
   }
 
+  function compatibilityMouse(event: MouseEvent): void {
+    if (!press || !accept(event) || !nearPress(press.point, event)) return;
+    if (eventElement(event.target)?.closest(EDITOR) !== press.editor) return;
+    event.preventDefault();
+    event.stopImmediatePropagation();
+  }
+
   function click(event: MouseEvent): void {
     if (!event.isTrusted) return;
     const start = press;
@@ -168,6 +175,8 @@ export function installNoteLinks(window: Window, open: (uri: SafeURI) => boolean
   }
 
   window.addEventListener('pointerdown', down, true);
+  window.addEventListener('mousedown', compatibilityMouse, true);
+  window.addEventListener('mouseup', compatibilityMouse, true);
   window.addEventListener('click', click, true);
   window.addEventListener('pointermove', move, true);
   window.addEventListener('pointerup', move, true);
@@ -186,6 +195,8 @@ export function installNoteLinks(window: Window, open: (uri: SafeURI) => boolean
     press = null;
     if (isDeadObject(window)) return;
     window.removeEventListener('pointerdown', down, true);
+    window.removeEventListener('mousedown', compatibilityMouse, true);
+    window.removeEventListener('mouseup', compatibilityMouse, true);
     window.removeEventListener('click', click, true);
     window.removeEventListener('pointermove', move, true);
     window.removeEventListener('pointerup', move, true);

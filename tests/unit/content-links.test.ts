@@ -253,6 +253,8 @@ describe('Note modifier links', () => {
 
       for (const element of [target, bare]) {
         expect(fire('pointerdown', element, modifier)).toEqual({ canceled: true, stopped: false });
+        expect(fire('mousedown', element, modifier)).toEqual({ canceled: true, stopped: true });
+        expect(fire('mouseup', element, modifier)).toEqual({ canceled: true, stopped: true });
         expect(fire('click', element, modifier)).toEqual({ canceled: true, stopped: true });
       }
       expect(open.mock.calls).toHaveLength(2);

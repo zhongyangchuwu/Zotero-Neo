@@ -365,9 +365,9 @@ describe('reader outline following', () => {
   it('orders EPUB href targets against the native flow range, falling back to the section start', async () => {
     const view = viewFrame();
     const epub = view._iframeWindow.document;
-    epub.body.innerHTML = `<div class="section-container" data-section-index="0" id="section">
+    epub.body.innerHTML = `<div class="sections"><div class="section-container" data-section-index="0" id="section">
       <h1 id="first">first</h1><p id="reading">text</p><h2 id="later">later</h2>
-    </div>`;
+    </div></div>`;
     const section = epub.getElementById('section')!;
     const range = epub.createRange();
     range.setStart(epub.getElementById('reading')!.firstChild!, 1);
@@ -387,6 +387,12 @@ describe('reader outline following', () => {
     reader(view, items);
     await flush();
     expect(highlighted()).toEqual(['outline-1']);
+
+    const later = epub.getElementById('later')!;
+    range.setStart(later.firstChild!, 1);
+    epub.querySelector<HTMLElement>('.sections')!.style.left = '-300px';
+    await flush();
+    expect(highlighted()).toEqual(['outline-2']);
 
     flow.startRange = null;
     view._iframeWindow.dispatchEvent(new Event('resize'));
