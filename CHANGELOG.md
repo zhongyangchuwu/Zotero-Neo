@@ -6,6 +6,13 @@
 
 ## [未发布]
 
+## [0.7.0] - 2026-11-27
+
+### 新增
+
+- PDF、EPUB 和网页快照的大纲随阅读位置更新，只高亮当前最深的可见章节。PDF 能区分同页小节；折叠时高亮可见上级，不自动展开。([#353])
+- 阅读器批注评论中的 `http://`、`https://` 和 `zotero://` 裸链接可直接单击打开。主窗口与 Reader 侧栏的笔记编辑器中，按住 Ctrl（macOS 为 ⌘）单击即可打开富文本链接或裸链接。([#353])
+
 ### 移除
 
 - 移除内置标签页增强，包括自定义标签栏、标题格式、阅读分组及其设置和快捷键。Zotero 原生标签栏、Neo 的标签页选择器、切换、关闭与跳转历史仍可用。旧分组和偏好不迁移，也不主动删除。
@@ -113,7 +120,8 @@
 - 首批 Zotero Neo 键盘工作流，包括 PDF 阅读历史、链接跳转、Flash 文本选择，以及主窗口条目选择和标签工作区。
 - 提供主题感知界面和快捷键自定义，并支持 Unicode 与输入法文本输入。
 
-[未发布]: https://github.com/zhongyangchuwu/Zotero-Neo/compare/v0.6.0...main
+[未发布]: https://github.com/zhongyangchuwu/Zotero-Neo/compare/v0.7.0...main
+[0.7.0]: https://github.com/zhongyangchuwu/Zotero-Neo/releases/tag/v0.7.0
 [0.6.0]: https://github.com/zhongyangchuwu/Zotero-Neo/releases/tag/v0.6.0
 [0.5.3]: https://github.com/zhongyangchuwu/Zotero-Neo/releases/tag/v0.5.3
 [0.5.2]: https://github.com/zhongyangchuwu/Zotero-Neo/releases/tag/v0.5.2
@@ -126,3 +134,4 @@
 [0.1.0]: https://github.com/zhongyangchuwu/Zotero-Neo/releases/tag/v0.1.0
 [#347]: https://github.com/zhongyangchuwu/Zotero-Neo/pull/347
 [#348]: https://github.com/zhongyangchuwu/Zotero-Neo/pull/348
+[#353]: https://github.com/zhongyangchuwu/Zotero-Neo/pull/353
