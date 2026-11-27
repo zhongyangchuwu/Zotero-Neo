@@ -107,10 +107,10 @@ function comment(text: string, readOnly = true): string {
 describe('Reader annotation comment links', () => {
   it('only highlights and opens read-only visible text; rebuilds and removes owned ranges', async () => {
     document.body.innerHTML = `<div id="annotations">
-      <div class="annotation">${comment('[Target](https://example.test/a) plain')}</div>
+      <div class="annotation">${comment('https://example.test/a，普通文字')}</div>
       <div class="annotation">${comment('https://editable.test/', false)}</div>
     </div>
-    <div class="annotation-popup">${comment('https://popup.test/')}</div>
+    <div class="annotation-popup">${comment('（zotero://select/library/items/ABCDEF12）')}</div>
     <div contenteditable="true" class="annotation-popup">${comment('https://nested.test/')}</div>`;
     const [shown, editable, popup, nested] = Array.from(
       document.querySelectorAll('.content'),
@@ -126,8 +126,8 @@ describe('Reader annotation comment links', () => {
     releases.push(release);
     const highlight = [...registry.values()][0]!;
     expect([...highlight].map((range) => range.toString())).toEqual([
-      'Target',
-      'https://popup.test/',
+      'https://example.test/a',
+      'zotero://select/library/items/ABCDEF12',
     ]);
 
     const before = document.body.innerHTML;
@@ -145,6 +145,9 @@ describe('Reader annotation comment links', () => {
       expect(fire('click', target).canceled).toBe(false);
     }
     paint(shownText);
+    const afterLink = { clientX: 10 + 8 * 'https://example.test/a'.length + 2 };
+    fire('pointerdown', shown!, afterLink);
+    expect(fire('click', shown!, afterLink).canceled).toBe(false);
     fire('pointerdown', shown!, { clientY: 19 });
     expect(fire('click', shown!, { clientY: 19 }).canceled).toBe(false);
     fire('pointerdown', shown!);
@@ -178,9 +181,40 @@ describe('Reader annotation comment links', () => {
 
     release();
     expect(registry.size).toBe(0);
+    expect(document.querySelector('[data-zv-comment-link-underlines]')).toBeNull();
     expect(document.head.querySelector('style')).toBeNull();
     fire('pointerdown', replacement);
     expect(fire('click', replacement).canceled).toBe(false);
+  });
+
+  it('limits the underline to visible URL glyphs inside the scrollport', () => {
+    const url = 'https://example.test/a';
+    document.body.innerHTML = `<div id="annotations" style="overflow-x:hidden;overflow-y:auto">
+      <div class="annotation">${comment(`${url}。`)}</div>
+    </div>`;
+    const content = document.querySelector('.content')!;
+    const scrollport = document.getElementById('annotations')!;
+    const rectangle = new DOMRect(0, 0, 105, 100);
+    vi.spyOn(content, 'getClientRects').mockReturnValue([rectangle] as unknown as DOMRectList);
+    vi.spyOn(scrollport, 'getBoundingClientRect').mockReturnValue(rectangle);
+    Object.defineProperties(scrollport, {
+      clientWidth: { value: 105 },
+      clientHeight: { configurable: true, value: 100 },
+    });
+    const place = layout();
+    place(content.firstChild as Text);
+    vi.stubGlobal('CSS', { highlights: new Map() });
+    vi.stubGlobal('Highlight', Set);
+    const request = vi.spyOn(window, 'requestAnimationFrame').mockReturnValue(1);
+    const reader = { itemID: 1, _iframeWindow: window };
+    releases.push(mountReaderCommentLinks(reader, () => true));
+    const line = document.querySelector('[data-zv-comment-link-underlines] path')!;
+    request.mock.calls[0]![0](0);
+    expect(line.getAttribute('d')).toBe('M10 31H105');
+    document.dispatchEvent(new Event('visibilitychange'));
+    Object.defineProperty(scrollport, 'clientHeight', { value: 28 });
+    request.mock.calls[1]![0](0);
+    expect(line.getAttribute('d')).toBe('');
   });
 });
 

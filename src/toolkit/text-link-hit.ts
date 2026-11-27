@@ -1,4 +1,4 @@
-import { extractLinks, parseSafeURI, type SafeURI } from './uri';
+import { extractLinks, type SafeURI } from './uri';
 
 const INLINE = /^(?:b|strong|i|em|u|s|del|strike|sup|sub|code|span|mark)$/;
 const ISLAND = '[contenteditable],.citation,.highlight,.math-node';
@@ -29,16 +29,15 @@ export function textLinkRanges(root: Element, surface: 'comment' | 'paragraph'):
 
   function flush(): void {
     for (const { start, end, uri } of extractLinks(text)) {
-      // Note Markdown rendering belongs to the native editor; only bare URLs are inferred there.
-      if (surface === 'paragraph' && parseSafeURI(text.slice(start, end))?.href !== uri.href)
-        continue;
-      const first = parts.find((part) => start < part.end);
-      const last = parts.find((part) => end <= part.end);
-      if (!first || !last) continue;
-      const range = root.ownerDocument.createRange();
-      range.setStart(first.node, start - first.start);
-      range.setEnd(last.node, end - last.start);
-      result.push({ range, uri });
+      for (const part of parts) {
+        if (part.end <= start) continue;
+        if (part.start >= end) break;
+        // Use identical text fragments for painting and hit testing, not inline box padding.
+        const range = root.ownerDocument.createRange();
+        range.setStart(part.node, Math.max(start, part.start) - part.start);
+        range.setEnd(part.node, Math.min(end, part.end) - part.start);
+        result.push({ range, uri });
+      }
     }
     parts.length = 0;
     text = '';
@@ -85,15 +84,7 @@ export function textLinkHit(
   if (caret?.offsetNode.nodeType !== 3 || !root.contains(caret.offsetNode)) return null;
   for (const { range, uri } of ranges) {
     if (!range.isPointInRange(caret.offsetNode, caret.offset)) continue;
-    let painted = range;
-    if (range.startContainer !== range.endContainer) {
-      // A multi-node Range's rectangles can include inline element boxes and their padding.
-      const node = caret.offsetNode as Text;
-      painted = root.ownerDocument.createRange();
-      painted.setStart(node, range.startContainer === node ? range.startOffset : 0);
-      painted.setEnd(node, range.endContainer === node ? range.endOffset : node.length);
-    }
-    const rects = painted.getClientRects();
+    const rects = range.getClientRects();
     if (!rects) continue;
     for (let index = 0; index < rects.length; index++) {
       const rect = rects[index]!;

@@ -5,13 +5,16 @@ import { extractLinks, openSafeURI, parseSafeURI } from '../../src/toolkit/uri';
 afterEach(() => vi.unstubAllGlobals());
 
 describe('content links', () => {
-  it('hits Markdown labels and bare URLs without including adjacent punctuation', () => {
+  it('hits only bare URL text without including adjacent punctuation', () => {
     const text =
-      '中文[原始文献](https://example.org/Topic_(math))，裸链（http://example.org/路径）；' +
+      '中文（https://example.org/Topic_(math)），裸链（http://example.org/路径）；' +
       '从 [zotero://select/library/items/ABCDEF12] 打开。Read https://example.org/a?x=1, then https://example.org/end.';
     const links = extractLinks(text);
     expect(links.map(({ start, end, uri }) => [text.slice(start, end), uri])).toEqual([
-      ['原始文献', { kind: 'external', href: 'https://example.org/Topic_(math)' }],
+      [
+        'https://example.org/Topic_(math)',
+        { kind: 'external', href: 'https://example.org/Topic_(math)' },
+      ],
       [
         'http://example.org/路径',
         { kind: 'external', href: 'http://example.org/%E8%B7%AF%E5%BE%84' },
@@ -22,6 +25,13 @@ describe('content links', () => {
       ],
       ['https://example.org/a?x=1', { kind: 'external', href: 'https://example.org/a?x=1' }],
       ['https://example.org/end', { kind: 'external', href: 'https://example.org/end' }],
+    ]);
+  });
+
+  it('treats bracketed labels as plain text, matching only the literal address', () => {
+    const text = '[原始文献](https://example.org/Topic_(math))。';
+    expect(extractLinks(text).map(({ start, end }) => text.slice(start, end))).toEqual([
+      'https://example.org/Topic_(math)',
     ]);
   });
 
@@ -45,7 +55,7 @@ describe('content links', () => {
     'https://\texample.org',
   ])('refuses %s', (uri) => {
     expect(parseSafeURI(uri)).toBeNull();
-    expect(extractLinks(`[not clickable](${uri})`)).toEqual([]);
+    expect(extractLinks(`读这里（${uri}）。`)).toEqual([]);
   });
 
   it('uses the owning Zotero pane for authorized internal actions, never the OS launcher', () => {

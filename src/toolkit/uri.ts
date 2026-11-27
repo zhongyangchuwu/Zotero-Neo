@@ -36,8 +36,7 @@ export function parseSafeURI(input: string): SafeURI | null {
   return { kind: 'external', href: url.href };
 }
 
-const LINK_START =
-  /(?:\[(?<label>[^\[\]\r\n]+)\]\([ \t]*(?<angle><)?)?(?<scheme>(?:https?|zotero):\/\/)/giu;
+const LINK_START = /(?:https?|zotero):\/\//gi;
 const URL_BREAK = /[\s<>"`“”‘’。、「」『』；，！？]/u;
 const TRAILING_PUNCTUATION = /[.,;:!?…'’]+$/u;
 
@@ -63,27 +62,13 @@ export function extractLinks(text: string): readonly TextLink[] {
   const links: TextLink[] = [];
   const matcher = new RegExp(LINK_START);
   for (let match = matcher.exec(text); match; match = matcher.exec(text)) {
-    const { label, angle, scheme } = match.groups!;
-    const urlStart = matcher.lastIndex - scheme!.length;
+    const start = match.index;
     const tokenEnd = linkEnd(text, matcher.lastIndex);
-    matcher.lastIndex = Math.max(matcher.lastIndex, tokenEnd);
-    if (label === undefined && match.index && /[a-z0-9_+.\-:]/i.test(text[match.index - 1]!))
-      continue;
-    let cursor = tokenEnd;
-    if (angle && text[cursor] === '>') cursor += 1;
-    while (text[cursor] === ' ' || text[cursor] === '\t') cursor += 1;
-    const markdown =
-      label !== undefined && (!angle || text[tokenEnd] === '>') && text[cursor] === ')';
-    const raw = text.slice(urlStart, tokenEnd);
-    const value = markdown ? raw : raw.replace(TRAILING_PUNCTUATION, '');
+    matcher.lastIndex = tokenEnd;
+    if (start && /[a-z0-9_+.\-:]/i.test(text[start - 1]!)) continue;
+    const value = text.slice(start, tokenEnd).replace(TRAILING_PUNCTUATION, '');
     const uri = parseSafeURI(value);
-    if (!uri) continue;
-    if (markdown) {
-      links.push({ start: match.index + 1, end: match.index + 1 + label.length, uri });
-      matcher.lastIndex = cursor + 1;
-    } else {
-      links.push({ start: urlStart, end: urlStart + value.length, uri });
-    }
+    if (uri) links.push({ start, end: start + value.length, uri });
   }
   return links;
 }

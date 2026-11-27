@@ -8,6 +8,7 @@ import {
   type ClientPoint,
   type TextLinkRange,
 } from '../text-link-hit';
+import { createCommentLinkUnderlines } from './comment-link-underlines';
 import type { SafeURI } from '../uri';
 import type { ReaderRuntime } from './contracts';
 import { readerIsClosed, readerWindow } from './host';
@@ -16,10 +17,32 @@ const COMMENT = ':is(#annotations .annotation, .annotation-popup) .comment';
 const CONTENT = `${COMMENT} .editor.read-only .content[role="textbox"][aria-readonly="true"][contenteditable="false"]`;
 const EDITABLE = 'input,textarea,[contenteditable]:not([contenteditable="false" i])';
 const HIGHLIGHT = 'zotero-neo-comment-link';
+const STYLE = `
+  :root {
+    --zv-comment-link-blue: light-dark(
+      color-mix(in srgb, var(--accent-blue, #4072e5) 84%, black),
+      color-mix(in srgb, var(--accent-blue, #4072e5) 64%, white)
+    );
+  }
+  @media (forced-colors: active) {
+    :root { --zv-comment-link-blue: LinkText; }
+  }
+  ::highlight(${HIGHLIGHT}) { color: var(--zv-comment-link-blue); }
+  [data-zv-comment-link-underlines] {
+    position: fixed;
+    inset: 0;
+    width: 100%;
+    height: 100%;
+    z-index: 10;
+    pointer-events: none;
+    color: var(--zv-comment-link-blue);
+  }
+`;
 
 // The project's DOM lib does not include the iterable declarations for these WebIDL collections.
 interface CommentWindow extends Window {
   readonly MutationObserver: typeof MutationObserver;
+  readonly ResizeObserver?: typeof ResizeObserver;
   readonly CSS?: { readonly highlights?: Map<string, Highlight> };
   readonly Highlight?: new () => Highlight & Pick<Set<AbstractRange>, 'add' | 'clear'>;
 }
@@ -62,20 +85,22 @@ export function installReaderCommentLinks(
   const window = candidate;
   const { document } = window;
   const root = document.documentElement;
-  if (!document.head || !root || typeof window.MutationObserver !== 'function') return () => {};
+  const registry = window.CSS?.highlights;
+  if (!document.head || !document.body || !root || !registry || !window.Highlight) return () => {};
 
   const cursor = linkCursor(document, `${CONTENT}:hover, ${CONTENT} :hover`);
   const style = document.createElement('style');
-  style.textContent = `::highlight(${HIGHLIGHT}) { color: LinkText; text-decoration: underline; }`;
+  style.textContent = STYLE;
   document.head.append(style);
-  const registry = window.CSS?.highlights;
-  const highlight =
-    registry && typeof window.Highlight === 'function' ? new window.Highlight() : null;
-  if (highlight) registry?.set(HIGHLIGHT, highlight);
+  const highlight = new window.Highlight();
+  registry.set(HIGHLIGHT, highlight);
+  const underlines = createCommentLinkUnderlines(document);
 
   const ranges = new Map<Element, readonly TextLinkRange[]>();
   let press: { point: ClientPoint; content: Element; href: string } | null = null;
   let disposed = false;
+  let frame: number | null = null;
+  const resize = window.ResizeObserver ? new window.ResizeObserver(schedulePaint) : null;
 
   function current(): boolean {
     return (
@@ -87,9 +112,18 @@ export function installReaderCommentLinks(
     );
   }
 
+  function schedulePaint(): void {
+    if (frame !== null || !current()) return;
+    frame = window.requestAnimationFrame(() => {
+      frame = null;
+      if (current()) underlines.paint(window, ranges);
+    });
+  }
+
   function rebuild(): void {
     ranges.clear();
-    highlight?.clear();
+    highlight.clear();
+    resize?.disconnect();
     const contents = document.querySelectorAll(CONTENT);
     for (let index = 0; index < contents.length; index++) {
       const content = contents[index]!;
@@ -97,9 +131,11 @@ export function installReaderCommentLinks(
       const links = textLinkRanges(content, 'comment');
       if (!links.length) continue;
       ranges.set(content, links);
-      for (const { range } of links) highlight?.add(range);
+      resize?.observe(content);
+      for (const { range } of links) highlight.add(range);
     }
     cursor.show(false);
+    schedulePaint();
   }
 
   const observer = new window.MutationObserver((records) => {
@@ -188,12 +224,19 @@ export function installReaderCommentLinks(
     cursor.show(false);
   }
 
+  function layoutChanged(): void {
+    reset();
+    schedulePaint();
+  }
+
   window.addEventListener('pointerdown', down, true);
   window.addEventListener('pointermove', move, true);
   window.addEventListener('click', click, true);
   window.addEventListener('pointercancel', reset, true);
   window.addEventListener('dragstart', reset, true);
-  window.addEventListener('scroll', reset, true);
+  window.addEventListener('scroll', layoutChanged, true);
+  window.addEventListener('resize', layoutChanged);
+  document.addEventListener('visibilitychange', schedulePaint);
   window.addEventListener('blur', reset);
   root.addEventListener('pointerleave', reset);
   return () => {
@@ -207,11 +250,16 @@ export function installReaderCommentLinks(
     window.removeEventListener('click', click, true);
     window.removeEventListener('pointercancel', reset, true);
     window.removeEventListener('dragstart', reset, true);
-    window.removeEventListener('scroll', reset, true);
+    window.removeEventListener('scroll', layoutChanged, true);
+    window.removeEventListener('resize', layoutChanged);
+    document.removeEventListener('visibilitychange', schedulePaint);
     window.removeEventListener('blur', reset);
     root.removeEventListener('pointerleave', reset);
     observer.disconnect();
-    if (highlight && registry?.get(HIGHLIGHT) === highlight) registry.delete(HIGHLIGHT);
+    resize?.disconnect();
+    if (frame !== null) window.cancelAnimationFrame(frame);
+    if (registry.get(HIGHLIGHT) === highlight) registry.delete(HIGHLIGHT);
+    underlines.dispose();
     style.remove();
     cursor.dispose();
   };
