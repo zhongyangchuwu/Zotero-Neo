@@ -58,6 +58,7 @@ import { createTagModule, type TagModule } from '../modules/tags';
 import { createWorksetsModule, type WorksetsModule } from '../modules/worksets';
 import { createLibraryModule, type LibraryModule } from '../modules/library';
 import { createNotesModule, type NotesModule } from '../modules/notes';
+import { createNoteLinkLifecycle } from '../modules/content-links/note-lifecycle';
 import { createWorkspaceModule, type WorkspaceModule } from '../modules/workspace';
 import {
   createDocumentPreparationModule,
@@ -541,6 +542,10 @@ export class MainWindowController implements MainWindowControllerApi {
       }
       session.cleanup.add(() => target.removeEventListener(type, listener, capture));
     };
+    const noteLinks = createNoteLinkLifecycle(window, (error) =>
+      reportDiagnosticError(this.#dependencies.logger, 'Note links failed', error),
+    );
+    session.cleanup.add(() => noteLinks.dispose());
     try {
       this.attachModules(window, session);
       if (!isCurrent()) return;
@@ -602,6 +607,8 @@ export class MainWindowController implements MainWindowControllerApi {
             );
           readerScanFailed = true;
         }
+        if (!isCurrent()) return;
+        noteLinks.sync();
         if (!isCurrent()) return;
         this.#noteEditor.sync(
           window,

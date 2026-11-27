@@ -1,5 +1,7 @@
 export { ReaderHostKeyBridge } from './input-bridge';
 export { ReaderViewLifecycle } from './view-lifecycle';
+export { observeReaderOutline } from './outline-follow';
+export { installReaderCommentLinks } from './comment-links';
 export { ReaderJumpHostAdapter } from './jump-host';
 export { ReaderJumpHistoryBridge } from './history-bridge';
 export type {

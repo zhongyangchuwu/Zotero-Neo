@@ -92,6 +92,8 @@ import {
   type ReaderAnnotationsModule,
 } from '../modules/reader-annotations';
 import { isReaderAnnotationAction } from '../modules/reader-annotations/actions';
+import { mountReaderOutline } from '../modules/reader-outline';
+import { mountReaderCommentLinks } from '../modules/content-links';
 import {
   createReaderWorkspaceModule,
   type ReaderWorkspaceModule,
@@ -106,6 +108,7 @@ import {
 } from '../toolkit/reader';
 import {
   mainItemOpening,
+  openSafeURI,
   openMainNote,
   selectedMainTabInfo,
   ReaderHostKeyBridge,
@@ -1526,6 +1529,22 @@ export class ReaderSession {
     this.#viewLifecycle.start();
     this.installOuterReaderListeners();
     this.#startNavigation();
+    const reader = this.#dependencies.reader;
+    const logger = this.#dependencies.controller.dependencies.logger;
+    const outlineError = (error: unknown): void =>
+      reportDiagnosticError(logger, 'Reader outline follow failed', error);
+    try {
+      this.#scope.add(mountReaderOutline(reader, outlineError));
+    } catch (error) {
+      outlineError(error);
+    }
+    try {
+      this.#scope.add(
+        mountReaderCommentLinks(reader, (uri) => openSafeURI(uri, readerMainWindow(reader))),
+      );
+    } catch (error) {
+      reportDiagnosticError(logger, 'Reader comment links failed', error);
+    }
   }
 
   /** Retires all owners once, preserving the first live cleanup failure for the caller. */
