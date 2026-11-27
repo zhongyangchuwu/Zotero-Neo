@@ -939,12 +939,16 @@ function likelyNoteWindow(
 
 /** Note editor discovery is host structure; bindings and modes remain business-owned. */
 export function mainNoteEditorWindow(main: MainWindow): Window | null {
-  const focused = Services.focus?.focusedWindow as unknown as Window | null;
   const frames = Array.from(
-    main.document.querySelectorAll('browser,iframe'),
+    main.document.querySelectorAll?.('browser,iframe') ?? [],
   ) as HTMLIFrameElement[];
   const contextFrame = activeContextNoteEditor(main)?._iframe;
   if (contextFrame && !frames.includes(contextFrame)) frames.push(contextFrame);
+  if (!frames.length) return null;
+  const focused =
+    typeof Services === 'undefined'
+      ? null
+      : (Services.focus?.focusedWindow as unknown as Window | null);
   let first: Window | null = null;
   for (const frame of frames) {
     if (frame.ownerDocument !== main.document || !frame.isConnected) continue;

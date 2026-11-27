@@ -1,5 +1,6 @@
 /** Main host capabilities. Native pane/tree/tab/editor objects remain internal. */
 export { registerMetadataReviewMenu } from './metadata-menu';
+export { installNoteLinks } from './note-links';
 export {
   selectedMainTabID,
   selectedMainTabInfo,
