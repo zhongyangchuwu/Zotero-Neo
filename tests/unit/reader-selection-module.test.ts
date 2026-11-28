@@ -6,18 +6,10 @@ import {
 } from '../../src/modules/reader-selection';
 import type { PdfWindow, ReaderMode } from '../../src/reader/types';
 import type { ReaderRuntime } from '../fixtures/reader-native-types';
-import { LOCAL_RULES_KEY, LocalRuleConfigurationError } from '../../src/document-analysis/settings';
-
-const documents = vi.hoisted(() => ({ cache: vi.fn(), native: vi.fn() }));
-vi.mock('../../src/reader/document-cache', () => ({
-  readReaderDocumentCache: documents.cache,
-  readReaderDocument: async () => null,
-  readNativeReaderDocument: documents.native,
-}));
+import type { DocumentRegion } from '../../src/document-analysis/contracts';
+import { textAdmissionFixture } from '../fixtures/reader-text-admission';
 
 beforeEach(() => {
-  documents.cache.mockReset();
-  documents.native.mockReset().mockResolvedValue(null);
   vi.stubGlobal('Components', {
     utils: { isDeadWrapper: () => false, cloneInto: <T>(value: T): T => value },
   });
@@ -27,7 +19,7 @@ afterEach(() => {
   vi.useRealTimers();
 });
 
-function selectionModule() {
+function selectionModule(source?: PdfWindow) {
   let mode: ReaderMode = 'visual';
   let current = true;
   const copied: string[] = [];
@@ -37,11 +29,13 @@ function selectionModule() {
     toString: () => 'Cafe\u0301\n selected',
     removeAllRanges: vi.fn(),
   };
-  const window = {
-    document: {},
-    getSelection: () => selection,
-    focus: vi.fn(),
-  } as unknown as PdfWindow;
+  const window =
+    source ??
+    ({
+      document: {},
+      getSelection: () => selection,
+      focus: vi.fn(),
+    } as unknown as PdfWindow);
   const input = { value: 'old query', dispatchEvent: vi.fn() };
   const findState = { primaryViewFindState: { popupOpen: false, query: 'old query' } };
   const openSearch = vi.fn(() => {
@@ -63,20 +57,14 @@ function selectionModule() {
     },
   } as unknown as ReaderRuntime;
   const host = new ModuleHost({ debug: vi.fn(), diagnostic: vi.fn() }, () => true);
-  const preferenceListeners = new Map<string, Set<() => void>>();
+  const layout = {
+    ensureVisible: vi.fn(async () => {}),
+    visibleRegions: vi.fn<() => readonly DocumentRegion[]>(() => []),
+    isCurrent: vi.fn(() => true),
+  };
   const ports: ReaderSelectionModulePorts = {
     reader,
-    preferences: {
-      get: (_key: string, fallback: unknown) => fallback,
-      observe: (key: string, listener: () => void) => {
-        const listeners = preferenceListeners.get(key) ?? new Set<() => void>();
-        listeners.add(listener);
-        preferenceListeners.set(key, listeners);
-        return () => {
-          listeners.delete(listener);
-        };
-      },
-    } as ReaderSelectionModulePorts['preferences'],
+    layout,
     activeWindow: () => window,
     isViewCurrent: () => current,
     capturePresentation: () => () => current,
@@ -104,7 +92,7 @@ function selectionModule() {
   return {
     module,
     host,
-    preferenceListeners,
+    layout,
     ports,
     window,
     copied,
@@ -120,45 +108,61 @@ function selectionModule() {
 }
 
 describe('Reader selection module isolation', () => {
-  it('reports invalid profile configuration instead of silently using native body geometry', async () => {
-    vi.useFakeTimers();
+  it('refreshes visible layout only while body selection is enabled', async () => {
     const fixture = selectionModule();
     fixture.ports.setMode('normal');
-    documents.cache.mockRejectedValueOnce(
-      new LocalRuleConfigurationError('Invalid local rule profile'),
-    );
+    fixture.module.refreshLayout(fixture.window);
+    expect(fixture.layout.ensureVisible).not.toHaveBeenCalled();
+    expect(fixture.module.executeAction('toggleBodySelection', fixture.window)).toBe(true);
+    expect(fixture.layout.ensureVisible).toHaveBeenCalledWith(fixture.window);
+    await Promise.resolve();
+    fixture.module.refreshLayout(fixture.window);
+    expect(fixture.layout.ensureVisible).toHaveBeenCalledTimes(2);
     fixture.module.executeAction('toggleBodySelection', fixture.window);
-    await vi.advanceTimersByTimeAsync(0);
-    expect(fixture.ports.debug).toHaveBeenCalledWith(
-      expect.stringContaining('Invalid local rule profile'),
-    );
-    expect(documents.native).not.toHaveBeenCalled();
-    expect(fixture.ports.showStatus).toHaveBeenCalledTimes(2);
+    fixture.module.refreshLayout(fixture.window);
+    expect(fixture.layout.ensureVisible).toHaveBeenCalledTimes(2);
     fixture.host.dispose();
   });
 
-  it('retires pending body selection on a profile edit and releases its observer with the module', async () => {
-    vi.useFakeTimers();
-    const fixture = selectionModule();
-    fixture.ports.setMode('normal');
-    const gate = Promise.withResolvers<unknown>();
-    documents.cache.mockReturnValueOnce(gate.promise);
-    fixture.module.executeAction('toggleBodySelection', fixture.window);
-    expect(documents.cache).toHaveBeenCalledOnce();
-    expect(fixture.ports.showStatus).toHaveBeenCalledOnce();
-    for (const listener of fixture.preferenceListeners.get(LOCAL_RULES_KEY) ?? []) listener();
-    const notices = vi.mocked(fixture.ports.showStatus).mock.calls.length;
-    gate.resolve({
-      parsed: { regions: [] },
-      isCurrent: async () => true,
-    });
-    await vi.advanceTimersByTimeAsync(0);
-    expect(fixture.ports.updateIndicator).toHaveBeenCalled();
-    expect(vi.mocked(fixture.ports.showStatus).mock.calls).toHaveLength(notices);
+  it('uses the native paragraph or token extension path immediately on a cold cache', () => {
+    const source = textAdmissionFixture();
+    const fixture = selectionModule(source.window);
+    const modify = vi.spyOn(fixture.module.range, 'modify').mockImplementation(() => {});
+    expect(fixture.module.executeAction('extendSentenceForward', fixture.window)).toBe(true);
+    expect(modify).toHaveBeenCalledWith(fixture.window, 'forward', 'sentence', null);
+    expect(fixture.layout.ensureVisible).not.toHaveBeenCalled();
     fixture.host.dispose();
-    expect(
-      [...fixture.preferenceListeners.values()].every((listeners) => listeners.size === 0),
-    ).toBe(true);
+  });
+
+  it('does not copy a filtered selection from a stale PDF source', async () => {
+    const source = textAdmissionFixture();
+    const fixture = selectionModule(source.window);
+    fixture.layout.visibleRegions.mockReturnValue([
+      {
+        id: 'chart',
+        pageIndex: 0,
+        rect: [95, 765, 155, 785],
+        kind: 'image',
+        text: '',
+        format: 'text',
+        flow: 'auxiliary',
+        anchorPrecision: 'region',
+      },
+    ]);
+    fixture.ports.setMode('normal');
+    fixture.module.executeAction('toggleBodySelection', fixture.window);
+    await Promise.resolve();
+    expect(source.elements[1]!.getAttribute('data-zv-text-excluded')).not.toBeNull();
+    fixture.ports.setMode('visual');
+    source.document.documentElement.setAttribute('data-zv-select-active', '');
+    fixture.layout.isCurrent.mockReturnValue(false);
+    vi.useFakeTimers();
+    expect(fixture.module.executeAction('copySelection', fixture.window)).toBe(true);
+    await vi.advanceTimersByTimeAsync(0);
+    expect(fixture.copied).toEqual([]);
+    expect(fixture.mode()).toBe('visual');
+    expect(source.elements[1]!.getAttribute('data-zv-text-excluded')).toBeNull();
+    fixture.host.dispose();
   });
 
   it('keeps a DOM-free selection snapshot but stops reading or copying after retirement', () => {

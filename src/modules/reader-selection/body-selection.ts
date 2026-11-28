@@ -1,46 +1,49 @@
-import {
-  readNativeReaderDocument,
-  type ReaderCachedDocument,
-  type ReaderDocumentSnapshot,
-} from '../../reader/document-cache';
+import { CleanupFailure } from '../../core/cleanup';
+import type { DocumentRegion } from '../../document-analysis/contracts';
+import type { ReaderLocalLayout } from '../../reader/local-layout';
+import type { PdfWindow } from '../../reader/types';
 import {
   leaseReaderTextAdmission,
+  projectReadingViewport,
   readerReadingMode,
+  readerTextNodeAllowed,
   readerTextSpans,
-  type ReaderRuntime,
-  type ReaderTextSourceLocation,
+  type ReaderReadingViewport,
 } from '../../toolkit/reader';
-import { CleanupFailure } from '../../core/cleanup';
-import { LocalRuleConfigurationError } from '../../document-analysis/settings';
-import { bodyTextAdmission } from './body-text';
+import { bodyTextAdmission, isBodyExclusion } from './body-text';
+
+export type SelectionLayout = Pick<
+  ReaderLocalLayout,
+  'ensureVisible' | 'visibleRegions' | 'isCurrent'
+>;
 
 export interface BodySelectionHost {
-  readonly reader: ReaderRuntime;
-  readonly readCache?: () => Promise<ReaderCachedDocument | null>;
+  readonly layout: SelectionLayout;
   readonly isCurrent: () => boolean;
-  readonly capturePresentation: (window: Window) => () => boolean;
-  readonly captureView: (window: Window) => () => boolean;
+  readonly capturePresentation: (window: PdfWindow) => () => boolean;
+  readonly captureView: (window: PdfWindow) => () => boolean;
   readonly showStatus: (message: string) => void;
   readonly text: (key: string) => string;
   readonly debug: (message: string) => void;
   readonly onChange?: () => void;
 }
 
-interface BodyLayout {
-  readonly isCurrent: () => Promise<boolean>;
-  readonly accepts: (source: ReaderTextSourceLocation) => boolean;
-  readonly cached: boolean;
+interface BodyView {
+  readonly current: () => boolean;
+  regions?: readonly DocumentRegion[];
+  dispose?: () => void;
+  reading?: ReaderReadingViewport;
+  publishedReading?: ReaderReadingViewport;
+  preparing?: Promise<void>;
 }
 
 /** A Reader-session switch owns source preparation and exact-view leases; native mouse selection is unchanged. */
 export class ReaderBodySelection {
   readonly #host: BodySelectionHost;
-  readonly #views = new Map<Window, { current: () => boolean; dispose: () => void }>();
-  readonly #layouts = new Map<boolean, BodyLayout>();
-  readonly #loading = new Map<boolean, Promise<BodyLayout>>();
-  #native: Promise<ReaderDocumentSnapshot | null> | null = null;
+  readonly #views = new Map<PdfWindow, BodyView>();
   #enabled = false;
   #pending = false;
+  #refreshPending = false;
   #disposed = false;
   #revision = 0;
 
@@ -48,10 +51,10 @@ export class ReaderBodySelection {
     this.#host = host;
   }
 
-  async toggle(window: Window): Promise<void> {
+  async toggle(window: PdfWindow): Promise<void> {
     if (this.#disposed || !this.#host.isCurrent()) return;
     if (this.#enabled || this.#pending) {
-      this.invalidate();
+      this.#reset();
       this.#host.showStatus(this.#host.text('all'));
       return;
     }
@@ -60,81 +63,73 @@ export class ReaderBodySelection {
     this.#pending = true;
     this.#host.showStatus(this.#host.text('preparing'));
     try {
-      const layout = await this.#load(readerReadingMode(window));
-      if (!this.#current(revision) || !current()) return;
-      if (!(await layout.isCurrent())) throw new Error('Document source changed');
-      if (!this.#current(revision) || !current()) return;
+      const reflow = readerReadingMode(window);
+      const reading = reflow ? projectReadingViewport(window) : undefined;
+      const hasPages = !reflow || !!reading?.pages.length;
+      if (hasPages) {
+        if (reading) await this.#host.layout.ensureVisible(window, reading.pages);
+        else await this.#host.layout.ensureVisible(window);
+        if (!this.#current(revision) || !current()) return;
+        if (!this.#host.layout.isCurrent()) throw new Error('Document source changed');
+      }
       this.#enabled = true;
-      this.bind(window);
-      this.#host.showStatus(this.#host.text(layout.cached ? 'cached' : 'body'));
+      const view = this.#view(window);
+      if (view) {
+        view.reading = reading;
+        this.#publish(window, view);
+      }
+      if (this.#refreshPending) this.refreshLayout(window);
+      this.#host.onChange?.();
+      this.#host.showStatus(this.#host.text(hasPages ? 'body' : 'unavailable'));
     } catch (error) {
-      if (this.#current(revision) && current()) this.#unavailable(error);
+      if (this.#current(revision) && current()) {
+        this.#reset();
+        this.#unavailable(error);
+      }
     } finally {
-      if (revision === this.#revision) this.#pending = false;
+      if (revision === this.#revision) this.#pending = this.#refreshPending = false;
     }
   }
 
-  /** A newly displayed Reading Mode obtains its own native block mapping; PDF never waits for SDT on a cache hit. */
-  bind(window: Window): void {
-    if (!this.#enabled || this.#disposed || !this.#host.isCurrent()) return;
-    const old = this.#views.get(window);
-    if (old?.current()) return;
-    old?.dispose();
-    const current = this.#host.captureView(window);
-    if (!current()) return;
-    const reading = readerReadingMode(window);
-    const layout = this.#layouts.get(reading);
-    if (!layout) {
-      const revision = this.#revision;
-      if (this.#loading.has(reading)) return;
-      this.#host.showStatus(this.#host.text('preparing'));
-      void this.#load(reading)
-        .then(async (prepared) => {
-          if (!this.#current(revision) || !this.#enabled || !current()) return;
-          if (!(await prepared.isCurrent())) throw new Error('Document source changed');
-          if (!this.#current(revision) || !this.#enabled || !current()) return;
-          this.bind(window);
-          this.#host.showStatus(this.#host.text(prepared.cached ? 'cached' : 'body'));
-        })
-        .catch((error: unknown) => {
-          if (this.#current(revision) && current()) this.#unavailable(error);
-        });
+  refreshLayout(window: PdfWindow): void {
+    if (this.#disposed || !this.#host.isCurrent()) return;
+    if (!this.#enabled) {
+      if (this.#pending) this.#refreshPending = true;
       return;
     }
-    const revision = this.#revision;
-    const live = (): boolean => this.#current(revision) && this.#enabled && current();
-    const dispose = leaseReaderTextAdmission(window, layout.accepts, live, async () => {
-      if (!live()) return false;
-      const valid = await layout.isCurrent();
-      if (!valid && this.#current(revision))
-        this.#unavailable(new Error('Document source changed'));
-      return valid && live();
-    });
-    this.#views.set(window, { current: live, dispose });
-    readerTextSpans(window);
-    this.#host.onChange?.();
-  }
-
-  /** Replacing the cache/service retires policy synchronously; the next explicit toggle prepares fresh data. */
-  invalidate(): void {
-    this.#revision++;
-    this.#enabled = this.#pending = false;
-    this.#layouts.clear();
-    this.#loading.clear();
-    this.#native = null;
-    this.#releaseViews();
-    if (!this.#disposed) this.#host.onChange?.();
+    const view = this.#view(window);
+    if (!view) return;
+    const reflow = readerReadingMode(window);
+    view.reading = reflow ? projectReadingViewport(window, view.reading) : undefined;
+    this.#publish(window, view);
+    if (reflow && !view.reading?.pages.length) return;
+    const layout = this.#host.layout;
+    const prepared = view.reading
+      ? layout.ensureVisible(window, view.reading.pages)
+      : layout.ensureVisible(window);
+    if (view.preparing === prepared) return;
+    view.preparing = prepared;
+    void prepared
+      .then(() => {
+        if (view.current() && view.preparing === prepared) this.#publish(window, view);
+      })
+      .catch((error: unknown) => {
+        if (view.current() && view.preparing === prepared) this.#unavailable(error);
+      })
+      .finally(() => {
+        if (view.preparing === prepared) view.preparing = undefined;
+      });
   }
 
   dispose(): void {
     this.#disposed = true;
-    this.invalidate();
+    this.#reset();
   }
 
-  releaseView(window: Window): void {
+  releaseView(window: PdfWindow): void {
     const view = this.#views.get(window);
     this.#views.delete(window);
-    view?.dispose();
+    view?.dispose?.();
   }
 
   #current(revision: number): boolean {
@@ -142,62 +137,84 @@ export class ReaderBodySelection {
   }
 
   #unavailable(error: unknown): void {
-    this.invalidate();
     this.#host.showStatus(this.#host.text('unavailable'));
     this.#host.debug(`body selection unavailable: ${String(error)}`);
   }
 
-  #releaseViews(): void {
+  #reset(): void {
+    this.#revision++;
+    this.#enabled = this.#pending = this.#refreshPending = false;
     const views = [...this.#views.values()];
     this.#views.clear();
     const failure = new CleanupFailure();
-    for (const view of views) failure.run(view.dispose);
+    for (const view of views) failure.run(() => view.dispose?.());
+    if (!this.#disposed) failure.run(() => this.#host.onChange?.());
     failure.rethrow();
   }
 
-  #load(reading: boolean): Promise<BodyLayout> {
-    const prepared = this.#layouts.get(reading);
-    if (prepared) return Promise.resolve(prepared);
-    const pending = this.#loading.get(reading);
-    if (pending) return pending;
+  #view(window: PdfWindow): BodyView | null {
+    const old = this.#views.get(window);
+    if (old?.current()) return old;
+    if (old) this.releaseView(window);
     const revision = this.#revision;
-    const current = (): boolean => this.#current(revision);
-    const task = (async (): Promise<BodyLayout> => {
-      if (!this.#host.reader.itemID) throw new Error('No PDF attachment');
-      let cached: ReaderCachedDocument | null = null;
-      try {
-        cached = (await this.#host.readCache?.()) ?? null;
-      } catch (error) {
-        if (error instanceof LocalRuleConfigurationError) throw error;
-        if (current()) this.#host.debug('Body cache unavailable; using native layout');
+    const current = this.#host.captureView(window);
+    if (!current()) return null;
+    const view: BodyView = {
+      current: () =>
+        this.#views.get(window) === view && this.#current(revision) && this.#enabled && current(),
+    };
+    this.#views.set(window, view);
+    return view;
+  }
+
+  #publish(window: PdfWindow, view: BodyView): void {
+    const { layout } = this.#host;
+    const reading = view.reading;
+    const regions = layout.visibleRegions(window, reading?.pages);
+    if (regions === view.regions && view.publishedReading === reading) return;
+    view.dispose?.();
+    view.dispose = undefined;
+    view.regions = regions;
+    view.publishedReading = reading;
+    if (!regions.some(isBodyExclusion)) return;
+    const acceptsGeometry = bodyTextAdmission(regions);
+    const excluded = reading ? new Map<string, boolean>() : null;
+    if (reading && excluded) {
+      for (const blocks of reading.blocks.values()) {
+        for (const { id, position } of blocks) {
+          excluded.set(
+            id,
+            excluded.get(id) !== false &&
+              !!position?.rects.length &&
+              position.rects.every(
+                (rect) =>
+                  !acceptsGeometry({ pageIndex: position.pageIndex, rect, sourceBlockId: null }),
+              ),
+          );
+        }
       }
-      if (!current()) throw new Error('Body selection retired');
-      // Reading Mode exposes native ref paths, not cloud IDs. Map only complete
-      // native source fragments; never interpret an OCR region as a character anchor.
-      let native: ReaderDocumentSnapshot | null = null;
-      if (reading || !cached) {
-        this.#native ??= readNativeReaderDocument(this.#host.reader, current);
-        native = await this.#native;
-        if (!current() || !native) throw new Error('Native layout unavailable');
-        if (cached && cached.parsed.sourceFingerprint !== native.parsed.sourceFingerprint)
-          throw new Error('Native layout belongs to another PDF revision');
-      }
-      const isCurrent = cached?.isCurrent ?? native!.isCurrent;
-      const layout: BodyLayout = {
-        isCurrent,
-        cached: !!cached,
-        accepts: bodyTextAdmission(
-          cached?.parsed.regions ?? native!.textRegions,
-          native?.textRegions ?? [],
-        ),
-      };
-      if (!current()) throw new Error('Body selection retired');
-      this.#layouts.set(reading, layout);
-      return layout;
-    })().finally(() => {
-      if (this.#loading.get(reading) === task) this.#loading.delete(reading);
-    });
-    this.#loading.set(reading, task);
-    return task;
+      for (const [id, reject] of excluded) if (!reject) excluded.delete(id);
+      if (!excluded.size) return;
+    }
+    view.dispose = leaseReaderTextAdmission(
+      window,
+      excluded ? (source) => !excluded.has(source.sourceBlockId ?? '') : acceptsGeometry,
+      view.current,
+      async () => {
+        const valid =
+          view.current() &&
+          layout.isCurrent() &&
+          view.reading === reading &&
+          (!reading || reading.isCurrent()) &&
+          layout.visibleRegions(window, reading?.pages) === regions;
+        if (!valid && view.regions === regions) view.regions = undefined;
+        return valid;
+      },
+    );
+    if (reading && excluded) {
+      for (const blocks of reading.blocks.values())
+        for (const { id, nodes } of blocks)
+          if (excluded.has(id)) for (const node of nodes) readerTextNodeAllowed(window, node);
+    } else readerTextSpans(window, new Set(regions.map((region) => region.pageIndex)));
   }
 }

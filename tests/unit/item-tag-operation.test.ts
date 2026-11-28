@@ -83,31 +83,6 @@ describe('semantic multi-target tag action', () => {
     expect(second.saves).toHaveBeenCalledTimes(2);
   });
 
-  it.each([0, 1])(
-    'preserves managed identities of type %i without blocking ordinary automatic tags',
-    async (type) => {
-      const identity = 'urn:zotero-neo:chapter-note:v1:' + 'f'.repeat(32);
-      const owner = tagItem(7, {
-        tags: [
-          { tag: identity, type },
-          { tag: 'topic', type: 1 },
-        ],
-      });
-      const other = tagItem(8);
-      const { request } = installHost([owner, other]);
-      const before = owner.getTags();
-
-      await expect(setItemTag([owner, other], ` ${identity} `, false, request)).rejects.toThrow();
-      await expect(setItemTag([owner, other], identity, true, request)).rejects.toThrow();
-      expect(owner.getTags()).toEqual(before);
-      expect(other.hasTag(identity)).toBe(false);
-
-      await expect(setItemTag([owner], 'topic', false, request)).resolves.toEqual({ done: 1 });
-      expect(owner.hasTag('topic')).toBe(false);
-      expect(owner.getTagType(identity)).toBe(type);
-    },
-  );
-
   it.each([true, false])(
     'restores only the failed item and continues the batch when assigning = %s',
     async (present) => {

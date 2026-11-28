@@ -1,4 +1,4 @@
-export type ArtifactKind = 'metadata-review' | 'document-corrections';
+export type ArtifactKind = 'metadata-review';
 export interface ArtifactSource {
   readonly attachmentKey: string;
   readonly contentHash: { readonly algorithm: 'md5' | 'sha256'; readonly value: string };

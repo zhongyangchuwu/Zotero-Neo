@@ -58,11 +58,9 @@ function NumberField({
 }
 
 function CredentialField({
-  provider,
   model,
   dispatch,
 }: {
-  provider: 'mineru' | 'semanticScholar';
   model: ReaderCredentialModel;
   dispatch: Dispatch;
 }) {
@@ -70,7 +68,7 @@ function CredentialField({
   const composing = React.useRef(false);
   React.useLayoutEffect(() => {
     const element = input.current;
-    dispatch({ type: 'mountCredential', provider });
+    dispatch({ type: 'mountCredential' });
     return () => {
       if (element) element.value = '';
     };
@@ -83,20 +81,20 @@ function CredentialField({
         <span>{model.inputLabel}</span>
         <input
           ref={input}
-          data-neo-ui-part={`credential-${provider}`}
+          data-neo-ui-part="credential-semanticScholar"
           type="password"
           autoComplete="off"
           onCompositionStart={() => {
             composing.current = true;
-            dispatch({ type: 'credentialEditing', provider });
+            dispatch({ type: 'credentialEditing' });
           }}
           onCompositionEnd={() => {
             composing.current = false;
-            dispatch({ type: 'credentialInput', provider });
+            dispatch({ type: 'credentialInput' });
           }}
           onInput={(event) => {
             if (composing.current || (event.nativeEvent as InputEvent).isComposing) return;
-            dispatch({ type: 'credentialInput', provider });
+            dispatch({ type: 'credentialInput' });
           }}
         />
       </label>
@@ -106,7 +104,7 @@ function CredentialField({
           disabled={model.checking}
           onClick={() => {
             if (composing.current) return;
-            dispatch({ type: 'verifyCredential', provider });
+            dispatch({ type: 'verifyCredential' });
           }}
         >
           {model.verifyLabel}
@@ -115,7 +113,7 @@ function CredentialField({
           href={model.helpURL}
           onClick={(event) => {
             event.preventDefault();
-            dispatch({ type: 'credentialHelp', provider });
+            dispatch({ type: 'credentialHelp' });
           }}
         >
           {model.helpLabel}
@@ -218,12 +216,7 @@ export function ReaderPage({ model, dispatch }: { model: ReaderPageModel; dispat
       <p role="status" aria-live="polite" className="neo-reader-error">
         {model.status}
       </p>
-      <CredentialField provider="mineru" model={model.mineru} dispatch={dispatch} />
-      <CredentialField
-        provider="semanticScholar"
-        model={model.semanticScholar}
-        dispatch={dispatch}
-      />
+      <CredentialField model={model.semanticScholar} dispatch={dispatch} />
     </div>
   );
 }

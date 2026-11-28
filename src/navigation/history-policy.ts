@@ -50,7 +50,6 @@ const EVENT_RULES: Readonly<Record<NavigationEventId, Rule>> = {
   'reader-mark.jump': (intent) => (isReaderPath(intent, 'mark') ? MANAGED_FINAL : IGNORE),
   'references.jump': (intent) => (isReaderPath(intent, 'internal-link') ? NATIVE_HARD : IGNORE),
   'references.open-local': (intent) => (intent.surface === 'reader' ? SETTLED_CHANGE : IGNORE),
-  'reader-excerpts.open-note': (intent) => (intent.surface === 'reader' ? SETTLED_CHANGE : IGNORE),
   'reader-native.hard': (intent) => (intent.surface === 'reader' ? NATIVE_HARD : IGNORE),
 };
 

@@ -14,7 +14,7 @@ npm ci
 
 两种 XPI 构建入口都会调用 `npm run verify`，依次检查 Prettier、严格 TypeScript、Vitest、包构建与 XPI 成员。
 
-固定 PDF 的来源清单、原生捕获命令、逐核验点评分和冷／暖耗时见[解析质量评测](internal/QUALITY_EVALUATION.md)。评测分别记录解析正确率和实际任务成功率；契约测试、缓存命中与处理完成不能代替这两项结果。
+固定 PDF 的来源清单和历次核验记录见[解析质量评测](internal/QUALITY_EVALUATION.md)。其中旧解析器、云端、缓存及捕获命令是历史证据，不能据此推断当前实现或工具仍可运行。评测分别记录解析正确率和实际任务成功率；处理完成不能代替这两项结果。
 
 ## 构建
 
@@ -211,87 +211,23 @@ Zotero 管理 Items、视图、标签页、Notes 和 Reader 状态。功能负�
 
 这些项目仅作公开文档和源码调研，未安装试用，也未复制其代码。来源字段和版本日期可能不同；不能因多个服务聚合了同一条记录，就把它们当作独立权威证明。
 
-按位置定位的章节和图表跳转显式采用原生 `behavior: 'instant'`：宿主 `navigate()` 的 Promise 不等待相邻页平滑滚动完成，不能据此认为已到达目标。连续 `j/k` 滚动仍沿用原有平滑滚动策略。
+按位置定位的标题和图表跳转显式采用原生 `behavior: 'instant'`：宿主 `navigate()` 的 Promise 不等待相邻页平滑滚动完成，不能据此认为已到达目标。连续 `j/k` 滚动仍沿用原有平滑滚动策略。
 
-`readerRegionPreview()` 默认保留成员遮罩，用于精确区域；图表列表和对象摘录显式传入第四参数 `'bounds'`，保留每页整组外框的连续原图。两种方式都先校验全部原始成员并通过 PDF viewport 变换，沿用来源退休、取消、显示图层与像素上限；连续截图只分配一张画布。截图不改变成员位置、正文排除或解析缓存身份。对象笔记的内容身份包含截图表示版本，避免新表示复用旧遮罩图片，同时保留旧笔记。
+### 本地规则内核
 
-### 本地规则内核与配置
+`src/document-analysis/local-rules/` 是纯 TypeScript 内核：输入未旋转 PDF 用户坐标中的页面文字与绘图几何，返回纯数据区域；不读取 Zotero、DOM、偏好或磁盘。题注识别、正文阻隔、组件连接、图表关联和段落构建使用固定默认规则，保留无歧义证据要求，不按论文或题号特判。对外的 TypeScript 入口和规则类型仍位于 `index.ts`；Reader 不再读取高级 JSON 规则偏好。
 
-`src/document-analysis/local-rules/` 是纯 TypeScript 模块。公开入口为 `index.ts`：接收未旋转 PDF 用户坐标中的 `LocalFigurePage[]`，返回纯数据区域；不读取 Zotero、DOM、偏好或磁盘。共享布局事实、题注识别、图形与表格证据、标签、组件连接、题注关联和段落构建各有负责方。段落构建接收明确的文字排除集合，不自行调用图表推断。
+`src/reader/local-layout.ts` 按 ReaderSession 管理页面和图表结果。首次图表导航筛查全文文字，仅对题注候选页读取绘图指令并执行本地规则；打开侧栏不启动扫描，图表路径不调用 Zotero 全文 SDT。正文选择只准备可见页；Reading Mode 复用已加载视图能明确映射到 PDF 的可见文本块，不启动全文解析。页面缓存有界，图表目标在会话内复用，Reader 关闭或插件停用时释放；不写入附件目录。来源或视图退休时，异步结果不能应用到后继视图。
 
-候选规则只提供自己的证据、文字成员或组件连接，不修改另一规则的内部集合；共享合并与归属仲裁处理重复和争用。题注／正文阻隔、坐标有效性及歧义退出始终生效，不是可任意关闭的规则。阶段顺序固定，不支持运行时脚本、任意排序或动态插件注册。宿主采集仍在 Toolkit，`local.ts` 负责解析器、来源与缓存适配；所有运行时代码继续静态打入 XPI。
-
-算法指令须同时有作者写出的 Algorithm 标题、重复编号步骤和对齐原生横线证据；面板组装后复用同一成员判据，保留共享定义，不把空框当主体。短居中题注可借最近原生分隔线确定表格搜索宽度，但仍须证明重复单元格和归属，不能借远处通栏页眉跨正文栏扩张。文字分轨优先匹配字号；局部数学脚标只在可连接的轨道间选择，不能被远处图轴标签夺走。
-
-图内普通文字先归属，再用固定的已证标签边界关联 `(a)`／`(b)` 子图说明，避免仅按裸绘图路径漏掉说明，或由先处理的子图说明向相邻面板扩张。同字号、相隔足够远的面板前缀可分开窄栏缝中的文字，后续换行仍受原字号、左对齐和行距约束。小型原生矢量字形／标签只在一个估计行距内关联唯一最近主体，使用实际绘制边界；`maxGapEm` 仍控制普通文字的横向邻接，不扩大所有图形的连通距离。表格框架的竖线可由在既有端点容差内对齐且连续覆盖的多段原生细线共同证明，断裂或错列的短线不能仅凭总包围框充当整列分隔线。
-
-`profile.ts` 定义输入 `LocalRuleOptions` 与解析后的不可变 `LocalRuleProfile`。先调用 `resolveLocalRuleProfile()`，再把同一个 profile 传给 `localFigureRegions()` 或 `localDocumentRegions()`；不要在逐页循环中重新解析配置。所有规则默认开启：
-
-| 配置 | 参数与默认值 | 控制的行为 |
-| --- | --- | --- |
-| `rules.unruledTables` | `enabled: true`、`minRows: 3`、`minColumns: 2` | 从重复单元格和稳定列识别少线／无框表。行列数须为至少 2 的整数。 |
-| `rules.graphicLabels` | `enabled: true`、`maxFontSizeEm: 1.4`、`maxGapEm: 0.8` | 文字标签归属和图内扩张；不会取消表格规则已证明的单元格归属。 |
-| `rules.ruledTables` | `enabled: true`、`endpointToleranceEm: 0.2` | 连接端点对齐、具有单元格证据的离散横线；关闭不等于隐藏所有表格。 |
-| `rules.compoundPanels` | `enabled: true`、`maxGapEm: 1.5`、`minOverlapRatio: 0.4`、`maxRepeatedGapRatio: 0.25` | 构建复合图的面板带。至少三个边缘对齐、尺寸相近且间隔一致的纵向面板，另允许间距不超过最短面板高度的指定比例；正文、题注阻隔和归属争用仍生效。两个比例范围均为 `(0, 1]`。 |
-| `association` | `maxDistanceLines: 5`、`minWidthEm: 3`、`minHeightEm: 2` | 限制题注关联距离及主体最小尺寸。 |
-
-`Em` 按该页估计的文字尺度计算，`Lines` 按估计行距计算，不是屏幕像素。其余数值参数必须为有限正数。未知键、错误类型和不支持的版本均会报错，不忽略拼写错误或静默换用默认规则。
-
-放宽参数不会取消正文／题注阻挡。标签扩张与正文排除共用边界约束，不能借较大留白吞入普通段落；换行标签也受所选字号上限约束。
-
-在 TypeScript 调用方通过公开入口使用配置和可选诊断：
-
-```ts
-import {
-  localDocumentRegions,
-  resolveLocalRuleProfile,
-  type LocalFigurePage,
-  type LocalRuleDiagnostic,
-  type LocalRuleOptions,
-} from './src/document-analysis/local-rules';
-
-export function inspectPages(pages: readonly LocalFigurePage[]) {
-  const options = {
-    version: 1,
-    rules: { unruledTables: { minRows: 4 } },
-  } satisfies LocalRuleOptions;
-  const profile = resolveLocalRuleProfile(options);
-  const diagnostics: LocalRuleDiagnostic[] = [];
-  const regions = localDocumentRegions(pages, profile, (event) => diagnostics.push(event));
-  return { regions, diagnostics };
-}
-```
-
-不传第三个参数时不收集诊断事件。事件中的 `ruleId`、`outcome`、`reason` 和可用的候选／题注引用用于解释候选、正文阻挡、缺少主体及关联争用；没有证据时不能从空结果伪造精确原因。诊断不写入区域缓存，也不作为解析策略的输入。
-
-实际 Reader 使用高级字符串偏好 `extensions.zotero-neo.documentAnalysis.local.rules`，值为上述输入配置的 JSON；空字符串表示默认组合。有效参数、启用规则及引擎／几何／规则修订进入规范化指纹，等价 JSON 的缓存身份相同。本地适配器代次为 4，当前引擎修订为 3、几何修订为 2；配置变化使在途和已展示结果退休，但普通读取仍不自动保存缓存。旧槽与绑定旧解析身份的纠错保留，不按区域 ID 强行迁移。
-
-#### 回放原生几何与规则消融
-
-`tools/replay-local-rules.mjs` 回放已有的原生几何，不下载 PDF、不调用 Zotero 或模型。输入目录内每篇为 `<documentId>.json`，含 `documentId`、`pdfSha256`、`sourceFingerprint` 和完整的 `pages`；每页含 `pageIndex`、`viewBox`、`text`、`graphics`。此捕获格式限定未旋转坐标，不能用显示截图或公开标注框代替输入证据。文件元数据须与语料清单一致；工具不重新读取 PDF 字节验证身份。
-
-先将 `GEOMETRY_C` 指向已有 C 集捕获目录，并选择尚不存在的输出路径。默认组合示例：
-
-```bash
-node tools/replay-local-rules.mjs \
-  --corpus evidence/document-quality/corpus-c.json \
-  --geometry "$GEOMETRY_C" \
-  --output /tmp/neo-local-default.json
-```
-
-可重复传入 `--corpus`、`--geometry`，合并不重叠的语料。`--profile <JSON文件>` 选择规则配置，`--diagnostics <新文件>` 保存决策事件；`--baseline <旧观测文件>` 可重复传入，逐文档比较完整区域与对象组，不能只比较通过数。工具记录输入／源码／bundle 哈希与实际配置；输出可直接交给现有 `quality:evaluate`。这里的耗时只含分组回放，不是完整解析或 Reader 延迟。
-
-指定 `--baseline` 后，每篇输入都必须有相同 PDF 哈希的旧观测；空或缺失的对照会报错。未指定时明确记录未比较，不把空对照列表视为输出相等。
-
-新增规则先说明适用证据、来源和参数单位，再增加真实行为正例、负例及必要的变换检查。按规则组合消融，分别检查误题注、错误合并、裁图边界与未关联原因；不按论文 ID、题号或 gold 框写分支。固定核验点全过不能代替额外对象审查或未见样本验证，质量口径见[解析质量评测](internal/QUALITY_EVALUATION.md)。
+历史本地规则回放和质量数据保留在评测记录中，不把旧工具链或旧缓存身份当作当前运行时契约。
 
 ### 模块基座与启动配置
 
 `src/core/module-host.ts` 提供按 MainWindow 或 ReaderSession 隔离的模块宿主及独立模块作用域。同步激活失败会释放部分资源并保留原错误；动作贡献按 `(BindingContext, ActionId)` 唯一登记，返回有类型的调用入口。退出先使全部回调失效，再完成其余释放，即使某次清理失败也不会中断其他模块。
 
-`src/modules/index.ts` 是包含 19 个模块的静态内置清单，启动校验 ID、依赖图和精确上下文贡献；可选增强为 `reader-hints`、`extensions` 和 `references`。
+`src/modules/index.ts` 是包含 13 个模块的静态内置清单，启动校验 ID、依赖图和精确上下文贡献；可选增强为 `reader-hints`、`extensions` 和 `references`。
 
-MainWindow 组合标签、扩展、分类、工作集、Library、Notes、Workspace、文档准备与配置迁移入口。ReaderSession 直接组合导航、章节查找、图表浏览、解析对照、选择、批注、对象摘录、章节笔记、文档准备、hints、引用增强、独立 Library citekey 贡献及 Workspace 分屏/焦点。各模块仅接收具名端口；Operations 与 Toolkit 保持各自负责方。
+MainWindow 组合标签、扩展、分类、工作集、Library、Notes、Workspace 和配置迁移入口。ReaderSession 组合导航、选择、批注、hints、引用增强、独立 Library citekey 贡献及 Workspace 分屏/焦点。各模块仅接收具名端口；Operations 与 Toolkit 保持各自负责方。
 
 `src/core/module-runtime.ts` 根据三项可选请求应用增强；`reader-hints`、`extensions` 与 `references` 默认开启。`src/platform/module-startup.ts` 在 Zotero 应用对象上保留请求的 JSON 快照，因此 Neo 热重载不会应用新请求，完全退出并重启 Zotero 后才会应用。旧启动快照缺少可选字段时，已应用值按关闭处理；旧核心键 `extensions.zotero-neo.modules.<core>.enabled=false` 不会关闭核心功能。
 
@@ -342,10 +278,9 @@ Workspace 按 MainWindow 拥有标签页来源、确认与 Reader/Note 的 Show 
 | 批注选择、过滤与 popup | `src/toolkit/reader/annotations.ts` | 适配 Reader 私有操作；条目写入继续使用公开 Zotero API。 |
 | 可见批注模型与几何 | `src/toolkit/reader/annotation-targets.ts` | 只接纳当前过滤视图中、具有支持锚点且与 viewport 相交的原生批注；隐藏、已过滤、屏外及不支持的目标不进入候选。 |
 | marks 几何与旧存储 | `src/toolkit/reader/marks.ts` | 提供宿主存储/几何；父条目或附件的存储策略由 `ReaderMarks` 决定。 |
-| Zotero 结构化文档块 | `src/toolkit/reader/structured-document.ts` | 原生冷处理可能覆盖整个 PDF 且无法取消；请求保持显式，语义分类属于 `ReaderCaptionTargets`。 |
+| Zotero 结构化文档块 | `src/toolkit/reader/structured-document.ts` | 原生冷处理可能覆盖整个 PDF 且无法取消；引用增强等独立消费者按其自身条件使用，图表导航不请求全文 SDT。 |
 | Reader 引用快照 | `src/toolkit/reader/references.ts`、`reference-contracts.ts` | 读取 Zotero 原生 PDF 全文 overlay，包括未渲染页面；快照捕获精确 PDF、presentation、Window、Document 与已加载 PDF 字节指纹，异步阶段持续验证来源。SDT 块只有在 `metadata.source.hash` 与该 PDF 指纹相同时才参与补充或上下文映射。唯一、明确的 `References`/`Bibliography` 标题下，可完整解析的连续编号条目补入未被原生 overlay 覆盖的条目；引用上下文来自原 PDF 字符或唯一映射的原文段落。不完整时界面标记 `partial` 并显示遗漏警告；零条识别不是未引用的证明。只返回不含 SDK/DOM 句柄的数据和来源守卫；不使用 OCR，也不声称对所有 PDF 均能完整识别。 |
 | 原生引文预览、右键与工具栏挂载 | `src/toolkit/reader/reference-interactions.ts`、`reference-interaction-contracts.ts` | 在各 presentation 的原生预览行内挂载控件，以原文及位置核对行归属；在 `createViewContextMenu` 同步追加菜单，工具栏使用既有 `custom-sections`。DOM observer 处理挂载与替换，不以常驻轮询扫描预览。原生引用逐项投影到插件 realm，避免把特权对象交给 content 数组回调。交互当前性与来源当前性分开，关闭原预览后仍保留精确来源；旧菜单不能在窗格或标签页切换后重获目标。 |
-| PDF 原图局部裁剪 | `src/toolkit/reader/region-preview.ts` | 使用不依赖后台动画帧的打印调度，并将默认显示图层的有效可见性复制到独立打印配置，不修改 Reader。当前 SDK 没有完整组枚举接口，`GetOptionalContentConfig` 窄通道补齐所有图层，不能用 `/Order` 代替。原生 Promise 直接归还所属 realm，不跨域克隆。 |
 
 引用增强由 `src/modules/references/` 和 `src/references/controller.ts` 拥有逐文献上下文动作、搜索清单、引用位置、本地匹配及单篇详情。Reader Normal 的 `openReferences` 使用 `<Space>fr`，与工具栏共用只含清单的查找入口；原生悬停不查询或聚焦。明确操作先记录锚点，再捕获并固定发起 ReaderView，通过既有导航端口跳转，不另建历史。原生预览内的按钮与浮层均按实际 ownerDocument 的焦点和精确来源窗格处理输入；没有全局 Tab 陷阱或全屏遮罩。退出或来源视图退休时取消在途工作，不能向后继文档发布结果。用户操作见[Reader 指南](READER_GUIDE.md)。
 
@@ -393,64 +328,16 @@ Bootstrap 将诊断写入 profile 下的 `zotero-neo-startup.log`，并通过 `Z
 
 `Zotero.Neo.reader.getSelection()` 返回当前 `ReaderSelectionContext` 或 `null`；`Zotero.Neo.reader.registerSelectionAction(action)` 注册扩展动作并返回 disposer。API 由 `src/addon.ts` 公开、`src/core/contracts.ts` 定义类型；`src/modules/reader-selection/` 负责选择上下文和动作运行时，`registry.ts` 的定义随应用存活，关闭一个 Reader 后仍保留。disposer 只删除自己的注册，同 ID 的后继注册受保护；选择模块退休后，旧上下文和回调均不可用。集成方继续使用原接口，Reader session 和 PDF.js 私有对象留在内部。
 
-## 原生阅读视图与文档解析接口
+## 原生阅读视图与本地布局
 
-`src/toolkit/reader/presentation.ts` 是当前显示视图的唯一解析入口：每个分屏优先使用 SDT Reading Mode 覆盖视图，操作目标始终指向可见呈现。`ReaderViewLifecycle` 在两种呈现间统一附着和释放监听器，并为精确 Window / Document 安装来源映射能力租约。租约释放只影响自身，后继租约继续有效。Reading Mode 沿用 Normal／Select 及既有绑定上下文，`ReaderMode` 保持不变。
+`src/toolkit/reader/presentation.ts` 解析当前显示视图：分屏各自使用实际可见呈现。`ReaderViewLifecycle` 按精确 Window / Document 附着和释放监听器及来源映射租约；Reading Mode 沿用 Normal／Select 及既有绑定上下文。
 
-`src/toolkit/reader/text-source.ts` 返回两种呈现的真实 Text 节点。词元、Flash、选择范围和视觉行移动共用业务实现；重排文本的视觉行来自 Range 客户矩形，段落来自原生 HTML 结构。词元快照仅覆盖锚点、活动端和相邻段落，并可在同一同步动作中复用于提示；远端锚点保持完整，不常驻全文索引。`selection-geometry.ts` 将重排选区交给原生 SDT 映射，保留 Zotero 的 sortIndex、pageLabel 和 PDF 几何。图像裁图区不被冒充为可选文字。
+`src/toolkit/reader/text-source.ts` 返回实际 Text 节点，词元、Flash、选择范围和视觉行移动共用业务实现。重排文本的视觉行来自 Range 客户矩形，段落来自原生 HTML 结构；`selection-geometry.ts` 将重排选区交给原生 SDT 映射，保留 Zotero 的 sortIndex、pageLabel 和 PDF 几何。图像裁图区不被冒充为可选文字。
 
-`reader/document-cache.ts` 的 `readReaderDocument()` 为句段、章节、图表和笔记提供缓存优先的来源契约。默认未命中时调用本地无模型解析；明确选用云端但没有匹配缓存时保留原生 SDT 退路。读取过程均不自动上传，云端上传由用户明确操作触发。`reader-selection/structured-text.ts` 只缓存区域快照；`paragraph-mapping.ts` 在一次动作中对原文字符建立临时映射，必须唯一、完整、无替字且起点源页一致；同一段落的完整原文可证实邻页续段端点，其他页面的独立出现不能作为证据。Reading Mode 限制在焦点附近段落，映射仅供当前动作使用。`text-boundary-motion.ts` 共享句段端点与常见缩写处理；PDF 缺映射时使用词元退路。异步准备后必须复查原选区端点和精确视图，保留后续输入。
+图表跳转由 `reader-navigation` 消费会话本地布局。首次 `[f` / `]f`、`[t` / `]t` 或显式图表目标请求读取全文文字，宽筛题注候选页，仅对候选页读取绘图指令并调用固定默认的本地规则。没有题注的图不会成为目标；这是候选定位，不是完整图表识别。原生大纲独立于图表准备。正文选择的可见页处理是另一条按需路径，不启动图表全文扫描。
 
-`document-analysis/sections.ts` 只确定编号章节范围与字面匹配；`modules/reader-chapters/chapter-search.ts` 拥有范围选择与跳转，`ui/search-dialog.ts` 只提供可复用的查询／候选界面、IME 和生命周期。该流程保留原生 Find 和既有导航历史。区域结果用于定位段落，不能直接保存为字符高亮。
+`src/toolkit/pdf-source.ts` 使用 Zotero 自带 PDF.js 和其 `reader/pdf/web/wasm/` 解码资源；`pdf-figure-geometry.ts` 将路径、图像与字体度量经 CTM 转为未旋转 PDF 用户坐标，并处理绘制裁剪与 Form／Group。页面与图表结果只保存在当前 Reader 会话内，关闭会话或停用插件时释放，不写附件目录缓存。异步工作必须复查 PDF 来源、精确视图和作用域，不能向替换视图发布结果。
 
-`modules/chapter-notes/index.ts` 按 ReaderSession 创建独立的 `chapter-notes` 实例，拥有章节整理、筛选、预览与显式保存，不由 Main 的 `notes` 模块转发。Toolkit 的 `sourceNoteEntries()` 读取精确 PDF 的公开批注 SDK、相关笔记及原生嵌图来源；HTML 在惰性 template 中解析，外部资源不插入活文档。模块内 `chapter-plan.ts` 用唯一原文或无歧义位置归属章节，跨章节／不确定内容保留待归类。对象副本按来源内容去重，独立批注保持身份。保存前重新读取来源内容，生成笔记用内容身份串行接纳并复用已有条目，手工修改不覆盖；新内容另建带时间的版本，生成结果不递归收集。
+`reader-selection/body-selection.ts` 拥有默认关闭的会话级 `<Space>rb` 开关，仅按需准备当前可见 PDF 页；`body-text.ts` 决定正文接纳，Toolkit 的 `text-admission.ts` 管理精确视图的可逆过滤租约。它只影响 Neo Select，普通鼠标拖选及 Zotero 原生复制、高亮路径不变。Reading Mode 中，完整的可见原生文本块须经当前视图同步、明确地映射到单个源 PDF 页面，且本地几何确认应排除，才会被过滤；不完整、有歧义或跨页的映射保留可选。句段扩展在 Reading Mode 使用原生 DOM 段落；这两项操作都不触发 SDT 冷读取。PDF 视图的句段扩展优先使用已有内存页面结果，无可靠映射时回退到原生段落或词元；异步准备后重新检查选区端点和精确视图。
 
-来源 Note 的幂等身份由 `platform/note-relations.ts` 定义，保留 `urn:zotero-neo:chapter-note:v1:<32 个小写十六进制字符>` 的原值，但存入 Zotero 标签，不写入任何关系谓词。新标记使用 `type: 1`，已有同名 `type: 0` 保留原类型；内部身份只按完整名称判断。`dc:relation` 保留真实来源 PDF 的 Zotero URI；写入方按该 URI 查找相关 Note，再核对身份标签、文库和所属条目。章节整理按身份标签排除生成结果。标记随 Note 同步，不受原生笔记编辑器的 HTML 规范化影响。
-
-读取已有图表摘录时，`src/toolkit/main/source-notes.ts` 为本次读取延迟创建一个无浏览上下文的 HTML 文档，在其 `template.content` 中解析 Zotero 原生笔记 HTML。主窗口是 XHTML，不能直接使用其片段解析器；模板内容不插入活文档。解析后仍逐张核对来源 PDF URI、页内位置和嵌图附件归属，坏图片只隔离自身，生成 Note 在解析前排除。
-
-启动在数据库初始化后扫描所有文库及回收站，仅迁移 Note 上符合完整身份格式的旧 `dc:relation` 对象。迁移通过公开 `addTag`、`removeRelation` 和 `saveTx` 提交，保留正文、条目身份、修改时间、其他关系及已有同名人工标签类型，并正常标记待同步。只读文库不绕过权限，数量写入诊断日志；来源读取时可在恢复写权限后完成单向迁移，也处理启动后到达的旧数据。启动和来源读取按 Note 合并在途保存；早期 Main 注入不等待数据库，迁移较晚完成也不能复活已关闭的控制器。
-
-`toolkit/main/managed-tags/` 按附加组件寿命保护内部标记：通过 `platform/chrome-windows.ts` 观察 Main、独立 Reader 和 Note 等顶层窗口，按精确 Document 管理标签框、原生选择器和标签补全输入。选择器投影最终 React 候选，包含仅有颜色设置的合成条目；补全只把 `fieldName: 'tag'` 的控件路由到独立原生代理。普通业务候选按名称去重，不显示手动／自动区别；底层类型和原生普通标签偏好不变。
-
-保护不覆盖或过滤 `Item.getTags()`、`hasTag()`、同步序列化等数据读取。标签框只投影可见行和计数，“移除全部”提交原有内部记录而不是删除后重加；全库写入口按名称排除内部 ID，自动清理保留原生类型过滤。旧的内部标签筛选条件在接管时清除，普通筛选保留。Gecko 补全控制器跨窗口共享，并在绑定输入时缓存提供器；路由切换需核对原生输入代理，只重绑当前输入，不能因关闭不活动窗口而停止另一窗口的搜索。停用按所有权恢复方法、控件与原生显示并注销代理，旧回调不得接管后继控制器。
-
-`modules/reader-excerpts/object-excerpts.ts` 拥有显式图表／公式摘录与预览接纳，复用共享文档快照、对象成员和原 PDF 渲染，不恢复一般文字 Capture，也不由 Select 构造或关闭。`ui/search-dialog.ts` 只负责可取消预览与显式动作；操作前重查来源和精确视图。Reader 解析固定 `SourceNoteTarget`，`operations/source-note.ts` 负责可编辑性、来源哈希、嵌图保存及失败时清理自有半成品；已接纳写入独立于 Reader 界面寿命。Toolkit 使用 Zotero 原生序列化保留区域来源，平台层负责安全表格 HTML、PNG 与多格式剪贴板。新笔记保留指向 PDF 的 `dc:relation`，不创建伪批注或修改既有笔记。
-
-`reader-selection/body-selection.ts` 拥有会话级正文选择开关、显式异步准备与退休结果隔离；缓存键由 `document-analysis/settings.ts` 统一确定。PDF 的有效缓存及默认本地提取均不请求 SDT；Reading Mode 按需读取原生块并验证同一来源。`body-text.ts` 只决定正文接纳策略，Toolkit 的 `text-admission.ts` 将精确视图的 Text 映射为 PDF 来源矩形或 SDT 顶层块 ID，并安装可逆属性租约；业务代码不读取 PDF.js 或 SDT 私有 DOM。
-
-正文选择排除 `excluded` 和非公式的 `auxiliary` 区域，未知来源保留可选。PDF 按文字 Range 的中心落入排除区域且水平覆盖至少 90% 分类（旋转 90° 的页边标签短轴允许字体行距，覆盖至少 70%），边缘容差 0.5 点；原生非图表文字优先采用 textMap 行墨迹框，避免粗框吞掉正文。明确正文覆盖优先于冲突排除，不扩大到对象分组包围框。Reading Mode 按真实原生块身份判断；非 SDT 布局只有在完整原生块的所有已知来源片段均被排除时接纳，部分或未知映射保留，本地 `sourceBlock` 不能冒充 SDT ID。复制和批注前由 `validateReaderSelection()` 重查精确租约、选区端点和文件身份，旧缓存／后端通知同步退休过滤。`user-select:none` 只在 Neo Select 样式租约内生效；复制保留布局序列化，批注另按接纳文字拆分连续 Range，所有片段必须完整映射，不能只过滤文本却保存包含图表的矩形。
-
-`src/document-analysis/contracts.ts` 定义 `DocumentParser`、来源和版本化区域结果。`local.ts`、`native.ts`、`oxr.ts`、`mineru.ts` 各自提供适配；本地规则为默认，已保存的显式云端选择保留。`DocumentRegion` 保留格式、正文归属和区域锚点精度；布局框不提供字符级批注保证。本地规则处理数字 PDF，OCR、表格单元格和公式 LaTeX 不在其输出范围内。
-
-`document-source.ts` 单独读取页面几何，不依赖 SDT。`toolkit/pdf-source.ts` 统一加载 Zotero 自带 PDF.js；`pdfSourceFigurePages()` 读取原始文字及实际绘图操作，并使用 Zotero 已安装的 `reader/pdf/web/wasm/` 解码资源。未配置该路径时，CCITT 内嵌图像可能使 Form 的后续绘图指令丢失；不另行安装或下载解码器。Chrome 侧不可见的 PDFPageProxy getter 仅在 Toolkit 内通过 `_pageInfo` 适配；共享 `geometry.ts` 负责云端坐标转换，缺页、重复页、非法尺寸和越界矩形拒绝接纳，不静默裁剪。
-
-`pdf-figure-geometry.ts` 的 `pdfFigureGeometry()` 将字体度量、路径和图像单位方框经过 CTM 转为未旋转 PDF 用户坐标，不使用栅格像素尺寸当作页面尺寸。`clip`／`eoClip` 在路径被消费后生效，当前绘制仍使用旧裁剪；save／restore、Form 和 Group 保留各自裁剪范围，再与实际绘制包围框求交。Form 的 bbox 使用 Form 矩阵；Group 矩阵仅变换其裁剪 bbox，不重复施加到内容 CTM。空裁剪不产生图像，裁剪路径本身也不是绘制。原生文字提取不遵守这些裁剪，因此仅当某字体的所有已观测使用均受裁剪、且文字框与全部对应裁剪范围都不相交时，才移除该文字。共用未裁剪字体、未知字体和部分重叠保守保留，不按字号或文字渲染模式推测可见性。轴对齐包围框不是任意路径的逐像素可见性。
-
-`local-rules/` 拥有题注、分栏、段落和视觉区域规则，使用独立本地身份。少线／无框表先由至少三行、两个稳定列起点的原生单元格识别，再合并正文；原生细线的 L／T 形表格骨架也须有单元格证据。完整算法面板须具有明确 Algorithm 编号与至少三行指令，不能仅凭边框豁免普通正文；小字号共享数学定义另需多算法引用、等式及相邻较高面板约束。图内标签按字符加权字号与最近无争用对象归属。复合面板先合并横向行，再比较整行边界连接纵向行，避免宽面板与分块面板无法组成一组。题注、正文和相邻对象限制扩张，竞争题注不按距离瓜分同一面板带。图形主体仍需实际绘制证据，不把题注附近的空白制造成主体。
-
-`src/platform/document-analysis.ts` 封装文件快照和可取消 HTTP；日志与结果均排除请求体和凭据。`ReaderDocumentComparison` 拥有显式处理、对照与迟到结果隔离。本地模式打开时准备来源和缓存，单独点击读取才运行 SDT；本地解析使用本地适配器，其他后端保留独立原生对照。SDK 提取不可真正中止，云端取消也不承诺远端停止。表格 HTML 只作为纯文本展示，后端 HTML 和外部资源不会加载到界面。
-
-`document-analysis/cache.ts` 定义 Neo 后端缓存、非秘密配置身份及完整校验；`platform/document-analysis-cache.ts` 使用 Zotero 文件 API 和 `IOUtils.move` 原子提交附件目录中的 `.zotero-neo-analysis-<配置摘要>.json`，不写链接 PDF 的外部源目录。每项配置保留最后一次成功结果，包含 PDF 哈希、页面几何、后端、适配器版本、已知模型版本和时间。本地键使用 `local-rules`、适配器代次 4 和规范化规则指纹；当前引擎／几何修订均为 2，规则或采集语义改变后不能复用旧身份。旧槽及绑定旧解析身份的纠错保留，不强行迁移。格式、区域种类、唯一身份和完整坐标均校验，限制 32 MiB／100000 区域；损坏视为未命中，不因此自动上传。
-
-写入按目标串行，暂存后重查调用寿命与来源再原子替换；已开始的最终提交继续完成，即使界面已经关闭。缓存只保存 `ParsedDocument` 已知字段，读取后按当前算法重算图表关系；凭据、原始响应和派生分组均不保存。本地与云端的显式对照解析负责持久写入；普通 `readReaderDocument()` 按需提取只供会话使用，避免保存通知退休其调用方正在打开的界面。通知仍正常退休已有布局和纠错快照，并反映版本变化。原生 SDT 缓存继续由 Zotero 管理，PDF 内嵌缓存和跨设备同步不在此链路范围。
-
-后续阶段后端应继续消费这些显式产物及来源坐标，原生 Reading Mode 继续使用真实映射，保持全局 SDT 缓存和 textMap 原样。当前尚未实现外部结构替换、跨后端布局／识别阶段编排和跨页图表关联。
-
-`analyze.ts` 在解析后执行共享图表关联；`object-groups.ts` 消费规范区域，输出 caption 身份、成员 ID 和 `backend`／`geometry`／`caption-only`／`ambiguous` 状态。本地规则可提供已判断的成员关系，但 `backend` 只表示该关系来自适配器，不等于人工验证正确。`sourceBlock` 保存同一来源块的矩形及顺序，不能跨越无效块留下的缺口；本地块身份与 SDT 块身份严格分开。
-
-几何关联使用 PDF 用户坐标：候选限于同页、同列的连通图片或表格，图片在图注上方，表格支持 caption 在上或在下；caption 间距上限 72 点，纵向子图连接间距上限 24 点，同列要求较窄水平区间至少 90% 重叠，比较容差 0.01 点。正文、其他纵向 caption 和不完整原生块阻断关联；图片内部已分类为辅助／排除的文字可成为成员。多个 caption 争用同一视觉区域时一起回退，避免遍历顺序决定归属。此规则不承诺模型级语义正确性。
-
-定位使用成员的真实矩形集合，不制造覆盖空白、正文或双栏内容的联合锚点；相同几何只在传给宿主时去重。对照界面的区域与整组条目共享展示和定位入口，定位前沿用来源版本校验、精确视图接纳和跨 compartment 克隆。匹配的整组可以替换同顶部的原生 Table 书签，避免表格本体再次丢失。
-
-MinerU 官方云端适配器通过 `DocumentParser` 接入相同对照、缓存和定位链路。它使用 v4 本地文件批量上传协议提交单篇 PDF，随后轮询并下载 ZIP；`transport.ts` 只定义 JSON 请求、原始上传、下载、归档 JSON 读取和等待能力，Gecko 实现在平台层。API Bearer Token 仅发送给官方 API，不转发到签名存储地址；Zotero.HTTP 会自动补 Content-Type，签名上传因此单独使用原始 XHR 发送二进制。归档只读取有界的 `layout.json`，不解压其他路径，临时文件在成功、失败和取消后清理。当前明确支持官方云端已验证的 `pdf_info` 布局协议，协议变化时拒绝结果，不把新版自部署 `docvortex.middle` 当成相同格式。生产者版本不是模型版本，因此 `modelRevision` 保留 null。
-
-MinerU 的 table/image/chart 父对象归一化为成员区域上的 `sourceObject`，公共图表关联先保留该显式关系，不要求 caption 或编号成功，也不再按距离扩大它。显式关系保留模型原意，不代表语义已验证；密集表格中仍可能错配题注，因此独立区域定位始终保留。其他无显式对象的区域继续使用原几何关联。当前覆盖单篇 Reader 显式解析、状态进度、缓存复用、对照面板定位及常规图表导航／侧栏增强；批量准备／恢复由共享 Document Preparation 负责，正文过滤由 Reader Selection 消费缓存；外部 Reading Mode 与跨后端阶段编排仍不在此链路范围。
-
-`reader/document-cache.ts` 的 `readReaderDocumentCache()` 仅读取所选后端的有效附件缓存；`readReaderDocument()` 在未命中时按所选策略准备。缓存读取不会上传或运行 SDT。`ReaderCaptionTargets` 消费该共享入口并保留来源守卫，纠错不可读时不会绕回未经修正的图表。目标携带稳定身份、显式类型和来源，类型不按缺失编号猜测，同页对象保持独立。原生标题由 `loadHeadings()` 单独准备，缓存图表无需等待原生全文分析。
-
-缓存导航在使用前重查 PDF 版本、服务配置和 Reader 所有权；目标被替换后，旧侧栏选择随之失效。当前 Reader 的分析成功提交以及服务偏好变化会退休并按需重载已准备的图表目标。所有缓存和原生目标继续通过同一原生位置／导航历史能力跳转，PDF.js 滚动位置由宿主处理。
-
-`src/modules/reader-figures/` 拥有图表查询、类型／整组筛选、裁图预览和确认；它依赖 Navigation 已成功启动，但只接收既有 caption 来源与定位端口。章节、图表和对象摘录各自持有缓存／服务失效订阅，订阅随各自作用域释放。精确视图、输入和唯一历史策略继续由 Reader Surface 提供。
-
-`src/modules/document-preparation/controller.ts` 由 Addon 创建一次；`createDocumentPreparationModule()` 分别绑定 Main／Reader 的 `prepareDocuments`。服务返回绑定精确 presentation 的释放句柄，旧作用域退出时只退休自己的界面，后来的同窗口界面继续运行。应用级队列由应用持有；局部模块借用队列，显式开始、继续和停止、任务记录及缓存仍沿用原契约。实机核对 Main 目标与 Reader 附件分别解析、替换后关闭旧 Reader 时新界面仍在；真实上传及已接纳任务继续执行需单独使用受控数据验证。
+不再提供文档准备、解析对照、图表筛选、对象摘录、章节笔记或章节内查找；MinerU／OXR 后端、附件目录解析缓存、规则纠错及相关配置均已移除。旧 `documentAnalysis.*` 偏好、已移除命令绑定和旧备份中的相关字段被忽略，不对既有 Zotero 笔记、标签或缓存做迁移写入。引用增强自己的元数据缓存和原生引用能力不属于上述移除范围。

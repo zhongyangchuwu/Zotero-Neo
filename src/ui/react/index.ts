@@ -17,20 +17,6 @@ import { mountLocalFindReactView, LOCAL_FIND_REACT_CSS } from './surfaces/local-
 import type { LocalFindReactModel } from '../../modules/library/local-find-react-model';
 import { mountExtensionsReactView, EXTENSIONS_REACT_CSS } from './surfaces/extensions';
 import type { ExtensionsReactModel } from '../../modules/extensions/react-model';
-import { mountSearchDialogReactView, SEARCH_DIALOG_REACT_CSS } from './surfaces/search-dialog';
-import type { SearchDialogReactModel } from '../search-dialog-react-model';
-import { mountReaderFiguresReactView, READER_FIGURES_REACT_CSS } from './surfaces/reader-figures';
-import type { ReaderFiguresReactModel } from '../../modules/reader-figures/react-model';
-import {
-  mountDocumentPreparationReactView,
-  DOCUMENT_PREPARATION_REACT_CSS,
-} from './surfaces/document-preparation';
-import type { PreparationReactModel } from '../../modules/document-preparation/react-model';
-import {
-  mountDocumentComparisonReactView,
-  DOCUMENT_COMPARISON_REACT_CSS,
-} from './surfaces/document-comparison';
-import type { DocumentComparisonModel } from '../../modules/document-comparison/react-model';
 import {
   mountAnnotationCommentReactView,
   ANNOTATION_COMMENT_REACT_CSS,
@@ -74,10 +60,6 @@ const runtime: NativeUIRuntime = {
         SELECTION_PANEL_REACT_CSS +
         LOCAL_FIND_REACT_CSS +
         EXTENSIONS_REACT_CSS +
-        SEARCH_DIALOG_REACT_CSS +
-        READER_FIGURES_REACT_CSS +
-        DOCUMENT_COMPARISON_REACT_CSS +
-        DOCUMENT_PREPARATION_REACT_CSS +
         METADATA_REVIEW_CSS +
         SETTINGS_SNAPSHOTS_CSS +
         ANNOTATION_COMMENT_REACT_CSS +
@@ -139,28 +121,12 @@ const runtime: NativeUIRuntime = {
         return mountExtensionsReactView(root, model as ExtensionsReactModel, (command) =>
           dispatch(command),
         ) as ReactView<unknown>;
-      case 'search-dialog':
-        return mountSearchDialogReactView(root, model as SearchDialogReactModel, (command) =>
-          dispatch(command),
-        ) as ReactView<unknown>;
-      case 'reader-figures':
-        return mountReaderFiguresReactView(root, model as ReaderFiguresReactModel, (command) =>
-          dispatch(command),
-        ) as ReactView<unknown>;
-      case 'document-preparation':
-        return mountDocumentPreparationReactView(root, model as PreparationReactModel, (command) =>
-          dispatch(command),
-        ) as ReactView<unknown>;
       case 'metadata-review':
         return mountMetadataReviewView(root, model as MetadataReviewModel, (command) =>
           dispatch(command),
         ) as ReactView<unknown>;
       case 'settings-snapshots':
         return mountSettingsSnapshotsView(root, model as SettingsSnapshotModel, (command) =>
-          dispatch(command),
-        ) as ReactView<unknown>;
-      case 'document-comparison':
-        return mountDocumentComparisonReactView(root, model as DocumentComparisonModel, (command) =>
           dispatch(command),
         ) as ReactView<unknown>;
       case 'annotation-comment':

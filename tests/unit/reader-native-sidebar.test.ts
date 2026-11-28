@@ -109,6 +109,11 @@ function harness(
     isContentEditable = false;
     readonly classList = { contains: (name: string) => this.className.split(' ').includes(name) };
     readonly click = vi.fn();
+    readonly toggles: EventListener[] = [];
+    emitToggle() {
+      for (let node: Node | null = this; node; node = node.parentElement)
+        for (const callback of node.toggles) callback({ target: this } as unknown as Event);
+    }
     readonly dispatchEvent = vi.fn((event: { key: string }) => {
       if (this.id === 'outlineView' && event.key === 'ArrowDown') nativeNavigate();
       return true;
@@ -216,7 +221,9 @@ function harness(
           name.slice(5).replace(/-([a-z])/g, (_, letter: string) => letter.toUpperCase())
         ];
     }
-    addEventListener() {}
+    addEventListener(name: string, callback: EventListener) {
+      if (name === 'toggle') this.toggles.push(callback);
+    }
     remove() {
       if (this.parentElement)
         this.parentElement.children.splice(this.parentElement.children.indexOf(this), 1);
@@ -338,6 +345,7 @@ function harness(
   });
   let currentBindings = bindings;
   const host = new ModuleHost({ debug: vi.fn(), diagnostic: vi.fn() }, () => current);
+  const figures = vi.fn(async () => []);
   const sidebar = host.activate(
     'sidebar-test',
     (scope) =>
@@ -360,6 +368,7 @@ function harness(
           () => {},
           () => {},
           () => current,
+          { figures, isCurrent: () => current },
         ),
         onCaptionTarget: () => {},
         bindings: () => currentBindings,
@@ -400,6 +409,7 @@ function harness(
     document,
     listeners,
     nativeNavigate,
+    figures,
     key,
     mutate: () => mutation(),
     createNode: (tag: string) => new Node(tag),
@@ -423,6 +433,20 @@ function harness(
 }
 
 describe('native Reader sidebar consumers', () => {
+  it('does not scan when the outline or caption group opens', () => {
+    const test = harness();
+    try {
+      test.sidebar.focus('outline', test.pdf);
+      test.sidebar.refreshCaptions();
+      const details = test.document.querySelector('#zv-reader-captions details');
+      expect(details).not.toBeNull();
+      details!.open = true;
+      details!.emitToggle();
+      expect(test.figures).not.toHaveBeenCalled();
+    } finally {
+      test.sidebar.dispose();
+    }
+  });
   it('releases listeners acquired before a sidebar startup failure', () => {
     const test = harness();
     const add = test.document.addEventListener;

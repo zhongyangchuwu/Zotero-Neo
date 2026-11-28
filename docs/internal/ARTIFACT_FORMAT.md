@@ -11,7 +11,7 @@ Neo 将 UTF-8 JSON 作为 Zotero 原生 `imported_file` 附件导入普通父文
 | 字段 | v1 内容 |
 | --- | --- |
 | `format`, `schemaVersion` | 分别为 `"zotero-neo"` 和 `1`。 |
-| `kind` | `metadata-review`、`document-corrections` 或 `ai-qa`。 |
+| `kind` | 当前支持 `metadata-review`。 |
 | `libraryURI`, `parentItemKey` | Zotero 文库 URI 和普通父条目的 key；发现文件后仍须与实际父条目核对。 |
 | `recordID`, `revisionID`, `parentRevisions` | 记录身份、不可变修订身份和父修订 ID 数组。首个修订的数组为空。 |
 | `createdAt`, `producer` | 可解析的时间和含 `name`、`version` 的生产者对象；生产者不是认证身份。 |
@@ -20,21 +20,19 @@ Neo 将 UTF-8 JSON 作为 Zotero 原生 `imported_file` 附件导入普通父文
 
 `libraryURI` 可为 Zotero 用户、群组或 `users/local/...` URI。local URI 只表明本地身份；代码仅在当前个人库的本地 URI 与父 key 相符时接受它，不能假定旧 local URI 在其他账号或设备自动有效。本机数字 `itemID`／`libraryID` 和文件路径不是跨设备身份。
 
-来源摘要明确标记 `md5` 或 `sha256`，使用对应长度的小写十六进制；目前 PDF 文件摘要由宿主计算为 MD5，不是 SHA-256。`precision` 为 `document` 或 `region`。PDF 字节或解析身份变化时保留历史，但不能将旧坐标或修正套到新来源。
+如果封套含 `source`，摘要须明确标记 `md5` 或 `sha256`，使用相应长度的小写十六进制；`precision` 为 `document` 或 `region`。
 
 | `kind` | `payload` v1 |
 | --- | --- |
 | `metadata-review` | `stage` 为 `proposal` 或 `applied`；`query` 是书目查询线索，`paper` 是来源记录，`snapshot` 含 `itemKey` 和审阅时的 `values`，`changes` 为含 `field`、`before`、`after`、`selected` 的差异；`selectedFields` 和 `appliedFields` 记录选择与实际应用字段。读取外部建议时还会验证来源记录，并相对当前条目重新计算差异。 |
-| `document-corrections` | `baseline` 为完整解析基底，`cacheKey` 是解析后端、适配器版本与配置身份，`corrections` 是绑定该基底的人工修正；必须有 `source`，基底指纹须匹配来源摘要。基底用于恢复不能仅凭补丁重放的结果。 |
-| `ai-qa` | 必须有 `source`；`deleted: false` 时 `record` 包含原稿 `output`、人工文本 `userText`、证据和来源等记录；删除以 `deleted: true, record: null` 的修订表达，不把删除当作缺失。此格式也用于迁移已有 AI 成果，不需要新模型调用。 |
 
-字段的完整结构与校验分别见 `src/metadata-review/artifacts.ts`、`src/document-analysis/corrections.ts`、`src/ai-qa/contracts.ts` 和 `src/artifacts/validation.ts`。JSON 限 32 MiB，必须是普通 JSON 值，不能含循环引用、非有限数或原型键。消费者应先验证版本、类别、父条目、来源和整个 payload，不执行其中脚本、HTML 或 URL。外部生产者不得写入 API key、授权信息或带秘密的 URL；元数据审阅会保存查询及条目快照，输入的 BibTeX、字段和来源 URL 也可能进入附件，保存前应自行排除秘密或不愿共享的信息。
+字段的完整结构与校验见 `src/metadata-review/artifacts.ts` 和 `src/artifacts/validation.ts`。JSON 限 32 MiB，必须是普通 JSON 值，不能含循环引用、非有限数或原型键。消费者应先验证版本、类别、父条目、来源和整个 payload，不执行其中脚本、HTML 或 URL。外部生产者不得写入 API key、授权信息或带秘密的 URL；元数据审阅会保存查询及条目快照，输入的 BibTeX、字段和来源 URL 也可能进入附件，保存前应自行排除秘密或不愿共享的信息。
 
 ## 修订、缺失与迁移
 
 有意义的保存产生新附件修订，不按每次按键写入，也不覆盖旧文件。同一 `revisionID` 不得用于不同内容；相同内容的同一修订可复用。`parentRevisions` 表达分支，离线并发可能出现多个 head，不能按时间戳取最后一个，也不能在文件尚未下载时认定全局只有一个 head。缺失父修订、冲突、回收站中的成果、未知 schema、损坏或未下载文件会报告问题并阻止发布，而不是当成空记录覆盖或自动清理。不同成果类别的冲突需要重新载入或明确处理；不要自行删除历史来消除提示。
 
-人工解析修正和既有 AI 历史在读取时按需迁移：先校验来源和内容，发布并读回正式附件，重复迁移使用稳定修订身份；原旁路文件保留。已有正式历史优先，避免旧文件复活删除或已恢复为空的记录。无法迁移时，符合条件的旧本机数据仍可读取，但不能因此声称已同步。普通查询和解析缓存仍是本地数据。
+能通过封套识别的旧 `document-corrections` 和 `ai-qa` 附件不进入元数据审阅的修订历史，即使已在回收站或 schema 不再受支持。Neo 不迁移、修改或清理这些附件，也不读取旧旁路修正文件或解析缓存。无法识别类别的缺失或损坏 Neo 附件仍会阻止发布，避免误判历史完整。
 
 更新书目字段不依赖成果附件，也不会自动创建记录。明确保存审阅结果时，Neo 才发布 JSON，并可创建关联的 Zotero 原生展示笔记；手工修改笔记不会写回 JSON。重复保存同一附件会复用关联笔记，不覆盖人工修改。
 

@@ -1,34 +1,22 @@
 import { structuredDocumentBlocks } from '../../toolkit/reader';
 import { nativeDocumentRegions } from '../../document-analysis/native';
 import type { DocumentObjectGroup, DocumentRegion } from '../../document-analysis/contracts';
-import type { ReaderCachedDocument } from '../../reader/document-cache';
-import { documentVisualBodies } from '../../document-analysis/visual-bodies';
 import {
   documentObjectGroups,
   documentObjectLocation,
 } from '../../document-analysis/object-groups';
+import type { ReaderLocalLayout } from '../../reader/local-layout';
 import type { ReaderLinkPosition, ReaderNativeOutlineEntry } from '../../reader/types';
 
 export interface ReaderCaptionTarget extends ReaderNativeOutlineEntry {
-  readonly id?: string;
-  readonly source?: 'cache' | 'native';
-  readonly part?: 'body';
   readonly kind: 'figure' | 'table';
   readonly label: string;
   readonly association?: DocumentObjectGroup['association'];
   readonly location: { readonly position: ReaderLinkPosition };
 }
 
-export interface ReaderCaptionCache {
-  read(): Promise<ReaderCachedDocument | null>;
-  unnamedTitle(kind: 'figure' | 'table', pageIndex: number): string;
-}
-
 type CaptionState = 'idle' | 'loading' | 'ready' | 'unavailable';
-interface NativeTargets {
-  readonly entries: readonly ReaderCaptionTarget[];
-  readonly bodies: readonly ReaderCaptionTarget[];
-}
+const EMPTY: readonly ReaderCaptionTarget[] = [];
 function headingText(title: string): string {
   return title
     .normalize('NFKC')
@@ -36,25 +24,18 @@ function headingText(title: string): string {
     .toLowerCase();
 }
 
-/**
- * Session-owned graph targets prefer validated external cache; native extraction remains explicit fallback.
- * Headings retain their separate native source. Retirement fences both sources without claiming SDK cancellation.
- */
+/** PDF-local caption targets and the independent native heading precision path. */
 export class ReaderCaptionTargets {
   readonly #itemID: number | undefined;
   readonly #onChange: () => void;
   readonly #debug: (message: string) => void;
   readonly #isCurrent: () => boolean;
-  readonly #cache: ReaderCaptionCache | undefined;
+  readonly #layout: Pick<ReaderLocalLayout, 'figures' | 'isCurrent'>;
   #state: CaptionState = 'idle';
-  #entries: readonly ReaderCaptionTarget[] = [];
-  #bodies: readonly ReaderCaptionTarget[] = [];
+  #entries = EMPTY;
   #headings: readonly { readonly title: string; readonly position: ReaderLinkPosition }[] = [];
   #promise: Promise<readonly ReaderCaptionTarget[]> | null = null;
-  #nativePromise: Promise<NativeTargets | null> | null = null;
-  #cacheCurrent: (() => Promise<boolean>) | null = null;
-  #settled = false;
-  #revision = 0;
+  #headingPromise: Promise<void> | null = null;
   #disposed = false;
 
   constructor(
@@ -62,23 +43,20 @@ export class ReaderCaptionTargets {
     onChange: () => void,
     debug: (message: string) => void,
     isCurrent: () => boolean,
-    cache?: ReaderCaptionCache,
+    layout: Pick<ReaderLocalLayout, 'figures' | 'isCurrent'>,
   ) {
     this.#itemID = itemID;
     this.#onChange = onChange;
     this.#debug = debug;
     this.#isCurrent = isCurrent;
-    this.#cache = cache;
+    this.#layout = layout;
   }
 
   get state(): CaptionState {
-    return this.#state;
+    return this.sourceCurrent() ? this.#state : 'unavailable';
   }
   get entries(): readonly ReaderCaptionTarget[] {
-    return !this.#disposed && this.#isCurrent() ? this.#entries : [];
-  }
-  get bodies(): readonly ReaderCaptionTarget[] {
-    return !this.#disposed && this.#isCurrent() ? this.#bodies : [];
+    return this.sourceCurrent() ? this.#entries : EMPTY;
   }
 
   /**
@@ -107,154 +85,81 @@ export class ReaderCaptionTargets {
   }
 
   load(): Promise<readonly ReaderCaptionTarget[]> {
-    if (this.#disposed || !this.#isCurrent()) return Promise.resolve([]);
-    if (this.#promise && this.#settled && this.#cacheCurrent) {
-      const previous = this.#promise;
-      return this.sourceCurrent().then((valid) => (valid ? previous : this.load()));
-    }
+    if (!this.sourceCurrent()) return Promise.resolve(EMPTY);
     if (this.#promise) return this.#promise;
-    const revision = this.#revision;
     this.#state = 'loading';
-    this.#promise = Promise.resolve()
-      .then(() => this.read(revision))
-      .finally(() => {
-        if (revision === this.#revision) this.#settled = true;
-      });
+    this.#promise = Promise.resolve().then(async () => {
+      if (!this.sourceCurrent()) return EMPTY;
+      try {
+        const regions = await this.#layout.figures();
+        if (!this.sourceCurrent()) return EMPTY;
+        this.#entries = this.targets(regions);
+        this.#state = 'ready';
+      } catch (error) {
+        if (!this.sourceCurrent()) return EMPTY;
+        this.#debug(`Reader local captions unavailable: ${String(error)}`);
+        this.#state = 'unavailable';
+        this.#promise = null;
+      }
+      this.#onChange();
+      return this.#entries;
+    });
     this.#onChange();
     return this.#promise;
   }
 
   dispose(): void {
     this.#disposed = true;
-    this.#revision++;
-    this.#entries = [];
-    this.#bodies = [];
-    this.#headings = [];
-    this.#cacheCurrent = null;
-  }
-
-  /** A saved analysis or a selected-service change retires published graph targets, not native heading data. */
-  invalidate(): void {
-    if (this.#disposed || !this.#isCurrent()) return;
-    this.#revision++;
+    this.#entries = EMPTY;
     this.#promise = null;
-    this.#settled = false;
-    this.#cacheCurrent = null;
-    this.#entries = [];
-    this.#bodies = [];
-    this.#state = 'idle';
-    this.#onChange();
+    this.#headings = [];
   }
 
   async loadHeadings(): Promise<void> {
-    if (!this.#disposed && this.#isCurrent()) await this.native();
+    if (this.#disposed || !this.#isCurrent()) return;
+    await (this.#headingPromise ??= this.readHeadings());
   }
 
-  /** Revalidate at use time, including sidebar choices made after a PDF or service change. */
-  async sourceCurrent(target?: ReaderCaptionTarget): Promise<boolean> {
-    if (this.#disposed || !this.#isCurrent()) return false;
-    if (target?.source && !this.#entries.includes(target) && !this.#bodies.includes(target))
-      return false;
-    const guard = this.#cacheCurrent;
-    if (!guard) return target?.source !== 'cache';
-    let valid = false;
-    try {
-      valid = await guard();
-    } catch {
-      this.#debug('Reader cached navigation source unavailable');
-    }
-    if (this.#disposed || !this.#isCurrent() || guard !== this.#cacheCurrent) return false;
-    if (!valid) {
-      this.#nativePromise = null;
-      this.#headings = [];
-      this.invalidate();
-    }
+  sourceCurrent(target?: ReaderCaptionTarget): boolean {
     return (
-      valid &&
-      (!target || !target.source || this.#entries.includes(target) || this.#bodies.includes(target))
+      !this.#disposed &&
+      this.#isCurrent() &&
+      this.#layout.isCurrent() &&
+      (!target || this.#entries.includes(target))
     );
   }
 
-  private bodyTargets(
-    regions: readonly DocumentRegion[],
-    source: 'cache' | 'native',
-  ): readonly ReaderCaptionTarget[] {
-    return documentVisualBodies(regions).map((body) => ({
-      id: body.id,
-      source,
-      part: 'body',
-      kind: body.kind,
-      label: '',
-      title:
-        this.#cache?.unnamedTitle(body.kind, body.location.pageIndex) ||
-        `${body.kind} · ${body.location.pageIndex + 1}`,
-      location: { position: body.location },
-    }));
-  }
-
-  private targets(
-    regions: readonly DocumentRegion[],
-    source: 'cache' | 'native',
-  ): readonly ReaderCaptionTarget[] {
-    return documentObjectGroups(regions).map((group) => {
-      const position = documentObjectLocation(regions, group);
-      return {
-        id: group.id,
-        source,
-        title:
-          group.title ||
-          this.#cache?.unnamedTitle(group.kind, position.pageIndex) ||
-          `${group.kind} · ${position.pageIndex + 1}`,
-        kind: group.kind,
-        label: group.label,
-        association: group.association,
-        location: { position },
-      };
-    });
-  }
-
-  private async read(revision: number): Promise<readonly ReaderCaptionTarget[]> {
-    const current = (): boolean =>
-      !this.#disposed && this.#isCurrent() && revision === this.#revision;
-    if (!current()) return [];
-    try {
-      const cached = await this.#cache?.read();
-      if (!current()) return [];
-      if (cached) {
-        const targets = this.targets(cached.parsed.regions, 'cache');
-        const bodies = this.bodyTargets(cached.parsed.regions, 'cache');
-        // A valid empty effective layout is authoritative: restoring the last body to text
-        // must not resurrect its original native graph through fallback.
-        this.#cacheCurrent = cached.isCurrent;
-        return this.finish(targets, bodies, true);
-      }
-    } catch {
-      if (current()) this.#debug('Reader effective document unavailable');
+  private targets(regions: readonly DocumentRegion[]): readonly ReaderCaptionTarget[] {
+    const pages = new Map<number, DocumentRegion[]>();
+    for (const region of regions) {
+      const page = pages.get(region.pageIndex);
+      if (page) page.push(region);
+      else pages.set(region.pageIndex, [region]);
     }
-    if (!current()) return [];
-    // A configured shared reader already owns native fallback and correction admission.
-    // Bypassing it after failure could revive raw graph regions whose overrides are unreadable.
-    if (this.#cache) return this.finish([], [], false);
-    const native = await this.native();
-    if (!current()) return [];
-    return this.finish(native?.entries ?? [], native?.bodies ?? [], native !== null);
+    const targets: ReaderCaptionTarget[] = [];
+    for (const page of pages.values()) {
+      for (const group of documentObjectGroups(page)) {
+        if (!group.label || !group.captionRegionIds.length) continue;
+        targets.push({
+          title: group.title,
+          kind: group.kind,
+          label: group.label,
+          association: group.association,
+          location: { position: documentObjectLocation(page, group) },
+        });
+      }
+    }
+    return targets;
   }
 
-  private native(): Promise<NativeTargets | null> {
-    return (this.#nativePromise ??= this.readNative());
-  }
-
-  private async readNative(): Promise<NativeTargets | null> {
-    if (this.#disposed || !this.#isCurrent()) return null;
+  private async readHeadings(): Promise<void> {
     try {
       const blocks = await structuredDocumentBlocks(
         this.#itemID,
         () => !this.#disposed && this.#isCurrent(),
       );
-      if (this.#disposed || !this.#isCurrent()) return null;
-      if (!blocks) return null;
+      if (this.#disposed || !this.#isCurrent() || !blocks) return;
       const regions = nativeDocumentRegions(blocks);
-      const entries = this.targets(regions, 'native');
       const headings: { title: string; position: ReaderLinkPosition }[] = [];
       const seen = new Set<string>();
       for (const region of regions) {
@@ -273,24 +178,9 @@ export class ReaderCaptionTargets {
         });
       }
       this.#headings = headings;
-      return { entries, bodies: this.bodyTargets(regions, 'native') };
     } catch (error) {
       if (!this.#disposed && this.#isCurrent())
-        this.#debug(`reader caption loading failed: ${String(error)}`);
-      return null;
+        this.#debug(`Reader heading precision unavailable: ${String(error)}`);
     }
-  }
-
-  private finish(
-    entries: readonly ReaderCaptionTarget[],
-    bodies: readonly ReaderCaptionTarget[],
-    available: boolean,
-  ): readonly ReaderCaptionTarget[] {
-    if (this.#disposed || !this.#isCurrent()) return [];
-    this.#entries = entries;
-    this.#bodies = bodies;
-    this.#state = available ? 'ready' : 'unavailable';
-    this.#onChange();
-    return entries;
   }
 }

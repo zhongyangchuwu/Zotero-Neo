@@ -1,11 +1,4 @@
-import { readDocumentCacheRecord } from '../document-analysis/cache';
-import {
-  documentRect,
-  record,
-  type DocumentCacheKey,
-  type DocumentPage,
-} from '../document-analysis/contracts';
-import { readDocumentCorrections } from '../document-analysis/corrections';
+import { record } from '../document-analysis/contracts';
 import { ArtifactError, type NeoArtifact } from './contracts';
 
 const text = (value: unknown, max = 200000): value is string =>
@@ -33,45 +26,6 @@ export function canonicalJSON(value: unknown, depth = 0): string {
     return `{${entries.map(([key, entry]) => `${JSON.stringify(key)}:${canonicalJSON(entry, depth + 1)}`).join(',')}}`;
   }
   throw new ArtifactError('invalid', 'Artifact must contain only JSON values');
-}
-
-function correctionsPayload(payload: Record<string, unknown>): boolean {
-  const baseline = record(payload.baseline),
-    key = record(payload.cacheKey);
-  if (
-    !baseline ||
-    !key ||
-    !id(key.backend) ||
-    !Number.isSafeInteger(key.adapterVersion) ||
-    !text(key.configuration) ||
-    !id(baseline.sourceFingerprint) ||
-    !Array.isArray(baseline.pages) ||
-    baseline.pages.length > 100000
-  )
-    return false;
-  for (const [index, value] of baseline.pages.entries()) {
-    const page = record(value);
-    if (
-      !page ||
-      page.pageIndex !== index ||
-      ![0, 90, 180, 270].includes(page.rotation as number) ||
-      !documentRect(page.viewBox)
-    )
-      return false;
-  }
-  const parsed = readDocumentCacheRecord(
-    { cacheVersion: 1, savedAt: 0, key, parsed: baseline },
-    {
-      fingerprint: baseline.sourceFingerprint,
-      fileName: '',
-      pages: baseline.pages as DocumentPage[],
-    },
-    key as unknown as DocumentCacheKey,
-  )?.parsed;
-  return (
-    !!parsed &&
-    !!readDocumentCorrections(payload.corrections, parsed, key as unknown as DocumentCacheKey)
-  );
 }
 
 function metadataPayload(payload: Record<string, unknown>): boolean {
@@ -113,7 +67,7 @@ export function validateArtifact(value: unknown): NeoArtifact {
       'unknown-schema',
       'Unsupported Zotero Neo artifact schema; file preserved',
     );
-  if (artifact.kind !== 'metadata-review' && artifact.kind !== 'document-corrections')
+  if (artifact.kind !== 'metadata-review')
     throw new ArtifactError('unknown-kind', 'Unsupported artifact kind; file preserved');
   const producer = record(artifact.producer),
     payload = record(artifact.payload),
@@ -151,20 +105,8 @@ export function validateArtifact(value: unknown): NeoArtifact {
       !(source.parserIdentity === undefined || text(source.parserIdentity, 32 * 1024 * 1024)))
   )
     throw new ArtifactError('invalid-source', 'Invalid algorithm-tagged artifact source');
-  if (
-    !(artifact.kind === 'document-corrections'
-      ? !!source && correctionsPayload(payload)
-      : metadataPayload(payload))
-  )
+  if (!metadataPayload(payload))
     throw new ArtifactError('invalid-payload', 'Invalid artifact payload');
-  if (
-    artifact.kind === 'document-corrections' &&
-    record(payload.baseline)?.sourceFingerprint !== hash?.value
-  )
-    throw new ArtifactError(
-      'invalid-source',
-      'Correction baseline does not match the declared content hash',
-    );
   canonicalJSON(value);
   return value as NeoArtifact;
 }

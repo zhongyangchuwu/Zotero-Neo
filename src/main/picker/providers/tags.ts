@@ -1,5 +1,4 @@
 import { suggestTagPaths } from '../../tag-path';
-import { isSourceNoteIdentity } from '../../../platform/note-relations';
 import { t, type AppLanguage } from '../../../i18n';
 import type { PickerItem } from '../model';
 import type { PickerProvider } from '../types';
@@ -73,17 +72,13 @@ export function createTagCandidateProvider(options: TagCandidateSourceOptions): 
     async load() {
       const byName = new Map<string, TagRecord>();
       for (const record of await options.loadTags()) {
-        if (isSourceNoteIdentity(record.tag)) continue;
         if (!byName.has(record.tag)) byName.set(record.tag, record);
       }
       return [...byName.values()].map((record) => tagItem(record, options.describe?.(record.tag)));
     },
     filterItems(items, query) {
       const records = items
-        .filter(
-          (item) =>
-            item.tagCandidate === 'tag' && item.tagName && !isSourceNoteIdentity(item.tagName),
-        )
+        .filter((item) => item.tagCandidate === 'tag' && item.tagName)
         .map((item) => ({
           item,
           name: item.tagName!,
@@ -102,7 +97,6 @@ export function createTagCandidateProvider(options: TagCandidateSourceOptions): 
         options.allowCreate === true &&
         !!trimmed &&
         !exact &&
-        !isSourceNoteIdentity(trimmed) &&
         (!options.separator || !trimmed.endsWith(options.separator));
       return canCreate ? [createItem(trimmed, language), ...projected] : projected;
     },

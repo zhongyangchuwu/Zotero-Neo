@@ -16,6 +16,9 @@ import {
 
 const root = resolve(import.meta.dirname, '..');
 const sha256 = (value) => createHash('sha256').update(value).digest('hex');
+// Stable report identity for historical baselines; replay no longer uses a cache adapter.
+const backend = 'local-rules';
+const adapterVersion = '4';
 
 /** This capture format stores unrotated native PDF geometry, not rendered pixels or gold boxes. */
 function capture(path, document) {
@@ -80,7 +83,6 @@ try {
       contents: [
         "export { localDocumentRegions, parseLocalRuleProfile } from './src/document-analysis/local-rules';",
         "export { documentObjectGroups } from './src/document-analysis/object-groups';",
-        "export { localDocumentCacheKey } from './src/document-analysis/local';",
       ].join('\n'),
       resolveDir: root,
       loader: 'ts',
@@ -96,7 +98,6 @@ try {
   const api = await import(`data:text/javascript;base64,${Buffer.from(code).toString('base64')}`);
   const profileText = args.profile ? readFileSync(args.profile, 'utf8') : '';
   const profile = api.parseLocalRuleProfile(profileText);
-  const key = api.localDocumentCacheKey(profile);
   const baselines = new Map();
   for (const path of args.baseline) {
     const baseline = json(path);
@@ -154,8 +155,8 @@ try {
     const observation = {
       documentId: document.id,
       pdfSha256: document.pdf.sha256,
-      backend: key.backend,
-      adapterVersion: String(key.adapterVersion),
+      backend,
+      adapterVersion,
       modelRevision: null,
       mode: 'cold',
       status: 'completed',
@@ -172,7 +173,7 @@ try {
       observation.parsed = {
         schemaVersion: 1,
         sourceFingerprint: raw.sourceFingerprint,
-        backend: key.backend,
+        backend,
         modelRevision: null,
         durationMs: observation.durationMs,
         pages: raw.pages.map(({ pageIndex, viewBox }) => ({ pageIndex, viewBox, rotation: 0 })),

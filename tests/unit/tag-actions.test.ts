@@ -279,54 +279,6 @@ describe('semantic Tag actions', () => {
     expect([typeOne, typeZero, unassigned].every((item) => !item.hasTag('mixed'))).toBe(true);
   });
 
-  it('hides valid Neo identities from tag actions and rejects forged create candidates', async () => {
-    const identity = 'urn:zotero-neo:chapter-note:v1:0123456789abcdef0123456789abcdef';
-    const assigned = tagItem(1, [
-      { tag: identity, type: 1 },
-      { tag: 'ordinary', type: 0 },
-    ]);
-    const unassigned = tagItem(2);
-    installZotero(
-      [assigned, unassigned],
-      [
-        { tag: identity, type: 0 },
-        { tag: 'ordinary', type: 0 },
-      ],
-    );
-    const h = harness({ items: [assigned, unassigned] });
-    const forgedIdentity = {
-      id: `create:${identity}`,
-      title: identity,
-      search: identity,
-      tagName: identity,
-      tagCandidate: 'create',
-    } as PickerItem;
-
-    h.actions.add(MAIN_ITEM_TARGET.resolve(h.window, h.selection));
-    const add = h.open();
-    expect((await add.options.source!.load()).map((candidate) => candidate.tagName)).toEqual([
-      'ordinary',
-    ]);
-    await add.options.confirm?.(forgedIdentity, false);
-    expect(unassigned.hasTag(identity)).toBe(false);
-
-    h.actions.remove(MAIN_ITEM_TARGET.resolve(h.window, h.selection));
-    const remove = h.open();
-    expect((await remove.options.source!.load()).map((candidate) => candidate.tagName)).toEqual([
-      'ordinary',
-    ]);
-    await remove.options.confirm?.(forgedIdentity, false);
-    expect(assigned.hasTag(identity)).toBe(true);
-
-    h.actions.toggleFilter();
-    const filter = h.open();
-    expect((await filter.options.source!.load()).map((candidate) => candidate.tagName)).toEqual([
-      'ordinary',
-    ]);
-    await filter.options.confirm?.(forgedIdentity, false);
-    expect(h.setFilter).not.toHaveBeenCalled();
-  });
-
   it('uses Neo EffectiveSelection instead of native Main tree selection', async () => {
     const nativeOnly = tagItem(1);
     const selected = tagItem(2);
@@ -552,9 +504,8 @@ describe('semantic Tag actions', () => {
     expect(second.hasTag('second only')).toBe(false);
   });
 
-  it('reports a neutral removal notice when the only assigned tags are protected or read-only', () => {
-    const identity = 'urn:zotero-neo:chapter-note:v1:0123456789abcdef0123456789abcdef';
-    const writable = tagItem(1, [{ tag: identity, type: 1 }]);
+  it('reports a neutral removal notice when only read-only items have assigned tags', () => {
+    const writable = tagItem(1);
     const readOnly = tagItem(2, [{ tag: 'ordinary', type: 0 }]);
     Reflect.set(readOnly, 'isEditable', () => false);
     const items = [writable, readOnly];
@@ -564,7 +515,6 @@ describe('semantic Tag actions', () => {
     h.actions.remove(MAIN_ITEM_TARGET.resolve(h.window, h.selection));
 
     expect(() => h.open()).toThrow('Tag action did not open a chooser');
-    expect(writable.hasTag(identity)).toBe(true);
     expect(readOnly.hasTag('ordinary')).toBe(true);
     expect(h.session.status.textContent).toContain('→ No tags removed');
   });

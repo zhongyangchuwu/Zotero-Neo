@@ -16,13 +16,11 @@ import {
   readerScrollConfig,
 } from '../core/preferences';
 import { t } from '../i18n';
-import { readSettledMinerUToken, saveMinerUToken } from '../platform/document-credentials';
 import {
-  CREDENTIAL_HELP_URLS,
-  checkCredential,
+  SEMANTIC_SCHOLAR_CREDENTIAL_HELP_URL,
+  checkSemanticScholarCredential,
   createCredentialAbortController,
-  openCredentialHelp,
-  type CredentialProvider,
+  openSemanticScholarCredentialHelp,
 } from '../platform/credential-check';
 import { changeReferenceKey, readSettledReferenceKey } from '../platform/reference-credentials';
 import { settingsText, type SettingsLanguage } from './settings-i18n';
@@ -32,7 +30,6 @@ import type {
   ReaderPageModel,
 } from './settings-reader-model';
 
-type Provider = CredentialProvider;
 type CredentialState = Pick<ReaderCredentialModel, 'checking' | 'error' | 'status'>;
 
 /** Owns Reader preferences and credential operations for one open Settings page. */
@@ -41,17 +38,11 @@ export class SettingsReader {
   readonly #language: SettingsLanguage;
   readonly #changed: () => void;
   readonly #cleanups: Array<() => void> = [];
-  readonly #input: (provider: Provider) => HTMLInputElement | null;
-  readonly #checks: Record<Provider, AbortController | null> = {
-    mineru: null,
-    semanticScholar: null,
-  };
-  readonly #revision: Record<Provider, number> = { mineru: 0, semanticScholar: 0 };
-  readonly #writes: Record<Provider, Promise<void>> = {
-    mineru: Promise.resolve(),
-    semanticScholar: Promise.resolve(),
-  };
-  readonly #credentials: Record<Provider, CredentialState>;
+  readonly #input: () => HTMLInputElement | null;
+  #check: AbortController | null = null;
+  #revision = 0;
+  #pendingWrite = Promise.resolve();
+  #credential: CredentialState = { checking: false, error: false, status: '' };
   #disposed = false;
   #status = '';
 
@@ -60,16 +51,12 @@ export class SettingsReader {
     preferences: PreferenceStore,
     language: SettingsLanguage,
     changed: () => void,
-    input: (provider: Provider) => HTMLInputElement | null,
+    input: () => HTMLInputElement | null,
   ) {
     this.#preferences = preferences;
     this.#language = language;
     this.#changed = changed;
     this.#input = input;
-    this.#credentials = {
-      mineru: { checking: false, error: false, status: '' },
-      semanticScholar: { checking: false, error: false, status: '' },
-    };
     const keys = [
       READER_VISUAL_MODE_ENABLED_PREFERENCE_KEY,
       ANNOTATION_COMMENT_EDITOR_ENABLED_PREFERENCE_KEY,
@@ -89,28 +76,13 @@ export class SettingsReader {
     }
   }
 
-  #credentialText(provider: Provider, key: string): string {
-    return t(
-      provider === 'mineru' ? `documentCredentials.${key}` : `reader.references.credentials.${key}`,
-      this.#language,
-    );
+  #credentialText(key: string): string {
+    return t(`reader.references.credentials.${key}`, this.#language);
   }
 
   model(): ReaderPageModel {
     const s = (message: Parameters<typeof settingsText>[1]): string =>
       settingsText(this.#language, message);
-    const credential = (provider: Provider): ReaderCredentialModel => ({
-      ...this.#credentials[provider],
-      title:
-        provider === 'mineru'
-          ? this.#credentialText(provider, 'token')
-          : this.#credentialText(provider, 'title'),
-      hint: this.#credentialText(provider, 'hint'),
-      inputLabel: this.#credentialText(provider, provider === 'mineru' ? 'token' : 'key'),
-      verifyLabel: this.#credentialText(provider, 'verify'),
-      helpLabel: this.#credentialText(provider, 'help'),
-      helpURL: CREDENTIAL_HELP_URLS[provider],
-    });
     return {
       labels: {
         title: s('Reader'),
@@ -178,8 +150,15 @@ export class SettingsReader {
       color: readerDefaultHighlightColor(this.#preferences),
       scroll: readerScrollConfig(this.#preferences),
       status: this.#status,
-      mineru: credential('mineru'),
-      semanticScholar: credential('semanticScholar'),
+      semanticScholar: {
+        ...this.#credential,
+        title: this.#credentialText('title'),
+        hint: this.#credentialText('hint'),
+        inputLabel: this.#credentialText('key'),
+        verifyLabel: this.#credentialText('verify'),
+        helpLabel: this.#credentialText('help'),
+        helpURL: SEMANTIC_SCHOLAR_CREDENTIAL_HELP_URL,
+      },
     };
   }
 
@@ -192,28 +171,26 @@ export class SettingsReader {
       command.type === 'verifyCredential' ||
       command.type === 'credentialHelp'
     ) {
-      const provider = command.provider;
-      if (provider !== 'mineru' && provider !== 'semanticScholar') return;
       switch (command.type) {
         case 'mountCredential':
-          void this.#prefill(provider);
+          void this.#prefill();
           break;
         case 'credentialEditing':
-          this.#invalidate(provider);
+          this.#invalidate();
           this.#changed();
           break;
         case 'credentialInput': {
-          const input = this.#input(provider);
-          if (input) this.#writeCredential(provider, input.value);
+          const input = this.#input();
+          if (input) this.#writeCredential(input.value);
           break;
         }
         case 'verifyCredential': {
-          const input = this.#input(provider);
-          if (input) void this.#verify(provider, input, input.value);
+          const input = this.#input();
+          if (input) void this.#verify(input, input.value);
           break;
         }
         case 'credentialHelp':
-          openCredentialHelp(provider);
+          openSemanticScholarCredentialHelp();
           break;
       }
       return;
@@ -265,96 +242,93 @@ export class SettingsReader {
     this.#changed();
   }
 
-  #current(provider: Provider, revision: number): boolean {
-    return !this.#disposed && this.#revision[provider] === revision;
+  #current(revision: number): boolean {
+    return !this.#disposed && this.#revision === revision;
   }
 
-  #invalidate(provider: Provider): number {
-    this.#checks[provider]?.abort();
-    this.#checks[provider] = null;
-    this.#credentials[provider] = { checking: false, error: false, status: '' };
-    return ++this.#revision[provider];
+  #invalidate(): number {
+    this.#check?.abort();
+    this.#check = null;
+    this.#credential = { checking: false, error: false, status: '' };
+    return ++this.#revision;
   }
 
-  async #prefill(provider: Provider): Promise<void> {
-    const revision = this.#revision[provider];
+  async #prefill(): Promise<void> {
+    const revision = this.#revision;
     // A mount command can arrive before the native view has returned its parts.
     await Promise.resolve();
-    if (!this.#current(provider, revision)) return;
-    const input = this.#input(provider);
+    if (!this.#current(revision)) return;
+    const input = this.#input();
     if (!input) return;
     try {
-      const value = await (provider === 'mineru'
-        ? readSettledMinerUToken()
-        : readSettledReferenceKey());
-      if (!this.#current(provider, revision) || this.#input(provider) !== input) return;
+      const value = await readSettledReferenceKey();
+      if (!this.#current(revision) || this.#input() !== input) return;
       input.value = value;
     } catch {
-      if (!this.#current(provider, revision) || this.#input(provider) !== input) return;
-      this.#credentials[provider] = {
+      if (!this.#current(revision) || this.#input() !== input) return;
+      this.#credential = {
         checking: false,
         error: true,
-        status: this.#credentialText(provider, 'unavailable'),
+        status: this.#credentialText('unavailable'),
       };
       this.#changed();
     }
   }
 
-  #writeCredential(provider: Provider, value: string): void {
-    const revision = this.#invalidate(provider);
+  #writeCredential(value: string): void {
+    const revision = this.#invalidate();
     // Admission is synchronous; only the shared Login Manager queue orders edits.
-    const pending =
-      provider === 'mineru' ? saveMinerUToken(value) : changeReferenceKey(value || null);
-    this.#writes[provider] = pending;
+    const pending = changeReferenceKey(value || null);
+    this.#pendingWrite = pending;
     void pending.catch(() => {
-      if (!this.#current(provider, revision)) return;
-      this.#credentials[provider] = {
+      if (!this.#current(revision)) return;
+      this.#credential = {
         checking: false,
         error: true,
-        status: this.#credentialText(provider, 'unavailable'),
+        status: this.#credentialText('unavailable'),
       };
       this.#changed();
     });
     this.#changed();
   }
 
-  async #verify(provider: Provider, input: HTMLInputElement, value: string): Promise<void> {
-    const revision = this.#invalidate(provider);
+  async #verify(input: HTMLInputElement, value: string): Promise<void> {
+    const revision = this.#invalidate();
     const check = createCredentialAbortController();
-    this.#checks[provider] = check;
+    this.#check = check;
     const current = (): boolean =>
-      this.#current(provider, revision) &&
+      this.#current(revision) &&
       !check.signal.aborted &&
-      this.#input(provider) === input &&
+      this.#input() === input &&
       input.value === value;
-    this.#credentials[provider] = {
+    this.#credential = {
       checking: true,
       error: false,
       status: t('credentials.validation.checking', this.#language),
     };
     this.#changed();
     try {
-      await this.#writes[provider];
+      await this.#pendingWrite;
       if (!current()) return;
-      const result = await checkCredential(provider, value, check.signal);
+      const result = await checkSemanticScholarCredential(value, check.signal);
       if (!current() || result === 'cancelled') return;
-      this.#credentials[provider] = {
+      this.#credential = {
         checking: false,
         error: result !== 'valid',
         status: t(`credentials.validation.${result}`, this.#language),
       };
     } catch {
       if (!current()) return;
-      this.#credentials[provider] = {
+      this.#credential = {
         checking: false,
         error: true,
-        status: this.#credentialText(provider, 'unavailable'),
+        status: this.#credentialText('unavailable'),
       };
     } finally {
-      if (this.#current(provider, revision)) {
-        this.#checks[provider] = null;
-        if (this.#credentials[provider].checking)
-          this.#credentials[provider] = { checking: false, error: false, status: '' };
+      if (this.#current(revision)) {
+        this.#check = null;
+        if (this.#credential.checking)
+          this.#credential = { checking: false, error: false, status: '' };
         this.#changed();
       }
     }
@@ -363,8 +337,7 @@ export class SettingsReader {
   dispose(): void {
     if (this.#disposed) return;
     this.#disposed = true;
-    this.#checks.mineru?.abort();
-    this.#checks.semanticScholar?.abort();
+    this.#check?.abort();
     for (const cleanup of this.#cleanups.splice(0)) cleanup();
   }
 }

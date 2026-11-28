@@ -35,12 +35,6 @@ export type BuiltinModuleId =
   | 'references'
   | 'notes'
   | 'workspace'
-  | 'reader-chapters'
-  | 'reader-figures'
-  | 'document-comparison'
-  | 'reader-excerpts'
-  | 'chapter-notes'
-  | 'document-preparation'
   | 'settings-snapshots'
   | 'extensions';
 
@@ -250,79 +244,6 @@ export const BUILTIN_MODULES: readonly BuiltinModuleDescriptor[] = [
     contributions: [{ host: 'reader', context: 'reader-normal', actions: ['openReferences'] }],
     selectionActions: [],
     ui: ['References'],
-  },
-  {
-    id: 'reader-chapters',
-    names: { en: 'Chapter Search', 'zh-CN': '章节查找' },
-    hosts: ['reader'],
-    scopes: ['Reader session', 'Reader view', 'Chapter search'],
-    requires: [],
-    optional: [],
-    contributions: [{ host: 'reader', context: 'reader-normal', actions: ['openChapterSearch'] }],
-    selectionActions: [],
-    ui: ['Chapter search'],
-  },
-  {
-    id: 'reader-figures',
-    names: { en: 'Figure Browser', 'zh-CN': '图表浏览' },
-    hosts: ['reader'],
-    scopes: ['Reader session', 'Reader view', 'Figure picker'],
-    requires: ['reader-navigation'],
-    optional: [],
-    contributions: [{ host: 'reader', context: 'reader-normal', actions: ['openFigurePicker'] }],
-    selectionActions: [],
-    ui: ['Figure picker'],
-  },
-  {
-    id: 'document-comparison',
-    names: { en: 'Document Comparison', 'zh-CN': '文档解析对照' },
-    hosts: ['reader'],
-    scopes: ['Reader session', 'Document comparison'],
-    requires: [],
-    optional: [],
-    contributions: [
-      { host: 'reader', context: 'reader-normal', actions: ['compareDocumentParsing'] },
-    ],
-    selectionActions: [],
-    ui: ['Document comparison'],
-  },
-  {
-    id: 'reader-excerpts',
-    names: { en: 'Object Excerpts', 'zh-CN': '对象摘录' },
-    hosts: ['reader'],
-    scopes: ['Reader session', 'Reader view', 'Object excerpts'],
-    requires: [],
-    optional: [],
-    contributions: [{ host: 'reader', context: 'reader-normal', actions: ['openObjectExcerpts'] }],
-    selectionActions: [],
-    ui: ['Object excerpts'],
-  },
-  {
-    id: 'chapter-notes',
-    names: { en: 'Chapter Notes', 'zh-CN': '章节笔记整理' },
-    hosts: ['reader'],
-    scopes: ['Reader session', 'Reader view', 'Chapter notes preview'],
-    requires: [],
-    optional: [],
-    contributions: [
-      { host: 'reader', context: 'reader-normal', actions: ['organizeChapterNotes'] },
-    ],
-    selectionActions: [],
-    ui: ['Chapter notes preview'],
-  },
-  {
-    id: 'document-preparation',
-    names: { en: 'Document Preparation', 'zh-CN': '文档准备' },
-    hosts: ['main', 'reader'],
-    scopes: ['Application task queue', 'Main window', 'Reader session'],
-    requires: [],
-    optional: [],
-    contributions: [
-      { host: 'main', context: 'main-normal', actions: ['prepareDocuments'] },
-      { host: 'reader', context: 'reader-normal', actions: ['prepareDocuments'] },
-    ],
-    selectionActions: [],
-    ui: ['Document preparation'],
   },
   {
     id: 'settings-snapshots',

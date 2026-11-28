@@ -45,8 +45,6 @@ export * from './annotation-targets';
 export { readerActionsTagsItemIDs } from './actions-tags-targets';
 export * from './sidebar';
 export * from './structured-document';
-export * from './document-source';
-export { pdfSourceFigurePages } from '../pdf-source';
 export { readReaderReferenceDocument } from './references';
 export type {
   ReaderReferenceDocument,
@@ -55,7 +53,5 @@ export type {
   ReaderCitationOccurrence,
   ReaderReferenceLocation,
 } from './reference-contracts';
-export { readerRegionPreview } from './region-preview';
-export type { ReaderRegionPreview } from './region-preview';
-
 export { readerReadingMode } from './presentation';
+export { projectReadingViewport, type ReaderReadingViewport } from './reading-text';

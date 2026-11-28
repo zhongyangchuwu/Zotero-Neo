@@ -1831,7 +1831,7 @@ describe('tag candidate chooser', () => {
     expect(session.picker.open).toBe(false);
   });
 
-  it('hides valid Neo identities from tag search, colon namespaces, and create candidates', async () => {
+  it('treats an existing chapter-note identity as an ordinary searchable tag', async () => {
     vi.useFakeTimers();
     vi.stubGlobal('Services', { focus: { focusedWindow: null } });
     const { window, session } = createPickerHarness();
@@ -1849,16 +1849,14 @@ describe('tag candidate chooser', () => {
     });
 
     await picker.open(window, session, 'tags', { source });
-    expect(session.picker.filtered.map((item) => item.tagName)).toEqual(['ordinary']);
+    expect(session.picker.filtered.map((item) => item.tagName)).toContain('urn:');
 
     const input = session.picker.input as HTMLInputElement & { emit(type: string): void };
     input.value = identity;
     input.emit('input');
-    expect(session.picker.filtered).toEqual([]);
-
-    input.value = 'urn:zotero-neo:';
-    input.emit('input');
-    expect(session.picker.filtered).toEqual([]);
+    expect(session.picker.filtered.map((item) => [item.tagCandidate, item.tagName])).toEqual([
+      ['tag', identity],
+    ]);
   });
 
   it('leaves domain mutation keys unclaimed and uses the ordinary pointer policy', async () => {

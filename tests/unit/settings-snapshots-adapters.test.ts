@@ -14,7 +14,6 @@ import {
   serializeSettingsDocument,
 } from '../../src/settings-snapshots/document';
 import { SettingsSnapshotService, settingsChangeID } from '../../src/settings-snapshots/service';
-import { saveMinerUToken } from '../../src/platform/document-credentials';
 import { changeReferenceKey } from '../../src/platform/reference-credentials';
 import { settingsSnapshotHostFixture } from './settings-snapshots-host-fixture';
 
@@ -154,6 +153,12 @@ describe('standalone built-in settings adapters at the native OS boundary', () =
     expect(entries['keyGuide.delayMs']).toEqual({ kind: 'set', value: 0 });
     expect(entries['modules.references.enabled']).toEqual({ kind: 'set', value: false });
     expect(entries['appearance.preset']).toEqual({ kind: 'set', value: 'terminal' });
+    expect(entries['documentAnalysis.provider']).toBeUndefined();
+    expect(entries['documentAnalysis.local.rules']).toBeUndefined();
+    expect(t.user.get('extensions.zotero-neo.documentAnalysis.provider')).toBe('mineru');
+    expect(t.user.get('extensions.zotero-neo.documentAnalysis.local.rules')).toBe(
+      values['documentAnalysis.local.rules'],
+    );
     expect(entries['tabEnhancements.side']).toBeUndefined();
     expect(entries['modules.tab-enhancements.enabled']).toBeUndefined();
     expect(t.user.get('extensions.zotero-neo.tabEnhancements.side')).toBe('right');
@@ -322,6 +327,50 @@ describe('standalone built-in settings adapters at the native OS boundary', () =
     expect(captured.section.entries.map(({ key }) => key).sort()).toEqual(['bindings', 'language']);
     expect(captured.issues.map(({ code }) => code)).not.toContain('excluded-or-unknown');
   });
+
+  it.each([22, BINDING_SCHEMA_VERSION])(
+    'ignores retired analysis fields and imports live binding overrides from schema %i',
+    async (schemaVersion) => {
+      const t = settingsSnapshotHostFixture();
+      const prefix = 'extensions.zotero-neo.';
+      const adapter = createSettingsAdapters(() => 'neo-target')[1]!;
+      const profileField = 'documentAnalysis.oxr.endpoint';
+      t.user.set(prefix + profileField, 'https://local.example');
+      const live = {
+        'reader-normal:<Space>rd': 'openReferences',
+        'main-normal:<Space>ru': 'openNeoSettings',
+        'reader-normal:<Space>rr': null,
+      };
+      const plan = await adapter.plan(
+        section(adapter.id, [
+          reset(profileField),
+          reset(profileField),
+          set(prefix + profileField, 'https://other.example'),
+          set('secret:mineru', 'ignored'),
+          set('bindings', {
+            schemaVersion,
+            overrides: JSON.stringify({
+              'reader-normal:<Space>ru': 'prepareDocuments',
+              'reader-normal:<Space>rf': 'openFigurePicker',
+              ...live,
+            }),
+          }),
+        ]),
+        context(),
+      );
+      expect(plan.issues.map(({ code }) => code)).toEqual(
+        schemaVersion === BINDING_SCHEMA_VERSION ? [] : ['binding-migration'],
+      );
+      expect(plan.changes.map(({ key }) => key)).toEqual(['bindings']);
+      expect(await adapter.apply(selected(plan.changes), context())).toMatchObject([
+        { key: 'bindings', status: 'applied' },
+      ]);
+      expect(JSON.parse(String(t.user.get(prefix + 'bindings')))).toEqual(live);
+      expect(t.user.get(prefix + profileField)).toBe('https://local.example');
+      expect(t.mutations).not.toContain(prefix + profileField);
+      expect(t.records).toEqual([]);
+    },
+  );
 
   it('plans target versions, defaults conflicts unselected, preserves false/zero/empty/reset, and imports idempotently', async () => {
     const t = settingsSnapshotHostFixture();
@@ -561,20 +610,29 @@ describe('standalone built-in settings adapters at the native OS boundary', () =
     ).toBe(true);
   });
 
-  it('round-trips named owned secrets only on explicit secret capture, never puts secret values into labels/issues/receipts', async () => {
+  it('transfers only Semantic Scholar credentials with explicit secret capture, without touching a legacy MinerU login', async () => {
     const t = settingsSnapshotHostFixture();
-    await saveMinerUToken('source-mineru');
+    const legacyLogin = {
+      hostname: 'chrome://zotero-neo',
+      httpRealm: 'MinerU API',
+      username: 'mineru',
+      password: 'source-mineru',
+    } as nsILoginInfo;
+    t.records.push(legacyLogin);
     await changeReferenceKey('source-reference');
     const adapter = createSettingsAdapters(() => 'neo-target')[1]!;
     const excluded = await adapter.capture(captureContext());
     expect(excluded.section.entries.some((entry) => entry.key.startsWith('secret:'))).toBe(false);
     const included = await adapter.capture({ ...captureContext(), includeSecrets: true });
-    expect(
-      included.section.entries.filter((entry) => entry.key.startsWith('secret:')),
-    ).toHaveLength(2);
-    await saveMinerUToken('');
+    expect(included.section.entries.filter((entry) => entry.key.startsWith('secret:'))).toEqual([
+      set('secret:semantic-scholar', 'source-reference'),
+    ]);
     await changeReferenceKey(null);
-    const plan = await adapter.plan(included.section, context());
+    const plan = await adapter.plan(
+      section(adapter.id, [reset('secret:mineru'), ...included.section.entries]),
+      context(),
+    );
+    expect(plan.issues).toEqual([]);
     const secretChanges = plan.changes.filter((change) => change.secret);
     const receipts = await adapter.apply(selected(secretChanges), context());
     expect(receipts.every((receipt) => receipt.status === 'applied')).toBe(true);
@@ -585,9 +643,9 @@ describe('standalone built-in settings adapters at the native OS boundary', () =
         receipts,
       }),
     ).not.toMatch(/source-mineru|source-reference/);
-    expect(t.records.map((login) => login.password)).toEqual(
-      expect.arrayContaining(['source-mineru', 'source-reference']),
-    );
+    expect(t.records[0]).toBe(legacyLogin);
+    expect(t.logins.findLogins).not.toHaveBeenCalledWith('chrome://zotero-neo', null, 'MinerU API');
+    expect(t.records.map((login) => login.password)).toEqual(['source-mineru', 'source-reference']);
     const repeated = await adapter.plan(included.section, context());
     expect(
       (
@@ -607,9 +665,9 @@ describe('standalone built-in settings adapters at the native OS boundary', () =
       await pending;
       await original(login);
     });
-    const first = saveMinerUToken('admitted-first');
+    const first = changeReferenceKey('admitted-first');
     const c = context();
-    const cancelled = saveMinerUToken('must-not-be-written', () => assertSettingsCurrent(c));
+    const cancelled = changeReferenceKey('must-not-be-written', () => assertSettingsCurrent(c));
     c.controller.abort();
     release();
     await first;
@@ -815,7 +873,7 @@ describe('standalone built-in settings adapters at the native OS boundary', () =
         set('modules.references.enabled', false),
         set('language', 'en'),
         set('keyGuide.delayMs', 0),
-        set('secret:mineru', 'new-token'),
+        set('secret:semantic-scholar', 'new-token'),
       ]),
       context(),
     );
@@ -823,7 +881,9 @@ describe('standalone built-in settings adapters at the native OS boundary', () =
       new Error('secret-bearing-native-error-new-token'),
     );
     const receipts = await adapter.apply(selected(plan.changes), context());
-    expect(receipts.find((receipt) => receipt.key === 'secret:mineru')!.status).toBe('failed');
+    expect(receipts.find((receipt) => receipt.key === 'secret:semantic-scholar')!.status).toBe(
+      'failed',
+    );
     expect(receipts.find((receipt) => receipt.key === 'modules.references.enabled')).toMatchObject({
       status: 'skipped',
     });

@@ -31,7 +31,6 @@ export type NavigationEventId =
   | 'reader-mark.jump'
   | 'references.jump'
   | 'references.open-local'
-  | 'reader-excerpts.open-note'
   | 'reader-native.hard';
 
 export type NavigationCause =

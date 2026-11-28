@@ -57,8 +57,12 @@ export function createArtifactRepository(): NeoArtifactRepository {
             throw new ArtifactError('corrupt', 'Invalid artifact JSON; file preserved');
         }
         const envelope = record(value);
-        // Retired AI Q&A artifacts remain stored but do not participate in active histories.
-        if (envelope?.format === 'zotero-neo' && envelope.kind === 'ai-qa') continue;
+        // Identifiable retired attachments stay stored and do not participate in active histories.
+        if (
+          envelope?.format === 'zotero-neo' &&
+          (envelope.kind === 'ai-qa' || envelope.kind === 'document-corrections')
+        )
+          continue;
         if (attachment.deleted)
           throw new ArtifactError(
             'removed-artifact',

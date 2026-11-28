@@ -1,9 +1,6 @@
 import { THEME_VARS } from '../../theme';
 
 export const ANNOTATION_COMMENT_OVERLAY_STYLE = `position:fixed;left:50%;bottom:14px;transform:translateX(-50%);width:min(560px,92%);z-index:99998;background:${THEME_VARS.surface};color:${THEME_VARS.text};border:1px solid ${THEME_VARS.border};border-radius:var(--neo-radius);box-shadow:var(--neo-shadow)`;
-export const FIGURES_BACKDROP_STYLE = `position:fixed;inset:0;z-index:2147483645;background:${THEME_VARS.backdrop}`;
-export const COMPARISON_BACKDROP_STYLE = `position:fixed;inset:0;z-index:2147483644;background:${THEME_VARS.backdrop}`;
-export const COMPARISON_PANEL_STYLE = `position:fixed;inset:5%;z-index:2147483645;overflow:auto;padding:20px;background:${THEME_VARS.surface};color:${THEME_VARS.text};border:1px solid ${THEME_VARS.border};border-radius:8px;box-shadow:0 8px 40px #0006;font:menu`;
 export const PREPARATION_BACKDROP_STYLE = `position:fixed;inset:0;z-index:2147483646;background:${THEME_VARS.backdrop};display:flex;align-items:center;justify-content:center`;
 export const PREPARATION_PANEL_STYLE = `display:flex;flex-direction:column;gap:10px;padding:18px;width:min(880px,90vw);max-height:90vh;overflow:auto;background:${THEME_VARS.surface};color:${THEME_VARS.text};border:1px solid ${THEME_VARS.border};border-radius:8px;font:menu`;
 export const SELECTION_ACTIONS_OVERLAY_STYLE = `position:fixed;right:16px;bottom:52px;z-index:100002;width:min(430px,calc(100vw - 32px));max-height:min(70vh,560px);overflow:auto;padding:10px;border:1px solid ${THEME_VARS.border};border-radius:var(--neo-radius);background:${THEME_VARS.surface};color:${THEME_VARS.text};box-shadow:var(--neo-shadow);pointer-events:none;`;

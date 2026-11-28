@@ -13,23 +13,27 @@ export function textAdmissionFixture(reading = false) {
     { left: 10, top: 30, right: 50, bottom: 40, width: 40, height: 10 },
   ];
   const root = { nodeType: 1 };
+  const reflowRoot = { id: 'sdt-content', children: elements };
   const document = {
     documentElement: {
       hasAttribute: (name: string) => attributes.has(name),
       setAttribute: (name: string, value: string) => attributes.set(name, value),
       removeAttribute: (name: string) => attributes.delete(name),
     },
-    getElementById: () => (reading ? { id: 'sdt-content' } : null),
-    querySelectorAll: (selector: string) => (selector.startsWith('.page') ? [page] : elements),
-    createTreeWalker: () => {
+    getElementById: () => (reading ? reflowRoot : null),
+    querySelectorAll: (selector: string) =>
+      selector.startsWith('.page') && !selector.includes('.textLayer') ? [page] : elements,
+    createTreeWalker: (container: Node) => {
+      const block = reading ? elements.indexOf(container as HTMLElement) : -1;
+      const scoped = block >= 0 ? [nodes[block]!] : nodes;
       let index = -1;
       return {
-        nextNode: () => nodes[++index] ?? null,
+        nextNode: () => scoped[++index] ?? null,
         get currentNode() {
-          return nodes[index] ?? root;
+          return scoped[index] ?? root;
         },
         set currentNode(node: Node) {
-          index = nodes.indexOf(node as Text);
+          index = scoped.indexOf(node as Text);
         },
       };
     },
@@ -41,7 +45,11 @@ export function textAdmissionFixture(reading = false) {
       isConnected: true,
       dataset: { refPath: String(index) },
       closest: (selector: string) =>
-        selector.includes('.page') ? page : selector.includes('data-ref-path') ? element : null,
+        selector.includes('.page')
+          ? page
+          : selector.includes('data-ref-path') || (reading && selector === '[data-text-index]')
+            ? element
+            : null,
       getAttribute: (name: string) => attrs.get(name) ?? null,
       setAttribute: (name: string, value: string) => attrs.set(name, value),
       removeAttribute: (name: string) => attrs.delete(name),
@@ -151,6 +159,7 @@ export function textAdmissionFixture(reading = false) {
   } as unknown as Selection;
   const window = {
     document,
+    innerHeight: 800,
     getSelection: () => selection,
     PDFViewerApplication: {
       pdfViewer: {

@@ -274,6 +274,10 @@ export class ReaderSelectionRange {
       const target = indexedStructuralTextPosition(paragraphs, focus, direction, granularity);
       if (target)
         selection.setBaseAndExtent(anchor.textNode, anchor.offset, target.textNode, target.offset);
+      else if (prepared) {
+        this.extendByToken(pdfWindow, direction === 'forward' ? 1 : -1);
+        return;
+      }
     } else if (granularity === 'sentence' || granularity === 'paragraph') {
       this.extendByToken(pdfWindow, direction === 'forward' ? 1 : -1);
       return;

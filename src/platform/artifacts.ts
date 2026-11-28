@@ -1,4 +1,4 @@
-import { ArtifactError, type ArtifactSource } from '../artifacts/contracts';
+import { ArtifactError } from '../artifacts/contracts';
 
 export const ARTIFACT_MAX_BYTES = 32 * 1024 * 1024;
 export const ARTIFACT_PREFIX = 'zotero-neo-';
@@ -35,61 +35,6 @@ export function artifactBelongsToParent(
         .replace(/^https:/u, 'http:')
         .replace(/\/$/u, '')
   );
-}
-
-export async function artifactPDF(itemID: number): Promise<{
-  item: Zotero.Item;
-  parent: Zotero.Item;
-  source: ArtifactSource;
-  isCurrent: () => Promise<boolean>;
-}> {
-  const item = await Zotero.Items.getAsync(itemID);
-  if (!item || item.deleted || !item.isPDFAttachment())
-    throw new ArtifactError('source-unavailable', 'PDF attachment unavailable');
-  const parent = item.parentID ? await Zotero.Items.getAsync(item.parentID) : null;
-  if (!parent)
-    throw new ArtifactError(
-      'parent-required',
-      'Attach this standalone PDF to a regular reference before saving Neo artifacts',
-    );
-  artifactParentIdentity(parent);
-  const path = await item.getFilePathAsync();
-  if (!path) throw new ArtifactError('source-unavailable', 'PDF file is not available locally');
-  const value = await Zotero.Utilities.Internal.md5Async(path);
-  if (!/^[a-f0-9]{32}$/iu.test(value))
-    throw new ArtifactError('source-unavailable', 'PDF MD5 digest unavailable');
-  const attachmentKey = item.key,
-    parentKey = parent.key,
-    parentID = parent.id,
-    libraryID = parent.libraryID;
-  return {
-    item,
-    parent,
-    source: {
-      attachmentKey,
-      contentHash: { algorithm: 'md5', value: value.toLowerCase() },
-      precision: 'document',
-    },
-    async isCurrent() {
-      const currentItem = await Zotero.Items.getAsync(itemID),
-        currentParent = await Zotero.Items.getAsync(parentID);
-      if (
-        !currentItem ||
-        currentItem.deleted ||
-        currentItem.key !== attachmentKey ||
-        currentItem.libraryID !== libraryID ||
-        currentItem.parentID !== parentID ||
-        !currentParent ||
-        currentParent.deleted ||
-        currentParent.key !== parentKey ||
-        currentParent.libraryID !== libraryID ||
-        !currentParent.isRegularItem()
-      )
-        return false;
-      const currentPath = await currentItem.getFilePathAsync();
-      return currentPath === path && (await Zotero.Utilities.Internal.md5Async(path)) === value;
-    },
-  };
 }
 
 export async function artifactAttachments(parent: Zotero.Item): Promise<Zotero.Item[]> {

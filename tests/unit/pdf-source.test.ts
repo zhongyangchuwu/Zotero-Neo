@@ -1,5 +1,5 @@
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
-import { pdfSourcePages } from '../../src/toolkit/pdf-source';
+import { pdfSourceFigurePages } from '../../src/toolkit/pdf-source';
 
 afterEach(() => vi.unstubAllGlobals());
 beforeEach(() => {
@@ -7,25 +7,33 @@ beforeEach(() => {
   vi.stubGlobal('Components', { utils: { cloneInto: (value: unknown) => value } });
 });
 describe('headless host PDF geometry', () => {
-  it('reads unrotated boxes and rotation, releasing the host document after metadata extraction', async () => {
-    const destroy = vi.fn(async () => {}),
-      getPage = vi.fn(async () => ({ view: [10, 20, 610, 820], rotate: 90 }));
+  it('reads unrotated bounds while keeping offline geometry extraction independent of Reader', async () => {
+    const destroy = vi.fn(async () => {});
+    const cleanup = vi.fn(() => true);
+    const getPage = vi.fn(async () => ({
+      view: [10, 20, 610, 820],
+      getTextContent: async () => ({ items: [], styles: {} }),
+      getOperatorList: async () => ({ fnArray: [], argsArray: [] }),
+      cleanup,
+    }));
     const module = {
       GlobalWorkerOptions: { workerSrc: '' },
+      OPS: {},
       getDocument: vi.fn(() => ({ promise: Promise.resolve({ numPages: 2, getPage }), destroy })),
     };
     const load = vi.fn(() => module);
     vi.stubGlobal('ChromeUtils', { importESModule: load });
     await expect(
-      pdfSourcePages(async () => new Uint8Array([1]), new AbortController().signal, 200),
+      pdfSourceFigurePages(async () => new Uint8Array([1]), new AbortController().signal, 200),
     ).resolves.toEqual([
-      { pageIndex: 0, viewBox: [10, 20, 610, 820], rotation: 90 },
-      { pageIndex: 1, viewBox: [10, 20, 610, 820], rotation: 90 },
+      { pageIndex: 0, viewBox: [10, 20, 610, 820], text: [], graphics: [] },
+      { pageIndex: 1, viewBox: [10, 20, 610, 820], text: [], graphics: [] },
     ]);
     expect(load).toHaveBeenCalledWith('resource://zotero/reader/pdf/build/pdf.mjs', {
       global: 'current',
     });
     expect(getPage.mock.calls).toHaveLength(2);
+    expect(cleanup).toHaveBeenCalledTimes(2);
     expect(destroy).toHaveBeenCalledOnce();
   });
   it('destroys a loading task on cancellation without publishing late geometry', async () => {
@@ -41,13 +49,13 @@ describe('headless host PDF geometry', () => {
         getDocument: () => ({ promise: pending.promise, destroy }),
       }),
     });
-    const task = pdfSourcePages(async () => new Uint8Array([1]), abort.signal, 200);
+    const task = pdfSourceFigurePages(async () => new Uint8Array([1]), abort.signal, 200);
     const rejected = expect(task).rejects.toThrow('cancelled');
     await Promise.resolve();
     abort.abort();
     pending.resolve({ numPages: 1, getPage: vi.fn() });
     await rejected;
-    expect(destroy).toHaveBeenCalled();
+    expect(destroy).toHaveBeenCalledOnce();
   });
   it('rejects oversized PDFs before enumerating pages and still releases host resources', async () => {
     const getPage = vi.fn(),
@@ -59,7 +67,7 @@ describe('headless host PDF geometry', () => {
       }),
     });
     await expect(
-      pdfSourcePages(async () => new Uint8Array([1]), new AbortController().signal, 200),
+      pdfSourceFigurePages(async () => new Uint8Array([1]), new AbortController().signal, 200),
     ).rejects.toThrow('200');
     expect(getPage).not.toHaveBeenCalled();
     expect(destroy).toHaveBeenCalledOnce();

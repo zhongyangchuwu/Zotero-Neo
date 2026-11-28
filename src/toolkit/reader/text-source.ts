@@ -21,9 +21,13 @@ export interface ReaderTextSpan {
 }
 
 /** Reads displayed source text in DOM order, retaining exact source node identity for both presentations. */
-export function readerTextSpans(window: Window): readonly ReaderTextSpan[] {
+export function readerTextSpans(
+  window: Window,
+  pages?: ReadonlySet<number>,
+): readonly ReaderTextSpan[] {
   const result: ReaderTextSpan[] = [];
   if (readerReadingMode(window)) {
+    if (pages) return result;
     const root = window.document.getElementById('sdt-content')!;
     const walker = window.document.createTreeWalker(root, 4);
     for (let node = walker.nextNode(); node; node = walker.nextNode()) {
@@ -46,9 +50,15 @@ export function readerTextSpans(window: Window): readonly ReaderTextSpan[] {
     }
     return result;
   }
-  for (const span of Array.from(
-    window.document.querySelectorAll('.textLayer span'),
-  ) as HTMLElement[]) {
+  const selector = pages
+    ? Array.from(pages, (page) => `.page[data-page-number="${page + 1}"] .textLayer span`).join(',')
+    : '.textLayer span';
+  if (!selector) return result;
+  for (const node of window.document.querySelectorAll(selector)) {
+    const span = node as HTMLElement;
+    const pageIndex =
+      Number(span.closest?.<HTMLElement>('.page[data-page-number]')?.dataset.pageNumber) - 1;
+    if (pages && !pages.has(pageIndex)) continue;
     const textNode = span.firstChild;
     if (textNode?.nodeType !== 3 || !(textNode as Text).length || !textNode.isConnected) continue;
     const rect = span.getBoundingClientRect();
@@ -62,8 +72,6 @@ export function readerTextSpans(window: Window): readonly ReaderTextSpan[] {
       rect.height <= 0
     )
       continue;
-    const pageIndex =
-      Number(span.closest?.<HTMLElement>('.page[data-page-number]')?.dataset.pageNumber) - 1;
     result.push({
       textNode: textNode as Text,
       text: (textNode as Text).data,

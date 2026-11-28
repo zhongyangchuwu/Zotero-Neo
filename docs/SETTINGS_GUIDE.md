@@ -42,7 +42,7 @@ Neo 界面默认随 Zotero 切换明暗。**交互配色**另管 Neo 的选区�
 
 也可在 [Zotero 配置文件目录](https://www.zotero.org/support/kb/profile_directory)中编辑 `docs/custom-neo.css`；仅当该文件不存在时，才读取旧的 `docs/custom-picker.css`。打开一个新的 Neo 面板可刷新所在窗口的文件样式。设置里非空的 CSS 优先，不与文件合并；只同步设置里的 CSS，不同步文件本身。
 
-用 `.neo-appearance` 设置所有受支持的 Neo 界面，也可单独选 `.picker-root`（选择器）、`.neo-extensions`（扩展）、`.neo-find`（行内查找）、`.neo-settings` / `.neo-snapshots`（设置和快照）、`.neo-sidebar`（标签与阅读器侧栏）、`.neo-hints`（按键与阅读器提示）、`.neo-statusbar`（状态条）、`.neo-toast`（通知）或 `.neo-reader-overlay`（图表选择器、选区操作及批注评论）。这些选择器只影响 Neo 自有容器，不影响 Zotero 原生控件或 PDF 纸面。可使用 `@media` 和 `@supports`，不加载 `@import`、`url()` 等外部资源。
+用 `.neo-appearance` 设置所有受支持的 Neo 界面，也可单独选 `.picker-root`（选择器）、`.neo-extensions`（扩展）、`.neo-find`（行内查找）、`.neo-settings` / `.neo-snapshots`（设置和快照）、`.neo-sidebar`（标签与阅读器侧栏）、`.neo-hints`（按键与阅读器提示）、`.neo-statusbar`（状态条）或 `.neo-reader-overlay`（选区操作及批注评论）。这些选择器只影响 Neo 自有容器，不影响 Zotero 原生控件或 PDF 纸面。可使用 `@media` 和 `@supports`，不加载 `@import`、`url()` 等外部资源。
 
 常用令牌：`--neo-bg`、`--neo-surface`、`--neo-surface-subtle`、`--neo-border`、`--neo-fg`、`--neo-muted`、`--neo-accent`、`--neo-selected-bg`、`--neo-selected-fg`、`--neo-radius`、`--neo-shadow`、`--neo-font-ui`、`--neo-font-mono`。
 
@@ -79,6 +79,8 @@ Neo 界面默认随 Zotero 切换明暗。**交互配色**另管 Neo 的选区�
 
 开启位置标记保存后，标记写入父条目的 Extra；独立 PDF 写入附件的 Extra。写入失败时回退到不同步的本地偏好，因此不要把它当作一定已同步的备份。
 
+`<Space>rb` 是 Reader 会话内的正文选择过滤开关，默认关闭，不是持久化设置。它只为可见 PDF 页面按需准备 Neo Select 使用的布局，不改变普通鼠标拖选或 Zotero 原生复制、高亮。详见[调整选中的文字范围](READER_GUIDE.md#调整选中的文字范围)。
+
 ## 选择启动焦点
 
 在**交互 → 主窗口 → 启动焦点**中，默认选中**条目列表**；希望启动后直接输入查询时，改选 **Zotero 快速搜索**。设置立即保存，下次启动进入文库时生效；不会改变恢复的阅读器标签页，也不会在插件重载时抢焦点。
@@ -106,6 +108,8 @@ Neo 界面默认随 Zotero 切换明暗。**交互配色**另管 Neo 的选区�
 切换开关立即保存；保存值与当前运行状态不同时，模块页顶部显示一条**部分更改将在重启 Zotero 后生效**提示。切回当前状态后提示消失。完全退出 Zotero 后重新打开才能应用；只关闭设置窗口、重开 PDF 或热重载 Neo 不会生效。**恢复功能默认值**只重置本页功能开关，并立即保存。
 
 Neo 不再提供 AI 问答或 Translate for Zotero 接入；这不会卸载已安装的翻译插件，也不会删除已保存的译文便签。
+
+文档准备、解析对照、图表筛选、对象摘录、章节笔记和章节内查找及其 `<Space>ru`、`<Space>rd`、`<Space>rf`、`<Space>re`、`<Space>rn`、`<Space>rs` 命令已移除。旧 `documentAnalysis.*` 偏好、已移除命令的自定义绑定和旧备份中的相关字段会被忽略；已有章节笔记、图表摘录、标签和旧缓存不会被迁移或主动删除。图表跳转改用会话内存，不再提供云端解析、解析缓存或本地规则 JSON 配置。
 
 ## 使用标签命名空间
 

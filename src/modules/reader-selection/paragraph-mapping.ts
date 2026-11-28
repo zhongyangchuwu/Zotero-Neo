@@ -60,11 +60,7 @@ export function mapDocumentParagraphs(
     const firstPage = sourcePages.get(pointers[start]!.textNode);
     const lastPage = sourcePages.get(ends[start + query.length - 1]!.textNode);
     if (firstPage !== undefined && !pages.has(firstPage)) continue;
-    // MinerU may retain merged continuation text on the first page's region.
-    // Exact literal source matching can prove its endpoint on the adjacent page;
-    // never borrow a unique occurrence that starts on another page.
-    if (lastPage !== undefined && !pages.has(lastPage) && lastPage !== (firstPage ?? -2) + 1)
-      continue;
+    if (lastPage !== undefined && !pages.has(lastPage)) continue;
     const mappedPointers = [],
       mappedEnds = [];
     let at = start;

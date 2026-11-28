@@ -1,18 +1,20 @@
-import { checkParseCurrent, type DocumentPage } from '../document-analysis/contracts';
-import { nativeDocumentPages } from '../document-analysis/native';
+import { checkParseCurrent, documentRect, record } from '../document-analysis/contracts';
+import { mayContainDocumentCaption } from '../document-analysis/local-rules/caption-identity';
 import { cloneInto } from '../platform/cross-compartment';
 import type { LocalFigurePage } from '../document-analysis/local-rules';
 import { pdfFigureGeometry } from './pdf-figure-geometry';
 
+interface PdfPage {
+  readonly view: readonly number[];
+  getTextContent(): Promise<unknown>;
+  getOperatorList(): Promise<unknown>;
+  cleanup(): boolean;
+}
+
 interface PDFTask {
   readonly promise: Promise<{
     readonly numPages: number;
-    getPage(index: number): Promise<{
-      readonly view: readonly number[];
-      readonly rotate: number;
-      getTextContent(): Promise<unknown>;
-      getOperatorList(): Promise<unknown>;
-    }>;
+    getPage(index: number): Promise<PdfPage>;
   }>;
   destroy(): Promise<void>;
 }
@@ -27,19 +29,35 @@ interface HostPDFModule {
   }): PDFTask;
 }
 
-async function withPdfSource<T>(
+export interface PdfExtractionSource {
+  readonly pageCount: number;
+  readPage(
+    index: number,
+    needGeometry: (hasCaption: () => boolean) => boolean,
+  ): Promise<LocalFigurePage | null>;
+  destroy(): Promise<void>;
+}
+
+function* pdfTextChunks(content: unknown): Iterable<string> {
+  const items = record(content)?.items;
+  if (!Array.isArray(items)) throw new Error('PDF text content unavailable');
+  for (const item of items) {
+    const text = record(item)?.str;
+    if (typeof text === 'string') yield text;
+  }
+}
+
+/** Open one in-memory host PDF.js document, owned by the caller's abort signal. */
+export async function openPdfSource(
   read: () => Promise<Uint8Array>,
   signal: AbortSignal,
-  maxPages: number,
-  visit: (pdf: Awaited<PDFTask['promise']>, module: HostPDFModule) => Promise<T>,
-): Promise<T> {
+  window: Window | undefined = Zotero.getMainWindow(),
+): Promise<PdfExtractionSource> {
   checkParseCurrent(signal);
-  if (!Number.isSafeInteger(maxPages) || maxPages < 1) throw new Error('Invalid PDF page budget');
-  const window = Zotero.getMainWindow();
-  if (!window || window.closed) throw new Error('PDF metadata host unavailable');
-  // PDF.js polyfills need the Main window's mutable realm, rather than Bootstrap's module realm.
-  // This fixed loader has no caller-supplied code and loads only Zotero's installed module.
-  const load = new (window as unknown as { Function: FunctionConstructor }).Function(
+  if (!window || window.closed) throw new Error('PDF extraction host unavailable');
+  // Use a mutable chrome window realm for the PDF.js polyfills, not Bootstrap's module realm.
+  const realm = window as Window & { Function: FunctionConstructor };
+  const load = new realm.Function(
     "return ChromeUtils.importESModule('resource://zotero/reader/pdf/build/pdf.mjs', { global: 'current' });",
   );
   const module = load() as HostPDFModule;
@@ -58,41 +76,54 @@ async function withPdfSource<T>(
       window,
     ),
   );
+  let disposal: Promise<void> | undefined;
+  const destroy = (): Promise<void> => {
+    signal.removeEventListener('abort', abort);
+    return (disposal ??= task.destroy());
+  };
   const abort = (): void => {
-    void task.destroy().catch(() => {});
+    void destroy().catch(() => {});
   };
   signal.addEventListener('abort', abort, { once: true });
   try {
     const pdf = await task.promise;
     checkParseCurrent(signal);
-    if (!Number.isInteger(pdf.numPages) || pdf.numPages < 1 || pdf.numPages > maxPages)
-      throw new Error(`PDF exceeds ${maxPages} pages or is unreadable`);
-    return await visit(pdf, module);
-  } finally {
-    signal.removeEventListener('abort', abort);
-    await task.destroy();
+    if (!Number.isSafeInteger(pdf.numPages) || pdf.numPages < 1)
+      throw new Error('PDF page count unavailable');
+    return {
+      pageCount: pdf.numPages,
+      destroy,
+      async readPage(index, needGeometry) {
+        checkParseCurrent(signal);
+        const page = await pdf.getPage(index + 1);
+        checkParseCurrent(signal);
+        try {
+          const textContent = await page.getTextContent();
+          checkParseCurrent(signal);
+          if (!needGeometry(() => mayContainDocumentCaption(pdfTextChunks(textContent))))
+            return null;
+          const operators = await page.getOperatorList();
+          checkParseCurrent(signal);
+          const viewBox = documentRect(page.view);
+          if (!viewBox) throw new Error('PDF page bounds unavailable');
+          return {
+            pageIndex: index,
+            viewBox,
+            ...pdfFigureGeometry(textContent, operators, module.OPS),
+          };
+        } finally {
+          // PDF.js otherwise keeps the full operator list on every visited page proxy.
+          if (!signal.aborted) page.cleanup();
+        }
+      },
+    };
+  } catch (error) {
+    await destroy().catch(() => {});
+    throw error;
   }
 }
 
-/** Read source geometry without opening Reader tabs or invoking SDT/OCR. */
-export async function pdfSourcePages(
-  read: () => Promise<Uint8Array>,
-  signal: AbortSignal,
-  maxPages: number,
-): Promise<readonly DocumentPage[]> {
-  return withPdfSource(read, signal, maxPages, async (pdf) => {
-    const pages: { viewRect: readonly number[]; rotation: number }[] = [];
-    for (let index = 1; index <= pdf.numPages; index++) {
-      checkParseCurrent(signal);
-      const page = await pdf.getPage(index);
-      checkParseCurrent(signal);
-      pages.push({ viewRect: page.view, rotation: page.rotate });
-    }
-    return nativeDocumentPages({ pages });
-  });
-}
-
-/** Read painted graphics and native text; no pixels, SDT labels, OCR or model are used. */
+/** Offline quality tooling: read all painted graphics and native text without a Reader session. */
 export async function pdfSourceFigurePages(
   read: () => Promise<Uint8Array>,
   signal: AbortSignal,
@@ -104,25 +135,22 @@ export async function pdfSourceFigurePages(
     if (!isCurrent()) throw new Error('Document analysis cancelled');
   };
   check();
-  return withPdfSource(read, signal, maxPages, async (pdf, module) => {
+  if (!Number.isSafeInteger(maxPages) || maxPages < 1) throw new Error('Invalid PDF page budget');
+  const pdf = await openPdfSource(read, signal);
+  try {
+    if (pdf.pageCount > maxPages) throw new Error(`PDF exceeds ${maxPages} pages`);
     const pages: LocalFigurePage[] = [];
-    for (let index = 0; index < pdf.numPages; index++) {
+    for (let index = 0; index < pdf.pageCount; index++) {
       check();
-      const page = await pdf.getPage(index + 1);
+      const page = await pdf.readPage(index, () => {
+        check();
+        return true;
+      });
       check();
-      const textContent = await page.getTextContent();
-      check();
-      const { text, graphics } = pdfFigureGeometry(
-        textContent,
-        await page.getOperatorList(),
-        module.OPS,
-      );
-      check();
-      const geometry = nativeDocumentPages({
-        pages: [{ viewRect: page.view, rotation: page.rotate }],
-      })[0]!;
-      pages.push({ pageIndex: index, viewBox: geometry.viewBox, text, graphics });
+      if (page) pages.push(page);
     }
     return pages;
-  });
+  } finally {
+    await pdf.destroy();
+  }
 }

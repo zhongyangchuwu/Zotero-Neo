@@ -106,10 +106,10 @@ export class BuiltinSettingsAdapter implements SettingsAdapter {
         };
       return nativeResourceField(key);
     }
-    if (key === 'secret:mineru' || key === 'secret:semantic-scholar')
+    if (key === 'secret:semantic-scholar')
       return {
         key,
-        label: key === 'secret:mineru' ? 'MinerU token' : 'Semantic Scholar API key',
+        label: 'Semantic Scholar API key',
         category: 'API credentials',
         type: 'string',
         secret: true,
@@ -200,7 +200,7 @@ export class BuiltinSettingsAdapter implements SettingsAdapter {
         ),
       );
     } else {
-      if (context.includeSecrets) supported.push('secret:mineru', 'secret:semantic-scholar');
+      if (context.includeSecrets) supported.push('secret:semantic-scholar');
       issues.push(
         this.#issue(
           'neo-exclusions',

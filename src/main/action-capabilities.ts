@@ -19,7 +19,6 @@ export const MAIN_NORMAL_ACTIONS = Object.freeze([
   'openZoteroBases',
   'openNeoSettings',
   'openSettingsSnapshots',
-  'prepareDocuments',
   'inspectMetadata',
   'inspectCollectionMetadata',
   'manageSelection',

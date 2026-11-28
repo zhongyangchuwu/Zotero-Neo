@@ -272,6 +272,22 @@ describe('ReaderSelectionRange', () => {
     expect(test.untheme).toHaveBeenCalledOnce();
   });
 
+  it('falls back to the next token at the edge of cached structural text', () => {
+    const test = tokenHarness();
+    test.owner.modify(test.pdfWindow, 'forward', 'paragraph', [
+      {
+        text: 'flow',
+        pointers: Array.from({ length: 4 }, (_, offset) => ({ textNode: test.node, offset })),
+        ends: Array.from({ length: 4 }, (_, offset) => ({
+          textNode: test.node,
+          offset: offset + 1,
+        })),
+      },
+    ]);
+    expect(test.setBaseAndExtent).toHaveBeenCalledWith(test.node, 0, test.node, 13);
+    test.owner.dispose();
+  });
+
   it('removes an old outline without removing a successor created during style cleanup', () => {
     const test = tokenHarness();
     test.owner.extendByToken(test.pdfWindow, 1);
