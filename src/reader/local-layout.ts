@@ -1,5 +1,6 @@
 import type { DocumentRegion } from '../document-analysis/contracts';
 import { localVisibleRegions } from '../document-analysis/local-rules';
+import { createAbortController } from '../platform/abort-controller';
 import { openPdfSource, type PdfExtractionSource } from '../toolkit/pdf-source';
 import {
   readerPdfSource,
@@ -36,7 +37,7 @@ interface VisibleRequest {
 /** Geometry belongs to exactly one loaded PDF and never outlives the Reader session. */
 export class ReaderLocalLayout {
   readonly #reader: ReaderRuntime;
-  readonly #abort = new AbortController();
+  readonly #abort = createAbortController();
   readonly #retired = Promise.withResolvers<void>();
   readonly #pages = new Map<number, Regions>();
   readonly #pending = new Map<number, PageWork>();

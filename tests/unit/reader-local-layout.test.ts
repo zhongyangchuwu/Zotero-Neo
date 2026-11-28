@@ -32,7 +32,10 @@ function page(items = [item(PROSE, 50, 700, 465)], graphics: readonly DocumentRe
   };
 }
 
-function harness(pages: readonly ReturnType<typeof page>[]) {
+function harness(
+  pages: readonly ReturnType<typeof page>[],
+  importGlobalProperties?: (names: string[]) => void,
+) {
   const bytes = new Uint8Array([12, 34]);
   const getData = vi.fn(async () => bytes);
   const getPage = vi.fn(async (number: number) => {
@@ -48,7 +51,11 @@ function harness(pages: readonly ReturnType<typeof page>[]) {
   const sdt = vi.fn();
   vi.stubGlobal('Zotero', { SDT: { getReader: sdt } });
   vi.stubGlobal('Components', {
-    utils: { cloneInto: (value: object) => value, waiveXrays: (value: object) => value },
+    utils: {
+      cloneInto: (value: object) => value,
+      waiveXrays: (value: object) => value,
+      importGlobalProperties,
+    },
   });
   vi.stubGlobal('ChromeUtils', {
     importESModule: () => ({ OPS, GlobalWorkerOptions: {}, getDocument }),
@@ -98,6 +105,18 @@ function harness(pages: readonly ReturnType<typeof page>[]) {
 afterEach(() => vi.unstubAllGlobals());
 
 describe('Reader-local PDF layout', () => {
+  it('opens and releases the extraction document from a Bootstrap scope without DOM globals', async () => {
+    const GeckoAbortController = AbortController;
+    vi.stubGlobal('AbortController', undefined);
+    const t = harness([page()], (names) => {
+      if (names.includes('AbortController')) vi.stubGlobal('AbortController', GeckoAbortController);
+    });
+    await t.layout.ensureVisible(t.primary);
+    expect(t.getPage).toHaveBeenCalledWith(1);
+    t.layout.dispose();
+    expect(t.destroy).toHaveBeenCalledOnce();
+  });
+
   it('reads text on every page and operators only on caption candidates, then reuses the scan', async () => {
     const prose = page([item(PROSE, 50, 700, 465)], [[50, 500, 300, 630]]);
     // PDF.js can emit one visual line as several runs and in unrelated stream order.
