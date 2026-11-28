@@ -9,8 +9,10 @@ import { deleteAnnotation as deleteReaderAnnotation } from '../../operations/del
 import {
   clearAnnotationSelection,
   computeSelectionPosition,
+  filteredReaderPdfSelection,
   readerAnnotationWriteGuard,
   readerOwnerWindow,
+  readerReadingMode,
   readerSelectionIsFiltered,
   readerSelectionText,
   selectedAnnotationIDs,
@@ -246,8 +248,15 @@ export function createReaderAnnotationsModule(
       const params = ports.selectionParams(window);
       const selection = window.getSelection();
       const hasDomSelection = selection && !selection.isCollapsed;
-      const computed = hasDomSelection ? computeSelectionPosition(window, selection) : null;
-      if (hasDomSelection && (!computed || computed.position === null)) {
+      const filtered = readerSelectionIsFiltered(window);
+      const filteredPdf = !!hasDomSelection && filtered && !readerReadingMode(window);
+      const parts = filteredPdf ? filteredReaderPdfSelection(window, selection) : null;
+      const computed =
+        hasDomSelection && !filteredPdf ? computeSelectionPosition(window, selection) : null;
+      if (
+        hasDomSelection &&
+        (filteredPdf ? !parts?.length : !computed || computed.position === null)
+      ) {
         ports.showStatus(
           computed?.failure === 'unsupported-page-span'
             ? t('reader.annotation.unsupportedSpan', ports.language())
@@ -257,30 +266,32 @@ export function createReaderAnnotationsModule(
         return;
       }
       const useNativeParams =
-        !readerSelectionIsFiltered(window) &&
+        !filtered &&
         params?.annotation &&
         (!hasDomSelection ||
           annotationText(params.annotation.text ?? '') ===
             annotationText(readerSelectionText(window, selection)));
-      let text: string;
-      let position: unknown;
-      let sortIndex: string | undefined;
-      let pageLabel: string | undefined;
-      if (useNativeParams) ({ text = '', position, sortIndex, pageLabel } = params.annotation);
+      let drafts: readonly {
+        readonly text?: string;
+        readonly position?: unknown;
+        readonly sortIndex?: string;
+        readonly pageLabel?: string;
+      }[];
+      if (parts?.length) drafts = parts;
+      else if (useNativeParams) drafts = [params.annotation];
       else {
         if (!selection || !computed || computed.position === null) {
           statusText('reader.selection.none', 1500);
           return;
         }
-        text = readerSelectionText(window, selection);
-        ({ position, sortIndex, pageLabel } = computed);
+        drafts = [{ ...computed, text: readerSelectionText(window, selection) }];
       }
       const attachment = ports.itemForReader();
       if (!attachment?.id || attachment.libraryID === undefined) {
         if (current()) statusText('reader.annotation.noAttachment', 2000);
         return;
       }
-      if (readerSelectionIsFiltered(window)) {
+      if (filtered) {
         const valid = await validateReaderSelection(window);
         if (!current()) return;
         if (!valid) {
@@ -288,23 +299,25 @@ export function createReaderAnnotationsModule(
           return;
         }
       }
-      let key: string;
+      let key: string | undefined;
       try {
-        const item = new (zoteroRuntime().Item)('annotation');
-        item.libraryID = attachment.libraryID;
-        item.parentID = attachment.id;
-        item.annotationType = annotationType;
-        item.annotationColor = color;
-        item.annotationText = annotationText(text);
-        item.annotationComment = '';
-        item.annotationIsExternal = false;
-        if (sortIndex) item.annotationSortIndex = sortIndex;
-        if (pageLabel) item.annotationPageLabel = pageLabel;
-        if (position)
-          item.annotationPosition =
-            typeof position === 'string' ? position : JSON.stringify(position);
-        await item.saveTx();
-        key = item.key;
+        for (const { text = '', position, sortIndex, pageLabel } of drafts) {
+          const item = new (zoteroRuntime().Item)('annotation');
+          item.libraryID = attachment.libraryID;
+          item.parentID = attachment.id;
+          item.annotationType = annotationType;
+          item.annotationColor = color;
+          item.annotationText = annotationText(text);
+          item.annotationComment = '';
+          item.annotationIsExternal = false;
+          if (sortIndex) item.annotationSortIndex = sortIndex;
+          if (pageLabel) item.annotationPageLabel = pageLabel;
+          if (position)
+            item.annotationPosition =
+              typeof position === 'string' ? position : JSON.stringify(position);
+          await item.saveTx();
+          key ??= item.key;
+        }
       } catch (error) {
         ports.debug(`create Reader annotation failed: ${String(error)}`);
         if (current()) statusText('reader.annotation.createFailed', 4000);

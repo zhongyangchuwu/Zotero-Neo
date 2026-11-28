@@ -11,17 +11,27 @@ export interface ReaderTextSourceLocation {
   readonly vertical?: boolean;
 }
 
-interface Admission {
+export interface ReaderTextAdmission {
+  readonly current: () => boolean;
+  readonly ready: (location: ReaderTextSourceLocation) => boolean;
+  readonly accepts: (location: ReaderTextSourceLocation) => boolean;
+}
+
+interface Admission extends ReaderTextAdmission {
   readonly id: string;
   readonly document: Document;
-  readonly accepts: (location: ReaderTextSourceLocation) => boolean;
-  readonly current: () => boolean;
-  readonly validate: () => Promise<boolean>;
+  readonly validate: () => boolean | Promise<boolean>;
   readonly marked: Map<HTMLElement, string | null>;
   readonly dispose: () => void;
   visits: number;
 }
 const admissions = new WeakMap<Window, Admission>();
+interface SelectFilter {
+  readonly admission: Admission;
+  readonly releaseStyle: () => void;
+  invalid: boolean;
+}
+const selectFilters = new WeakMap<Window, SelectFilter>();
 const ATTRIBUTE = 'data-zv-text-excluded';
 let nextAdmission = 0;
 
@@ -31,12 +41,14 @@ function restoreAttribute(element: HTMLElement, previous: string | null, id: str
   else element.setAttribute(ATTRIBUTE, previous);
 }
 
-/** Lease a feature-owned source policy to one exact view; native mouse selection is never patched. */
+/** Mark current layout without changing native selection until an admitted gesture starts. */
 export function leaseReaderTextAdmission(
   window: Window,
   accepts: Admission['accepts'],
   current: () => boolean,
-  validate: () => Promise<boolean> = async () => true,
+  validate: Admission['validate'] = () => true,
+  ready: ReaderTextAdmission['ready'] = (location) =>
+    (location.pageIndex !== null && location.rect !== null) || !!location.sourceBlockId,
 ): () => void {
   admissions.get(window)?.dispose();
   const document = window.document;
@@ -47,6 +59,7 @@ export function leaseReaderTextAdmission(
     id,
     document,
     accepts,
+    ready,
     validate,
     marked,
     visits: 0,
@@ -56,6 +69,8 @@ export function leaseReaderTextAdmission(
       disposed = true;
       if (admissions.get(window) === admission) admissions.delete(window);
       const failure = new CleanupFailure();
+      const filter = selectFilters.get(window);
+      if (filter?.admission === admission) failure.run(filter.releaseStyle);
       for (const [element, previous] of marked)
         failure.run(() => restoreAttribute(element, previous, id));
       marked.clear();
@@ -66,10 +81,57 @@ export function leaseReaderTextAdmission(
   return admission.dispose;
 }
 
+/** Capture a single layout publication; it cannot become current again after replacement. */
+export function captureReaderTextAdmission(window: Window): ReaderTextAdmission | null {
+  const admission = admissions.get(window);
+  if (!admission?.current()) return null;
+  return {
+    accepts: admission.accepts,
+    ready: admission.ready,
+    current: () => admission.current() && admission.validate() === true,
+  };
+}
+
+/** The document owns this rule only while an admitted mouse or Neo Select gesture is active. */
+export function activateReaderTextFilter(window: Window): () => void {
+  const document = window.document;
+  const style = document.createElement('style');
+  style.setAttribute('data-zv-body-filter', '');
+  style.textContent =
+    ':is(.textLayer, #sdt-content) [data-zv-text-excluded] { user-select:none !important; }';
+  document.documentElement.appendChild(style);
+  return () => {
+    if (!isDeadObject(style)) style.remove();
+  };
+}
+
+/** Latch Neo Select intent at its anchor. Warming a page never takes over an existing selection. */
+export function beginReaderTextSelection(window: Window, anchor: Text): (() => void) | null {
+  const admission = admissions.get(window);
+  if (!admission?.current() || admission.validate() !== true) return null;
+  const location = sourceLocation(window, anchor);
+  if (!admission.ready(location) || !admission.accepts(location)) return null;
+  const releaseStyle = activateReaderTextFilter(window);
+  const filter = { admission, releaseStyle, invalid: false };
+  selectFilters.set(window, filter);
+  return () => {
+    if (selectFilters.get(window) === filter) selectFilters.delete(window);
+    releaseStyle();
+  };
+}
+
 /** Recheck source ownership before copying or saving a filtered snapshot; never accept a replacement lease. */
 export async function validateReaderSelection(window: Window): Promise<boolean> {
-  if (!readerSelectionIsFiltered(window)) return true;
-  const admission = admissions.get(window)!;
+  const filter = selectFilters.get(window);
+  if (!filter) return true;
+  const { admission } = filter;
+  const invalidate = (): false => {
+    filter.invalid = true;
+    filter.releaseStyle();
+    return false;
+  };
+  if (filter.invalid || admissions.get(window) !== admission || !admission.current())
+    return invalidate();
   const selection = window.getSelection();
   const endpoints = selection && [
     selection.anchorNode,
@@ -84,10 +146,7 @@ export async function validateReaderSelection(window: Window): Promise<boolean> 
     // Missing or changed source geometry cannot authorize a filtered write.
   }
   valid = valid && admissions.get(window) === admission && admission.current();
-  if (!valid) {
-    admission.dispose();
-    return false;
-  }
+  if (!valid || selectFilters.get(window) !== filter) return invalidate();
   const latest = window.getSelection();
   return (
     !!endpoints &&
@@ -103,12 +162,9 @@ export function readerTextAdmissionActive(window: Window): boolean {
   return admissions.get(window)?.current() === true;
 }
 
-/** Geometry filtering belongs only to a Neo-owned Select interaction, never native Normal-mode selection. */
+/** Keep a stale filtered intent distinguishable from a gesture that started unfiltered. */
 export function readerSelectionIsFiltered(window: Window): boolean {
-  return (
-    readerTextAdmissionActive(window) &&
-    window.document.documentElement.hasAttribute('data-zv-select-active')
-  );
+  return selectFilters.has(window);
 }
 
 /** Read PDF source coordinates or the native SDT block identity without exposing private view objects. */
@@ -155,14 +211,15 @@ function sourceLocation(window: Window, text: Text, bounds?: DOMRect): ReaderTex
   };
 }
 
-/** Unknown geometry remains selectable; only the feature's explicit, current policy excludes text. */
+/** Mark the current text layer; only an admitted Neo Select gesture hides nodes from motions. */
 export function readerTextNodeAllowed(window: Window, text: Text, bounds?: DOMRect): boolean {
   const admission = admissions.get(window);
   if (!admission?.current()) return true;
-  const accepted = admission.accepts(sourceLocation(window, text, bounds));
+  const location = sourceLocation(window, text, bounds);
+  const excluded = admission.ready(location) && !admission.accepts(location);
   const element = text.parentElement;
   if (element) {
-    if (!accepted) {
+    if (excluded) {
       if (!admission.marked.has(element))
         admission.marked.set(element, element.getAttribute(ATTRIBUTE));
       element.setAttribute(ATTRIBUTE, admission.id);
@@ -179,15 +236,19 @@ export function readerTextNodeAllowed(window: Window, text: Text, bounds?: DOMRe
         restoreAttribute(element, previous, admission.id);
         admission.marked.delete(element);
       }
-  return accepted;
+  const filter = selectFilters.get(window);
+  return !excluded || filter?.invalid === true || filter?.admission !== admission;
 }
 
 /** Split at excluded source text: DOM Range itself still contains user-select:none descendants in Gecko. */
 export function readerSelectedTextRanges(window: Window, selection: Selection): readonly Range[] {
   const result: Range[] = [];
+  const filter = selectFilters.get(window);
+  const separatePages = filter && !readerReadingMode(window);
+  if (filter && (filter.invalid || !filter.admission.current())) return result;
   for (let i = 0; i < selection.rangeCount; i++) {
     const selected = selection.getRangeAt(i);
-    if (!readerSelectionIsFiltered(window)) {
+    if (!filter) {
       result.push(selected);
       continue;
     }
@@ -198,9 +259,15 @@ export function readerSelectedTextRanges(window: Window, selection: Selection): 
     }
     const walker = window.document.createTreeWalker(selected.commonAncestorContainer, 4);
     let run: Range | null = null;
+    let page: Element | null | undefined;
     for (let node = walker.nextNode(); node; node = walker.nextNode()) {
       if (selected.comparePoint(node, 0) > 0) break;
       if (!selected.intersectsNode(node)) continue;
+      if (separatePages) {
+        const nextPage = (node as Text).parentElement?.closest('.page[data-page-number]');
+        if (nextPage !== page) run = null;
+        page = nextPage;
+      }
       if (!readerTextNodeAllowed(window, node as Text)) {
         run = null;
         continue;
@@ -219,9 +286,37 @@ export function readerSelectedTextRanges(window: Window, selection: Selection): 
   return result;
 }
 
-/** Preserve Gecko's layout-aware spaces and line breaks; Range.toString() omits PDF text-layer BRs. */
+/** Preserve text-layer line boundaries without reserializing the unfiltered Gecko Selection. */
+export function readerTextRangeText(range: Range): string {
+  if (range.startContainer === range.endContainer) return range.toString();
+  const document = range.startContainer.ownerDocument;
+  if (!document) return range.toString();
+  const walker = document.createTreeWalker(range.commonAncestorContainer, 4);
+  let previousBlock: Element | null | undefined;
+  const parts: string[] = [];
+  for (let node = walker.nextNode(); node; node = walker.nextNode()) {
+    if (range.comparePoint(node, 0) > 0) break;
+    if (!range.intersectsNode(node)) continue;
+    const text = node as Text;
+    const parent = text.parentElement;
+    const block = parent?.closest('p,li,td,th,pre,figcaption,h1,h2,h3,h4,h5,h6,.textLayer');
+    if (
+      parts.length &&
+      (block !== previousBlock || parent?.previousElementSibling?.localName === 'br')
+    )
+      parts.push('\n');
+    parts.push(
+      text.data.slice(
+        text === range.startContainer ? range.startOffset : 0,
+        text === range.endContainer ? range.endOffset : text.length,
+      ),
+    );
+    previousBlock = block;
+  }
+  return parts.join('');
+}
+
 export function readerSelectionText(window: Window, selection: Selection): string {
-  // Refresh admission marks before Gecko serializes the user-select:none scope.
-  if (readerSelectionIsFiltered(window)) readerSelectedTextRanges(window, selection);
-  return selection.toString();
+  if (!readerSelectionIsFiltered(window)) return selection.toString();
+  return readerSelectedTextRanges(window, selection).map(readerTextRangeText).join(' ');
 }

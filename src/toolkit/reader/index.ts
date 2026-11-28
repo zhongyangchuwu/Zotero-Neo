@@ -1,5 +1,7 @@
 export { ReaderHostKeyBridge } from './input-bridge';
 export { ReaderViewLifecycle } from './view-lifecycle';
+export { leaseNativeBodySelection, readerHasNativeBodyGesture } from './native-body-selection';
+export { readerPaintedTextLayer, type ReaderPaintedTextLayer } from './painted-text-layer';
 export { observeReaderOutline } from './outline-follow';
 export { installReaderCommentLinks } from './comment-links';
 export { ReaderJumpHostAdapter } from './jump-host';
@@ -33,6 +35,7 @@ export * from './links';
 export * from './marks';
 export * from './text-source';
 export {
+  beginReaderTextSelection,
   leaseReaderTextAdmission,
   readerTextNodeAllowed,
   readerSelectionIsFiltered,

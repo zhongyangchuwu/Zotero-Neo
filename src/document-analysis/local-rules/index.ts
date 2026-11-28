@@ -102,9 +102,16 @@ function completePage(
     for (const line of layout.lines) {
       const [x1, y1, x2, y2] = line.rect;
       const folio =
-        (y1 <= bottom + edge || y2 >= top - edge) &&
         line.fontSize <= layout.unit &&
-        /^(?:\d{1,4}|[ivxlcdm]{1,7})$/iu.test(line.text);
+        /^(?:\d{1,4}|[ivxlcdm]{1,7})$/iu.test(line.text) &&
+        (y1 <= bottom + edge ||
+          y2 >= top - edge ||
+          // Typeset folios can sit well inside the physical page edge. Only admit the
+          // lowest, isolated line on the center axis, not an in-flow number or table cell.
+          (y2 <= bottom + (top - bottom) / 10 &&
+            Math.abs(x1 + x2 - left - right) <= layout.unit &&
+            layout.lines.length > 1 &&
+            layout.lines.every((other) => other === line || other.rect[1] >= y2 + layout.unit)));
       const verticalLabel =
         (x1 <= left + edge || x2 >= right - edge) &&
         width(line.rect) <= layout.unit * 1.4 &&

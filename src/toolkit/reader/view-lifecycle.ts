@@ -5,10 +5,17 @@ import { leaseReaderPresentation, readerPresentationViews } from './presentation
 import type { PdfWindow, ReaderRuntime } from './contracts';
 import type { NativeReaderRuntime, NativeReaderViewRuntime } from './private-types';
 
+interface TextLayerBus {
+  on(type: 'textlayerrendered', listener: () => void): void;
+  off(type: 'textlayerrendered', listener: () => void): void;
+}
+
 interface ViewHandlers {
   readonly view: NativeReaderViewRuntime;
   readonly document: Document;
   readonly cleanups: Array<() => void>;
+  bodySelection?: () => void;
+  textLayerEvents?: { readonly bus: TextLayerBus; readonly dispose: () => void };
   ready: boolean;
   retired: boolean;
 }
@@ -18,12 +25,14 @@ export interface ReaderViewLifecycleDependencies {
   readonly timerWindow: PdfWindow;
   readonly onKeyDown: (event: KeyboardEvent, pdfWindow: PdfWindow) => void;
   readonly onKeyUp: (event: KeyboardEvent) => void;
-  readonly onPointerDown: (pdfWindow: PdfWindow) => void;
+  readonly onPointerDown: (pdfWindow: PdfWindow, event: PointerEvent) => void;
   readonly onBlur: (pdfWindow: PdfWindow, event: FocusEvent) => void;
   readonly onSelectionChange: (pdfWindow: PdfWindow) => void;
   readonly onScroll: (pdfWindow: PdfWindow) => void;
   readonly onResize: (pdfWindow: PdfWindow) => void;
   readonly onReady?: (pdfWindow: PdfWindow) => void;
+  readonly attachBodySelection?: (window: PdfWindow, current: () => boolean) => () => void;
+  readonly onTextLayerRendered?: (window: PdfWindow) => void;
   readonly releaseView: (pdfWindow: PdfWindow) => void;
   readonly syncHostBridge: () => void;
 }
@@ -45,6 +54,7 @@ export class ReaderViewLifecycle {
   #activePdfWindow: PdfWindow;
   #syncTimer: number | null = null;
   #disposed = false;
+  #bodySelectionActive = false;
 
   constructor(dependencies: ReaderViewLifecycleDependencies) {
     this.#dependencies = dependencies;
@@ -59,6 +69,15 @@ export class ReaderViewLifecycle {
 
   setActivePdfWindow(pdfWindow: PdfWindow): void {
     this.#activePdfWindow = pdfWindow;
+  }
+
+  setBodySelectionActive(active: boolean): void {
+    if (this.#disposed || this.#bodySelectionActive === active) return;
+    this.#bodySelectionActive = active;
+    const failure = new CleanupFailure();
+    for (const [window, handlers] of this.#handlers)
+      failure.run(() => this.#syncBodySelection(window, handlers));
+    failure.rethrow();
   }
 
   start(): void {
@@ -107,6 +126,9 @@ export class ReaderViewLifecycle {
       this.#attach(pdfWindow, target.view, target.document);
     }
 
+    if (this.#bodySelectionActive)
+      for (const [window, handlers] of this.#handlers) this.#syncBodySelection(window, handlers);
+
     if (!this.#disposed) this.#dependencies.syncHostBridge();
   }
 
@@ -135,9 +157,9 @@ export class ReaderViewLifecycle {
       const keyEvent = asKeyboardEvent(event);
       if (keyEvent) this.#dependencies.onKeyUp(keyEvent);
     }) as EventListener;
-    const pointerDown = (() => {
+    const pointerDown = ((event: Event) => {
       if (!this.#handlerCurrent(pdfWindow, handlers)) return;
-      this.#dependencies.onPointerDown(pdfWindow);
+      this.#dependencies.onPointerDown(pdfWindow, event as PointerEvent);
     }) as EventListener;
     const blur = ((event: Event) => {
       if (!this.#handlerCurrent(pdfWindow, handlers)) return;
@@ -243,6 +265,49 @@ export class ReaderViewLifecycle {
     }
   }
 
+  #syncBodySelection(window: PdfWindow, handlers: ViewHandlers): void {
+    const { attachBodySelection, onTextLayerRendered } = this.#dependencies;
+    if (!this.#bodySelectionActive || !this.#handlerCurrent(window, handlers)) {
+      this.#releaseBodySelection(handlers);
+      return;
+    }
+    if (attachBodySelection && !handlers.bodySelection) {
+      handlers.bodySelection = attachBodySelection(
+        window,
+        () => this.#bodySelectionActive && this.#handlerCurrent(window, handlers),
+      );
+    }
+    if (!onTextLayerRendered) return;
+    const bus = (window as PdfWindow & { PDFViewerApplication?: { eventBus?: TextLayerBus } })
+      .PDFViewerApplication?.eventBus;
+    if (bus === handlers.textLayerEvents?.bus) return;
+    handlers.textLayerEvents?.dispose();
+    handlers.textLayerEvents = undefined;
+    if (typeof bus?.on !== 'function' || typeof bus.off !== 'function') return;
+    const listener = (): void => {
+      if (this.#bodySelectionActive && this.#handlerCurrent(window, handlers))
+        onTextLayerRendered(window);
+    };
+    bus.on('textlayerrendered', listener);
+    handlers.textLayerEvents = {
+      bus,
+      dispose: () => {
+        if (!isDeadObject(bus)) bus.off('textlayerrendered', listener);
+      },
+    };
+  }
+
+  #releaseBodySelection(handlers: ViewHandlers): void {
+    const release = handlers.bodySelection;
+    const events = handlers.textLayerEvents;
+    handlers.bodySelection = undefined;
+    handlers.textLayerEvents = undefined;
+    const failure = new CleanupFailure();
+    failure.run(() => events?.dispose());
+    failure.run(() => release?.());
+    failure.rethrow();
+  }
+
   #handlerCurrent(pdfWindow: PdfWindow, handlers: ViewHandlers, pending = false): boolean {
     if (
       this.#disposed ||
@@ -266,6 +331,7 @@ export class ReaderViewLifecycle {
     handlers.ready = false;
     const cleanups = handlers.cleanups.splice(0);
     const failure = new CleanupFailure();
+    failure.run(() => this.#releaseBodySelection(handlers));
     for (const cleanup of cleanups) failure.run(cleanup);
     failure.run(() => this.#dependencies.releaseView(pdfWindow));
     failure.rethrow();

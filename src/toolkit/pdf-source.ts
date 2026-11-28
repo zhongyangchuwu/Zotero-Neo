@@ -34,6 +34,7 @@ export interface PdfExtractionSource {
   readPage(
     index: number,
     needGeometry: (hasCaption: () => boolean) => boolean,
+    beforeGeometry?: () => boolean | Promise<boolean>,
   ): Promise<LocalFigurePage | null>;
   destroy(): Promise<void>;
 }
@@ -93,7 +94,7 @@ export async function openPdfSource(
     return {
       pageCount: pdf.numPages,
       destroy,
-      async readPage(index, needGeometry) {
+      async readPage(index, needGeometry, beforeGeometry) {
         checkParseCurrent(signal);
         const page = await pdf.getPage(index + 1);
         checkParseCurrent(signal);
@@ -104,6 +105,11 @@ export async function openPdfSource(
             return null;
           const operators = await page.getOperatorList();
           checkParseCurrent(signal);
+          if (beforeGeometry) {
+            const ready = beforeGeometry();
+            if (typeof ready === 'boolean' ? !ready : !(await ready)) return null;
+            checkParseCurrent(signal);
+          }
           const viewBox = documentRect(page.view);
           if (!viewBox) throw new Error('PDF page bounds unavailable');
           return {

@@ -6,7 +6,7 @@ import {
 } from '../../src/modules/reader-selection';
 import type { PdfWindow, ReaderMode } from '../../src/reader/types';
 import type { ReaderRuntime } from '../fixtures/reader-native-types';
-import type { DocumentRegion } from '../../src/document-analysis/contracts';
+import { beginReaderTextSelection, leaseReaderTextAdmission } from '../../src/toolkit/reader';
 import { textAdmissionFixture } from '../fixtures/reader-text-admission';
 
 beforeEach(() => {
@@ -59,7 +59,9 @@ function selectionModule(source?: PdfWindow) {
   const host = new ModuleHost({ debug: vi.fn(), diagnostic: vi.fn() }, () => true);
   const layout = {
     ensureVisible: vi.fn(async () => {}),
-    visibleRegions: vi.fn<() => readonly DocumentRegion[]>(() => []),
+    visibleRegions: vi.fn(() => []),
+    visibleSnapshot: vi.fn(() => null),
+    prepareVisiblePage: vi.fn(async () => {}),
     isCurrent: vi.fn(() => true),
   };
   const ports: ReaderSelectionModulePorts = {
@@ -108,22 +110,6 @@ function selectionModule(source?: PdfWindow) {
 }
 
 describe('Reader selection module isolation', () => {
-  it('refreshes visible layout only while body selection is enabled', async () => {
-    const fixture = selectionModule();
-    fixture.ports.setMode('normal');
-    fixture.module.refreshLayout(fixture.window);
-    expect(fixture.layout.ensureVisible).not.toHaveBeenCalled();
-    expect(fixture.module.executeAction('toggleBodySelection', fixture.window)).toBe(true);
-    expect(fixture.layout.ensureVisible).toHaveBeenCalledWith(fixture.window);
-    await Promise.resolve();
-    fixture.module.refreshLayout(fixture.window);
-    expect(fixture.layout.ensureVisible).toHaveBeenCalledTimes(2);
-    fixture.module.executeAction('toggleBodySelection', fixture.window);
-    fixture.module.refreshLayout(fixture.window);
-    expect(fixture.layout.ensureVisible).toHaveBeenCalledTimes(2);
-    fixture.host.dispose();
-  });
-
   it('uses the native paragraph or token extension path immediately on a cold cache', () => {
     const source = textAdmissionFixture();
     const fixture = selectionModule(source.window);
@@ -134,33 +120,50 @@ describe('Reader selection module isolation', () => {
     fixture.host.dispose();
   });
 
+  it.each([
+    { start: 0, readyAtStart: true, expected: 'alpha omega' },
+    { start: 1, readyAtStart: true, expected: 'alphaCHARTomega' },
+    { start: 0, readyAtStart: false, expected: 'alphaCHARTomega' },
+  ])('latches Neo copy admission at the initial anchor: %j', async (test) => {
+    vi.useFakeTimers();
+    const source = textAdmissionFixture();
+    const fixture = selectionModule(source.window);
+    const publish = () =>
+      leaseReaderTextAdmission(
+        fixture.window,
+        ({ rect }) => !rect || rect[0]! < 90,
+        () => true,
+      );
+    const ready = test.readyAtStart ? publish() : null;
+    const end = beginReaderTextSelection(fixture.window, source.nodes[test.start]!);
+    const release = ready ?? publish();
+    expect(fixture.module.executeAction('copySelection', fixture.window)).toBe(true);
+    await vi.advanceTimersByTimeAsync(0);
+    expect(fixture.copied).toEqual([test.expected]);
+    end?.();
+    release();
+    fixture.host.dispose();
+  });
+
   it('does not copy a filtered selection from a stale PDF source', async () => {
     const source = textAdmissionFixture();
     const fixture = selectionModule(source.window);
-    fixture.layout.visibleRegions.mockReturnValue([
-      {
-        id: 'chart',
-        pageIndex: 0,
-        rect: [95, 765, 155, 785],
-        kind: 'image',
-        text: '',
-        format: 'text',
-        flow: 'auxiliary',
-        anchorPrecision: 'region',
-      },
-    ]);
-    fixture.ports.setMode('normal');
-    fixture.module.executeAction('toggleBodySelection', fixture.window);
-    await Promise.resolve();
-    expect(source.elements[1]!.getAttribute('data-zv-text-excluded')).not.toBeNull();
-    fixture.ports.setMode('visual');
-    source.document.documentElement.setAttribute('data-zv-select-active', '');
-    fixture.layout.isCurrent.mockReturnValue(false);
+    let current = true;
+    const release = leaseReaderTextAdmission(
+      fixture.window,
+      ({ rect }) => !rect || rect[0]! < 90,
+      () => true,
+      () => current,
+    );
+    const end = beginReaderTextSelection(fixture.window, source.nodes[0]!);
+    current = false;
     vi.useFakeTimers();
     expect(fixture.module.executeAction('copySelection', fixture.window)).toBe(true);
     await vi.advanceTimersByTimeAsync(0);
     expect(fixture.copied).toEqual([]);
     expect(fixture.mode()).toBe('visual');
+    end?.();
+    release();
     expect(source.elements[1]!.getAttribute('data-zv-text-excluded')).toBeNull();
     fixture.host.dispose();
   });

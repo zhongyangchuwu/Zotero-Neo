@@ -154,8 +154,7 @@ export function decorateReaderSelection(window: Window): () => void {
     document.querySelector(selector)?.remove();
     style.dataset.zvSelectSelection = '1';
     style.textContent =
-      ':root[data-zv-select-active] :is(.textLayer, #sdt-content) ::selection { background-color: rgb(66, 133, 244); }' +
-      ':root[data-zv-select-active] :is(.textLayer, #sdt-content) [data-zv-text-excluded] { user-select:none !important; }';
+      ':root[data-zv-select-active] :is(.textLayer, #sdt-content) ::selection { background-color: rgb(66, 133, 244); }';
     document.documentElement.appendChild(style);
     document.documentElement.setAttribute('data-zv-select-active', '');
     return release;

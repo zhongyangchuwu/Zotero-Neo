@@ -2,6 +2,7 @@ import { describe, expect, it } from 'vitest';
 import {
   localDocumentRegions,
   localFigureRegions,
+  localVisibleRegions,
   resolveLocalRuleProfile,
   type LocalFigurePage,
   type LocalFigureText,
@@ -211,6 +212,16 @@ describe('local rule profiles act on evidence and geometry', () => {
       separated.find((region) => region.text === 'Figure 1: First.')?.sourceObject,
     ).toBeUndefined();
     expect(bodies(separated)).toHaveLength(1);
+  });
+
+  it('excludes an isolated centered folio inside the bottom margin, not an in-flow number', () => {
+    const prose = text('The final body line remains available to a reader.', [108, 70, 490, 79]);
+    const folio = text('2', [297.5, 40, 302.5, 50]);
+    const exclusions = (input: LocalFigurePage) =>
+      localVisibleRegions(input).filter((region) => region.flow === 'excluded');
+
+    expect(exclusions(page([prose, folio]))).toMatchObject([{ text: '2', rect: folio.rect }]);
+    expect(exclusions(page([prose, text('2', [297.5, 57, 302.5, 67])]))).toEqual([]);
   });
 
   it('never gives a shared body to competing captions when optional rules are disabled', () => {

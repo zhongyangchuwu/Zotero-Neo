@@ -59,7 +59,6 @@ export const READER_LOCAL_NORMAL_ACTIONS = Object.freeze([
   'yankAnnotation',
   'yankAnnotationComment',
   'enterVisual',
-  'toggleBodySelection',
   'enterInsert',
   'focusReaderSplitLeft',
   'focusReaderSplitDown',

@@ -170,7 +170,6 @@ Main Select 中，`j` / `k` 扩展范围，`gg` / `G` 扩展到首行/末行（`
 
 | 位置 | 默认按键或入口 | 操作 |
 | --- | --- | --- |
-| Reader Normal | `<Space>rb` | 切换 Neo Select 正文选择过滤；默认关闭，按需准备可见 PDF 页，不改变原生鼠标复制或高亮。 |
 | Main Normal | 命令面板 | 文献信息检查及其他未绑定的可选操作。 |
 
 </details>
