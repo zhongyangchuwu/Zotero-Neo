@@ -166,10 +166,14 @@ describe('Reader native comment surfaces', () => {
     expect(document.activeElement).toBe(document.body);
 
     const input = comment.firstElementChild!;
-    input.setAttribute('contenteditable', 'true');
-    input.setAttribute('aria-readonly', 'false');
     const pane = comment.closest<HTMLElement>('.secondary-view')!;
     pane.style.display = 'none';
+    vi.advanceTimersByTime(25);
+    expect(document.activeElement).toBe(document.body);
+
+    // Zotero 10.0.8 reports an empty aria-readonly value in writable popups.
+    input.setAttribute('contenteditable', 'true');
+    input.setAttribute('aria-readonly', '');
     vi.advanceTimersByTime(25);
     expect(document.activeElement).toBe(document.body);
 

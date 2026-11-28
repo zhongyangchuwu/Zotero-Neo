@@ -154,7 +154,7 @@ export function readerAnnotationCommentFocus(
       ? `#annotations [data-sidebar-annotation-id="${key}"]`
       : `.${primary ? 'primary' : 'secondary'}-view .annotation-popup`;
     const input = document.querySelector<HTMLElement>(
-      `${container} .comment .content[id="${key}"][role="textbox"][contenteditable="true"][aria-readonly="false"]`,
+      `${container} .comment .content[id="${key}"][role="textbox"][contenteditable="true"]:not([aria-readonly="true" i])`,
     );
     // Connected but hidden React trees are not ready; only settle once focus can land.
     return input && visibleElement(window, input) ? input : 'pending';

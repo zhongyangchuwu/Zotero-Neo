@@ -1162,11 +1162,12 @@ function configureNativeCommentSurface(
   Reflect.set(view, '_openAnnotationPopup', open);
   const elements = new Map<string, HTMLElement>();
   const nativeQuery = document.querySelector.bind(document);
-  Reflect.set(
-    document,
-    'querySelector',
-    (selector: string) => elements.get(selector) ?? nativeQuery(selector),
-  );
+  Reflect.set(document, 'querySelector', (selector: string) => {
+    for (const [key, input] of elements) {
+      if (selector.startsWith(key + '[')) return input;
+    }
+    return nativeQuery(selector);
+  });
   function mountInput(key: string, surface: 'primary' | 'sidebar' = 'primary') {
     const input = document.createElement('div');
     input.id = key;
@@ -1183,10 +1184,7 @@ function configureNativeCommentSurface(
       surface === 'sidebar'
         ? `#annotations [data-sidebar-annotation-id="${key}"]`
         : '.primary-view .annotation-popup';
-    elements.set(
-      `${root} .comment .content[id="${key}"][role="textbox"][contenteditable="true"][aria-readonly="false"]`,
-      input,
-    );
+    elements.set(`${root} .comment .content[id="${key}"]`, input);
     return input;
   }
   return { state, select, open, mountInput };
