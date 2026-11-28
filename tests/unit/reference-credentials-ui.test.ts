@@ -7,16 +7,12 @@ import type { NativeReactViewOptions } from '../../src/ui/react/types';
 import type { SettingsReactCommand, SettingsReactModel } from '../../src/main/settings-react-model';
 import { SettingsCenter } from '../../src/main/settings-center';
 import { resolveInteractionAppearance } from '../../src/main/interaction-appearance';
-import type { CredentialProvider } from '../../src/platform/credential-check';
 import { mountSettingsReactView } from '../../src/ui/react/surfaces/settings';
 
 const credentials = vi.hoisted(() => ({
-  stored: { mineru: '', semanticScholar: '' },
-  readMinerU: vi.fn(),
-  saveMinerU: vi.fn(),
+  stored: '',
   readKey: vi.fn(),
   saveKey: vi.fn(),
-  commitMinerU: vi.fn(),
   commitKey: vi.fn(),
   check: vi.fn(),
   help: vi.fn(),
@@ -25,18 +21,11 @@ vi.mock('../../src/platform/reference-credentials', () => ({
   readSettledReferenceKey: credentials.readKey,
   changeReferenceKey: credentials.saveKey,
 }));
-vi.mock('../../src/platform/document-credentials', () => ({
-  readSettledMinerUToken: credentials.readMinerU,
-  saveMinerUToken: credentials.saveMinerU,
-}));
 vi.mock('../../src/platform/credential-check', async (importOriginal) => ({
   ...(await importOriginal<typeof CredentialChecks>()),
-  CREDENTIAL_HELP_URLS: {
-    mineru: 'https://mineru.net/apiManage/token',
-    semanticScholar: 'https://www.semanticscholar.org/product/api',
-  },
-  checkCredential: credentials.check,
-  openCredentialHelp: credentials.help,
+  SEMANTIC_SCHOLAR_CREDENTIAL_HELP_URL: 'https://www.semanticscholar.org/product/api',
+  checkSemanticScholarCredential: credentials.check,
+  openSemanticScholarCredentialHelp: credentials.help,
 }));
 
 const native = vi.hoisted(() => ({
@@ -74,26 +63,22 @@ async function settle(): Promise<void> {
 }
 
 // Model the shared storage boundary, not a page-local write queue.
-let sharedWrites: Record<CredentialProvider, Promise<void>>;
-function store(provider: CredentialProvider, value: string | null): Promise<void> {
-  const pending = sharedWrites[provider]
-    .catch(() => {})
-    .then(() =>
-      provider === 'mineru' ? credentials.commitMinerU(value) : credentials.commitKey(value),
-    );
-  sharedWrites[provider] = pending;
+let sharedWrites: Promise<void>;
+function store(value: string | null): Promise<void> {
+  const pending = sharedWrites.catch(() => {}).then(() => credentials.commitKey(value));
+  sharedWrites = pending;
   return pending;
 }
 
-async function readSettled(provider: CredentialProvider): Promise<string> {
+async function readSettled(): Promise<string> {
   for (;;) {
-    const pending = sharedWrites[provider];
+    const pending = sharedWrites;
     await pending.catch(() => {});
-    if (pending === sharedWrites[provider]) return credentials.stored[provider];
+    if (pending === sharedWrites) return credentials.stored;
   }
 }
 
-function mount(provider: CredentialProvider) {
+function mount() {
   const preferences = {
     get: (_key: string, fallback: unknown) => fallback,
     has: () => false,
@@ -129,7 +114,7 @@ function mount(provider: CredentialProvider) {
     },
   };
   const input = () =>
-    root.querySelector<HTMLInputElement>(`[data-neo-ui-part="credential-${provider}"]`)!;
+    root.querySelector<HTMLInputElement>('[data-neo-ui-part="credential-semanticScholar"]')!;
   const section = () => input().closest('section')!;
   const verify = () => section().querySelector('button')!;
   const edit = (value: string) => {
@@ -143,27 +128,20 @@ function mount(provider: CredentialProvider) {
 beforeEach(() => {
   vi.resetAllMocks();
   native.commands.length = 0;
-  sharedWrites = { mineru: Promise.resolve(), semanticScholar: Promise.resolve() };
-  credentials.stored.mineru = 'stored-mineru-secret';
-  credentials.stored.semanticScholar = 'stored-s2-secret';
-  credentials.readMinerU.mockImplementation(() => readSettled('mineru'));
-  credentials.readKey.mockImplementation(() => readSettled('semanticScholar'));
-  credentials.saveMinerU.mockImplementation((value: string) => store('mineru', value));
-  credentials.saveKey.mockImplementation((value: string | null) => store('semanticScholar', value));
-  credentials.commitMinerU.mockImplementation(async (value: string) => {
-    credentials.stored.mineru = value;
-  });
+  sharedWrites = Promise.resolve();
+  credentials.stored = 'stored-s2-secret';
+  credentials.readKey.mockImplementation(readSettled);
+  credentials.saveKey.mockImplementation(store);
   credentials.commitKey.mockImplementation(async (value: string | null) => {
-    credentials.stored.semanticScholar = value ?? '';
+    credentials.stored = value ?? '';
   });
   credentials.check.mockResolvedValue('valid');
 });
 
-describe.each(['mineru', 'semanticScholar'] as const)(
-  'Reader Settings %s credentials',
-  (provider) => {
-    const save = provider === 'mineru' ? credentials.saveMinerU : credentials.saveKey;
-    const commit = provider === 'mineru' ? credentials.commitMinerU : credentials.commitKey;
+describe('Reader Settings', () => {
+  describe('Semantic Scholar credentials', () => {
+    const save = credentials.saveKey;
+    const commit = credentials.commitKey;
 
     it.each(['newer-other-surface', null])(
       'admits Settings edits before a newer cross-surface value %s or deletion',
@@ -171,17 +149,17 @@ describe.each(['mineru', 'semanticScholar'] as const)(
         const pending = Promise.withResolvers<void>();
         commit.mockImplementationOnce(async (value: string) => {
           await pending.promise;
-          credentials.stored[provider] = value;
+          credentials.stored = value;
         });
-        const ui = mount(provider);
+        const ui = mount();
         await settle();
         ui.edit('settings-A');
         await settle();
         ui.edit('settings-B');
         expect(save).toHaveBeenCalledTimes(2);
         ui.dispose();
-        const latest = save(newer ?? (provider === 'mineru' ? '' : null));
-        const reopened = mount(provider);
+        const latest = save(newer);
+        const reopened = mount();
         await settle();
         expect(reopened.input().value).toBe('');
         pending.resolve();
@@ -190,9 +168,9 @@ describe.each(['mineru', 'semanticScholar'] as const)(
         expect(save.mock.calls.map(([value]) => value)).toEqual([
           'settings-A',
           'settings-B',
-          newer ?? (provider === 'mineru' ? '' : null),
+          newer,
         ]);
-        expect(credentials.stored[provider]).toBe(newer ?? '');
+        expect(credentials.stored).toBe(newer ?? '');
         expect(reopened.input().value).toBe(newer ?? '');
         expect(credentials.check).not.toHaveBeenCalled();
         reopened.dispose();
@@ -203,11 +181,11 @@ describe.each(['mineru', 'semanticScholar'] as const)(
       const pending = Promise.withResolvers<void>();
       commit.mockImplementationOnce(async (value: string) => {
         await pending.promise;
-        credentials.stored[provider] = value;
+        credentials.stored = value;
       });
       const first = save('other-surface-A');
       await settle();
-      const ui = mount(provider);
+      const ui = mount();
       await settle();
       expect(ui.input().value).toBe('');
       const latest = save('other-surface-B');
@@ -216,7 +194,7 @@ describe.each(['mineru', 'semanticScholar'] as const)(
       await latest;
       await settle();
       expect(ui.input().value).toBe('other-surface-B');
-      expect(ui.reader.model()[provider].status).toBe('');
+      expect(ui.reader.model().semanticScholar.status).toBe('');
       expect(credentials.check).not.toHaveBeenCalled();
       ui.dispose();
     });
@@ -225,10 +203,10 @@ describe.each(['mineru', 'semanticScholar'] as const)(
       const pending = Promise.withResolvers<void>();
       commit.mockImplementationOnce(async (value: string) => {
         await pending.promise;
-        credentials.stored[provider] = value;
+        credentials.stored = value;
       });
       const first = save('other-surface-A');
-      const ui = mount(provider);
+      const ui = mount();
       await settle();
       ui.edit('visible-user-edit');
       const latest = save('other-surface-C');
@@ -236,25 +214,22 @@ describe.each(['mineru', 'semanticScholar'] as const)(
       await first;
       await latest;
       await settle();
-      expect(credentials.stored[provider]).toBe('other-surface-C');
+      expect(credentials.stored).toBe('other-surface-C');
       expect(ui.input().value).toBe('visible-user-edit');
-      expect(ui.reader.model()[provider].status).toBe('');
+      expect(ui.reader.model().semanticScholar.status).toBe('');
       ui.dispose();
     });
 
-    it('prefills both actual password inputs, autosaves edits and clears on deletion without exposing secrets', async () => {
-      const ui = mount(provider);
+    it('shows only the reference credential, autosaves edits and clears on deletion without exposing secrets', async () => {
+      const ui = mount();
       await settle();
-      for (const id of ['mineru', 'semanticScholar'] as const) {
-        const input = ui.root.querySelector<HTMLInputElement>(
-          `[data-neo-ui-part="credential-${id}"]`,
-        )!;
-        expect(input.type).toBe('password');
-        expect(input.value).toBe(credentials.stored[id]);
-        expect(ui.reader.model()[id].status).toBe('');
-        expect(JSON.stringify(ui.reader.model())).not.toContain(credentials.stored[id]);
-        expect(ui.root.textContent).not.toContain(credentials.stored[id]);
-      }
+      expect(ui.root.querySelectorAll('input[type="password"]')).toHaveLength(1);
+      expect(ui.root.textContent).not.toContain('MinerU');
+      expect(ui.input().type).toBe('password');
+      expect(ui.input().value).toBe(credentials.stored);
+      expect(ui.reader.model().semanticScholar.status).toBe('');
+      expect(JSON.stringify(ui.reader.model())).not.toContain(credentials.stored);
+      expect(ui.root.textContent).not.toContain(credentials.stored);
       expect(save).not.toHaveBeenCalled();
       ui.edit('replacement-secret');
       await settle();
@@ -264,17 +239,17 @@ describe.each(['mineru', 'semanticScholar'] as const)(
       ui.input().dispatchEvent(new FocusEvent('blur', { bubbles: true }));
       expect(credentials.check).not.toHaveBeenCalled();
       ui.dispose();
-      const reopened = mount(provider);
+      const reopened = mount();
       await settle();
       expect(reopened.input().value).toBe('replacement-secret');
       reopened.edit('');
       await settle();
-      expect(save).toHaveBeenLastCalledWith(provider === 'mineru' ? '' : null);
+      expect(save).toHaveBeenLastCalledWith(null);
       reopened.dispose();
-      const cleared = mount(provider);
+      const cleared = mount();
       await settle();
       expect(cleared.input().value).toBe('');
-      expect(cleared.reader.model()[provider].status).toBe('');
+      expect(cleared.reader.model().semanticScholar.status).toBe('');
       expect(credentials.check).not.toHaveBeenCalled();
       cleared.dispose();
     });
@@ -283,9 +258,9 @@ describe.each(['mineru', 'semanticScholar'] as const)(
       const pending = Promise.withResolvers<void>();
       commit.mockImplementationOnce(async (value: string) => {
         await pending.promise;
-        credentials.stored[provider] = value;
+        credentials.stored = value;
       });
-      const ui = mount(provider);
+      const ui = mount();
       await settle();
       ui.edit('first');
       await settle();
@@ -298,24 +273,19 @@ describe.each(['mineru', 'semanticScholar'] as const)(
       const oldInput = ui.input();
       ui.dispose();
       expect(oldInput.value).toBe('');
-      const reopened = mount(provider);
+      const reopened = mount();
       pending.resolve();
-      await sharedWrites[provider];
+      await sharedWrites;
       await settle();
-      expect(save.mock.calls.map(([value]) => value)).toEqual([
-        'first',
-        'second',
-        'second',
-        provider === 'mineru' ? '' : null,
-      ]);
+      expect(save.mock.calls.map(([value]) => value)).toEqual(['first', 'second', 'second', null]);
       expect(reopened.input().value).toBe('');
-      expect(credentials.stored[provider]).toBe('');
+      expect(credentials.stored).toBe('');
       expect(credentials.check).not.toHaveBeenCalled();
       reopened.dispose();
     });
 
     it('persists only completed IME input and never checks on composition or blur', async () => {
-      const ui = mount(provider);
+      const ui = mount();
       await settle();
       ui.input().dispatchEvent(new CompositionEvent('compositionstart', { bubbles: true }));
       ui.edit('partial');
@@ -333,9 +303,9 @@ describe.each(['mineru', 'semanticScholar'] as const)(
       const pending = Promise.withResolvers<void>();
       commit.mockImplementationOnce(async (value: string) => {
         await pending.promise;
-        credentials.stored[provider] = value;
+        credentials.stored = value;
       });
-      const ui = mount(provider);
+      const ui = mount();
       await settle();
       ui.edit('exact-visible-value');
       ui.verify().click();
@@ -345,58 +315,57 @@ describe.each(['mineru', 'semanticScholar'] as const)(
       pending.resolve();
       await settle();
       expect(credentials.check).toHaveBeenCalledWith(
-        provider,
         'exact-visible-value',
         expect.any(AbortSignal),
       );
       const commands = native.commands.flatMap((command) =>
         command.type === 'reader' ? [command.command] : [],
       );
-      expect(commands).toContainEqual({ type: 'credentialInput', provider });
-      expect(commands).toContainEqual({ type: 'verifyCredential', provider });
+      expect(commands).toContainEqual({ type: 'credentialInput' });
+      expect(commands).toContainEqual({ type: 'verifyCredential' });
       expect(JSON.stringify(native.commands)).not.toContain('exact-visible-value');
-      expect(ui.reader.model()[provider].error).toBe(false);
-      expect(ui.reader.model()[provider].status).not.toBe('');
-      expect(ui.reader.model()[provider].checking).toBe(false);
+      expect(ui.reader.model().semanticScholar.error).toBe(false);
+      expect(ui.reader.model().semanticScholar.status).not.toBe('');
+      expect(ui.reader.model().semanticScholar.checking).toBe(false);
       const link = ui.section().querySelector('a')!;
       expect(link.href.startsWith('https://')).toBe(true);
       link.click();
-      expect(credentials.help).toHaveBeenCalledWith(provider);
+      expect(credentials.help).toHaveBeenCalledOnce();
       ui.dispose();
     });
 
     it('aborts and ignores stale validity after an edit or page remount', async () => {
       const first = Promise.withResolvers<string>();
       credentials.check.mockReturnValueOnce(first.promise);
-      const ui = mount(provider);
+      const ui = mount();
       await settle();
       ui.verify().click();
       await settle();
-      const signal = credentials.check.mock.calls[0][2] as AbortSignal;
+      const signal = credentials.check.mock.calls[0][1] as AbortSignal;
       ui.edit('different-key');
       expect(signal.aborted).toBe(true);
       first.resolve('valid');
       await settle();
-      expect(ui.reader.model()[provider].status).toBe('');
+      expect(ui.reader.model().semanticScholar.status).toBe('');
       const second = Promise.withResolvers<string>();
       credentials.check.mockReturnValueOnce(second.promise);
       ui.verify().click();
       await settle();
-      const closingSignal = credentials.check.mock.calls[1][2] as AbortSignal;
+      const closingSignal = credentials.check.mock.calls[1][1] as AbortSignal;
       ui.dispose();
       expect(closingSignal.aborted).toBe(true);
-      const reopened = mount(provider);
+      const reopened = mount();
       second.resolve('valid');
       await settle();
       expect(reopened.input().value).toBe('different-key');
-      expect(reopened.reader.model()[provider].status).toBe('');
+      expect(reopened.reader.model().semanticScholar.status).toBe('');
       reopened.dispose();
     });
 
     it('retires verification waiting for storage when a later edit is accepted', async () => {
       const pending = Promise.withResolvers<void>();
       commit.mockImplementationOnce(async () => pending.promise);
-      const ui = mount(provider);
+      const ui = mount();
       await settle();
       ui.edit('first');
       ui.verify().click();
@@ -404,19 +373,18 @@ describe.each(['mineru', 'semanticScholar'] as const)(
       pending.resolve();
       await settle();
       expect(credentials.check).not.toHaveBeenCalled();
-      expect(credentials.stored[provider]).toBe('second');
-      expect(ui.reader.model()[provider].status).toBe('');
+      expect(credentials.stored).toBe('second');
+      expect(ui.reader.model().semanticScholar.status).toBe('');
       ui.dispose();
     });
 
     it('reports storage errors, recovers on later input, and does not verify a failed save', async () => {
-      const read = provider === 'mineru' ? credentials.readMinerU : credentials.readKey;
-      read.mockImplementationOnce(() => {
+      credentials.readKey.mockImplementationOnce(() => {
         throw new Error('Storage unavailable');
       });
-      const ui = mount(provider);
+      const ui = mount();
       await settle();
-      expect(ui.reader.model()[provider].error).toBe(true);
+      expect(ui.reader.model().semanticScholar.error).toBe(true);
       const failure = Promise.withResolvers<void>();
       commit.mockReturnValueOnce(failure.promise);
       ui.edit('failed');
@@ -425,25 +393,25 @@ describe.each(['mineru', 'semanticScholar'] as const)(
       expect(credentials.check).not.toHaveBeenCalled();
       failure.reject(new Error('Write failed'));
       await settle();
-      expect(ui.reader.model()[provider].error).toBe(true);
+      expect(ui.reader.model().semanticScholar.error).toBe(true);
       expect(credentials.check).not.toHaveBeenCalled();
       ui.edit('recovered');
       await settle();
-      expect(credentials.stored[provider]).toBe('recovered');
-      expect(ui.reader.model()[provider].status).toBe('');
+      expect(credentials.stored).toBe('recovered');
+      expect(ui.reader.model().semanticScholar.status).toBe('');
       ui.dispose();
     });
 
     it('reloads the saved field on tab remount and retires the previous verification', async () => {
       const check = Promise.withResolvers<string>();
       credentials.check.mockReturnValueOnce(check.promise);
-      const ui = mount(provider);
+      const ui = mount();
       await settle();
       ui.edit('tab-persisted');
       await settle();
       ui.verify().click();
       await settle();
-      const signal = credentials.check.mock.calls[0][2] as AbortSignal;
+      const signal = credentials.check.mock.calls[0][1] as AbortSignal;
       const oldInput = ui.input();
       ui.navigate('Appearance');
       expect(signal.aborted).toBe(true);
@@ -453,12 +421,12 @@ describe.each(['mineru', 'semanticScholar'] as const)(
       await settle();
       expect(ui.input()).not.toBe(oldInput);
       expect(ui.input().value).toBe('tab-persisted');
-      expect(ui.reader.model()[provider].status).toBe('');
+      expect(ui.reader.model().semanticScholar.status).toBe('');
       ui.dispose();
     });
 
     it('preserves native keyboard ownership during composition and saves accepted input before Escape closes', async () => {
-      const ui = mount(provider);
+      const ui = mount();
       await settle();
       ui.input().focus();
       ui.input().dispatchEvent(new CompositionEvent('compositionstart', { bubbles: true }));
@@ -471,7 +439,7 @@ describe.each(['mineru', 'semanticScholar'] as const)(
       ui.input().dispatchEvent(new KeyboardEvent('keydown', { key: 'Escape', bubbles: true }));
       expect(ui.root.isConnected).toBe(false);
       await settle();
-      expect(credentials.stored[provider]).toBe('keyboard-accepted');
+      expect(credentials.stored).toBe('keyboard-accepted');
     });
-  },
-);
+  });
+});

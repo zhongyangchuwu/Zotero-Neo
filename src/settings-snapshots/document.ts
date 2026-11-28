@@ -97,7 +97,9 @@ export function isRetiredNeoPreference(key: unknown): boolean {
     name === 'ai.configuration' ||
     name.startsWith('pdf-translate.') ||
     name.startsWith('reader-ai.') ||
-    name.startsWith('secret:ai:')
+    name.startsWith('secret:ai:') ||
+    name.startsWith('documentAnalysis.') ||
+    name === 'secret:mineru'
   );
 }
 

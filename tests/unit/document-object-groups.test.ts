@@ -1,14 +1,7 @@
 import { describe, expect, it } from 'vitest';
-import { analyzeDocument } from '../../src/document-analysis/analyze';
 import { documentCaptionIdentity } from '../../src/document-analysis/local-rules';
-import type {
-  DocumentRegion,
-  DocumentRect,
-  DocumentSource,
-  ParsedDocument,
-} from '../../src/document-analysis/contracts';
+import type { DocumentRegion, DocumentRect } from '../../src/document-analysis/contracts';
 import { nativeDocumentRegions } from '../../src/document-analysis/native';
-import { oxrParsedDocument } from '../../src/document-analysis/oxr';
 import {
   documentObjectGroups,
   documentObjectLocation,
@@ -37,11 +30,6 @@ const right = region('right', 'image', [310, 400, 545, 650]);
 const caption = region('caption', 'caption', [50, 340, 545, 390], {
   text: 'Figure 2: Two panels.',
 });
-const source: DocumentSource = {
-  fingerprint: 'test',
-  fileName: 'test.pdf',
-  pages: [{ pageIndex: 0, rotation: 0, viewBox: [0, 0, 600, 800] }],
-};
 
 describe('document object grouping', () => {
   it('keeps separate panels and caption rectangles in one target, independent of array order', () => {
@@ -212,76 +200,5 @@ describe('document object grouping', () => {
     ]);
     expect(groups[0]?.memberRegionIds).toHaveLength(4);
     expect(groups[1]?.association).toBe('caption-only');
-  });
-
-  it('uses one grouping stage for native and OXR normalized geometry', () => {
-    const native = nativeDocumentRegions([
-      { type: 'image', anchor: { pageRects: [[0, ...left.rect]] } },
-      { type: 'image', anchor: { pageRects: [[0, ...right.rect]] } },
-      {
-        type: 'caption',
-        content: [{ text: caption.text }],
-        anchor: { pageRects: [[0, ...caption.rect]] },
-      },
-    ]);
-    const oxr = oxrParsedDocument(source, {
-      code: 0,
-      data: {
-        result: {
-          outputs: {
-            json: {
-              pages: [
-                {
-                  page_num: 0,
-                  page_size: { w: 600, h: 800 },
-                  blocks: [left, right, caption].map((r) => ({
-                    type: r.kind === 'image' ? 'Picture' : 'Caption',
-                    bbox: [r.rect[0], 800 - r.rect[3], r.rect[2], 800 - r.rect[1]],
-                    content: r.text,
-                  })),
-                },
-              ],
-            },
-          },
-        },
-      },
-    });
-    for (const regions of [native, oxr.regions]) {
-      const group = documentObjectGroups(regions)[0]!;
-      expect(group.association).toBe('geometry');
-      const actual = documentObjectLocation(regions, group).rects;
-      expect(actual).toHaveLength(3);
-      for (const [index, expected] of [left.rect, right.rect, caption.rect].entries())
-        expected.forEach((value, axis) => expect(actual[index]![axis]).toBeCloseTo(value, 8));
-    }
-  });
-
-  it('runs shared analysis only for a current matching source result', async () => {
-    const parsed: ParsedDocument = {
-      schemaVersion: 1,
-      sourceFingerprint: source.fingerprint,
-      backend: 'test',
-      modelRevision: null,
-      durationMs: 0,
-      pages: source.pages,
-      regions: [left, right, caption],
-    };
-    const abort = new AbortController();
-    const parser = { id: 'test', capabilities: [] as const, parse: async () => parsed };
-    expect(
-      (await analyzeDocument(parser, source, { signal: abort.signal })).objectGroups[0]
-        ?.memberRegionIds,
-    ).toHaveLength(3);
-    abort.abort();
-    await expect(analyzeDocument(parser, source, { signal: abort.signal })).rejects.toThrow(
-      'cancelled',
-    );
-    await expect(
-      analyzeDocument(
-        parser,
-        { ...source, fingerprint: 'changed' },
-        { signal: new AbortController().signal },
-      ),
-    ).rejects.toThrow('different PDF');
   });
 });

@@ -1,6 +1,5 @@
 import { reportDiagnosticError, type Logger } from '../core/logging';
 import type { BatchOutcome } from '../i18n/batch-result';
-import { isSourceNoteIdentity } from '../platform/note-relations';
 import { executeCollectionTransaction } from '../toolkit/main/collection-transactions';
 
 /** Only the same live, editable item from the surface's target set may be changed. */
@@ -33,7 +32,6 @@ export async function setItemTag(
 ): Promise<BatchOutcome> {
   const name = tag.trim().normalize();
   if (!name) throw new Error('Tag name is empty');
-  if (isSourceNoteIdentity(name)) throw new Error('Neo-managed tag cannot be edited');
 
   const result: BatchOutcome = { done: 0 };
   for (const item of items) {

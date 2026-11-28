@@ -9,6 +9,7 @@ import {
   migrateBindingModeOverrides,
   migrateMainDirectPrefixOverrides,
   migrateNoteBindingOverrides,
+  migrateRetiredShortcutActions,
   parseBindingKey,
   parseBindingOverrides,
   parseCustomBindings,
@@ -103,6 +104,40 @@ describe('binding parsing and overrides', () => {
     for (const action of ['switchTab', 'closeCurrentTab', 'previousTab', 'nextTab']) {
       expect(isActionId(action)).toBe(true);
     }
+  });
+
+  it('retires document actions by ID without reserving their old keys', () => {
+    const retired = {
+      'reader-normal:<Space>rd': 'compareDocumentParsing',
+      'reader-normal:<Space>rf': 'openFigurePicker',
+      'reader-normal:<Space>rs': 'openChapterSearch',
+      'reader-normal:<Space>re': 'openObjectExcerpts',
+      'reader-normal:<Space>rn': 'organizeChapterNotes',
+      'reader-normal:<Space>ru': 'prepareDocuments',
+      'main-normal:<Space>ru': 'prepareDocuments',
+    };
+    const live = {
+      'reader-normal:<Space>rd': 'openReferences',
+      'main-normal:<Space>ru': 'openNeoSettings',
+      'reader-normal:<Space>rr': null,
+    };
+    for (const [key, action] of Object.entries(retired)) {
+      expect(isActionId(action)).toBe(false);
+      expect(resolveBindings('')[key]).toBeUndefined();
+    }
+    const legacy = JSON.stringify({
+      ...retired,
+      'reader-normal:<Space>rb': 'compareDocumentParsing',
+      ...live,
+    });
+    expect(JSON.parse(migrateRetiredShortcutActions(legacy))).toEqual(live);
+    expect(parseBindingOverrides(legacy)).toEqual(live);
+    expect(resolveBindings(legacy)).toMatchObject({
+      'reader-normal:<Space>rd': 'openReferences',
+      'main-normal:<Space>ru': 'openNeoSettings',
+      'reader-normal:<Space>rb': 'toggleBodySelection',
+    });
+    expect(resolveBindings(legacy)['reader-normal:<Space>rr']).toBeUndefined();
   });
 
   it('executes token defaults while keeping separate character fallback actions', () => {

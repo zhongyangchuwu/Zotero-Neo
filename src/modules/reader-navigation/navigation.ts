@@ -38,7 +38,7 @@ export class ReaderNavigation {
     }
     const outline = await this.#host.prepareOutline(pdfWindow, isCurrent);
     if (!outline) return false;
-    // Heading correction stays native; graph navigation can use cloud cache without cold SDT work.
+    // Printed heading correction is native; captions belong to the loaded local PDF.
     if (category === 'heading') await this.#dependencies.captions.loadHeadings();
     const captions = category === 'heading' ? [] : await this.#dependencies.captions.load();
     if (!outline.isCurrent()) return false;
@@ -100,45 +100,32 @@ export class ReaderNavigation {
     if (category !== 'heading') {
       const seen = new Map(
         entries.map((entry) => [
-          `${entry.page}:${documentCaptionIdentity(entry.entry.title)?.label}`,
+          `${entry.page}:${documentCaptionIdentity(entry.entry.title)?.label.toLowerCase()}`,
           entry,
         ]),
       );
       for (const caption of captions) {
         if (caption.kind !== category) continue;
-        const key = caption.label
-          ? `${caption.location.position.pageIndex}:${caption.label}`
-          : `object:${caption.id ?? order}`;
-        const existing = seen.get(key);
-        if (existing) {
-          // A resolved group retains all panels and its caption, including tables
-          // whose caption already starts at the authored bookmark's top.
-          if (category === 'figure' || category === 'table') {
-            let top = -Infinity;
-            for (const rect of caption.location.position.rects) {
-              if (!Array.isArray(rect) || rect.length < 4 || !rect.every(Number.isFinite)) {
-                top = -Infinity;
-                break;
-              }
-              top = Math.max(top, rect[1], rect[3]);
-            }
-            if (
-              Number.isFinite(top) &&
-              (caption.association === 'geometry' ||
-                caption.association === 'backend' ||
-                top > existing.top)
-            ) {
-              existing.entry = caption;
-              existing.top = top;
-              existing.clonePosition = true;
-            }
-          }
-          continue;
-        }
         const top = Math.max(
           ...caption.location.position.rects.map((rect) => Math.max(rect[1], rect[3])),
         );
         if (!Number.isFinite(top)) continue;
+        const key = `${caption.location.position.pageIndex}:${caption.label.toLowerCase()}`;
+        const existing = seen.get(key);
+        if (existing) {
+          // A resolved group retains all panels and its caption, including tables
+          // whose caption already starts at the authored bookmark's top.
+          if (
+            caption.association === 'geometry' ||
+            caption.association === 'backend' ||
+            top > existing.top
+          ) {
+            existing.entry = caption;
+            existing.top = top;
+            existing.clonePosition = true;
+          }
+          continue;
+        }
         const added = {
           entry: caption,
           page: caption.location.position.pageIndex,
@@ -190,11 +177,7 @@ export class ReaderNavigation {
     }
     if (!target?.entry.location || !isCurrent() || this.#host.activePdfWindow() !== pdfWindow)
       return false;
-    if (
-      category !== 'heading' &&
-      !(await this.#dependencies.captions.sourceCurrent(target.entry as ReaderCaptionTarget))
-    )
-      return false;
+    if (category !== 'heading' && !this.#dependencies.captions.sourceCurrent()) return false;
     if (!outline.isCurrent() || !isCurrent() || this.#host.activePdfWindow() !== pdfWindow)
       return false;
     await this.#host.navigatePosition(outline.view, target.entry.location);
@@ -204,7 +187,7 @@ export class ReaderNavigation {
   /** A caption choice uses the exact active view's native position/history producer. */
   async navigateCaption(target: ReaderCaptionTarget, pdfWindow: PdfWindow): Promise<boolean> {
     if (
-      !(await this.#dependencies.captions.sourceCurrent(target)) ||
+      !this.#dependencies.captions.sourceCurrent(target) ||
       this.#host.activePdfWindow() !== pdfWindow ||
       !this.#host.canNavigate(pdfWindow)
     )

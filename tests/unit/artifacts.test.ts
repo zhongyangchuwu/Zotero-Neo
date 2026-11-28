@@ -1,6 +1,5 @@
 import { afterEach, describe, expect, it, vi } from 'vitest';
 import { artifactHeads, createArtifactRepository, validateArtifact } from '../../src/artifacts';
-import { artifactPDF } from '../../src/platform/artifacts';
 import { artifactHost } from '../fixtures/artifact-host';
 
 const payload = {
@@ -187,54 +186,48 @@ describe('versioned Zotero artifact attachments', () => {
     ).rejects.toMatchObject({ kind: 'incomplete' });
   });
 
-  it('keeps retired AI attachments, including trashed or unsupported payloads, out of active lineage', async () => {
-    const host = artifactHost();
-    const repo = createArtifactRepository();
-    const legacy = JSON.stringify({
-      format: 'zotero-neo',
-      kind: 'ai-qa',
-      schemaVersion: 1,
-      payload: { oldShape: true },
-    });
-    const live = host.addJSON(legacy, 'zotero-neo-ai-qa-live.json');
-    const trashed = host.addJSON(legacy, 'zotero-neo-ai-qa-trashed.json');
-    trashed.deleted = true;
-    const legacyFiles = [...host.files].filter(([, value]) => value === legacy);
-    expect(legacyFiles).toHaveLength(2);
-    expect(await repo.list(host.parent)).toMatchObject({
-      complete: true,
-      artifacts: [],
-      issues: [],
-    });
+  it.each(['ai-qa', 'document-corrections'])(
+    'leaves retired %s attachments, including trashed or unsupported payloads, out of active lineage',
+    async (kind) => {
+      const host = artifactHost();
+      const repo = createArtifactRepository();
+      const legacy = JSON.stringify({
+        format: 'zotero-neo',
+        kind,
+        schemaVersion: 99,
+        payload: { oldShape: true },
+      });
+      const live = host.addJSON(legacy, 'renamed-external.json');
+      const trashed = host.addJSON(legacy);
+      trashed.deleted = true;
+      const legacyFiles = [...host.files].filter(([, value]) => value === legacy);
+      expect(legacyFiles).toHaveLength(2);
+      expect(await repo.list(host.parent)).toMatchObject({
+        complete: true,
+        artifacts: [],
+        issues: [],
+      });
 
-    const published = await repo.publish(host.parent, {
-      kind: 'metadata-review',
-      recordID: 'review',
-      payload,
-    });
-    expect(await repo.list(host.parent)).toMatchObject({
-      complete: true,
-      artifacts: [published.artifact],
-      issues: [],
-    });
-    expect([...host.files].filter(([, value]) => value === legacy)).toEqual(legacyFiles);
-    expect(host.children).toEqual(expect.arrayContaining([live, trashed]));
-    expect(live.deleted).toBe(false);
-    expect(trashed.deleted).toBe(true);
-  });
+      const published = await repo.publish(host.parent, {
+        kind: 'metadata-review',
+        recordID: 'review',
+        payload,
+      });
+      expect(await repo.list(host.parent)).toMatchObject({
+        complete: true,
+        artifacts: [published.artifact],
+        issues: [],
+      });
+      expect([...host.files].filter(([, value]) => value === legacy)).toEqual(legacyFiles);
+      expect(host.children).toEqual(expect.arrayContaining([live, trashed]));
+      expect(live.deleted).toBe(false);
+      expect(trashed.deleted).toBe(true);
+    },
+  );
 
-  it('reports real MD5, source unavailability, account-less identity and read-only libraries distinctly', async () => {
+  it('distinguishes account-less identity and read-only libraries', async () => {
     const host = artifactHost(),
       repo = createArtifactRepository();
-    expect((await artifactPDF(2)).source).toEqual({
-      attachmentKey: 'PDFKEY01',
-      contentHash: { algorithm: 'md5', value: host.digest },
-      precision: 'document',
-    });
-    host.files.set('/pdf', 'different bytes');
-    expect((await artifactPDF(2)).source.contentHash.value).not.toBe(host.digest);
-    host.files.delete('/pdf');
-    await expect(artifactPDF(2)).rejects.toMatchObject({ kind: 'source-unavailable' });
     host.library.filesEditable = false;
     await expect(
       repo.publish(host.parent, { kind: 'metadata-review', recordID: 'review', payload }),
@@ -287,15 +280,6 @@ describe('versioned Zotero artifact attachments', () => {
     expect((await repo.list(host.parent)).issues).toEqual(
       expect.arrayContaining([expect.objectContaining({ kind: 'identity-mismatch' })]),
     );
-  });
-
-  it('requires a regular parent for standalone PDFs rather than silently creating one', async () => {
-    const host = artifactHost();
-    const snapshot = await artifactPDF(2);
-    host.pdf.parentID = 0;
-    expect(await snapshot.isCurrent()).toBe(false);
-    await expect(artifactPDF(2)).rejects.toMatchObject({ kind: 'parent-required' });
-    expect(host.imports).not.toHaveBeenCalled();
   });
 
   it('rejects invalid known payloads and stale source without creating attachments', async () => {

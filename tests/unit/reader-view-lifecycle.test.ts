@@ -14,7 +14,7 @@ type ListenerEntry = {
   readonly listener: EventListener;
 };
 
-function fakePdfWindow() {
+function fakePdfWindow(reading = false) {
   const windowAdds: ListenerEntry[] = [];
   const windowRemoves: ListenerEntry[] = [];
   const documentAdds: ListenerEntry[] = [];
@@ -29,7 +29,7 @@ function fakePdfWindow() {
       scrollRemoves.push({ type, listener }),
   } as unknown as Element;
   const document = {
-    getElementById: (id: string) => (id === 'viewerContainer' ? scrollElement : null),
+    getElementById: (id: string) => (!reading && id === 'viewerContainer' ? scrollElement : null),
     querySelector: () => null,
     addEventListener: (type: string, listener: EventListener) =>
       documentAdds.push({ type, listener }),
@@ -80,7 +80,7 @@ describe('ReaderViewLifecycle', () => {
   it('retires hidden PDF callbacks immediately and leases only the displayed Reading Mode view', () => {
     Reflect.set(globalThis, 'Components', { utils: { isDeadWrapper: () => false } });
     const pdf = fakePdfWindow(),
-      reading = fakePdfWindow();
+      reading = fakePdfWindow(true);
     const base = { _iframeWindow: pdf.pdfWindow };
     const overlay = { _iframeWindow: reading.pdfWindow };
     const internal = {
@@ -88,7 +88,8 @@ describe('ReaderViewLifecycle', () => {
       _primarySDTView: undefined as typeof overlay | undefined,
     };
     const onKeyDown = vi.fn(),
-      releaseView = vi.fn();
+      releaseView = vi.fn(),
+      onScroll = vi.fn();
     const lifecycle = new ReaderViewLifecycle({
       reader: { _internalReader: internal } as ReaderRuntime,
       timerWindow: pdf.pdfWindow,
@@ -98,7 +99,7 @@ describe('ReaderViewLifecycle', () => {
       onPointerDown: vi.fn(),
       onBlur: vi.fn(),
       onSelectionChange: vi.fn(),
-      onScroll: vi.fn(),
+      onScroll,
       onResize: vi.fn(),
       syncHostBridge: vi.fn(),
     });
@@ -113,8 +114,12 @@ describe('ReaderViewLifecycle', () => {
     expect(releaseView).toHaveBeenCalledWith(pdf.pdfWindow);
     reading.emitWindow('keydown', { key: 'j' } as KeyboardEvent);
     expect(onKeyDown).toHaveBeenLastCalledWith(expect.anything(), reading.pdfWindow);
+    reading.emitDocument('scroll', {} as Event);
+    expect(onScroll).toHaveBeenLastCalledWith(reading.pdfWindow);
     internal._primarySDTView = undefined;
     reading.emitWindow('keydown', { key: 'j' } as KeyboardEvent);
+    reading.emitDocument('scroll', {} as Event);
+    expect(onScroll).toHaveBeenCalledOnce();
     expect(onKeyDown).toHaveBeenCalledTimes(2);
     lifecycle.sync();
     expect(releaseView).toHaveBeenCalledWith(reading.pdfWindow);

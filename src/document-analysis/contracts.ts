@@ -14,19 +14,6 @@ export type DocumentRegionKind =
   | 'other';
 export type DocumentRect = readonly [number, number, number, number];
 
-export interface DocumentPage {
-  readonly pageIndex: number;
-  /** Unrotated PDF user coordinates; never CSS pixels. */
-  readonly viewBox: DocumentRect;
-  readonly rotation: 0 | 90 | 180 | 270;
-}
-
-export interface DocumentSource {
-  readonly fingerprint: string;
-  readonly fileName: string;
-  readonly pages: readonly DocumentPage[];
-}
-
 export interface DocumentRegion {
   readonly id: string;
   /** Several page rectangles may belong to one backend block; order retains gaps from unusable blocks. */
@@ -59,45 +46,10 @@ export interface DocumentLocation {
   readonly rects: readonly DocumentRect[];
 }
 
-export interface ParsedDocument {
-  readonly schemaVersion: 1;
-  readonly sourceFingerprint: string;
-  readonly backend: string;
-  readonly modelRevision: string | null;
-  readonly durationMs: number;
-  readonly pages: readonly DocumentPage[];
-  readonly regions: readonly DocumentRegion[];
-}
-
-export interface ParseContext {
-  readonly signal: AbortSignal;
-}
-
-/** Only explicit, non-secret parser settings identify reusable results; never serialize provider options wholesale. */
-export interface DocumentCacheKey {
-  readonly backend: string;
-  readonly adapterVersion: number;
-  readonly configuration: string;
-}
-
-/** Complete parsers can satisfy several stages together; protocol adapters own their HTTP details. */
-export interface DocumentParser {
-  readonly id: string;
-  readonly cacheKey?: DocumentCacheKey;
-  readonly capabilities: readonly ('layout' | 'text' | 'reading-order' | 'tables')[];
-  parse(source: DocumentSource, context: ParseContext): Promise<ParsedDocument>;
-}
-
-/** Semantic defaults are shared across providers; explicit native flow classification remains authoritative. */
+/** Fallback when native blocks do not include explicit flow classification. */
 export function documentRegionFlow(kind: DocumentRegionKind): DocumentRegion['flow'] {
   if (kind === 'header' || kind === 'footer') return 'excluded';
   return ['caption', 'image', 'table', 'formula', 'footnote'].includes(kind) ? 'auxiliary' : 'body';
-}
-
-export interface NativeDocumentData {
-  readonly metadata: unknown;
-  readonly catalog: unknown;
-  readonly blocks: readonly unknown[];
 }
 
 export function record(value: unknown): Readonly<Record<string, unknown>> | null {

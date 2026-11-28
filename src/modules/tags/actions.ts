@@ -8,7 +8,6 @@ import {
 import { isWritableTagItem, setItemTag } from '../../operations/item-tags';
 import type { PickerOpenOptions } from '../../main/picker/types';
 import { createTagCandidateProvider, type TagRecord } from '../../main/picker/providers/tags';
-import { isSourceNoteIdentity } from '../../platform/note-relations';
 import { t, type AppLanguage } from '../../i18n';
 import { batchStatus, type BatchOutcome } from '../../i18n/batch-result';
 
@@ -42,9 +41,7 @@ function targetLabel(targets: ItemTargetSet, language: string): string {
 }
 
 function countTags(counts: Map<string, number>, item: Zotero.Item): void {
-  for (const { tag } of item.getTags()) {
-    if (!isSourceNoteIdentity(tag)) counts.set(tag, (counts.get(tag) ?? 0) + 1);
-  }
+  for (const { tag } of item.getTags()) counts.set(tag, (counts.get(tag) ?? 0) + 1);
 }
 
 function mergeTags(...sources: readonly (readonly TagRecord[])[]): TagRecord[] {
@@ -61,8 +58,7 @@ function candidateName(item: {
   readonly tagName?: string;
   readonly tagCandidate?: string;
 }): string {
-  const name = item.tagCandidate === 'namespace' ? '' : (item.tagName?.trim() ?? '');
-  return isSourceNoteIdentity(name) ? '' : name;
+  return item.tagCandidate === 'namespace' ? '' : (item.tagName?.trim() ?? '');
 }
 
 function presenceLabel(

@@ -482,7 +482,7 @@ export class ReaderNativeSidebar {
     this.refreshFocus();
   }
 
-  /** Caption groups are owned DOM; opening them is the only sidebar trigger for native extraction. */
+  /** Render session results without starting extraction when the sidebar opens. */
   refreshCaptions(): void {
     const document = this.#document;
     if (!this.isCurrent() || !document || isDeadObject(document)) return;
@@ -498,15 +498,6 @@ export class ReaderNativeSidebar {
       root.id = 'zv-reader-captions';
       root.className = 'neo-appearance neo-sidebar';
       root.setAttribute('role', 'group');
-      root.addEventListener(
-        'toggle',
-        (event) => {
-          const details = event.target as HTMLDetailsElement;
-          if (details.parentElement === root && details.open && this.isCurrent())
-            void this.#host.captions.load();
-        },
-        true,
-      );
       wrapper.insertBefore(
         root,
         this.#marksRoot?.parentElement === wrapper ? this.#marksRoot : null,

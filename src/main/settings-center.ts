@@ -315,7 +315,7 @@ export class SettingsCenter {
               this.#preferences,
               language,
               changed,
-              (provider) => {
+              () => {
                 if (
                   this.#panel !== panel ||
                   this.#pageEpoch !== epoch ||
@@ -323,7 +323,7 @@ export class SettingsCenter {
                   this.#window.document !== document
                 )
                   return null;
-                const input = this.#view?.getElement(`credential-${provider}`);
+                const input = this.#view?.getElement('credential-semanticScholar');
                 return input?.localName === 'input' &&
                   (input as HTMLInputElement).type === 'password'
                   ? (input as HTMLInputElement)

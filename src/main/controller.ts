@@ -61,10 +61,6 @@ import { createNotesModule, type NotesModule } from '../modules/notes';
 import { createNoteLinkLifecycle } from '../modules/content-links/note-lifecycle';
 import { createWorkspaceModule, type WorkspaceModule } from '../modules/workspace';
 import {
-  createDocumentPreparationModule,
-  type DocumentPreparationModule,
-} from '../modules/document-preparation';
-import {
   createSettingsSnapshotModule,
   type SettingsSnapshotModule,
 } from '../modules/settings-snapshots';
@@ -91,7 +87,7 @@ import {
   mainPluginActive,
 } from '../toolkit/main';
 import { mainCursorItem, resolveMainEffectiveTargets } from './action-targets';
-import { resolveMainDocumentAttachments, MAIN_ITEM_TARGET } from './main-item-target';
+import { MAIN_ITEM_TARGET } from './main-item-target';
 import { NOTE_ITEM_TARGET } from './note-item-target';
 import { createExtensionsModule, type ExtensionsModule } from '../modules/extensions';
 import { MainItemStateDecoration } from './item-state-decoration';
@@ -125,7 +121,6 @@ export class MainWindowController implements MainWindowControllerApi {
       readonly library: LibraryModule | null;
       readonly notes: NotesModule | null;
       readonly workspace: WorkspaceModule | null;
-      readonly preparation: DocumentPreparationModule | null;
       readonly settingsSnapshots: SettingsSnapshotModule | null;
     }
   >();
@@ -181,12 +176,6 @@ export class MainWindowController implements MainWindowControllerApi {
     const host = scope.host;
     session.cleanup.add(() => scope.dispose());
     try {
-      const preparationService = this.#dependencies.documentPreparation;
-      const preparation = preparationService
-        ? scope.activate('document-preparation', () =>
-            createDocumentPreparationModule(host, 'main-normal', preparationService),
-          )
-        : null;
       const settingsSnapshotsService = this.#dependencies.settingsSnapshots;
       const settingsSnapshots = settingsSnapshotsService
         ? scope.activate('settings-snapshots', () =>
@@ -454,7 +443,6 @@ export class MainWindowController implements MainWindowControllerApi {
         library,
         notes,
         workspace,
-        preparation,
         settingsSnapshots,
       });
     } catch (error) {
@@ -1077,7 +1065,6 @@ export class MainWindowController implements MainWindowControllerApi {
     session: MainWindowSession,
   ): void {
     if (this.#sessions.get(window) !== session) return;
-    if (this.#dependencies.documentPreparation?.handleKey(event)) return;
     if (this.#dependencies.settingsSnapshots?.handleKey(event)) return;
     if (mainIdentifierLookupOwnsInput(window)) {
       this.resetMainInput(window, session);
@@ -1515,23 +1502,6 @@ export class MainWindowController implements MainWindowControllerApi {
       case 'openSettingsSnapshots': {
         this.#modules.get(session)?.settingsSnapshots?.open({
           window,
-          language: () => this.keyGuideLanguage(),
-          themeRoot: (root) => session.theme.add(root),
-          isCurrent: () => this.#sessions.get(window) === session && !session.cleanup.disposed,
-        });
-        break;
-      }
-      case 'prepareDocuments': {
-        const targets = resolveMainDocumentAttachments(
-          window,
-          this.worksetsModule(session)?.selection ?? null,
-          this.worksetsModule(session)?.isVisual
-            ? this.worksetsModule(session)?.currentTarget()
-            : undefined,
-        );
-        this.#modules.get(session)?.preparation?.open({
-          window,
-          targets,
           language: () => this.keyGuideLanguage(),
           themeRoot: (root) => session.theme.add(root),
           isCurrent: () => this.#sessions.get(window) === session && !session.cleanup.disposed,

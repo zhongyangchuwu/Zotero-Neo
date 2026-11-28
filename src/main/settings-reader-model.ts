@@ -49,7 +49,6 @@ export interface ReaderPageModel {
   readonly color: HighlightColorName;
   readonly scroll: ReaderScrollConfig;
   readonly status: string;
-  readonly mineru: ReaderCredentialModel;
   readonly semanticScholar: ReaderCredentialModel;
 }
 
@@ -65,5 +64,4 @@ export type ReaderPageCommand =
         | 'credentialInput'
         | 'verifyCredential'
         | 'credentialHelp';
-      readonly provider: 'mineru' | 'semanticScholar';
     };

@@ -23,6 +23,7 @@ export interface ReaderViewLifecycleDependencies {
   readonly onSelectionChange: (pdfWindow: PdfWindow) => void;
   readonly onScroll: (pdfWindow: PdfWindow) => void;
   readonly onResize: (pdfWindow: PdfWindow) => void;
+  readonly onReady?: (pdfWindow: PdfWindow) => void;
   readonly releaseView: (pdfWindow: PdfWindow) => void;
   readonly syncHostBridge: () => void;
 }
@@ -154,10 +155,10 @@ export class ReaderViewLifecycle {
       if (!this.#handlerCurrent(pdfWindow, handlers)) return;
       this.#dependencies.onResize(pdfWindow);
     }) as EventListener;
-    const scrollElement =
+    const scrollTarget =
       document.getElementById('viewerContainer') ??
       document.querySelector('.pdfViewer') ??
-      document.scrollingElement;
+      document;
     const handlers: ViewHandlers = {
       view,
       document,
@@ -219,16 +220,16 @@ export class ReaderViewLifecycle {
         return;
       if (!windowListener('resize', resize, { passive: true })) return;
       if (
-        scrollElement &&
         !acquire(
-          () => scrollElement.addEventListener('scroll', scroll, { passive: true }),
+          () => scrollTarget.addEventListener('scroll', scroll, { passive: true }),
           () => {
-            if (!isDeadObject(scrollElement)) scrollElement.removeEventListener('scroll', scroll);
+            if (!isDeadObject(scrollTarget)) scrollTarget.removeEventListener('scroll', scroll);
           },
         )
       )
         return;
       handlers.ready = true;
+      this.#dependencies.onReady?.(pdfWindow);
     } catch (error) {
       const failure = new CleanupFailure();
       failure.run(() => {

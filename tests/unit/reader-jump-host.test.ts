@@ -752,10 +752,10 @@ describe('duplicate PDF shared-history roundtrip', () => {
       const source = fixture.adapter.captureReader(reader, 'reader-B', origin.view)!;
       const departing = history.port(fixture.ownerWindow, session).execute(
         {
-          cause: {
-            kind: 'event',
-            event: destination === 'note' ? 'reader-excerpts.open-note' : 'references.open-local',
-          },
+          cause:
+            destination === 'note'
+              ? { kind: 'action', action: 'switchTab' }
+              : { kind: 'event', event: 'references.open-local' },
           surface: 'reader',
         },
         {

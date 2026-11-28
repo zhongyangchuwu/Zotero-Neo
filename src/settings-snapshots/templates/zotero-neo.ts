@@ -11,13 +11,7 @@ import {
 } from '../../core/preferences';
 import { OPTIONAL_MODULE_IDS } from '../../modules';
 import type { SettingsValue } from '../contracts';
-import {
-  fields,
-  safeEndpoint,
-  validBindings,
-  validLocalRules,
-  type TransferField,
-} from '../adapters/fields';
+import { fields, validBindings, type TransferField } from '../adapters/fields';
 
 export const NEO_PREFERENCE_FIELDS: readonly TransferField[] = [
   {
@@ -77,25 +71,4 @@ export const NEO_PREFERENCE_FIELDS: readonly TransferField[] = [
     validate: validBindings,
   },
   ...fields('number', 'Migration metadata', 'interaction.defaultsVersion'),
-  {
-    key: 'documentAnalysis.provider',
-    label: 'Document backend',
-    category: 'Document analysis',
-    type: 'string',
-    validate: (value) => ['local', 'mineru', 'oxr'].includes(String(value)),
-  },
-  {
-    key: 'documentAnalysis.oxr.endpoint',
-    label: 'OXR endpoint',
-    category: 'Document analysis',
-    type: 'string',
-    validate: (value) => typeof value === 'string' && safeEndpoint(value),
-  },
-  {
-    key: 'documentAnalysis.local.rules',
-    label: 'Local analysis rules',
-    category: 'Document analysis',
-    type: 'string',
-    validate: validLocalRules,
-  },
 ];

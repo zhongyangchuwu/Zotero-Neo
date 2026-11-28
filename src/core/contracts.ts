@@ -1,4 +1,3 @@
-import type { DocumentPreparationPort } from '../modules/document-preparation';
 import type { ActionId } from '../input/actions';
 import type { BindingMap, BindingContext } from '../input/bindings';
 import type { ItemTargetSet } from './item-target';
@@ -132,7 +131,6 @@ export interface MainWindowControllerApi extends ReaderMainOperations {
 
 export interface ReaderControllerDependencies {
   readonly scholarly: ScholarlyMetadataService;
-  readonly documentPreparation?: DocumentPreparationPort;
   readonly modules: BuiltinModuleRuntime;
   readonly preferences: PreferenceStore;
   readonly logger: Logger;
@@ -142,7 +140,6 @@ export interface ReaderControllerDependencies {
 export interface MainWindowControllerDependencies {
   readonly metadataReview?: MetadataReviewPort;
   readonly settingsSnapshots?: SettingsSnapshotPort;
-  readonly documentPreparation?: DocumentPreparationPort;
   readonly modules: BuiltinModuleRuntime;
   readonly preferences: PreferenceStore;
   readonly logger: Logger;

@@ -2,14 +2,6 @@ import type { ModuleHost } from '../../core/module-host';
 import type { ReaderSelectionActionDefinition, ReaderSelectionContext } from '../../core/contracts';
 import { CleanupFailure } from '../../core/cleanup';
 import type { KeyGuideLanguage } from '../../input/key-guide-config';
-import type { PreferenceStore } from '../../core/preference-store';
-import { readReaderDocumentCache, readReaderDocument } from '../../reader/document-cache';
-import { observeAttachmentDocumentCache } from '../../platform/document-analysis-cache';
-import {
-  DOCUMENT_PROVIDER_KEY,
-  OXR_ENDPOINT_KEY,
-  LOCAL_RULES_KEY,
-} from '../../document-analysis/settings';
 import type { PdfWindow, ReaderMode, ReaderRuntime } from '../../reader/types';
 import {
   computeSelectionPosition,
@@ -19,8 +11,8 @@ import {
   validateReaderSelection,
 } from '../../toolkit';
 import { t } from '../../i18n';
-import { ReaderBodySelection } from './body-selection';
-import { ReaderStructuredText } from './structured-text';
+import { ReaderBodySelection, type SelectionLayout } from './body-selection';
+import { readerStructuredParagraphs } from './structured-text';
 import { ReaderFlash } from './flash';
 import { ReaderSelectionRange } from './selection-range';
 import { ReaderSelectionActions } from './selection-actions';
@@ -33,7 +25,7 @@ import {
 
 export interface ReaderSelectionModulePorts {
   readonly reader: ReaderRuntime;
-  readonly preferences: PreferenceStore;
+  readonly layout: SelectionLayout;
   readonly activeWindow: () => PdfWindow | null;
   readonly isViewCurrent: (window: PdfWindow) => boolean;
   readonly capturePresentation: (window: PdfWindow) => () => boolean;
@@ -69,6 +61,7 @@ export interface ReaderSelectionModule {
   isCurrent(): boolean;
   context(): ReaderSelectionContext | null;
   executeAction(action: ReaderSelectionAction, window: PdfWindow): boolean;
+  refreshLayout(window: PdfWindow): void;
   releaseView(window: PdfWindow): void;
 }
 
@@ -96,9 +89,7 @@ export function createReaderSelectionModule(
     });
     scope.add(ports.clearOwner);
     const body = new ReaderBodySelection({
-      reader: ports.reader,
-      readCache: () =>
-        readReaderDocumentCache(ports.reader, ports.preferences, () => scope.isCurrent()),
+      layout: ports.layout,
       isCurrent: () => scope.isCurrent(),
       capturePresentation: ports.capturePresentation,
       captureView: ports.captureView,
@@ -108,20 +99,6 @@ export function createReaderSelectionModule(
       onChange: ports.updateIndicator,
     });
     scope.add(() => body.dispose());
-    const structured = new ReaderStructuredText(() =>
-      readReaderDocument(ports.reader, ports.preferences, () => scope.isCurrent()),
-    );
-    scope.add(() => structured.invalidate());
-    const invalidateStructure = (): void => {
-      body.invalidate();
-      structured.invalidate();
-    };
-    if (ports.reader.itemID)
-      scope.add(observeAttachmentDocumentCache(ports.reader.itemID, invalidateStructure));
-    for (const key of [DOCUMENT_PROVIDER_KEY, OXR_ENDPOINT_KEY, LOCAL_RULES_KEY]) {
-      const stop = ports.preferences.observe?.(key, invalidateStructure);
-      if (stop) scope.add(stop);
-    }
     const flash = new ReaderFlash({
       isCurrent,
       captureView: ports.captureView,
@@ -151,30 +128,16 @@ export function createReaderSelectionModule(
       direction: 'forward' | 'backward',
       granularity: 'sentence' | 'paragraph',
     ): void => {
-      const current = ports.capturePresentation(window),
-        selection = window.getSelection();
-      if (!selection?.anchorNode || selection.focusNode?.nodeType !== 3) return;
-      const anchor = selection.anchorNode,
-        anchorOffset = selection.anchorOffset;
-      const focus = selection.focusNode as Text,
-        offset = selection.focusOffset;
-      const stillSelected = (): boolean =>
-        scope.isCurrent() &&
-        current() &&
-        ports.mode() === 'visual' &&
-        selection.anchorNode === anchor &&
-        selection.anchorOffset === anchorOffset &&
-        selection.focusNode === focus &&
-        selection.focusOffset === offset;
-      void structured
-        .paragraphs(window, { textNode: focus, offset }, stillSelected)
-        .then((paragraphs) => {
-          if (stillSelected()) range.modify(window, direction, granularity, paragraphs);
-        })
-        .catch((error: unknown) => {
-          if (stillSelected()) showStatus(t('bodySelection.changed', ports.language()));
-          ports.debug(`Reader structural selection unavailable: ${String(error)}`);
-        });
+      const selection = window.getSelection();
+      const focus = selection?.focusNode;
+      const paragraphs =
+        selection && focus?.nodeType === 3
+          ? readerStructuredParagraphs(ports.layout, window, {
+              textNode: focus as Text,
+              offset: selection.focusOffset,
+            })
+          : null;
+      range.modify(window, direction, granularity, paragraphs);
     };
     const context = (): ReaderSelectionContext | null => {
       if (!scope.isCurrent() || ports.mode() !== 'visual') return null;
@@ -214,7 +177,6 @@ export function createReaderSelectionModule(
     scope.add(() => actions.dispose());
     const run = (action: ReaderSelectionAction, window: PdfWindow): void => {
       if (!isCurrent(window)) return;
-      body.bind(window);
       switch (action) {
         case 'toggleBodySelection':
           void body.toggle(window).catch((error: unknown) => {
@@ -347,6 +309,9 @@ export function createReaderSelectionModule(
       actions,
       isCurrent: () => scope.isCurrent(),
       context,
+      refreshLayout: (window) => {
+        if (isCurrent(window)) body.refreshLayout(window);
+      },
       releaseView: (window) => {
         const failure = new CleanupFailure();
         failure.run(() => range.releaseView(window));

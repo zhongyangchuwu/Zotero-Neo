@@ -117,12 +117,6 @@ export const DEFAULT_BINDINGS = {
   'reader-normal:<C-k>': 'focusReaderSplitUp',
   'reader-normal:<C-l>': 'focusReaderSplitRight',
   'reader-normal:<Esc>': 'clearSearch',
-  'reader-normal:<Space>ru': 'prepareDocuments',
-  'reader-normal:<Space>rd': 'compareDocumentParsing',
-  'reader-normal:<Space>rf': 'openFigurePicker',
-  'reader-normal:<Space>rs': 'openChapterSearch',
-  'reader-normal:<Space>re': 'openObjectExcerpts',
-  'reader-normal:<Space>rn': 'organizeChapterNotes',
   'reader-normal:<Space>rr': 'toggleReadingMode',
   'reader-normal:<Space>rb': 'toggleBodySelection',
   'reader-normal:<Space>ro': 'focusReaderOutline',
@@ -207,7 +201,6 @@ export const DEFAULT_BINDINGS = {
   'note-insert:<C-l>': 'focusReaderSplitRight',
   'main-normal:<C-o>': 'navigateBack',
   'main-normal:<C-i>': 'navigateForward',
-  'main-normal:<Space>ru': 'prepareDocuments',
   'main-normal:<Space>ff': 'findAllItems',
   'main-normal:<Space>fq': 'mainQuickSearch',
   'main-normal:<Space>fa': 'mainAdvancedSearch',
@@ -417,7 +410,6 @@ export const DEFAULT_PREFIX_BINDINGS = {
   'main-normal:w': prefix('panes'),
   'main-normal:<Space>': prefix('commands'),
   'main-normal:<Space>a': prefix('add'),
-  'main-normal:<Space>r': prefix('reader'),
   'main-normal:<Space>f': prefix('find'),
   'main-normal:<Space>o': prefix('open'),
   'main-normal:<Space>t': prefix('tags'),
@@ -930,6 +922,19 @@ export function isRetiredAIShortcutAction(action: unknown): boolean {
   return action === 'openAIQA' || action === 'openReaderAI';
 }
 
+const RETIRED_DOCUMENT_SHORTCUT_ACTIONS = {
+  compareDocumentParsing: true,
+  openFigurePicker: true,
+  openChapterSearch: true,
+  openObjectExcerpts: true,
+  organizeChapterNotes: true,
+  prepareDocuments: true,
+};
+
+export function isRetiredDocumentShortcutAction(action: unknown): boolean {
+  return typeof action === 'string' && Object.hasOwn(RETIRED_DOCUMENT_SHORTCUT_ACTIONS, action);
+}
+
 const RETIRED_SHORTCUT_ACTIONS = new Map<string, ActionId | null>([
   ['copyIdentifier', 'copyTarget'],
   ['followIdentifier', 'followLink'],
@@ -947,6 +952,7 @@ export function migrateRetiredShortcutActions(raw: unknown): string {
     !entries.some(
       ([, action]) =>
         isRetiredAIShortcutAction(action) ||
+        isRetiredDocumentShortcutAction(action) ||
         (typeof action === 'string' && RETIRED_SHORTCUT_ACTIONS.has(action)),
     )
   )
@@ -954,7 +960,7 @@ export function migrateRetiredShortcutActions(raw: unknown): string {
   return JSON.stringify(
     Object.fromEntries(
       entries.flatMap(([key, action]) => {
-        if (isRetiredAIShortcutAction(action)) return [];
+        if (isRetiredAIShortcutAction(action) || isRetiredDocumentShortcutAction(action)) return [];
         const replacement =
           typeof action === 'string' ? RETIRED_SHORTCUT_ACTIONS.get(action) : undefined;
         return replacement === null ? [] : [[key, replacement ?? action]];

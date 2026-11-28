@@ -1,4 +1,3 @@
-import { DocumentPreparationController } from './modules/document-preparation';
 import type {
   CommandPaletteContext,
   MainWindow,
@@ -21,8 +20,7 @@ import {
 import { createMainWindowController } from './main/controller';
 import { createReaderController } from './reader/controller';
 import { moduleStartupFlags } from './platform/module-startup';
-import { isSourceNoteIdentity, migrateLegacySourceNoteIdentities } from './platform/note-relations';
-import { ManagedTagsUI, registerMetadataReviewMenu } from './toolkit/main';
+import { registerMetadataReviewMenu } from './toolkit/main';
 import { registerNativeUIResources } from './platform/native-ui';
 import { createScholarlyMetadataService } from './scholarly';
 import { createArtifactRepository } from './artifacts';
@@ -67,11 +65,7 @@ type ZoteroWithNeo = typeof Zotero & {
 export class ZoteroNeoAddon implements ZoteroNeoController {
   readonly #logger = new ZoteroLogger();
   readonly #preferences: ZoteroPreferenceStore;
-  readonly #managedTags = new ManagedTagsUI(isSourceNoteIdentity, (error) =>
-    this.#logger.debug(`Managed tag UI failed: ${String(error)}`),
-  );
   readonly #modules: BuiltinModuleRuntime;
-  readonly #preparation: DocumentPreparationController;
   readonly #scholarly = createScholarlyMetadataService();
   readonly #artifacts = createArtifactRepository();
   readonly #metadataReview: MetadataReviewController;
@@ -89,10 +83,6 @@ export class ZoteroNeoAddon implements ZoteroNeoController {
 
   constructor(preferences: ZoteroPreferenceStore) {
     this.#preferences = preferences;
-    this.#preparation = new DocumentPreparationController(
-      (message) => this.#logger.debug(message),
-      preferences,
-    );
     this.#metadataReview = new MetadataReviewController(
       this.#scholarly,
       this.#artifacts,
@@ -136,7 +126,6 @@ export class ZoteroNeoAddon implements ZoteroNeoController {
     let main: MainWindowControllerApi | null = null;
     this.#reader = createReaderController({
       modules: this.#modules,
-      documentPreparation: this.#preparation,
       scholarly: this.#scholarly,
       preferences: this.#preferences,
       logger: this.#logger,
@@ -168,7 +157,6 @@ export class ZoteroNeoAddon implements ZoteroNeoController {
     });
     this.#main = createMainWindowController({
       modules: this.#modules,
-      documentPreparation: this.#preparation,
       metadataReview: this.#metadataReview,
       settingsSnapshots: this.#settingsSnapshots,
       preferences: this.#preferences,
@@ -196,19 +184,11 @@ export class ZoteroNeoAddon implements ZoteroNeoController {
     migrateReaderPreferences(this.#preferences);
     this.#registerPreferences();
     this.#registerMetadataReviewMenu(context.id);
-    this.#managedTags.start();
     this.#reader.start(context.id);
     const host = Zotero as ZoteroWithNeo;
     if (host.Neo !== this.api) {
       host.Neo = this.api;
       Services.obs.notifyObservers(Services.obs, NEO_READER_API_CHANGED);
-    }
-    const migration = await migrateLegacySourceNoteIdentities();
-    if (this.#context !== context) return;
-    if (migration.migrated || migration.readOnly) {
-      this.#logger.debug(
-        `Source note identities migrated=${migration.migrated} deferredReadOnly=${migration.readOnly}`,
-      );
     }
     this.#logger.debug(`Initialized v${context.version} on Zotero ${Zotero.version || '?'}`);
     this.#logger.diagnostic(
@@ -224,10 +204,8 @@ export class ZoteroNeoAddon implements ZoteroNeoController {
     }
     this.#context = null;
     const failure = new CleanupFailure();
-    failure.run(() => this.#managedTags.dispose());
     failure.run(() => this.#releaseMetadataReviewMenu?.());
     this.#releaseMetadataReviewMenu = null;
-    failure.run(() => this.#preparation.dispose());
     failure.run(() => this.#metadataReview.dispose());
     for (const { releaseSnapshots } of this.#mainWindows.values()) failure.run(releaseSnapshots);
     this.#mainWindows.clear();

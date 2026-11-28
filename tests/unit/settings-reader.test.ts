@@ -11,14 +11,8 @@ import {
 import { SettingsReader } from '../../src/main/settings-reader';
 
 const credentials = vi.hoisted(() => ({
-  readMinerU: vi.fn(),
-  saveMinerU: vi.fn(),
   readKey: vi.fn(),
   setKey: vi.fn(),
-}));
-vi.mock('../../src/platform/document-credentials', () => ({
-  readSettledMinerUToken: credentials.readMinerU,
-  saveMinerUToken: credentials.saveMinerU,
 }));
 vi.mock('../../src/platform/reference-credentials', () => ({
   readSettledReferenceKey: credentials.readKey,
@@ -26,9 +20,8 @@ vi.mock('../../src/platform/reference-credentials', () => ({
 }));
 vi.mock('../../src/platform/credential-check', async (importOriginal) => ({
   ...(await importOriginal<typeof CredentialChecks>()),
-  CREDENTIAL_HELP_URLS: { mineru: '', semanticScholar: '' },
-  checkCredential: vi.fn(),
-  openCredentialHelp: vi.fn(),
+  checkSemanticScholarCredential: vi.fn(),
+  openSemanticScholarCredentialHelp: vi.fn(),
 }));
 
 class Preferences implements PreferenceStore {
@@ -65,8 +58,6 @@ class Preferences implements PreferenceStore {
 
 beforeEach(() => {
   vi.resetAllMocks();
-  credentials.readMinerU.mockReturnValue('stored-mineru-secret');
-  credentials.saveMinerU.mockResolvedValue(undefined);
   credentials.readKey.mockReturnValue('stored-s2-secret');
   credentials.setKey.mockResolvedValue(undefined);
 });

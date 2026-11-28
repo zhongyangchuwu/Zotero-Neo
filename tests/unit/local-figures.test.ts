@@ -10,6 +10,7 @@ import {
   type LocalFigurePage,
   type LocalFigureText,
 } from '../../src/document-analysis/local-rules';
+import { mayContainDocumentCaption } from '../../src/document-analysis/local-rules/caption-identity';
 
 function text(content: string, rect: DocumentRect, fontSize = 10): LocalFigureText {
   return { text: content, rect, fontSize };
@@ -359,6 +360,11 @@ describe('authored local caption labels', () => {
     ['表二：结果', 'table', '二'],
   ])('recognizes %s without changing the shared identity shape', (title, kind, label) => {
     expect(documentCaptionIdentity(title)).toEqual({ kind, label });
+    expect(mayContainDocumentCaption(Array.from(title).reverse())).toBe(true);
+  });
+
+  it('screens out numbered text without a possible caption lead', () => {
+    expect(mayContainDocumentCaption(['Stable configuration', '2.1', 'Test plan'])).toBe(false);
   });
 
   it.each([

@@ -1,6 +1,7 @@
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import { readReaderReferenceDocument } from '../../src/toolkit/reader/references';
 import type { ReaderRuntime } from '../../src/toolkit/reader/contracts';
+import type { analysisPDF as readAttachmentFingerprint } from '../../src/platform/document-analysis';
 
 const source = vi.hoisted(() => ({
   fingerprint: '0123456789abcdef0123456789abcdef',
@@ -102,6 +103,25 @@ afterEach(() => {
   sdt.hash = '0123456789abcdef0123456789abcdef';
   sdt.unavailable = false;
   vi.unstubAllGlobals();
+});
+
+it('validates the saved file again by path and fingerprint without depending on Reader state', async () => {
+  const { analysisPDF } = await vi.importActual<{ analysisPDF: typeof readAttachmentFingerprint }>(
+    '../../src/platform/document-analysis',
+  );
+  const getFilePathAsync = vi.fn(async () => '/original.pdf');
+  const getAsync = vi.fn(async () => ({ isPDFAttachment: () => true, getFilePathAsync }));
+  const md5Async = vi.fn(async () => 'original-fingerprint');
+  vi.stubGlobal('Zotero', { Items: { getAsync }, Utilities: { Internal: { md5Async } } });
+  const snapshot = await analysisPDF(42);
+  expect(getAsync).toHaveBeenCalledWith(42);
+  expect(snapshot.fingerprint).toBe('original-fingerprint');
+  await expect(snapshot.isCurrent()).resolves.toBe(true);
+  md5Async.mockResolvedValueOnce('changed-fingerprint');
+  await expect(snapshot.isCurrent()).resolves.toBe(false);
+  getFilePathAsync.mockResolvedValueOnce('/other.pdf');
+  await expect(snapshot.isCurrent()).resolves.toBe(false);
+  expect(md5Async).toHaveBeenCalledTimes(3);
 });
 
 describe('native reference document', () => {

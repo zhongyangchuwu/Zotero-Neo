@@ -14,7 +14,7 @@ features:
     link: /docs/MAIN_GUIDE#开始浏览文库
     linkText: 浏览和整理文库
   - title: 读 PDF，眼睛不用离开正文
-    details: Flash 按屏幕上的词句选中文字，不必拖过整段。沿批注定位上下文，顺着引文找参考文献和文库里的副本。
+    details: Flash 按屏幕上的词句选中文字，不必拖过整段。按需跳转带题注的图表，沿批注定位上下文，顺着引文找参考文献和文库里的副本。
     link: /docs/READER_GUIDE#从一段文字开始
     linkText: 阅读和批注 PDF
   - title: 切换阅读标签页，换设备不用重配

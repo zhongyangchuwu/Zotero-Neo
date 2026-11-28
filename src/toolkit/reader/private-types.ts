@@ -190,6 +190,13 @@ export interface PdfViewerRuntime {
   readonly _pages?: readonly PdfPageViewRuntime[];
   update?(): void;
   getPageView?(index: number): PdfPageViewRuntime | undefined;
+  _getVisiblePages?(): {
+    readonly views: readonly {
+      readonly id: number;
+      readonly y: number;
+      readonly view: PdfPageViewRuntime;
+    }[];
+  };
 }
 
 export interface PdfPageViewRuntime {
@@ -201,53 +208,19 @@ export interface PdfPageViewRuntime {
   };
 }
 
-export interface PdfViewportRuntime {
-  readonly width: number;
-  readonly height: number;
-  convertToViewportRectangle?(rect: readonly number[]): readonly number[];
-}
-
-export interface PdfRenderTaskRuntime {
-  readonly promise: Promise<void>;
-  cancel(): void;
-}
-
-export interface PdfOptionalContentConfigRuntime {
-  getOrder(): readonly unknown[] | null;
-  isVisible(group: { readonly type: 'OCG'; readonly id: string }): boolean;
-  setVisibility(id: string, visible: boolean, preserveRB: boolean): void;
-}
-
 export interface PdfDocumentRuntime {
   readonly numPages?: number;
+  readonly fingerprints?: readonly (string | null)[];
+  readonly _pdfInfo?: {
+    readonly numPages?: number;
+    readonly fingerprints?: readonly (string | null)[];
+  };
   getProcessedData?(): Promise<unknown>;
   getData?(): Promise<Uint8Array>;
   getDestination?(destination: string): Promise<unknown>;
   getPageIndex?(reference: unknown): Promise<number>;
-  getOptionalContentConfig?(options: {
-    readonly intent: 'display' | 'print';
-  }): Promise<PdfOptionalContentConfigRuntime>;
-  readonly _transport?: {
-    readonly messageHandler?: {
-      sendWithPromise(
-        method: 'GetOptionalContentConfig',
-        data: null,
-      ): Promise<{ readonly groups: readonly { readonly id: string }[] } | null>;
-    };
-  };
   getPage?(page: number): Promise<{
-    readonly view?: readonly number[];
-    readonly rotate?: number;
-    readonly _pageInfo?: { readonly view: readonly number[]; readonly rotate?: number };
-    getViewport(options: { readonly scale: number }): PdfViewportRuntime;
-    render?(options: {
-      readonly viewport: PdfViewportRuntime;
-      readonly canvasContext: CanvasRenderingContext2D;
-      readonly transform: readonly number[];
-      readonly annotationMode: number;
-      readonly intent?: 'display' | 'print';
-      readonly optionalContentConfigPromise?: Promise<PdfOptionalContentConfigRuntime>;
-    }): PdfRenderTaskRuntime;
+    getViewport(options: { readonly scale: number }): { readonly height: number };
   }>;
 }
 

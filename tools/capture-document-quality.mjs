@@ -33,7 +33,7 @@ async function capture() {
     args.backend === undefined || ['local', 'native'].includes(args.backend),
     'Invalid capture backend',
   );
-  const backends = local ? ['local-rules'] : ['zotero-sdt', 'zotero-reader'];
+  const backend = local ? 'local-rules' : 'zotero-reader';
   const modes = local ? ['cold'] : ['cold', 'warm'];
   const docs = loadCorpus(args.corpus);
   const files = docs.map((doc) => resolve(args.directory, doc.pdf.fileName));
@@ -51,12 +51,52 @@ async function capture() {
     return { doc, file: files[index], md5: hash(bytes, 'md5') };
   });
   const root = resolve(args['source-root'] ?? resolve(import.meta.dirname, '..'));
-  const imports = [
-    `import { readNativeReaderDocument, readLocalReaderDocument } from ${JSON.stringify(`${root}/src/reader/document-cache.ts`)};`,
-    `import { readReaderReferenceDocument } from ${JSON.stringify(`${root}/src/toolkit/reader/references.ts`)};`,
-    `import { documentObjectGroups } from ${JSON.stringify(`${root}/src/document-analysis/object-groups.ts`)};`,
-    'Object.assign(globalThis, { NeoQualityCapture: { readNativeReaderDocument, readLocalReaderDocument, readReaderReferenceDocument, documentObjectGroups } });',
-  ].join('\n');
+  const source = (path) => JSON.stringify(resolve(root, 'src', path));
+  const imports = local
+    ? `
+import { analysisPDF } from ${source('platform/document-analysis.ts')};
+import { pdfSourceFigurePages } from ${source('toolkit/pdf-source.ts')};
+import { localDocumentRegions } from ${source('document-analysis/local-rules/index.ts')};
+import { documentObjectGroups } from ${source('document-analysis/object-groups.ts')};
+
+async function captureLocalLayout(itemID, expectedFingerprint) {
+  const start = Date.now();
+  const source = await analysisPDF(itemID);
+  if (source.fingerprint !== expectedFingerprint) throw Error('Imported PDF differs from corpus bytes');
+  const item = await Zotero.Items.getAsync(itemID);
+  const path = await item.getFilePathAsync();
+  if (!path || !(await source.isCurrent())) throw Error('PDF changed before decoding');
+  if (typeof AbortController === 'undefined')
+    Components.utils.importGlobalProperties(['AbortController']);
+  const read = async () => {
+    const data = await Zotero.File.getBinaryContentsAsync(path);
+    return Uint8Array.from(data, (character) => character.charCodeAt(0));
+  };
+  const pages = await pdfSourceFigurePages(read, new AbortController().signal, Number.MAX_SAFE_INTEGER);
+  const regions = localDocumentRegions(pages);
+  const objectGroups = documentObjectGroups(regions);
+  if (!(await source.isCurrent())) throw Error('PDF changed during capture');
+  const durationMs = Date.now() - start;
+  return {
+    durationMs,
+    parsed: {
+      schemaVersion: 1,
+      sourceFingerprint: source.fingerprint,
+      backend: 'local-rules',
+      modelRevision: null,
+      durationMs,
+      pages: pages.map(({ pageIndex, viewBox }) => ({ pageIndex, viewBox, rotation: 0 })),
+      regions,
+    },
+    objectGroups,
+  };
+}
+Object.assign(globalThis, { NeoQualityCapture: { captureLocalLayout } });
+`
+    : `
+import { readReaderReferenceDocument } from ${source('toolkit/reader/references.ts')};
+Object.assign(globalThis, { NeoQualityCapture: { readReaderReferenceDocument } });
+`;
   const bundle = await build({
     stdin: { contents: imports, resolveDir: root, loader: 'ts' },
     bundle: true,
@@ -80,8 +120,8 @@ async function capture() {
       host: '',
       startedAt: new Date().toISOString(),
       protocol: local
-        ? 'One local model-free extraction per fresh attachment. Reader initialization is excluded; no SDT, cloud service or model is invoked by the parser. Quality checks concern selected source annotations, not full-document accuracy or UI task success.'
-        : 'cold=first explicit extraction on a fresh imported attachment; warm=second extraction. Import/Reader initialization excluded. Native caches and model initialization may affect timing. Not model-only compute or human task time. No UI completion is inferred.',
+        ? 'One offline decode per fresh attachment using local rules and unrotated PDF geometry. No Reader, SDT, cloud service or model is used. Quality checks concern selected source annotations, not full-document accuracy or UI task success.'
+        : 'cold=first explicit reference extraction on a fresh imported attachment; warm=second extraction. Import and Reader initialization are excluded. Native caches may affect timing. No UI completion is inferred.',
     },
     observations: [],
   };
@@ -101,6 +141,10 @@ async function capture() {
       if (result.error) throw new Error(result.error);
       return result;
     };
+    const closeQualityReader = () =>
+      execute(
+        'if(qualityCapture.reader)await qualityCapture.reader.close();qualityCapture.reader=null;return JSON.stringify({closed:true});',
+      );
     const identity = await execute(
       'globalThis.qualityCapture={window:Services.wm.getMostRecentWindow("navigator:browser")};globalThis.Zotero=qualityCapture.window.Zotero;await Zotero.initializationPromise;return JSON.stringify({profile:Services.dirsvc.get("ProfD",Components.interfaces.nsIFile).path,version:Zotero.version,os:Services.appinfo.OS});',
     );
@@ -124,96 +168,49 @@ async function capture() {
           `try{const item=await Zotero.Attachments.importFromFile({file:${JSON.stringify(hostPath(file, identity.os))},title:${JSON.stringify(`Neo quality: ${doc.title}`)}});return JSON.stringify({id:item.id});}catch(e){return JSON.stringify({error:String(e)});}`,
         );
       } catch (error) {
-        for (const backend of backends)
+        for (const mode of modes)
+          report.observations.push({
+            ...base,
+            backend,
+            mode,
+            status: 'failed',
+            failure: `Attachment preparation: ${error}`,
+          });
+        save();
+        continue;
+      }
+      if (!local) {
+        try {
+          await execute(
+            `try{qualityCapture.reader=await Zotero.Reader.open(${item.id});await qualityCapture.reader._initPromise;await qualityCapture.reader._internalReader._primaryView.initializedPromise;return JSON.stringify({ready:true});}catch(e){return JSON.stringify({error:String(e)});}`,
+          );
+        } catch (error) {
           for (const mode of modes)
             report.observations.push({
               ...base,
               backend,
               mode,
               status: 'failed',
-              failure: `Attachment preparation: ${error}`,
+              failure: `Reader initialization: ${error}`,
             });
-        save();
-        continue;
-      }
-      if (local) {
-        try {
-          await execute(
-            `qualityCapture.reader=await Zotero.Reader.open(${item.id});await qualityCapture.reader._initPromise;await qualityCapture.reader._internalReader._primaryView.initializedPromise;return JSON.stringify({ready:true});`,
-          );
-          const result = await execute(
-            `try{const start=Date.now();const snapshot=await NeoQualityCapture.readLocalReaderDocument(qualityCapture.reader,()=>true);if(!snapshot)throw Error('Local structure unavailable');if(snapshot.parsed.sourceFingerprint!==${JSON.stringify(md5)})throw Error('Loaded PDF differs from corpus bytes');return JSON.stringify({durationMs:Date.now()-start,parsed:snapshot.parsed,objectGroups:NeoQualityCapture.documentObjectGroups(snapshot.parsed.regions)});}catch(e){return JSON.stringify({error:String(e)});}`,
-          );
-          report.observations.push({
-            ...base,
-            backend: 'local-rules',
-            mode: 'cold',
-            status: 'completed',
-            ...result,
-          });
-        } catch (error) {
-          report.observations.push({
-            ...base,
-            backend: 'local-rules',
-            mode: 'cold',
-            status: 'failed',
-            failure: String(error),
-          });
-        } finally {
-          await execute(
-            'if(qualityCapture.reader)await qualityCapture.reader.close();qualityCapture.reader=null;return JSON.stringify({closed:true});',
-          );
+          await closeQualityReader();
+          save();
+          continue;
         }
-        save();
-        console.log(`[quality] Captured local rules ${doc.id}`);
-        continue;
       }
-      for (const mode of ['cold', 'warm']) {
-        try {
-          const result = await execute(
-            `try{const start=Date.now();const snapshot=await NeoQualityCapture.readNativeReaderDocument({itemID:${item.id}},()=>true);if(!snapshot)throw Error('Native structure unavailable');if(snapshot.parsed.sourceFingerprint!==${JSON.stringify(md5)})throw Error('Loaded PDF differs from corpus bytes');return JSON.stringify({durationMs:Date.now()-start,parsed:snapshot.parsed,objectGroups:NeoQualityCapture.documentObjectGroups(snapshot.parsed.regions)});}catch(e){return JSON.stringify({error:String(e)});}`,
-          );
-          report.observations.push({
-            ...base,
-            backend: 'zotero-sdt',
-            mode,
-            status: 'completed',
-            ...result,
-            modelRevision: result.parsed.modelRevision,
-          });
-        } catch (error) {
-          report.observations.push({
-            ...base,
-            backend: 'zotero-sdt',
-            mode,
-            status: 'failed',
-            failure: String(error),
-          });
-        }
-        save();
-      }
-      let readerReady = false;
       try {
-        await execute(
-          `try{qualityCapture.reader=await Zotero.Reader.open(${item.id});await qualityCapture.reader._initPromise;await qualityCapture.reader._internalReader._primaryView.initializedPromise;return JSON.stringify({ready:true});}catch(e){return JSON.stringify({error:String(e)});}`,
-        );
-        readerReady = true;
-        for (const mode of ['cold', 'warm']) {
+        for (const mode of modes) {
           try {
             const result = await execute(
-              `try{const start=Date.now();const snapshot=await NeoQualityCapture.readReaderReferenceDocument(qualityCapture.reader,()=>true,qualityCapture.reader._internalReader._primaryView._iframeWindow);if(snapshot.document.sourceID!==${JSON.stringify(md5)})throw Error('Reference source differs from corpus bytes');return JSON.stringify({durationMs:Date.now()-start,references:snapshot.document});}catch(e){return JSON.stringify({error:String(e)});}`,
+              local
+                ? `try{return JSON.stringify(await NeoQualityCapture.captureLocalLayout(${item.id}, ${JSON.stringify(md5)}));}catch(e){return JSON.stringify({error:String(e)});}`
+                : `try{const start=Date.now();const snapshot=await NeoQualityCapture.readReaderReferenceDocument(qualityCapture.reader,()=>true,qualityCapture.reader._internalReader._primaryView._iframeWindow);if(snapshot.document.sourceID!==${JSON.stringify(md5)})throw Error('Reference source differs from corpus bytes');return JSON.stringify({durationMs:Date.now()-start,references:snapshot.document});}catch(e){return JSON.stringify({error:String(e)});}`,
             );
-            report.observations.push({
-              ...base,
-              backend: 'zotero-reader',
-              mode,
-              status: 'completed',
-              ...result,
-            });
+            report.observations.push({ ...base, backend, mode, status: 'completed', ...result });
           } catch (error) {
             report.observations.push({
               ...base,
-              backend: 'zotero-reader',
+              backend,
               mode,
               status: 'failed',
               failure: String(error),
@@ -221,30 +218,9 @@ async function capture() {
           }
           save();
         }
-      } catch (error) {
-        for (const mode of ['cold', 'warm'])
-          report.observations.push({
-            ...base,
-            backend: 'zotero-reader',
-            mode,
-            status: 'failed',
-            failure: `Reader initialization: ${error}`,
-          });
       } finally {
-        if (readerReady)
-          await execute(
-            'await qualityCapture.reader.close();return JSON.stringify({closed:true});',
-          );
+        if (!local) await closeQualityReader();
       }
-      for (const backend of ['mineru', 'oxr'])
-        report.observations.push({
-          ...base,
-          backend,
-          mode: 'cold',
-          status: 'not-performed',
-          failure:
-            'The native capture command does not execute cloud parsing; provide a separately authorized cloud observation.',
-        });
       save();
       console.log(`[quality] Captured ${doc.id}`);
     }

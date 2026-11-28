@@ -2,10 +2,10 @@ import { BINDING_SCHEMA_VERSION, migrateBindingPreferences } from '../../core/pr
 import type { SettingState, SettingsValue } from '../contracts';
 import {
   isRetiredAIShortcutAction,
+  isRetiredDocumentShortcutAction,
   migrateRetiredShortcutActions,
   parseBindingOverrides,
 } from '../../input/bindings';
-import { parseLocalRuleProfile } from '../../document-analysis/local-rules/profile';
 import { SettingsSnapshotError } from '../contracts';
 
 export interface TransferField {
@@ -35,7 +35,7 @@ const object = (value: SettingsValue): value is { readonly [key: string]: Settin
   value !== null && typeof value === 'object' && !Array.isArray(value);
 const textObject = (value: SettingsValue): boolean =>
   object(value) && Object.values(value).every((item) => typeof item === 'string');
-export function safeEndpoint(value: string): boolean {
+function safeEndpoint(value: string): boolean {
   try {
     const url = new URL(value);
     return (
@@ -68,7 +68,9 @@ export function validBindings(value: SettingsValue): boolean {
       return false;
     if (Number(value.schemaVersion) < BINDING_SCHEMA_VERSION) return true;
     const canonical = parseBindingOverrides(value.overrides);
-    const retained = Object.values(parsed).filter((item) => !isRetiredAIShortcutAction(item));
+    const retained = Object.values(parsed).filter(
+      (item) => !isRetiredAIShortcutAction(item) && !isRetiredDocumentShortcutAction(item),
+    );
     return (
       Object.keys(canonical).length === retained.length &&
       Object.values(canonical).every((action) => action === null || typeof action === 'string')
@@ -380,14 +382,4 @@ export function normalizeTransferFieldState(
       return normalized;
     }),
   };
-}
-
-export function validLocalRules(value: SettingsValue): boolean {
-  if (typeof value !== 'string') return false;
-  try {
-    parseLocalRuleProfile(value);
-    return true;
-  } catch {
-    return false;
-  }
 }

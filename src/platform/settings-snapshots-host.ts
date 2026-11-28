@@ -5,7 +5,6 @@ import type {
 } from '../settings-snapshots/contracts';
 import { SettingsSnapshotError } from '../settings-snapshots/contracts';
 import { assertSettingsCurrent, sameSettingState } from '../settings-snapshots/document';
-import { readMinerUToken, readSettledMinerUToken, saveMinerUToken } from './document-credentials';
 import {
   readReferenceKey,
   readSettledReferenceKey,
@@ -241,12 +240,10 @@ export function writeTransferPreference(
   return usesDefault ? 'default' : 'exact';
 }
 export function readTransferCredential(key: string): string {
-  if (key === 'secret:mineru') return readMinerUToken();
   if (key === 'secret:semantic-scholar') return readReferenceKey();
   throw new SettingsSnapshotError('invalid-field', 'Unknown credential');
 }
 export async function readSettledTransferCredential(key: string): Promise<string> {
-  if (key === 'secret:mineru') return readSettledMinerUToken();
   if (key === 'secret:semantic-scholar') return readSettledReferenceKey();
   return readTransferCredential(key);
 }
@@ -255,7 +252,6 @@ export function writeTransferCredential(
   value: string,
   admit: () => void,
 ): Promise<void> {
-  if (key === 'secret:mineru') return saveMinerUToken(value, admit);
   if (key === 'secret:semantic-scholar') return changeReferenceKey(value || null, admit);
   return Promise.reject(new SettingsSnapshotError('invalid-field', 'Unknown credential'));
 }

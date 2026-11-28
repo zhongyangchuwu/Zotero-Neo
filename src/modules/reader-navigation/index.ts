@@ -11,16 +11,7 @@ import { ReaderSmoothScroller, type ReaderSmoothScrollerHost } from './smooth-sc
 import { ReaderMarks, type MarksHost } from './marks';
 import { ReaderNativeSidebar, type ReaderNativeSidebarHost } from './native-sidebar';
 import { ReaderCaptionTargets } from './caption-targets';
-import type { ReaderCaptionTarget } from './caption-targets';
-import type { PreferenceStore } from '../../core/preference-store';
-import { readReaderDocument } from '../../reader/document-cache';
-import { observeAttachmentDocumentCache } from '../../platform/document-analysis-cache';
-import {
-  DOCUMENT_PROVIDER_KEY,
-  OXR_ENDPOINT_KEY,
-  LOCAL_RULES_KEY,
-} from '../../document-analysis/settings';
-import { t } from '../../i18n';
+import type { ReaderLocalLayout } from '../../reader/local-layout';
 import {
   bindReaderNavigationActions,
   type ReaderNavigationAction,
@@ -31,7 +22,7 @@ import type { ActionId } from '../../input/actions';
 import type { SmoothScrollSpec } from './smooth-scroll';
 
 export interface ReaderNavigationModulePorts {
-  readonly preferences?: PreferenceStore;
+  readonly layout: Pick<ReaderLocalLayout, 'figures' | 'isCurrent'>;
   readonly reader: ReaderRuntime;
   readonly navigationHost: ReaderNavigationHost;
   readonly smooth: ReaderSmoothScrollerHost;
@@ -51,12 +42,7 @@ export interface ReaderNavigationModulePorts {
   readonly debug: (message: string) => void;
 }
 
-export type { ReaderCaptionTarget } from './caption-targets';
-export type ReaderCaptionSource = Pick<ReaderCaptionTargets, 'load' | 'bodies' | 'sourceCurrent'>;
-
 export interface ReaderNavigationModule {
-  readonly captions: ReaderCaptionSource;
-  navigateCaption(target: ReaderCaptionTarget, window: PdfWindow): Promise<boolean>;
   readonly smooth: ReaderSmoothScroller;
   readonly marks: ReaderMarks;
   readonly sidebar: ReaderNativeSidebar;
@@ -121,28 +107,9 @@ export function createReaderNavigationModule(
       () => sidebar?.refreshCaptions(),
       ports.debug,
       () => scope.isCurrent(),
-      ports.preferences
-        ? {
-            read: () =>
-              readReaderDocument(ports.reader, ports.preferences!, () => scope.isCurrent()),
-            unnamedTitle: (kind, pageIndex) =>
-              `${t(`reader.sidebar.${kind}`, ports.sidebar.language())} · ${pageIndex + 1}`,
-          }
-        : undefined,
+      ports.layout,
     );
     scope.add(() => captions.dispose());
-    const refreshAnalysis = (): void => {
-      const loaded = captions.state !== 'idle';
-      captions.invalidate();
-      if (loaded) void captions.load();
-    };
-    const preferences = ports.preferences;
-    if (ports.reader.itemID)
-      scope.add(observeAttachmentDocumentCache(ports.reader.itemID, refreshAnalysis));
-    for (const key of [DOCUMENT_PROVIDER_KEY, OXR_ENDPOINT_KEY, LOCAL_RULES_KEY]) {
-      const stop = preferences?.observe?.(key, refreshAnalysis);
-      if (stop) scope.add(stop);
-    }
     sidebar = new ReaderNativeSidebar({
       ...ports.sidebar,
       bindAction: (context, action, run) => {
@@ -219,8 +186,6 @@ export function createReaderNavigationModule(
     };
     return {
       smooth,
-      captions,
-      navigateCaption: (target, window) => navigation.navigateCaption(target, window),
       marks,
       sidebar,
       executeAction,

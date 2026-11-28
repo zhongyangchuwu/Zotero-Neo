@@ -5,6 +5,7 @@ import { ReaderCaptionTargets } from '../../src/modules/reader-navigation/captio
 import { ReaderNavigationHost } from '../../src/toolkit';
 import type { PdfWindow, ReaderRuntime, ReaderViewRuntime } from '../fixtures/reader-native-types';
 import type { ReaderNativeOutlineEntry, ReaderLinkPosition } from '../../src/reader/types';
+import type { DocumentRect, DocumentRegion } from '../../src/document-analysis/contracts';
 
 const originalComponents = Reflect.get(globalThis, 'Components');
 const originalServices = Reflect.get(globalThis, 'Services');
@@ -26,6 +27,25 @@ function pdfWindow(): PdfWindow {
     },
     focus: vi.fn(),
   } as unknown as PdfWindow;
+}
+
+function figureRegion(
+  id: string,
+  pageIndex: number,
+  rect: DocumentRect,
+  text: string,
+  kind: DocumentRegion['kind'] = 'caption',
+): DocumentRegion {
+  return {
+    id,
+    pageIndex,
+    kind,
+    rect,
+    text,
+    flow: 'auxiliary',
+    format: 'text',
+    anchorPrecision: 'region',
+  };
 }
 
 function harness(itemID = 42) {
@@ -86,11 +106,14 @@ function harness(itemID = 42) {
   const scrollBoundary = vi.fn();
   const showStatus = vi.fn();
   const debug = vi.fn();
+  const localFigures = vi.fn<() => Promise<readonly DocumentRegion[]>>().mockResolvedValue([]);
+  const layoutCurrent = vi.fn(() => true);
   const captions = new ReaderCaptionTargets(
     reader.itemID,
     () => {},
     debug,
     () => true,
+    { figures: localFigures, isCurrent: layoutCurrent },
   );
   const host = new ReaderNavigationHost({
     reader,
@@ -125,6 +148,8 @@ function harness(itemID = 42) {
     navigation,
     reader,
     captions,
+    localFigures,
+    layoutCurrent,
     primary,
     secondary,
     syncViews,
@@ -671,36 +696,18 @@ describe('ReaderNavigation', () => {
     expect(navigate).not.toHaveBeenCalled();
   });
 
-  it('merges native bookmark and genuine SDT caption targets without repeating a figure identity', async () => {
+  it('merges authored bookmarks with genuine local captions without repeating a figure identity', async () => {
     const test = harness();
     const nativeFigure = { pageIndex: 0, rects: [[0, 600, 0, 600]] };
     const figure = { pageIndex: 2, rects: [[50, 100, 500, 140]] };
     const table = { pageIndex: 3, rects: [[50, 400, 500, 440]] };
-    const blocks = [
-      {
-        type: 'caption',
-        content: [{ text: 'Figure 1: Overview' }],
-        anchor: { pageRects: [[0, 50, 400, 500, 440]] },
-      },
-      {
-        type: 'caption',
-        content: [{ text: 'Figure 2: Model' }],
-        anchor: { pageRects: [[2, 50, 100, 500, 140]] },
-      },
-      {
-        type: 'caption',
-        content: [{ text: 'Table 1: Results' }],
-        anchor: { pageRects: [[3, 50, 400, 500, 440]] },
-      },
-    ];
-    Reflect.set(globalThis, 'Zotero', {
-      SDT: {
-        getReader: async () => ({
-          getTopLevelBlockCount: () => blocks.length,
-          getBlocks: async () => blocks,
-        }),
-      },
-    });
+    const getReader = vi.fn();
+    Reflect.set(globalThis, 'Zotero', { SDT: { getReader } });
+    test.localFigures.mockResolvedValue([
+      figureRegion('overview', 0, [50, 400, 500, 440], 'Fig. 1: Overview'),
+      figureRegion('model', 2, [50, 100, 500, 140], 'Figure 2: Model'),
+      figureRegion('results', 3, [50, 400, 500, 440], 'Table 1: Results'),
+    ]);
     const internal = test.reader._internalReader!;
     Reflect.set(internal, '_state', {
       outline: [{ title: 'Figure 1 Overview', location: { position: nativeFigure } }],
@@ -730,6 +737,8 @@ describe('ReaderNavigation', () => {
       { position: table },
       { block: 'start', behavior: 'instant' },
     );
+    expect(test.localFigures).toHaveBeenCalledOnce();
+    expect(getReader).not.toHaveBeenCalled();
   });
 
   it('lands a duplicate Figure identity at the supplied image region rather than its bookmark caption', async () => {
@@ -739,7 +748,7 @@ describe('ReaderNavigation', () => {
     const caption = { pageIndex: 1, rects: [[40, 440, 560, 460]] };
     const target = {
       kind: 'figure' as const,
-      label: 'Figure 1',
+      label: '1',
       title: 'Figure 1: Overview',
       location: { position: region },
     };
@@ -747,6 +756,7 @@ describe('ReaderNavigation', () => {
       outline: [{ title: 'Figure 1 Overview', location: { position: caption } }],
     });
     vi.spyOn(test.captions, 'load').mockResolvedValue([target]);
+    vi.spyOn(test.captions, 'sourceCurrent').mockReturnValue(true);
     const container = { scrollTop: 0, scrollHeight: 2000, clientHeight: 500 };
     const viewer = { container, _location: { pageNumber: 1, top: 900, left: 0 } };
     Reflect.set(test.primary, 'PDFViewerApplication', { pdfViewer: viewer });
@@ -830,40 +840,39 @@ describe('ReaderNavigation', () => {
     },
   );
 
-  it('navigates distinct unnumbered tables by typed identity rather than their display titles', async () => {
+  it('does not navigate to an uncaptioned painted table or reuse stale caption positions', async () => {
     const test = harness();
     const internal = test.reader._internalReader!;
     Reflect.set(internal, '_state', { outline: [] });
-    const a = { pageIndex: 0, rects: [[50, 650, 500, 700]] };
-    const b = { pageIndex: 0, rects: [[50, 450, 500, 500]] };
-    vi.spyOn(test.captions, 'load').mockResolvedValue([
-      { id: 'a', title: '未编号结果 A', kind: 'table', label: '', location: { position: a } },
-      { id: 'b', title: '未编号结果 B', kind: 'table', label: '', location: { position: b } },
+    test.localFigures.mockResolvedValue([
+      figureRegion('untitled', 0, [50, 650, 500, 700], '', 'table'),
+      figureRegion('label', 1, [50, 450, 500, 500], 'Table IV: Results'),
     ]);
-    const location = { pageNumber: 1, top: 800, left: 0 };
-    Reflect.set(test.primary, 'PDFViewerApplication', { pdfViewer: { _location: location } });
+    Reflect.set(test.primary, 'PDFViewerApplication', {
+      pdfViewer: { _location: { pageNumber: 1, top: 800, left: 0 } },
+    });
     const navigate = vi.fn();
     Reflect.set(internal._primaryView!, 'navigate', navigate);
     await test.navigation.traverseOutline('table', 1, test.primary, () => true);
     expect(navigate).toHaveBeenLastCalledWith(
-      { position: a },
+      { position: { pageIndex: 1, rects: [[50, 450, 500, 500]] } },
       { block: 'start', behavior: 'instant' },
     );
-    location.top = 600;
-    await test.navigation.traverseOutline('table', 1, test.primary, () => true);
-    expect(navigate).toHaveBeenLastCalledWith(
-      { position: b },
-      { block: 'start', behavior: 'instant' },
-    );
-    vi.spyOn(test.captions, 'sourceCurrent').mockResolvedValue(false);
-    await test.navigation.traverseOutline('table', 1, test.primary, () => true);
-    expect(navigate).toHaveBeenCalledTimes(2);
+    test.layoutCurrent.mockReturnValue(false);
+    await expect(
+      test.navigation.traverseOutline('table', 1, test.primary, () => true),
+    ).resolves.toBe(false);
+    expect(navigate).toHaveBeenCalledOnce();
   });
 
-  it('does not navigate when focus ownership retires during native caption processing', async () => {
+  it('does not navigate when focus ownership retires during a local caption scan', async () => {
     const test = harness();
-    const pending = Promise.withResolvers<unknown>();
-    Reflect.set(globalThis, 'Zotero', { SDT: { getReader: () => pending.promise } });
+    const pending = Promise.withResolvers<readonly DocumentRegion[]>();
+    const started = Promise.withResolvers<void>();
+    test.localFigures.mockImplementation(() => {
+      started.resolve();
+      return pending.promise;
+    });
     const internal = test.reader._internalReader!;
     Reflect.set(internal, '_state', { outline: [] });
     Reflect.set(test.primary, 'PDFViewerApplication', {
@@ -873,18 +882,9 @@ describe('ReaderNavigation', () => {
     Reflect.set(internal._primaryView!, 'navigate', navigate);
     let current = true;
     const request = test.navigation.traverseOutline('figure', 1, test.primary, () => current);
-    await Promise.resolve();
+    await started.promise;
     current = false;
-    pending.resolve({
-      getTopLevelBlockCount: () => 1,
-      getBlocks: async () => [
-        {
-          type: 'caption',
-          content: [{ text: 'Figure 1: Overview' }],
-          anchor: { pageRects: [[1, 50, 100, 500, 140]] },
-        },
-      ],
-    });
+    pending.resolve([figureRegion('late-figure', 1, [50, 100, 500, 140], 'Figure 1: Overview')]);
     await expect(request).resolves.toBe(false);
     expect(navigate).not.toHaveBeenCalled();
   });

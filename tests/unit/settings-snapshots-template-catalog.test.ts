@@ -158,6 +158,7 @@ describe('local template field selection', () => {
     expect(keys).not.toContain('modules.item-attributes.enabled');
     expect(keys).not.toContain('picker.theme');
     expect(keys).not.toContain('picker.customCss');
+    expect(keys?.some((key) => key.startsWith('documentAnalysis.'))).toBe(false);
     catalog.dispose();
   });
 

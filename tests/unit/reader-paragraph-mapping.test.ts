@@ -82,22 +82,10 @@ describe('literal source paragraph mapping', () => {
     expect(mapDocumentParagraphs([region(a.text)], [a])).toEqual([]);
   });
 
-  it('recovers a uniquely matched continuation on the adjacent source page without inventing coordinates', () => {
+  it('does not infer a cross-page paragraph from a page-local layout region', () => {
     const a = { ...span('This paragraph begins here and '), sourcePageIndex: 0 };
     const b = { ...span('continues on the next page.', 20), sourcePageIndex: 1 };
-    const mapped = mapDocumentParagraphs([region(a.text + b.text)], [a, b]);
-    expect(mapped).toHaveLength(1);
-    expect(
-      indexedStructuralTextPosition(
-        mapped.map((p) => p.index),
-        { textNode: a.textNode, offset: 0 },
-        'forward',
-        'paragraph',
-      ),
-    ).toEqual({ textNode: b.textNode, offset: b.text.length });
-    expect(
-      mapDocumentParagraphs([region(a.text + b.text)], [a, { ...b, sourcePageIndex: 2 }]),
-    ).toEqual([]);
+    expect(mapDocumentParagraphs([region(a.text + b.text)], [a, b])).toEqual([]);
   });
 
   it('merges common academic abbreviations while keeping real sentence endings', () => {
