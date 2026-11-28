@@ -194,7 +194,7 @@ it('round-trips plaintext snapshots without a password or DOM worker and still v
 });
 
 it.each(['json', 'age'] as const)(
-  'opens old %s backups without carrying retired ItemAttributes data into the workspace',
+  'opens old %s backups without carrying retired Neo settings into the workspace',
   async (container) => {
     const files = codec();
     const { context } = operation();
@@ -245,11 +245,18 @@ it.each(['json', 'age'] as const)(
       itemAttributes: { version: 99, definitions: null },
       sections: [
         { adapterID: 'itemAttributes', schemaVersion: 99, entries: null },
+        { adapterID: 'reader-ai', schemaVersion: 99, entries: null },
         {
           ...neo,
           entries: [
             ...neo.entries,
             { key: 'itemAttributes.fields.v1', state: { kind: 'unknown-operation' } },
+            { key: 'extensions.zotero-neo.modules.translation.enabled', state: null },
+            { key: 'modules.reader-ai.enabled' },
+            { key: 'pdf-translate.mode', state: null },
+            { key: 'extensions.zotero-neo.reader-ai.provider', state: null },
+            { key: 'ai.configuration', state: { kind: 'unknown-operation' } },
+            { key: 'secret:ai:not-an-endpoint', state: { kind: 'unknown-operation' } },
           ],
         },
       ],

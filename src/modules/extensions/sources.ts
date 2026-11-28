@@ -6,12 +6,6 @@ import {
   scheduleExtensionTimeout,
   writeProfileExtensionSources,
 } from '../../platform/extension-sources';
-import {
-  TRANSLATE_PLUGIN_HASH,
-  TRANSLATE_PLUGIN_ID,
-  TRANSLATE_PLUGIN_INSTALL_URL,
-  TRANSLATE_SUPPORTED_VERSION,
-} from '../translation/dependency';
 
 export type ExtensionSource =
   | {
@@ -39,33 +33,14 @@ export interface ExtensionCandidate {
   readonly expectedVersion?: string;
 }
 
-type CuratedExtension = { readonly label: string } & (
-  | { readonly candidate: ExtensionCandidate }
-  | {
-      readonly description: readonly [english: string, chinese: string];
-      readonly source: GitHubSource & { readonly assetName: string };
-      readonly expectedID: string;
-    }
-);
+interface CuratedExtension {
+  readonly label: string;
+  readonly description: readonly [english: string, chinese: string];
+  readonly source: GitHubSource & { readonly assetName: string };
+  readonly expectedID: string;
+}
 
 export const CURATED_EXTENSIONS: readonly CuratedExtension[] = [
-  {
-    label: 'Translate Extra',
-    candidate: {
-      source: {
-        kind: 'xpi',
-        url: TRANSLATE_PLUGIN_INSTALL_URL,
-        hash: TRANSLATE_PLUGIN_HASH,
-        expectedVersion: TRANSLATE_SUPPORTED_VERSION,
-      },
-      url: TRANSLATE_PLUGIN_INSTALL_URL,
-      name: 'translate-for-zotero.xpi',
-      version: TRANSLATE_SUPPORTED_VERSION,
-      hash: TRANSLATE_PLUGIN_HASH,
-      expectedID: TRANSLATE_PLUGIN_ID,
-      expectedVersion: TRANSLATE_SUPPORTED_VERSION,
-    },
-  },
   {
     label: 'Zotero Bases',
     description: [
@@ -425,7 +400,6 @@ export async function resolveCuratedExtension(
   signal: AbortSignal,
 ): Promise<ExtensionCandidate> {
   signal.throwIfAborted();
-  if ('candidate' in entry) return entry.candidate;
   const candidates = await latestGitHubRelease(entry.source, signal);
   const matches = candidates.filter(({ name }) => name === entry.source.assetName);
   if (!matches.length) throw new ExtensionSourceError('release-assets');

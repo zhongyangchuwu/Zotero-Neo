@@ -11,8 +11,6 @@ import {
   readSettledReferenceKey,
   changeReferenceKey,
 } from './reference-credentials';
-import { readAICredential, readSettledAICredential, changeAICredential } from './ai-credentials';
-import { normalizeAIEndpoint, normalizeAICredential } from '../ai/configuration-policy';
 import {
   nativeResourceField,
   normalizeTransferFieldState,
@@ -242,27 +240,14 @@ export function writeTransferPreference(
     Services.prefs.setBoolPref('extensions.zotero.sync.storage.verified', false);
   return usesDefault ? 'default' : 'exact';
 }
-export function ownedAIEndpoint(): string {
-  const state = readTransferPreference('extensions.zotero-neo.ai.configuration');
-  if (state.kind !== 'set' || typeof state.value !== 'string') return '';
-  try {
-    const value = JSON.parse(state.value) as { endpoint?: unknown };
-    return typeof value.endpoint === 'string' ? normalizeAIEndpoint(value.endpoint) : '';
-  } catch {
-    return '';
-  }
-}
 export function readTransferCredential(key: string): string {
   if (key === 'secret:mineru') return readMinerUToken();
   if (key === 'secret:semantic-scholar') return readReferenceKey();
-  if (key.startsWith('secret:ai:')) return readAICredential(normalizeAIEndpoint(key.slice(10)));
   throw new SettingsSnapshotError('invalid-field', 'Unknown credential');
 }
 export async function readSettledTransferCredential(key: string): Promise<string> {
   if (key === 'secret:mineru') return readSettledMinerUToken();
   if (key === 'secret:semantic-scholar') return readSettledReferenceKey();
-  if (key.startsWith('secret:ai:'))
-    return readSettledAICredential(normalizeAIEndpoint(key.slice(10)));
   return readTransferCredential(key);
 }
 export function writeTransferCredential(
@@ -272,12 +257,6 @@ export function writeTransferCredential(
 ): Promise<void> {
   if (key === 'secret:mineru') return saveMinerUToken(value, admit);
   if (key === 'secret:semantic-scholar') return changeReferenceKey(value || null, admit);
-  if (key.startsWith('secret:ai:'))
-    return changeAICredential(
-      normalizeAIEndpoint(key.slice(10)),
-      value ? normalizeAICredential(value) : null,
-      admit,
-    );
   return Promise.reject(new SettingsSnapshotError('invalid-field', 'Unknown credential'));
 }
 export function nativeLibraryKeys(): readonly { identity: string; id: number }[] {

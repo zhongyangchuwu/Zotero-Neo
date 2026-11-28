@@ -701,7 +701,7 @@ export class MainWindowController implements MainWindowControllerApi {
     failure.rethrow();
   }
 
-  openSettings(owner?: Window | null, section?: 'Extras'): boolean {
+  openSettings(owner?: Window | null): boolean {
     const session = owner ? this.#sessions.get(owner as MainWindow) : undefined;
     const resolved =
       session ?? (this.#sessions.size === 1 ? this.#sessions.values().next().value : undefined);
@@ -718,7 +718,6 @@ export class MainWindowController implements MainWindowControllerApi {
         this.#modules.get(resolved)?.settingsSnapshots
           ? () => this.executeMain('openSettingsSnapshots', window, resolved, 1)
           : undefined,
-        section,
       );
       return true;
     } catch (error) {
@@ -1078,10 +1077,6 @@ export class MainWindowController implements MainWindowControllerApi {
     session: MainWindowSession,
   ): void {
     if (this.#sessions.get(window) !== session) return;
-    if (this.#dependencies.aiQA?.()?.ownsTarget(event.target)) {
-      this.resetMainInput(window, session);
-      return;
-    }
     if (this.#dependencies.documentPreparation?.handleKey(event)) return;
     if (this.#dependencies.settingsSnapshots?.handleKey(event)) return;
     if (mainIdentifierLookupOwnsInput(window)) {

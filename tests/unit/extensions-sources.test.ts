@@ -3,12 +3,6 @@ import {
   CURATED_EXTENSIONS,
   resolveExtensionCandidates,
 } from '../../src/modules/extensions/sources';
-import {
-  TRANSLATE_PLUGIN_HASH,
-  TRANSLATE_PLUGIN_ID,
-  TRANSLATE_PLUGIN_INSTALL_URL,
-  TRANSLATE_SUPPORTED_VERSION,
-} from '../../src/modules/translation/dependency';
 
 const endpoint = 'https://api.github.com/repos/owner/sample/releases/latest';
 const download = 'https://github.com/Owner/Sample/releases/download/v2.3.0';
@@ -175,23 +169,7 @@ describe('extension source resolution', () => {
     await rejected;
   });
 
-  it('keeps the curated Translate dependency pinned in both the candidate and its provenance', () => {
-    expect(CURATED_EXTENSIONS).toContainEqual({
-      label: 'Translate Extra',
-      candidate: {
-        source: {
-          kind: 'xpi',
-          url: TRANSLATE_PLUGIN_INSTALL_URL,
-          hash: TRANSLATE_PLUGIN_HASH,
-          expectedVersion: TRANSLATE_SUPPORTED_VERSION,
-        },
-        url: TRANSLATE_PLUGIN_INSTALL_URL,
-        name: 'translate-for-zotero.xpi',
-        version: TRANSLATE_SUPPORTED_VERSION,
-        expectedID: TRANSLATE_PLUGIN_ID,
-        expectedVersion: TRANSLATE_SUPPORTED_VERSION,
-        hash: TRANSLATE_PLUGIN_HASH,
-      },
-    });
+  it('retains Zotero Bases as the only built-in install recommendation', () => {
+    expect(CURATED_EXTENSIONS.map(({ label }) => label)).toEqual(['Zotero Bases']);
   });
 });

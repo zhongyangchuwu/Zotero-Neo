@@ -6,7 +6,6 @@ import {
   type DocumentPage,
 } from '../document-analysis/contracts';
 import { readDocumentCorrections } from '../document-analysis/corrections';
-import { parseAIQAOutput } from '../ai-qa/output';
 import { ArtifactError, type NeoArtifact } from './contracts';
 
 const text = (value: unknown, max = 200000): value is string =>
@@ -75,77 +74,6 @@ function correctionsPayload(payload: Record<string, unknown>): boolean {
   );
 }
 
-function aiPayload(payload: Record<string, unknown>): boolean {
-  if (typeof payload.deleted !== 'boolean') return false;
-  if (payload.deleted) return payload.record === null;
-  const value = record(payload.record),
-    source = record(value?.source),
-    usage = record(value?.usage);
-  if (
-    !value ||
-    !source ||
-    'itemID' in source ||
-    'libraryID' in source ||
-    !id(source.key) ||
-    !id(source.fingerprint) ||
-    !text(source.fileName, 2000) ||
-    !id(value.id) ||
-    !Number.isSafeInteger(value.revision) ||
-    (value.revision as number) < 1 ||
-    !['explain', 'question', 'guide'].includes(value.kind as string) ||
-    !text(value.question, 20000) ||
-    !text(value.contextTitle, 2000) ||
-    !text(value.model, 2000) ||
-    !text(value.endpoint, 4000) ||
-    !text(value.createdAt, 100) ||
-    !text(value.updatedAt, 100) ||
-    !(value.userText === null || text(value.userText)) ||
-    !usage ||
-    ![usage.inputTokens, usage.outputTokens].every(
-      (n) => n === null || (Number.isSafeInteger(n) && (n as number) >= 0),
-    ) ||
-    !Array.isArray(value.evidence) ||
-    value.evidence.length > 500
-  )
-    return false;
-  const ids = new Set<string>();
-  for (const raw of value.evidence) {
-    const evidence = record(raw),
-      location = record(evidence?.location);
-    if (
-      !evidence ||
-      !id(evidence.id) ||
-      ids.has(evidence.id) ||
-      !['selection', 'text', 'figure', 'table'].includes(evidence.kind as string) ||
-      !text(evidence.title, 2000) ||
-      !text(evidence.text) ||
-      !['text', 'html', 'latex', 'markdown'].includes(evidence.format as string) ||
-      !(evidence.pageLabel === null || text(evidence.pageLabel, 100)) ||
-      !['text', 'region'].includes(evidence.precision as string) ||
-      !(evidence.nativePosition === null || text(evidence.nativePosition, 20000))
-    )
-      return false;
-    if (
-      evidence.location !== null &&
-      (!location ||
-        !Number.isSafeInteger(location.pageIndex) ||
-        (location.pageIndex as number) < 0 ||
-        !Array.isArray(location.rects) ||
-        !location.rects.length ||
-        location.rects.length > 256 ||
-        !location.rects.every((rect) => documentRect(rect)))
-    )
-      return false;
-    ids.add(evidence.id);
-  }
-  try {
-    parseAIQAOutput(value.output, value.evidence as never);
-    return true;
-  } catch {
-    return false;
-  }
-}
-
 function metadataPayload(payload: Record<string, unknown>): boolean {
   const query = record(payload.query),
     paper = record(payload.paper),
@@ -185,7 +113,7 @@ export function validateArtifact(value: unknown): NeoArtifact {
       'unknown-schema',
       'Unsupported Zotero Neo artifact schema; file preserved',
     );
-  if (!['metadata-review', 'document-corrections', 'ai-qa'].includes(artifact.kind as string))
+  if (artifact.kind !== 'metadata-review' && artifact.kind !== 'document-corrections')
     throw new ArtifactError('unknown-kind', 'Unsupported artifact kind; file preserved');
   const producer = record(artifact.producer),
     payload = record(artifact.payload),
@@ -226,9 +154,7 @@ export function validateArtifact(value: unknown): NeoArtifact {
   if (
     !(artifact.kind === 'document-corrections'
       ? !!source && correctionsPayload(payload)
-      : artifact.kind === 'ai-qa'
-        ? !!source && aiPayload(payload)
-        : metadataPayload(payload))
+      : metadataPayload(payload))
   )
     throw new ArtifactError('invalid-payload', 'Invalid artifact payload');
   if (
@@ -239,19 +165,6 @@ export function validateArtifact(value: unknown): NeoArtifact {
       'invalid-source',
       'Correction baseline does not match the declared content hash',
     );
-  if (artifact.kind === 'ai-qa' && payload.deleted === false) {
-    const reading = record(payload.record),
-      readingSource = record(reading?.source);
-    if (
-      readingSource?.key !== source?.attachmentKey ||
-      typeof readingSource?.fingerprint !== 'string' ||
-      readingSource.fingerprint.toLowerCase() !== hash?.value
-    )
-      throw new ArtifactError(
-        'invalid-source',
-        'AI evidence source does not match the declared original content hash',
-      );
-  }
   canonicalJSON(value);
   return value as NeoArtifact;
 }

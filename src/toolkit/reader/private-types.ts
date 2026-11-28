@@ -41,8 +41,6 @@ export interface InternalReaderRuntime {
     readonly showAnnotations?: boolean;
     readonly primaryReadingModeEnabled?: boolean;
     readonly secondaryReadingModeEnabled?: boolean;
-    readonly primaryViewSelectionPopup?: { readonly annotation?: object } | null;
-    readonly secondaryViewSelectionPopup?: { readonly annotation?: object } | null;
     readonly selectedAnnotationIDs?: readonly string[];
     readonly primaryViewFindState?: NativeReaderFindState;
     readonly secondaryViewFindState?: NativeReaderFindState;

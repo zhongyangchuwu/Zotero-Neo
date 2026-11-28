@@ -110,21 +110,14 @@ describe('Plugin Manager React presentation', () => {
       inline: {
         kind: 'source',
         resolving: false,
-        curated: [
-          { label: 'Translate Extra' },
-          { label: 'Zotero Bases', description: '独立多视图文献表格' },
-        ],
+        curated: [{ label: 'Zotero Bases', description: '独立多视图文献表格' }],
       },
     });
     expect(view.getElement('install-input')?.getAttribute('placeholder')).toContain('HTTPS XPI');
-    const curated = root.querySelector<HTMLButtonElement>('[data-neo-curated-index="0"]')!;
-    expect(curated.textContent).toBe('Translate Extra');
-    curated.click();
-    expect(dispatch).toHaveBeenLastCalledWith({ type: 'curated', index: 0 });
-    const bases = root.querySelector<HTMLButtonElement>('[data-neo-curated-index="1"]')!;
+    const bases = root.querySelector<HTMLButtonElement>('[data-neo-curated-index="0"]')!;
     expect(bases.textContent).toContain('Zotero Bases · 独立多视图文献表格');
     bases.click();
-    expect(dispatch).toHaveBeenLastCalledWith({ type: 'curated', index: 1 });
+    expect(dispatch).toHaveBeenLastCalledWith({ type: 'curated', index: 0 });
     view.update({
       ...model,
       inline: {

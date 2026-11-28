@@ -187,6 +187,42 @@ describe('versioned Zotero artifact attachments', () => {
     ).rejects.toMatchObject({ kind: 'incomplete' });
   });
 
+  it('keeps retired AI attachments, including trashed or unsupported payloads, out of active lineage', async () => {
+    const host = artifactHost();
+    const repo = createArtifactRepository();
+    const legacy = JSON.stringify({
+      format: 'zotero-neo',
+      kind: 'ai-qa',
+      schemaVersion: 1,
+      payload: { oldShape: true },
+    });
+    const live = host.addJSON(legacy, 'zotero-neo-ai-qa-live.json');
+    const trashed = host.addJSON(legacy, 'zotero-neo-ai-qa-trashed.json');
+    trashed.deleted = true;
+    const legacyFiles = [...host.files].filter(([, value]) => value === legacy);
+    expect(legacyFiles).toHaveLength(2);
+    expect(await repo.list(host.parent)).toMatchObject({
+      complete: true,
+      artifacts: [],
+      issues: [],
+    });
+
+    const published = await repo.publish(host.parent, {
+      kind: 'metadata-review',
+      recordID: 'review',
+      payload,
+    });
+    expect(await repo.list(host.parent)).toMatchObject({
+      complete: true,
+      artifacts: [published.artifact],
+      issues: [],
+    });
+    expect([...host.files].filter(([, value]) => value === legacy)).toEqual(legacyFiles);
+    expect(host.children).toEqual(expect.arrayContaining([live, trashed]));
+    expect(live.deleted).toBe(false);
+    expect(trashed.deleted).toBe(true);
+  });
+
   it('reports real MD5, source unavailability, account-less identity and read-only libraries distinctly', async () => {
     const host = artifactHost(),
       repo = createArtifactRepository();

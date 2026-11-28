@@ -10,7 +10,6 @@ export type SettingsSection =
   | 'Reader'
   | 'Keybindings'
   | 'Modules'
-  | 'Extras'
   | 'Advanced';
 export type SettingsPagePresentation =
   | { readonly kind: 'appearance'; readonly model: AppearancePageModel }

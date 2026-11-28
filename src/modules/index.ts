@@ -30,10 +30,8 @@ export type BuiltinModuleId =
   | 'collections'
   | 'reader-navigation'
   | 'reader-selection'
-  | 'translation'
   | 'reader-annotations'
   | 'reader-hints'
-  | 'ai-qa'
   | 'references'
   | 'notes'
   | 'workspace'
@@ -46,19 +44,11 @@ export type BuiltinModuleId =
   | 'settings-snapshots'
   | 'extensions';
 
-export const OPTIONAL_MODULE_IDS = [
-  'reader-hints',
-  'extensions',
-  'translation',
-  'ai-qa',
-  'references',
-] as const;
+export const OPTIONAL_MODULE_IDS = ['reader-hints', 'extensions', 'references'] as const;
 export type OptionalModuleId = (typeof OPTIONAL_MODULE_IDS)[number];
 export const OPTIONAL_MODULE_DEFAULTS: Readonly<Record<OptionalModuleId, boolean>> = {
   'reader-hints': true,
   extensions: true,
-  translation: false,
-  'ai-qa': false,
   references: true,
 };
 const OPTIONAL_MODULE_ID_SET = new Set<BuiltinModuleId>(OPTIONAL_MODULE_IDS);
@@ -226,17 +216,6 @@ export const BUILTIN_MODULES: readonly BuiltinModuleDescriptor[] = [
     ui: ['Selection actions', 'Flash'],
   },
   {
-    id: 'translation',
-    names: { en: 'Translation Enhancement', 'zh-CN': '翻译增强' },
-    hosts: ['reader'],
-    scopes: ['Reader session', 'Reader view'],
-    requires: [],
-    optional: [],
-    contributions: [],
-    selectionActions: [],
-    ui: ['Translation popup', 'Translation sidebar'],
-  },
-  {
     id: 'reader-annotations',
     names: { en: 'Reader Annotations', 'zh-CN': '阅读批注' },
     hosts: ['reader'],
@@ -355,17 +334,6 @@ export const BUILTIN_MODULES: readonly BuiltinModuleDescriptor[] = [
     contributions: [{ host: 'main', context: 'main-normal', actions: ['openSettingsSnapshots'] }],
     selectionActions: [],
     ui: ['Workspace backup', 'Library sync', 'Settings restore preview'],
-  },
-  {
-    id: 'ai-qa',
-    names: { en: 'AI Q&A (Experimental)', 'zh-CN': 'AI 问答（实验）' },
-    hosts: ['reader'],
-    scopes: ['Reader session', 'Reading task', 'Reading results'],
-    requires: ['reader-selection'],
-    optional: [],
-    contributions: [{ host: 'reader', context: 'reader-normal', actions: ['openAIQA'] }],
-    selectionActions: ['neo.ai-qa.explain'],
-    ui: ['AI Q&A', 'Evidence preview'],
   },
   {
     id: 'notes',

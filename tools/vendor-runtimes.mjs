@@ -17,9 +17,9 @@ const root = resolve(import.meta.dirname, '..');
 const selected = process.argv[2] ?? null;
 if (
   process.argv.length > 3 ||
-  (selected !== null && !['react', 'ai-sdk', 'age-encryption'].includes(selected))
+  (selected !== null && !['react', 'age-encryption'].includes(selected))
 )
-  throw new Error('Usage: node tools/vendor-runtimes.mjs [react|ai-sdk|age-encryption]');
+  throw new Error('Usage: node tools/vendor-runtimes.mjs [react|age-encryption]');
 
 const reactDependencies = { react: '19.3.1', 'react-dom': '19.3.1' };
 const reactEntry =
@@ -27,15 +27,7 @@ const reactEntry =
 const temp = mkdtempSync(join(tmpdir(), 'neo-runtime-vendor-'));
 try {
   const dependencies =
-    selected === 'age-encryption'
-      ? { 'age-encryption': '0.3.1' }
-      : {
-          ai: '7.0.162',
-          '@ai-sdk/openai': '4.0.108',
-          '@ai-sdk/openai-compatible': '3.0.84',
-          zod: '4.2.0',
-          ...reactDependencies,
-        };
+    selected === 'age-encryption' ? { 'age-encryption': '0.3.1' } : reactDependencies;
   writeFileSync(
     join(temp, 'package.json'),
     JSON.stringify(
@@ -44,8 +36,7 @@ try {
       2,
     ) + '\n',
   );
-  const lockName = selected === 'age-encryption' ? selected : 'ai-sdk';
-  const existingLock = join(root, 'vendor', lockName, 'package-lock.json');
+  const existingLock = join(root, 'vendor', selected ?? 'react', 'package-lock.json');
   const hasExistingLock = existsSync(existingLock);
   let lockMatchesDependencies = false;
   if (hasExistingLock) {
@@ -62,8 +53,6 @@ try {
     { cwd: temp, stdio: 'inherit' },
   );
   const entries = {
-    'ai-sdk':
-      "export { generateText, Output, jsonSchema } from 'ai';\nexport { createOpenAI } from '@ai-sdk/openai';\nexport { createOpenAICompatible } from '@ai-sdk/openai-compatible';\n",
     react: reactEntry,
     'age-encryption': "export { Encrypter, Decrypter, armor } from 'age-encryption';\n",
   };
@@ -117,15 +106,6 @@ try {
           /* try canonical alternatives */
         }
       }
-      if (
-        !license &&
-        metadata.license === 'Apache-2.0' &&
-        metadata.repository?.url === 'https://github.com/vercel/ai'
-      ) {
-        const response = await fetch('https://www.apache.org/licenses/LICENSE-2.0.txt');
-        if (!response.ok) throw new Error('Cannot retrieve Apache 2.0 license');
-        license = 'Copyright 2023 Vercel, Inc.\n\n' + (await response.text());
-      }
       if (!license) throw new Error(`Missing license text: ${path}`);
       closure[path] = {
         version: info.version,
@@ -158,12 +138,6 @@ try {
   if (selected === null || selected === 'react') {
     writeFileSync(join(root, 'vendor/react/index.d.ts'), reactEntry);
   }
-  if (selected === null || selected === 'ai-sdk') {
-    writeFileSync(
-      join(root, 'vendor/ai-sdk/index.d.ts'),
-      'export const generateText: (options: any) => Promise<any>;\nexport const Output: { object(options: any): any };\nexport const jsonSchema: (schema: any) => any;\nexport const createOpenAI: (options: any) => any;\nexport const createOpenAICompatible: (options: any) => (model: string) => any;\n',
-    );
-  }
   if (selected === 'age-encryption') {
     writeFileSync(
       join(root, 'vendor/age-encryption/index.d.ts'),
@@ -185,7 +159,7 @@ export const armor: { encode(file: Uint8Array): string; decode(file: string): Ui
 } finally {
   rmSync(temp, { recursive: true, force: true });
 }
-// Regenerate the independent lock separately from the AI/React dependency lock.
+// Each runtime has an independent dependency lock.
 if (selected === null) {
   execFileSync(process.execPath, [resolve(root, 'tools/vendor-runtimes.mjs'), 'age-encryption'], {
     cwd: root,

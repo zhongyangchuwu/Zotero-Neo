@@ -4,7 +4,6 @@ import type {
   MainWindow,
   MainWindowControllerApi,
   ReaderControllerApi,
-  ReaderSelectionActionDefinition,
   ReaderSelectionApi,
 } from './core/contracts';
 import { NEO_READER_API_CHANGED } from './core/contracts';
@@ -22,9 +21,6 @@ import {
 import { createMainWindowController } from './main/controller';
 import { createReaderController } from './reader/controller';
 import { moduleStartupFlags } from './platform/module-startup';
-import { migrateTranslationModulePreference } from './modules/translation/preferences';
-import { SELECTION_TRANSLATION_ACTION_ID } from './modules/translation/selection-action';
-import { AIQAController } from './ai-qa/controller';
 import { isSourceNoteIdentity, migrateLegacySourceNoteIdentities } from './platform/note-relations';
 import { ManagedTagsUI, registerMetadataReviewMenu } from './toolkit/main';
 import { registerNativeUIResources } from './platform/native-ui';
@@ -90,7 +86,6 @@ export class ZoteroNeoAddon implements ZoteroNeoController {
   #preferencesRegistered = false;
   #releaseNativeUI: (() => void) | null = null;
   #releaseMetadataReviewMenu: (() => void) | null = null;
-  aiQA: AIQAController | null = null;
 
   constructor(preferences: ZoteroPreferenceStore) {
     this.#preferences = preferences;
@@ -143,7 +138,6 @@ export class ZoteroNeoAddon implements ZoteroNeoController {
       modules: this.#modules,
       documentPreparation: this.#preparation,
       scholarly: this.#scholarly,
-      aiQA: () => this.aiQA,
       preferences: this.#preferences,
       logger: this.#logger,
       main: {
@@ -177,7 +171,6 @@ export class ZoteroNeoAddon implements ZoteroNeoController {
       documentPreparation: this.#preparation,
       metadataReview: this.#metadataReview,
       settingsSnapshots: this.#settingsSnapshots,
-      aiQA: () => this.aiQA,
       preferences: this.#preferences,
       logger: this.#logger,
       reader: this.#reader,
@@ -188,13 +181,7 @@ export class ZoteroNeoAddon implements ZoteroNeoController {
       openSettings: (owner) => this.#main.openSettings(owner),
       reader: {
         getSelection: () => this.#reader.getSelection(),
-        registerSelectionAction: (action: ReaderSelectionActionDefinition) => {
-          // Older companion XPIs may still try to register the action now owned by Neo.
-          if (action.id.trim() === SELECTION_TRANSLATION_ACTION_ID) {
-            throw new Error(`Selection action ID is reserved: ${SELECTION_TRANSLATION_ACTION_ID}`);
-          }
-          return this.#reader.registerSelectionAction(action);
-        },
+        registerSelectionAction: (action) => this.#reader.registerSelectionAction(action),
       },
     };
   }
@@ -210,19 +197,6 @@ export class ZoteroNeoAddon implements ZoteroNeoController {
     this.#registerPreferences();
     this.#registerMetadataReviewMenu(context.id);
     this.#managedTags.start();
-    if (this.#modules.applied['ai-qa'] && !this.aiQA) {
-      try {
-        this.aiQA = new AIQAController({
-          pluginID: context.id,
-          rootURI: context.rootURI,
-          preferences: this.#preferences,
-          logger: this.#logger,
-        });
-      } catch {
-        // Optional AI registration must not prevent core Reader/Main startup.
-        this.#logger.debug('AI Q&A initialization failed');
-      }
-    }
     this.#reader.start(context.id);
     const host = Zotero as ZoteroWithNeo;
     if (host.Neo !== this.api) {
@@ -262,8 +236,6 @@ export class ZoteroNeoAddon implements ZoteroNeoController {
     failure.run(() => this.#settingsSnapshots.dispose());
     failure.run(() => this.#scholarly.dispose());
     failure.run(() => this.#reader.shutdown());
-    failure.run(() => this.aiQA?.dispose());
-    this.aiQA = null;
     failure.run(() => this.#main.shutdown());
     const releaseNativeUI = this.#releaseNativeUI;
     this.#releaseNativeUI = null;
@@ -325,7 +297,5 @@ export class ZoteroNeoAddon implements ZoteroNeoController {
 }
 
 export async function createAddon(): Promise<ZoteroNeoController> {
-  const preferences = new ZoteroPreferenceStore();
-  await migrateTranslationModulePreference(preferences);
-  return new ZoteroNeoAddon(preferences);
+  return new ZoteroNeoAddon(new ZoteroPreferenceStore());
 }

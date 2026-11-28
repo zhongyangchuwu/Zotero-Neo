@@ -29,22 +29,6 @@ function identityContent(artifact: NeoArtifact): string {
 function lineageError(artifact: NeoArtifact, ancestor: NeoArtifact): string | null {
   if (ancestor.recordID !== artifact.recordID || ancestor.kind !== artifact.kind)
     return 'Artifact parent revision belongs to another record';
-  if (artifact.kind !== 'ai-qa') return null;
-  const payload = record(artifact.payload)!,
-    parentPayload = record(ancestor.payload)!;
-  if (parentPayload.deleted === true && payload.deleted !== true)
-    return 'Deleted AI record identities cannot be resurrected; use a new record identity';
-  if (
-    artifact.source?.attachmentKey !== ancestor.source?.attachmentKey ||
-    canonicalJSON(artifact.source?.contentHash) !== canonicalJSON(ancestor.source?.contentHash)
-  )
-    return 'AI record evidence cannot be retargeted to another source revision';
-  if (payload.deleted !== true && parentPayload.deleted !== true) {
-    const childRecord = record(payload.record)!,
-      parentRecord = record(parentPayload.record)!;
-    if ((childRecord.revision as number) <= (parentRecord.revision as number))
-      return 'AI payload revisions must increase along each branch; revision IDs remain the conflict identity';
-  }
   return null;
 }
 
@@ -65,19 +49,23 @@ export function createArtifactRepository(): NeoArtifactRepository {
         attachment.getField?.('title') === 'Zotero Neo artifact';
       try {
         const text = await readArtifactAttachment(attachment);
+        let value: unknown;
+        try {
+          value = JSON.parse(text);
+        } catch {
+          if (!attachment.deleted)
+            throw new ArtifactError('corrupt', 'Invalid artifact JSON; file preserved');
+        }
+        const envelope = record(value);
+        // Retired AI Q&A artifacts remain stored but do not participate in active histories.
+        if (envelope?.format === 'zotero-neo' && envelope.kind === 'ai-qa') continue;
         if (attachment.deleted)
           throw new ArtifactError(
             'removed-artifact',
             'An artifact attachment is in the trash; restore or resolve it explicitly before saving',
           );
-        let value: unknown;
-        try {
-          value = JSON.parse(text);
-        } catch {
-          throw new ArtifactError('corrupt', 'Invalid artifact JSON; file preserved');
-        }
         // Ordinary unrelated JSON is not a Neo artifact. Named Neo files must never disappear silently.
-        if (record(value)?.format === 'zotero-neo') recognized = true;
+        if (envelope?.format === 'zotero-neo') recognized = true;
         if (!recognized) continue;
         const artifact = validateArtifact(value);
         if (!artifactBelongsToParent(parent, artifact.libraryURI, artifact.parentItemKey))

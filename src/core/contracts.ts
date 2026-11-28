@@ -7,7 +7,6 @@ import type { PreferenceStore } from './preference-store';
 import type { BuiltinModuleRuntime } from './module-runtime';
 import type { Cleanup } from './cleanup';
 import type { NavigationPort } from '../navigation/types';
-import type { AIQAController } from '../ai-qa/controller';
 import type { ScholarlyMetadataService } from '../scholarly/contracts';
 import type { MetadataReviewPort } from '../metadata-review/controller';
 import type { SettingsSnapshotPort } from '../settings-snapshots/controller';
@@ -134,7 +133,6 @@ export interface MainWindowControllerApi extends ReaderMainOperations {
 export interface ReaderControllerDependencies {
   readonly scholarly: ScholarlyMetadataService;
   readonly documentPreparation?: DocumentPreparationPort;
-  readonly aiQA?: () => AIQAController | null;
   readonly modules: BuiltinModuleRuntime;
   readonly preferences: PreferenceStore;
   readonly logger: Logger;
@@ -145,7 +143,6 @@ export interface MainWindowControllerDependencies {
   readonly metadataReview?: MetadataReviewPort;
   readonly settingsSnapshots?: SettingsSnapshotPort;
   readonly documentPreparation?: DocumentPreparationPort;
-  readonly aiQA?: () => AIQAController | null;
   readonly modules: BuiltinModuleRuntime;
   readonly preferences: PreferenceStore;
   readonly logger: Logger;

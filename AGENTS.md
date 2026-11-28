@@ -16,7 +16,7 @@ Zotero Neo 是面向最新稳定版 Zotero 的插件。它通过 Firefox/Gecko B
 
 Windows（无需 bash）可运行：`powershell -ExecutionPolicy Bypass -File tools\build.ps1`
 
-生成 `zotero-neo.xpi`，这是一个确定性归档，包含生成的 JavaScript bundle、AI 问答实验工具窗外壳、偏好页标记、manifest 和图标、项目 `LICENSE`，以及第三方声明和来源记录：`licenses/fuzzysort-LICENSE`、`licenses/ai-sdk-NOTICE`、`licenses/ai-sdk-provenance.json`、`licenses/react-NOTICE` 和 `licenses/react-provenance.json`。
+生成 `zotero-neo.xpi`，这是一个确定性归档，包含生成的 JavaScript bundle、偏好页标记、manifest 和图标、项目 `LICENSE`，以及 fuzzysort、React 和 age-encryption 的第三方声明和来源记录。
 
 ### 安装
 
@@ -99,7 +99,7 @@ src/
   i18n/                    共享应用本地化、动作标签和语言目录
   bootstrap.ts             Gecko Bootstrap 全局生命周期入口
   input/                   规范绑定、动作和匹配器
-  modules/                 内置能力模块；可选模块 `reader-hints`、`extensions`、`translation`、`references`、`ai-qa`
+  modules/                 内置能力模块；可选模块 `reader-hints`、`extensions`、`references`
   reader/                  Reader 生命周期与功能
   toolkit/                 内部 Main（含 Note pane）及 Reader 宿主能力，包含 Main 标签页宿主接缝
   platform/                窄范围的宿主边界适配器
@@ -109,7 +109,7 @@ vendor/                    固定版本且带许可证的第三方源码／构�
 ### TypeScript 约定
 
 - 使用严格 TypeScript；仅用于类型的依赖使用 `import type`。
-- 打包后的运行时不得动态依赖 npm/package manager。开发依赖仅限构建／测试工具和类型声明。经批准的运行时库（包括 AI SDK 与本地 React UI）可以作为固定版本、经过审计且自包含的 vendor 构建快照打包。锁定完整依赖闭包、上游来源和完整性信息，保留许可证文本，并将所有可执行代码静态打入 XPI；运行时不得安装或获取包、CDN 脚本或辅助服务。
+- 打包后的运行时不得动态依赖 npm/package manager。开发依赖仅限构建／测试工具和类型声明。经批准的运行时库（包括本地 React UI 和 age 加密）可以作为固定版本、经过审计且自包含的 vendor 构建快照打包。锁定完整依赖闭包、上游来源和完整性信息，保留许可证文本，并将所有可执行代码静态打入 XPI；运行时不得安装或获取包、CDN 脚本或辅助服务。
 - 将 Gecko 全局对象保护放在具名 platform adapter 中，将 Zotero SDK/DOM 私有接缝留在 `src/toolkit/`。业务模块导入公开 Toolkit 入口，不导入私有实现类型或原始 pane/tree/PDF/editor 对象。优先采用语义等价的文档化 API；必要的私有能力应由能力契约封装。目标、模式、工作流和历史策略归业务负责方。Bootstrap 全局对象不提供 DOM 构造器；不要使用跨 compartment 的 `instanceof` 检查。
 - 使用分号和 2 空格缩进。格式以 Prettier 为准。
 - 方法和变量使用 `camelCase`；内部字段使用原生 `#private` 字段。常量使用 `SCREAMING_SNAKE_CASE`。
