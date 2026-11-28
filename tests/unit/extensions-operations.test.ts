@@ -36,10 +36,25 @@ const latestVersion = '2.3.0';
 const hostURL = `https://github.com/owner/sample/releases/download/v${latestVersion}`;
 const assetName = 'selected.xpi';
 const github: ExtensionSource = { kind: 'github', owner: 'owner', repo: 'sample', assetName };
-const directURL = 'https://example.org/download/plugin.xpi?token=local-only';
+const publicURL = 'https://example.org/download/plugin.xpi';
+const directURL = `${publicURL}?token=local-only`;
 const direct: ExtensionSource = { kind: 'xpi', url: directURL };
 const digest = `sha256:${'ab'.repeat(32)}`;
 const result = { id: plugin.id, version: latestVersion, pendingRestart: true };
+const pinned = {
+  source: {
+    kind: 'xpi' as const,
+    url: publicURL,
+    hash: digest,
+    expectedVersion: latestVersion,
+  },
+  url: publicURL,
+  name: 'plugin.xpi',
+  version: latestVersion,
+  expectedID: plugin.id,
+  expectedVersion: latestVersion,
+  hash: digest,
+};
 
 function profile() {
   const values = new Map<string, string>();
@@ -117,14 +132,14 @@ describe('extension provenance', () => {
     );
   });
 
-  it('passes and retains the curated ID, version and hash', async () => {
-    const candidate = await resolveCuratedExtension(CURATED_EXTENSIONS[0], transport().signal);
+  it('passes and retains explicitly supplied package identity, version and hash', async () => {
+    const candidate = pinned;
     native.install.mockImplementationOnce(async (source, options) => {
       expect(options.id).toBe(candidate.expectedID);
       expect(options.hash).toBe(candidate.hash);
-      const version = candidate.expectedVersion!;
-      expect(options.confirm({ name: 'Translate Extra', source, version })).toBe(true);
-      return { id: candidate.expectedID!, version, pendingRestart: false };
+      const version = candidate.expectedVersion;
+      expect(options.confirm({ name: 'Example', source, version })).toBe(true);
+      return { id: candidate.expectedID, version, pendingRestart: false };
     });
 
     await expect(installExtension(candidate, transport())).resolves.toEqual({
@@ -132,28 +147,28 @@ describe('extension provenance', () => {
     });
     expect(prefs.set).toHaveBeenCalledExactlyOnceWith(
       SOURCE_PREF,
-      JSON.stringify({ version: 1, sources: { [candidate.expectedID!]: candidate.source } }),
+      JSON.stringify({ version: 1, sources: { [candidate.expectedID]: candidate.source } }),
     );
   });
 
   it('vetoes stale, changed URL and wrong pinned version without recording success', async () => {
-    const candidate = await resolveCuratedExtension(CURATED_EXTENSIONS[0], transport().signal);
+    const candidate = pinned;
     const controller = new AbortController();
     native.install.mockImplementationOnce(async (source, options) => {
-      expect(() => options.confirm({ name: 'Translate Extra', source, version: '99' })).toThrow(
+      expect(() => options.confirm({ name: 'Example', source, version: '99' })).toThrow(
         MainToolkit.MainPluginError,
       );
       expect(() =>
         options.confirm({
-          name: 'Translate Extra',
+          name: 'Example',
           source: `${source}?changed`,
-          version: candidate.expectedVersion!,
+          version: candidate.expectedVersion,
         }),
       ).toThrow(MainToolkit.MainPluginError);
       controller.abort();
-      expect(
-        options.confirm({ name: 'Translate Extra', source, version: candidate.expectedVersion! }),
-      ).toBe(false);
+      expect(options.confirm({ name: 'Example', source, version: candidate.expectedVersion })).toBe(
+        false,
+      );
       return null;
     });
 

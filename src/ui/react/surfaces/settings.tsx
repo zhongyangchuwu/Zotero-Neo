@@ -127,16 +127,6 @@ function FormGroup({
   group: SettingsFormGroup;
   dispatch: (command: SettingsFormCommand) => void;
 }) {
-  if (group.disclosure) {
-    return (
-      <details className="neo-settings-group neo-settings-disclosure">
-        <summary>{group.title}</summary>
-        {group.groups?.map((child) => (
-          <FormGroup key={child.id} group={child} dispatch={dispatch} />
-        ))}
-      </details>
-    );
-  }
   return (
     <section className="neo-settings-group">
       <div className="neo-settings-group-heading">
@@ -199,9 +189,6 @@ export const SETTINGS_REACT_CSS = `
 .neo-settings-header button { display:flex; gap:9px; align-items:center; }
 .neo-settings-page { flex:1; min-height:0; min-width:0; overflow:auto; overscroll-behavior:contain; padding:20px; }
 .neo-settings-group { margin-bottom:20px; }
-.neo-settings-disclosure > summary { cursor:pointer; }
-/* Gecko can report rectangles for closed details descendants; exclude them from modal Tab. */
-.neo-settings-disclosure:not([open]) > :not(summary) { display:none; }
 .neo-settings-group-heading h3 { margin-bottom:5px; }
 .neo-settings-fields { border:1px solid var(--zotero-neo-border); border-radius:var(--neo-radius-small); overflow:hidden; }
 .neo-settings-field-body { display:flex; flex-direction:column; gap:5px; min-width:0; max-width:420px; }

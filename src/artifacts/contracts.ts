@@ -1,4 +1,4 @@
-export type ArtifactKind = 'metadata-review' | 'document-corrections' | 'ai-qa';
+export type ArtifactKind = 'metadata-review' | 'document-corrections';
 export interface ArtifactSource {
   readonly attachmentKey: string;
   readonly contentHash: { readonly algorithm: 'md5' | 'sha256'; readonly value: string };
@@ -62,7 +62,7 @@ export class ArtifactError extends Error {
   }
 }
 
-/** Returns every branch head. A tombstone is a head, never absence of a record. */
+/** Returns every branch head. */
 export function artifactHeads(artifacts: readonly NeoArtifact[], recordID: string): NeoArtifact[] {
   const records = artifacts.filter((artifact) => artifact.recordID === recordID);
   const ancestors = new Set(records.flatMap((artifact) => [...artifact.parentRevisions]));

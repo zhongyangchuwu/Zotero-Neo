@@ -39,8 +39,6 @@ export interface SettingsFormGroup {
   readonly title: string;
   readonly description?: string;
   readonly fields: readonly SettingsFormField[];
-  readonly disclosure?: boolean;
-  readonly groups?: readonly SettingsFormGroup[];
 }
 export interface SettingsFormModel {
   readonly title: string;

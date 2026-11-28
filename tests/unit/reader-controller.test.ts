@@ -14,7 +14,6 @@ import { createTagModule } from '../../src/modules/tags';
 import { createCollectionsModule } from '../../src/modules/collections';
 import { createExtensionsModule } from '../../src/modules/extensions';
 import { createWorkspaceModule } from '../../src/modules/workspace';
-import { TRANSLATION_EXTRA_PREFERENCE } from '../../src/modules/translation/selection-action';
 import { NavigationCoordinator } from '../../src/navigation/coordinator';
 import { NavigationHistoryState } from '../../src/navigation/history';
 import type { NavigationIntent, NavigationPort } from '../../src/navigation/types';
@@ -2599,12 +2598,10 @@ describe('reader keymap forwarding', () => {
   });
 });
 describe('Reader Selection Actions capture', () => {
-  function nativeSelectionController(translation = false) {
+  function nativeSelectionController(initial: Readonly<Record<string, boolean>> = {}) {
     const created = createHistorySession();
     configureAnnotationSelection(created);
-    const { service, dependencies } = createReaderRegistryHarness({
-      'modules.translation.enabled': translation,
-    });
+    const { service, dependencies } = createReaderRegistryHarness(initial);
     configureAnnotationPersistence([created]);
     service._readers = [created.reader];
     Reflect.set(service, 'getByTabID', () => created.reader);
@@ -2618,7 +2615,7 @@ describe('Reader Selection Actions capture', () => {
     return {
       created,
       controller,
-      preferences: dependencies.preferences,
+      service,
       menu: () =>
         created.bodyChildren.find((node) => node.dataset.zoteroNeoSelectionActions === '1'),
       replaceDocument: () =>
@@ -2631,65 +2628,38 @@ describe('Reader Selection Actions capture', () => {
     };
   }
 
-  it.each([false, true])(
-    'offers manual translation only when the Extra is enabled (automatic module: %s)',
-    async (enabled) => {
-      const fixture = nativeSelectionController(enabled);
-      const translate = vi.fn(async () => ({ status: 'success', result: '  translated text  ' }));
-      Reflect.set(Zotero, 'PDFTranslate', { api: { translate } });
-      try {
-        fixture.press('a');
-        expect(fixture.menu()?.textContent).toContain('Underline');
-        expect(fixture.menu()?.textContent).not.toContain('Translate');
-        fixture.press('Escape');
-
-        fixture.preferences.set(TRANSLATION_EXTRA_PREFERENCE, true);
-        fixture.press('a');
-        expect(fixture.menu()?.textContent).toContain('Translate');
-        expect(translate).not.toHaveBeenCalled();
-        await settleReaderMicrotasks();
-        for (const key of ['G', 'Enter']) fixture.press(key);
-        expect(translate).toHaveBeenCalledExactlyOnceWith('alpha', {
-          pluginID: 'zotero-neo@zotero-neo',
-          itemID: 41,
-        });
-        await settleReaderMicrotasks();
-        expect(fixture.menu()?.textContent).toBe('translated text');
-        expect(fixture.preferences.get('modules.translation.enabled', false)).toBe(enabled);
-      } finally {
-        fixture.dispose();
-      }
-    },
-  );
-
-  it('retires open menu callbacks and pending results across a live Extra toggle', async () => {
-    const fixture = nativeSelectionController();
-    const pending = Promise.withResolvers<{ result: string }>();
-    const translate = vi.fn(() => pending.promise);
+  it('ignores old feature preferences while preserving native selection and external actions', async () => {
+    const fixture = nativeSelectionController({
+      'modules.translation.enabled': true,
+      'extras.translation.enabled': true,
+      'modules.ai-qa.enabled': true,
+      'modules.reader-ai.enabled': true,
+    });
+    const translate = vi.fn();
     Reflect.set(Zotero, 'PDFTranslate', { api: { translate } });
+    const run = vi.fn(() => ({ body: 'External action result' }));
     try {
-      fixture.preferences.set(TRANSLATION_EXTRA_PREFERENCE, true);
+      expect(fixture.service._registeredListeners.map(({ type }) => type)).not.toContain(
+        'renderSidebarAnnotationHeader',
+      );
       fixture.press('a');
-      expect(fixture.menu()?.textContent).toContain('Translate');
-      await settleReaderMicrotasks();
-      fixture.preferences.set(TRANSLATION_EXTRA_PREFERENCE, false);
-      fixture.preferences.set(TRANSLATION_EXTRA_PREFERENCE, true);
-      for (const key of ['G', 'Enter']) fixture.press(key);
-      await settleReaderMicrotasks();
-      expect(translate).not.toHaveBeenCalled();
-      expect(fixture.menu()).toBeUndefined();
+      expect(fixture.menu()?.textContent).toContain('Underline');
+      expect(fixture.menu()?.textContent).not.toMatch(/Translate|Explain/u);
+      fixture.press('Escape');
 
+      fixture.controller.registerSelectionAction({
+        id: 'pdf-translate.translate',
+        label: 'External action',
+        run,
+      });
       fixture.press('a');
+      expect(fixture.menu()?.textContent).toContain('External action');
       await settleReaderMicrotasks();
       for (const key of ['G', 'Enter']) fixture.press(key);
-      expect(translate).toHaveBeenCalledOnce();
-      fixture.preferences.set(TRANSLATION_EXTRA_PREFERENCE, false);
-      fixture.preferences.set(TRANSLATION_EXTRA_PREFERENCE, true);
-      pending.resolve({ result: 'obsolete translation' });
       await settleReaderMicrotasks();
-      expect(fixture.menu()).toBeUndefined();
-      fixture.press('a');
-      expect(fixture.menu()?.textContent).toContain('Translate');
+      expect(run).toHaveBeenCalledOnce();
+      expect(fixture.menu()?.textContent).toBe('External action result');
+      expect(translate).not.toHaveBeenCalled();
     } finally {
       fixture.dispose();
     }

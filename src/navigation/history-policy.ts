@@ -48,7 +48,6 @@ const EVENT_RULES: Readonly<Record<NavigationEventId, Rule>> = {
   'main-local-find.confirm': (intent) => (isItems(intent) ? SETTLED_CHANGE : IGNORE),
   'main-selection-panel.reveal': (intent) => (isItems(intent) ? SETTLED_CHANGE : IGNORE),
   'reader-mark.jump': (intent) => (isReaderPath(intent, 'mark') ? MANAGED_FINAL : IGNORE),
-  'ai-qa.jump': (intent) => (isReaderPath(intent, 'internal-link') ? NATIVE_HARD : IGNORE),
   'references.jump': (intent) => (isReaderPath(intent, 'internal-link') ? NATIVE_HARD : IGNORE),
   'references.open-local': (intent) => (intent.surface === 'reader' ? SETTLED_CHANGE : IGNORE),
   'reader-excerpts.open-note': (intent) => (intent.surface === 'reader' ? SETTLED_CHANGE : IGNORE),

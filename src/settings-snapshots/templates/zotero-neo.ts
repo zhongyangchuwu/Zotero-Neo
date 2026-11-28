@@ -11,12 +11,9 @@ import {
 } from '../../core/preferences';
 import { OPTIONAL_MODULE_IDS } from '../../modules';
 import type { SettingsValue } from '../contracts';
-import { parseAIConfiguration } from '../../ai/configuration-policy';
-import { SettingsSnapshotError } from '../contracts';
 import {
   fields,
   safeEndpoint,
-  validAI,
   validBindings,
   validLocalRules,
   type TransferField,
@@ -80,24 +77,6 @@ export const NEO_PREFERENCE_FIELDS: readonly TransferField[] = [
     validate: validBindings,
   },
   ...fields('number', 'Migration metadata', 'interaction.defaultsVersion'),
-  {
-    key: 'ai.configuration',
-    label: 'AI configuration',
-    category: 'AI',
-    type: 'string',
-    validate: validAI,
-    normalize: (state) => {
-      if (state.kind === 'reset') return state;
-      try {
-        return {
-          kind: 'set',
-          value: JSON.stringify(parseAIConfiguration(JSON.parse(String(state.value)))),
-        };
-      } catch {
-        throw new SettingsSnapshotError('invalid-field', 'AI configuration is not transferable.');
-      }
-    },
-  },
   {
     key: 'documentAnalysis.provider',
     label: 'Document backend',

@@ -53,7 +53,7 @@ const H = 'http://www.w3.org/1999/xhtml';
 const CURATED_OPTIONS = ([0, 1] as const).map((language) =>
   CURATED_EXTENSIONS.map((entry) => ({
     label: entry.label,
-    description: 'description' in entry ? entry.description[language] : undefined,
+    description: entry.description[language],
   })),
 );
 
@@ -615,8 +615,7 @@ export class PluginManagerPanel {
   private chooseCurated(index: number): void {
     const entry = Number.isInteger(index) ? CURATED_EXTENSIONS[index] : undefined;
     if (!entry) return;
-    if ('candidate' in entry) this.setInline({ kind: 'install', candidate: entry.candidate });
-    else this.lookupInstall(async (signal) => [await resolveCuratedExtension(entry, signal)]);
+    this.lookupInstall(async (signal) => [await resolveCuratedExtension(entry, signal)]);
   }
 
   private lookupInstall(

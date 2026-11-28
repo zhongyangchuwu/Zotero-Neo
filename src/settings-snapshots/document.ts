@@ -82,20 +82,32 @@ export function validateSettingsSection(value: unknown): asserts value is Settin
 }
 /** Retired Neo preferences are not transferable configuration. */
 export function isRetiredNeoPreference(key: unknown): boolean {
+  if (typeof key !== 'string') return false;
+  const prefix = 'extensions.zotero-neo.';
+  const name = key.startsWith(prefix) ? key.slice(prefix.length) : key;
   return (
-    key === 'itemAttributes.fields.v1' ||
-    key === 'modules.item-attributes.enabled' ||
-    key === 'picker.theme' ||
-    key === 'picker.customCss'
+    name === 'itemAttributes.fields.v1' ||
+    name === 'modules.item-attributes.enabled' ||
+    name === 'picker.theme' ||
+    name === 'picker.customCss' ||
+    name === 'modules.translation.enabled' ||
+    name === 'extras.translation.enabled' ||
+    name === 'modules.ai-qa.enabled' ||
+    name === 'modules.reader-ai.enabled' ||
+    name === 'ai.configuration' ||
+    name.startsWith('pdf-translate.') ||
+    name.startsWith('reader-ai.') ||
+    name.startsWith('secret:ai:')
   );
 }
 
 /** Keep unknown values for normal validation; only the retired entries are opaque. */
-function withoutRetiredNeoEntries(entries: readonly unknown[]): readonly unknown[] {
-  let retained: unknown[] | undefined;
+export function withoutRetiredNeoEntries<T>(entries: readonly T[]): readonly T[] {
+  let retained: T[] | undefined;
   for (let index = 0; index < entries.length; index++) {
-    const entry = entries[index];
-    if (object(entry) && isRetiredNeoPreference(entry.key)) {
+    const entry = entries[index]!;
+    const value: unknown = entry;
+    if (object(value) && isRetiredNeoPreference(value.key)) {
       retained ??= entries.slice(0, index);
     } else {
       retained?.push(entry);
@@ -129,7 +141,7 @@ export function validateSettingsDocument(value: unknown): SettingsDocument {
   for (const stored of value.sections) {
     let section: unknown = stored;
     if (object(stored)) {
-      if (stored.adapterID === 'itemAttributes') continue;
+      if (stored.adapterID === 'itemAttributes' || stored.adapterID === 'reader-ai') continue;
       if (Array.isArray(stored.entries)) {
         if ((entries += stored.entries.length) > MAX_ENTRIES)
           invalid('Duplicate adapters or too many settings');

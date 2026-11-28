@@ -63,13 +63,9 @@ export class BuiltinModuleRuntime {
     this.#preferences = preferences;
     this.logger = logger;
     const flags = applied ?? this.requested();
-    this.applied = Object.freeze({
-      'reader-hints': flags['reader-hints'],
-      extensions: flags.extensions,
-      translation: flags.translation === true,
-      'ai-qa': flags['ai-qa'] === true,
-      references: flags.references === true,
-    });
+    this.applied = Object.freeze(
+      Object.fromEntries(OPTIONAL_MODULE_IDS.map((id) => [id, flags[id] === true])) as ModuleFlags,
+    );
   }
 
   requested(): ModuleFlags {

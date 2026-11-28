@@ -4,7 +4,7 @@ Zotero Neo 是 **Zotero 的模块化增强工具链**，灵感来自 [LazyVim](h
 
 - **找文献，不离开键盘**：用统一选择器查找条目、分类和笔记，边浏览边标记，挑完再批量整理。
 - **读 PDF，不反复拖选和翻页**：用 Flash 按词句选中文字，在批注、图表和引用之间跳转，随时回到刚才的位置。
-- **少找标签页，少重配一遍**：用侧栏分组管理打开的文献，用 Neo 管理已装扩展；借助设置快照备份和携带配置，可选用 Zotero 同步快照。
+- **少找标签页，少重配一遍**：用选择器切换打开的文献，用 Neo 管理已装扩展；借助设置快照备份和携带配置，可选用 Zotero 同步快照。
 
 [3 分钟快速上手](docs/GETTING_STARTED.md) · [文档站](https://zhongyangchuwu.github.io/Zotero-Neo/) · [更新记录](CHANGELOG.md) · [开发指南](docs/DEVELOPMENT.md)
 

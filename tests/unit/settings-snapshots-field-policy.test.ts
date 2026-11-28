@@ -7,12 +7,6 @@ import {
 } from '../../src/settings-snapshots/adapters/fields';
 import { NATIVE_PREFERENCE_FIELDS } from '../../src/settings-snapshots/templates/zotero';
 import { NEO_PREFERENCE_FIELDS } from '../../src/settings-snapshots/templates/zotero-neo';
-import {
-  normalizeAIConfiguration,
-  normalizeAICredential,
-  normalizeAIEndpoint,
-  parseAIConfiguration,
-} from '../../src/ai/configuration-policy';
 import type { SettingState, SettingsValue } from '../../src/settings-snapshots/contracts';
 import { SettingsSnapshotError } from '../../src/settings-snapshots/contracts';
 import { READER_SCROLL_NUMBER_SPECS, KEY_GUIDE_NUMBER_SPECS } from '../../src/core/preferences';
@@ -24,21 +18,6 @@ function preference(key: string, fields = NATIVE_PREFERENCE_FIELDS): TransferFie
   return field;
 }
 const locate = nativeResourceField('locate:engines')!;
-const ai = preference('ai.configuration', NEO_PREFERENCE_FIELDS);
-const config = {
-  api: 'openai-chat-completions' as const,
-  endpoint: 'https://example.test/v1',
-  model: 'model-one',
-  maxOutputTokens: 2048,
-  sendImages: false,
-};
-const credential = (endpoint: string): TransferField => ({
-  key: `secret:ai:${endpoint}`,
-  label: 'AI endpoint API key',
-  category: 'API credentials',
-  type: 'string',
-  secret: true,
-});
 
 function normalizedValue(field: TransferField, value: SettingsValue): SettingsValue {
   const result = normalizeTransferFieldState(field, set(value));
@@ -143,85 +122,6 @@ describe('Locate transfer policy', () => {
   });
 });
 
-describe('AI transfer canonical policy', () => {
-  it('uses generation configuration normalization and the identical credential endpoint identity', () => {
-    const incoming = {
-      ...config,
-      endpoint: 'HTTPS://EXAMPLE.TEST:443/v1/../v1/',
-      model: ' model-one ',
-    };
-    const encoded = normalizedValue(ai, JSON.stringify(incoming));
-    expect(typeof encoded).toBe('string');
-    const imported = JSON.parse(encoded as string);
-    expect(imported).toEqual(normalizeAIConfiguration(incoming));
-    expect(imported).toEqual(config);
-    expect(parseAIConfiguration(JSON.parse(encoded as string))).toEqual(imported);
-    expect(normalizeAIEndpoint(incoming.endpoint)).toBe(imported.endpoint);
-    expect(credential(normalizeAIEndpoint(incoming.endpoint)).key).toBe(
-      `secret:ai:${imported.endpoint}`,
-    );
-    expect(normalizedValue(ai, encoded)).toBe(encoded);
-  });
-
-  it('migrates the persisted implicit chat API without changing AI business settings', () => {
-    const { api: _api, ...legacy } = config;
-    expect(JSON.parse(normalizedValue(ai, JSON.stringify(legacy)) as string)).toEqual(config);
-    expect(parseAIConfiguration(legacy)).toEqual(config);
-  });
-
-  it.each([
-    'http://remote.test/v1',
-    'https://user:private-password@example.test/v1',
-    'https://example.test/v1?',
-    'https://example.test/v1#',
-    'not-a-url',
-  ])('rejects endpoints rejected by generation: %s', (endpoint) => {
-    expect(() => normalizeAIEndpoint(endpoint)).toThrow();
-    expect(validFieldState(ai, set(JSON.stringify({ ...config, endpoint })))).toBe(false);
-    expect(validFieldState(credential(endpoint), set('private-key'))).toBe(false);
-  });
-
-  it.each(['http://localhost:8080/v1/', 'http://127.0.0.1/v1/', 'http://[::1]/v1/'])(
-    'retains the generation service loopback exception: %s',
-    (endpoint) => {
-      const value = normalizedValue(ai, JSON.stringify({ ...config, endpoint }));
-      expect(JSON.parse(value as string).endpoint).toBe(normalizeAIEndpoint(endpoint));
-    },
-  );
-
-  it.each(['', '   ', 'private-key\n', '\rprivate-key', 'p'.repeat(8193), ` ${'p'.repeat(8192)}`])(
-    'rejects invalid credentials before admission without disclosing them',
-    (value) => {
-      const field = credential(config.endpoint);
-      expect(() => normalizeAICredential(value)).toThrow();
-      expect(validFieldState(field, set(value))).toBe(false);
-      expect(() => normalizeTransferFieldState(field, set(value))).toThrow(
-        'Setting value does not match its field policy.',
-      );
-    },
-  );
-
-  it('preserves the raw credential limit and applies the same trim as configure()', () => {
-    const field = credential(config.endpoint);
-    expect(normalizedValue(field, '  private-key  ')).toBe(
-      normalizeAICredential('  private-key  '),
-    );
-    expect(normalizedValue(field, 'p'.repeat(8192))).toBe('p'.repeat(8192));
-    expect(validFieldState(field, set(false))).toBe(false);
-  });
-
-  it('rejects unsupported API and extra configuration properties instead of silently dropping data', () => {
-    for (const value of [
-      { ...config, api: 'unknown' },
-      { ...config, apiKey: 'private-key' },
-      { ...config, maxOutputTokens: 0 },
-      { ...config, model: ' ' },
-    ]) {
-      expect(validFieldState(ai, set(JSON.stringify(value)))).toBe(false);
-    }
-  });
-});
-
 describe('numeric preference policy', () => {
   it('admits only integers representable by the native signed32 preference API', () => {
     const field = preference('backup.interval');
@@ -287,14 +187,9 @@ describe('Quick Copy site canonical representation', () => {
   });
 });
 
-it('preserves reset as reset rather than materializing defaults or a credential', () => {
+it('preserves reset as reset rather than materializing defaults', () => {
   const reset: SettingState = Object.freeze({ kind: 'reset' });
-  for (const field of [
-    locate,
-    ai,
-    credential(config.endpoint),
-    preference('browserRequest.timeout'),
-  ]) {
+  for (const field of [locate, preference('browserRequest.timeout')]) {
     expect(normalizeTransferFieldState(field, reset)).toBe(reset);
     expect(validFieldState(field, reset)).toBe(true);
   }

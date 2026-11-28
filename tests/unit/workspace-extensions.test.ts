@@ -1,16 +1,13 @@
 import { afterEach, expect, it, vi } from 'vitest';
 import { ZOTERO_NEO_PLUGIN_ID } from '../../src/modules/extensions/host';
-import {
-  CURATED_EXTENSIONS,
-  resolveCuratedExtension,
-  type ExtensionSource,
-} from '../../src/modules/extensions/sources';
+import type { ExtensionSource } from '../../src/modules/extensions/sources';
 import {
   applyWorkspaceExtensions,
   captureWorkspaceExtensions,
   inspectWorkspaceExtensions,
   resolveWorkspaceExtensionInput,
   workspaceExtensionCandidateLabel,
+  validateWorkspaceExtensionManifest,
   type WorkspaceExtension,
 } from '../../src/modules/extensions/workspace';
 import { SettingsSnapshotError } from '../../src/settings-snapshots/contracts';
@@ -19,6 +16,15 @@ const permission = { uninstall: 1, enable: 2, disable: 4 };
 const sourcePref = 'extensions.zotero-neo.extensionSources';
 const url = (id: string) => `https://packages.example.org/${id}.xpi`;
 const direct = (id: string): ExtensionSource => ({ kind: 'xpi', url: url(id) });
+const translateID = 'zoteropdftranslate@euclpts.com';
+const translateURL =
+  'https://github.com/windingwind/zotero-pdf-translate/releases/latest/download/translate-for-zotero.xpi';
+const retiredTranslateSource = {
+  kind: 'xpi',
+  url: translateURL,
+  hash: `sha256:${'ab'.repeat(32)}`,
+  expectedVersion: '2.4.8',
+} as const;
 const context = (signal = new AbortController().signal) => ({ signal, isCurrent: () => true });
 const verify = async () => {};
 
@@ -156,7 +162,6 @@ function host(...plugins: NativeAddon[]) {
 afterEach(() => vi.unstubAllGlobals());
 
 it('captures all manageable third-party extensions, reading local sources once without copying signed links', async () => {
-  const curated = await resolveCuratedExtension(CURATED_EXTENSIONS[0]!, context().signal);
   const github = {
     kind: 'github',
     owner: 'PubLisher',
@@ -169,7 +174,7 @@ it('captures all manageable third-party extensions, reading local sources once w
     addon('manual', false),
     addon('github'),
     addon('direct'),
-    addon(curated.expectedID!),
+    addon(translateID),
     addon('system', true, false),
     addon(ZOTERO_NEO_PLUGIN_ID),
   );
@@ -182,7 +187,7 @@ it('captures all manageable third-party extensions, reading local sources once w
         direct: direct('direct'),
         signed: { kind: 'xpi', url: `${url('signed')}?token=local-value` },
         path: { kind: 'xpi', url: 'https://packages.example.org/%74oken/local-value/plugin.xpi' },
-        [curated.expectedID!]: curated.source,
+        [translateID]: retiredTranslateSource,
       },
     }),
   );
@@ -198,10 +203,13 @@ it('captures all manageable third-party extensions, reading local sources once w
       { ...entry('manual', null, false), version: '2.0', sensitiveKeys: ['a.token', 'z.secret'] },
       { ...entry('path'), version: '2.0' },
       { ...entry('signed'), version: '2.0' },
-      { ...entry(curated.expectedID!, curated.source), version: '2.0' },
+      { ...entry(translateID), version: '2.0' },
     ),
   );
   expect(JSON.stringify(inventory)).not.toContain('local-value');
+  expect(JSON.parse(runtime.prefs.get(sourcePref)!).sources[translateID]).toEqual(
+    retiredTranslateSource,
+  );
 });
 
 it('still captures installed inventory for a broken source store and honors independent cancellation', async () => {
@@ -264,15 +272,28 @@ it('previews install, repair, state, same and protected rows without proposing d
   expect(JSON.stringify(plan)).not.toContain('local-only');
 });
 
-it('binds explicit replacements to the selected ID, preserves exact curated pinning, and labels sources without secrets', async () => {
-  const translate = CURATED_EXTENSIONS[0]!;
+it('keeps existing Translate for Zotero inventory but treats its old Neo pin as manual provenance', async () => {
+  const runtime = host(addon(translateID));
+  const backup = validateWorkspaceExtensionManifest(
+    manifest({ ...entry(translateID, retiredTranslateSource), version: '2.4.8' }),
+  );
+  expect(backup.addons).toEqual([{ ...entry(translateID), version: '2.4.8' }]);
+  expect((await inspectWorkspaceExtensions(backup, context())).rows).toMatchObject([
+    { status: 'same', entry: { addonId: translateID, source: null } },
+  ]);
+  expect(runtime.manager.getInstallForURL).not.toHaveBeenCalled();
+});
+
+it('uses the generic XPI path for explicit replacements, including Translate for Zotero', async () => {
   const signal = context().signal;
-  const candidate = await resolveCuratedExtension(translate, signal);
-  await expect(resolveWorkspaceExtensionInput('other', candidate.url, signal)).resolves.toEqual([]);
-  await expect(
-    resolveWorkspaceExtensionInput(candidate.expectedID!, candidate.url, signal),
-  ).resolves.toEqual([candidate]);
-  expect(workspaceExtensionCandidateLabel(candidate)).toBe(translate.label);
+  await expect(resolveWorkspaceExtensionInput(translateID, translateURL, signal)).resolves.toEqual([
+    {
+      url: translateURL,
+      name: 'translate-for-zotero.xpi',
+      expectedID: translateID,
+      source: { kind: 'xpi', url: translateURL },
+    },
+  ]);
   const [directCandidate] = await resolveWorkspaceExtensionInput(
     'other',
     `${url('other')}?signature=local-only`,

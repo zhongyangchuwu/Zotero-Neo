@@ -165,17 +165,15 @@ Main Select 中，`j` / `k` 扩展范围，`gg` / `G` 扩展到首行/末行（`
 | `o` / `R` / `L` | 打开主页、关联的 README 或提交历史。 |
 
 <details>
-<summary>可选与实验性功能</summary>
+<summary>其他操作</summary>
 
-这些操作的可用性取决于[设置](SETTINGS_GUIDE.md)中的功能开关；未绑定操作可在命令面板或快捷键设置中查找。
+未绑定操作可在命令面板或快捷键设置中查找。
 
 | 位置 | 默认按键或入口 | 操作 |
 | --- | --- | --- |
-| Reader Normal | `<Space>aa` | 打开 AI 问答面板。 |
 | Reader Normal | `<Space>rb` / `<Space>re` / `<Space>rn` | 正文选择、图表摘录和章节笔记。 |
 | Main 或 Reader Normal | `<Space>ru` | 准备 PDF 文档。 |
 | Reader Normal | `<Space>rd` | 文档解析对照。 |
 | Main Normal | 命令面板 | 文献信息检查及其他未绑定的可选操作。 |
-| Reader Select | 选区操作面板 | 可用时提供翻译和选区解释。 |
 
 </details>

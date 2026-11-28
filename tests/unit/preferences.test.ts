@@ -1044,19 +1044,37 @@ describe('binding schema migrations', () => {
     expect(preferences.get('bindings.schemaVersion', 0)).toBe(BINDING_SCHEMA_VERSION);
   });
 
-  it('migrates the old AI action before parsing schema-20 custom bindings', () => {
-    const preferences = new TestPreferences({
-      'bindings.schemaVersion': 20,
-      bindings: JSON.stringify({ 'reader-normal:aq': 'openReaderAI', 'reader-normal:z': null }),
-    });
-    migrateBindingPreferences(preferences);
-    expect(JSON.parse(preferences.get('bindings', ''))).toEqual({
-      'reader-normal:aq': 'openAIQA',
-      'reader-normal:z': null,
-    });
-    expect(bindingsFromPreferences(preferences)['reader-normal:aq']).toBe('openAIQA');
-    expect(preferences.get('bindings.schemaVersion', 0)).toBe(BINDING_SCHEMA_VERSION);
-  });
+  it.each([20, BINDING_SCHEMA_VERSION])(
+    'drops both retired AI actions without losing custom bindings at schema %d',
+    (version) => {
+      const retained = {
+        'reader-normal:<Space>aa': 'scrollDown',
+        'reader-normal:gc': 'copyTarget',
+        'reader-normal:j': null,
+      };
+      const raw = JSON.stringify({
+        'reader-normal:aq': 'openReaderAI',
+        'reader-normal:ax': 'openAIQA',
+        ...retained,
+      });
+      const preferences = new TestPreferences({ 'bindings.schemaVersion': version, bindings: raw });
+      migrateBindingPreferences(preferences);
+      const effective = bindingsFromPreferences(preferences);
+      expect(effective['reader-normal:<Space>aa']).toBe('scrollDown');
+      expect(effective['reader-normal:gc']).toBe('copyTarget');
+      expect(effective['reader-normal:<Space>ai']).toBe('mainAddByIdentifier');
+      for (const key of ['reader-normal:aq', 'reader-normal:ax', 'reader-normal:j'])
+        expect(effective[key]).toBeUndefined();
+      expect(DEFAULT_BINDINGS).not.toHaveProperty('reader-normal:<Space>aa');
+      expect(preferences.get('bindings.schemaVersion', 0)).toBe(BINDING_SCHEMA_VERSION);
+      if (version === BINDING_SCHEMA_VERSION) {
+        expect(preferences.get('bindings', '')).toBe(raw);
+        expect(preferences.writes).toEqual([]);
+      } else {
+        expect(JSON.parse(preferences.get('bindings', ''))).toEqual(retained);
+      }
+    },
+  );
 
   it('rewrites schema-18 action IDs in place while preserving custom bindings and tombstones', () => {
     const raw = JSON.stringify({

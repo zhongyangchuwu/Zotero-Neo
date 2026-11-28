@@ -511,19 +511,21 @@ describe('configurable plugin manager contexts', () => {
       panel.close();
     }
   });
-  it('opens the pinned install choice from an empty filtered list without downloading until confirmed', async () => {
+  it('opens the source editor from an empty filtered list and waits for explicit confirmation', async () => {
     installManagerHost();
     const install = vi.mocked(installExtension).mockResolvedValueOnce({ pendingRestart: true });
+    const url = 'https://packages.example.org/reader-tools.xpi';
     const { state, panel, window } = createPanelFixture();
     panel.open();
     await vi.waitFor(() => expect(state.loading).toBe(false));
     const filter = state.input as HTMLInputElement & { emit(type: string): void };
-    filter.value = 'Translate for Zotero';
+    filter.value = 'Reader Tools';
     filter.emit('input');
     expect(state.list?.textContent).toContain('No matching plugins');
     panel.handleKey(pickerKey('i', state.overlay));
     const source = state.sourceInput as HTMLInputElement & { emit(type: string): void };
     expect(window.document.activeElement).toBe(source);
+    source.value = url;
     panel.handleKey(pickerKey('Enter', source, { isComposing: true }));
     expect(state.inline?.kind).toBe('source');
     source.emit('compositionstart');
@@ -531,21 +533,20 @@ describe('configurable plugin manager contexts', () => {
     expect(state.inline?.kind).toBe('source');
     source.emit('compositionend');
     panel.handleKey(pickerKey('Enter', source));
+    await vi.waitFor(() => expect(state.inline?.kind).toBe('install'));
     expect(state.inline).toMatchObject({
       kind: 'install',
-      candidate: {
-        name: 'translate-for-zotero.xpi',
-        expectedID: expect.any(String),
-        expectedVersion: expect.any(String),
-      },
+      candidate: { name: 'reader-tools.xpi', url },
     });
     expect(install).not.toHaveBeenCalled();
     panel.handleKey(pickerKey('Escape', state.overlay));
     expect(state.inline).toBeNull();
     expect(state.open).toBe(true);
-    expect(state.input?.value).toBe('Translate for Zotero');
+    expect(state.input?.value).toBe('Reader Tools');
     panel.handleKey(pickerKey('i', state.overlay));
+    state.sourceInput!.value = url;
     panel.handleKey(pickerKey('Enter', state.sourceInput));
+    await vi.waitFor(() => expect(state.inline?.kind).toBe('install'));
     panel.handleKey(Object.assign(pickerKey('Enter', state.overlay), { repeat: true }));
     expect(install).not.toHaveBeenCalled();
     panel.handleKey(pickerKey('Enter', state.overlay));

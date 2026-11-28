@@ -66,10 +66,7 @@ function mount(initial: Record<string, boolean | number | string> = {}, owner = 
 }
 function field(page: SettingsModules, id: string) {
   const groups = page.model().groups;
-  const result = groups
-    .flatMap((group) => [group, ...(group.groups ?? [])])
-    .flatMap((group) => group.fields)
-    .find((entry) => entry.id === id);
+  const result = groups.flatMap((group) => group.fields).find((entry) => entry.id === id);
   if (!result) throw new Error(`Missing field ${id}`);
   return result;
 }
@@ -120,22 +117,7 @@ describe('headless module settings', () => {
     test.page.dispose();
   });
 
-  it('keeps experimental switches in a closed-by-default disclosure without losing other switches', () => {
-    const test = mount();
-    const groups = test.page.model().groups;
-    const extras = groups.find((group) => group.id === 'module-extras');
-    expect(extras).toMatchObject({ disclosure: true, title: 'Experimental and optional extras' });
-    expect(extras?.groups?.map((group) => group.id).sort()).toEqual([
-      'module.ai-qa',
-      'module.translation',
-    ]);
-    for (const { id } of OPTIONAL_MODULES)
-      expect(field(test.page, `modules.request.${id}`).kind).toBe('boolean');
-    expect(JSON.stringify(extras)).not.toContain('Install Translate for Zotero');
-    test.page.dispose();
-  });
-
-  it('renders a native closed disclosure and retains its open state on updates', () => {
+  it('renders only the three supported optional switches without an extras fold', () => {
     const test = mount();
     const root = document.createElement('div');
     const model: SettingsReactModel = {
@@ -150,17 +132,16 @@ describe('headless module settings', () => {
       page: { kind: 'form', model: test.page.model() },
     };
     const view = mountSettingsReactView(root, model, vi.fn());
-    const disclosure = root.querySelector('details');
-    expect(disclosure?.open).toBe(false);
-    expect(disclosure?.querySelector('summary')?.textContent).toBe(
-      'Experimental and optional extras',
-    );
-    if (!disclosure) throw new Error('Missing disclosure');
-    disclosure.open = true;
-    request(test.page, 'translation', true);
+    expect(root.querySelector('details')).toBeNull();
+    const fields = test.page.model().groups.flatMap(({ fields }) => fields);
+    expect(fields.map(({ id }) => id).sort()).toEqual([
+      'modules.request.extensions',
+      'modules.request.reader-hints',
+      'modules.request.references',
+      'modules.restore',
+    ]);
+    request(test.page, 'references', false);
     view.update({ ...model, page: { kind: 'form', model: test.page.model() } });
-    expect(root.querySelector('details')).toBe(disclosure);
-    expect(disclosure.open).toBe(true);
     expect(root.querySelector('.neo-settings-form > [role="status"]')?.textContent).toBe(
       'Some changes will take effect after restarting Zotero.',
     );
@@ -172,7 +153,6 @@ describe('headless module settings', () => {
     const test = mount({
       [modulePreferenceKey('reader-hints')]: false,
       [modulePreferenceKey('extensions')]: false,
-      [modulePreferenceKey('translation')]: true,
       'modules.library.enabled': false,
       'modules.item-attributes.enabled': true,
     });
@@ -183,33 +163,14 @@ describe('headless module settings', () => {
     expect(test.modules.requested().extensions).toBe(false);
     expect(field(test.page, 'modules.request.extensions')).toMatchObject({ value: false });
     expect(test.page.model().status?.error).toBe(true);
-    expect(test.modules.requested().translation).toBe(false);
     expect(test.preferences.clears).not.toContain('modules.item-attributes.enabled');
     expect(test.preferences.values.get('modules.item-attributes.enabled')).toBe(true);
     expect(test.preferences.values.get('modules.library.enabled')).toBe(false);
     test.preferences.failClearKey = null;
     test.page.dispatch({ type: 'action', id: 'modules.restore' });
-    expect(
-      OPTIONAL_MODULES.filter(({ id }) => id !== 'translation').every(
-        ({ id }) => !test.preferences.has(modulePreferenceKey(id)),
-      ),
-    ).toBe(true);
-    expect(test.preferences.values.get(modulePreferenceKey('translation'))).toBe(false);
-    test.page.dispose();
-  });
-
-  it('continues restoring other switches when the translation reset fails', () => {
-    const test = mount({
-      [modulePreferenceKey('translation')]: true,
-      [modulePreferenceKey('ai-qa')]: true,
-      [modulePreferenceKey('references')]: false,
-    });
-    test.preferences.failSetKey = modulePreferenceKey('translation');
-    test.page.dispatch({ type: 'action', id: 'modules.restore' });
-    expect(field(test.page, 'modules.request.translation')).toMatchObject({ value: true });
-    expect(test.preferences.has(modulePreferenceKey('ai-qa'))).toBe(false);
-    expect(test.preferences.has(modulePreferenceKey('references'))).toBe(false);
-    expect(test.page.model().status?.error).toBe(true);
+    expect(OPTIONAL_MODULES.every(({ id }) => !test.preferences.has(modulePreferenceKey(id)))).toBe(
+      true,
+    );
     test.page.dispose();
   });
 
@@ -249,35 +210,32 @@ describe('headless module settings', () => {
     expect(preferences.listenerCount()).toBe(0);
   });
 
-  it('ignores invalid and unknown module commands without writing preferences', () => {
+  it('ignores retired prefs and commands without writing or clearing their stored values', () => {
     const legacy = {
       'modules.tab-enhancements.enabled': true,
       'tabEnhancements.side': 'right',
       'tabEnhancements.groups.v2': 'saved',
+      'modules.translation.enabled': true,
+      'extras.translation.enabled': true,
+      'modules.ai-qa.enabled': true,
+      'modules.reader-ai.enabled': true,
+      'ai.configuration': '{"model":"user-selected"}',
     };
     const test = mount(legacy);
     test.page.dispatch({ type: 'value', id: 'modules.request.library', value: false });
     test.page.dispatch({ type: 'value', id: 'modules.request.references', value: 'invalid' });
     test.page.dispatch({ type: 'value', id: 'modules.request.tab-enhancements', value: false });
+    test.page.dispatch({ type: 'value', id: 'modules.request.ai-qa', value: false });
+    test.page.dispatch({ type: 'value', id: 'modules.request.translation', value: false });
     test.page.dispatch({ type: 'action', id: 'tabs.restore' });
     expect(test.preferences.writes).toEqual([]);
-    expect(JSON.stringify(test.page.model())).not.toContain('tab-enhancements');
+    expect(JSON.stringify(test.page.model())).not.toMatch(/tab-enhancements|ai-qa|translation/u);
     test.page.dispatch({ type: 'action', id: 'modules.restore' });
-    for (const [key, value] of Object.entries(legacy))
+    for (const [key, value] of Object.entries(legacy)) {
       expect(test.preferences.values.get(key)).toBe(value);
+      expect(test.preferences.clears).not.toContain(key);
+    }
+    expect(test.preferences.writes).toEqual([]);
     test.page.dispose();
   });
-});
-
-it('saves automatic translation without enabling selection translation or requiring Plugin Manager', () => {
-  const test = mount({ [modulePreferenceKey('extensions')]: false });
-  request(test.page, 'translation', true);
-  expect(field(test.page, 'modules.request.translation')).toMatchObject({ value: true });
-  expect(test.preferences.writes).toEqual([[modulePreferenceKey('translation'), true]]);
-  expect(test.modules.inspect(test.owner).find(({ id }) => id === 'translation')).toMatchObject({
-    applied: false,
-    requested: true,
-    pendingRestart: true,
-  });
-  test.page.dispose();
 });

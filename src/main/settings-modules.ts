@@ -2,7 +2,7 @@ import { CleanupScope } from '../core/cleanup';
 import type { MainWindow } from '../core/contracts';
 import type { PreferenceStore } from '../core/preference-store';
 import { modulePreferenceKey, type BuiltinModuleRuntime } from '../core/module-runtime';
-import { OPTIONAL_MODULE_DEFAULTS, OPTIONAL_MODULES, type OptionalModuleId } from '../modules';
+import { OPTIONAL_MODULES, type OptionalModuleId } from '../modules';
 import type {
   SettingsFormCommand,
   SettingsFormGroup,
@@ -18,14 +18,6 @@ const MODULE_DESCRIPTIONS: Record<OptionalModuleId, { en: string; 'zh-CN': strin
   extensions: {
     en: 'Manage Zotero plugins from Neo.',
     'zh-CN': '在 Neo 中管理 Zotero 插件。',
-  },
-  translation: {
-    en: 'Save automatic translations and filter them in the Reader sidebar.',
-    'zh-CN': '保存自动译文并在阅读器侧栏筛选。',
-  },
-  'ai-qa': {
-    en: 'Ask questions about a document and inspect the supporting evidence.',
-    'zh-CN': '就文档提问并查看回答依据。',
   },
   references: {
     en: 'Browse references from the reader.',
@@ -91,10 +83,9 @@ export class SettingsModules {
         ],
       },
     ];
-    const extras: SettingsFormGroup[] = [];
     for (const descriptor of OPTIONAL_MODULES) {
       const state = states.get(descriptor.id);
-      const group: SettingsFormGroup = {
+      groups.push({
         id: `module.${descriptor.id}`,
         title: descriptor.names[language],
         description: MODULE_DESCRIPTIONS[descriptor.id][language],
@@ -112,17 +103,8 @@ export class SettingsModules {
               : {}),
           },
         ],
-      };
-      if (descriptor.id === 'translation' || descriptor.id === 'ai-qa') extras.push(group);
-      else groups.push(group);
+      });
     }
-    groups.push({
-      id: 'module-extras',
-      title: settingsText(language, 'Experimental and optional extras'),
-      disclosure: true,
-      fields: [],
-      groups: extras,
-    });
     return {
       title: settingsText(language, 'Optional enhancements'),
       ...(OPTIONAL_MODULES.some(({ id }) => requested[id] !== this.#modules.applied[id])
@@ -161,9 +143,7 @@ export class SettingsModules {
     let failed = false;
     for (const { id } of OPTIONAL_MODULES) {
       try {
-        if (id === 'translation')
-          this.#preferences.set(modulePreferenceKey(id), OPTIONAL_MODULE_DEFAULTS[id]);
-        else this.#preferences.clear(modulePreferenceKey(id));
+        this.#preferences.clear(modulePreferenceKey(id));
       } catch {
         failed = true;
       }

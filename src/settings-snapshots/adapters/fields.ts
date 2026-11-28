@@ -1,12 +1,11 @@
 import { BINDING_SCHEMA_VERSION, migrateBindingPreferences } from '../../core/preferences';
 import type { SettingState, SettingsValue } from '../contracts';
-import { parseBindingOverrides } from '../../input/bindings';
-import { parseLocalRuleProfile } from '../../document-analysis/local-rules/profile';
 import {
-  normalizeAICredential,
-  normalizeAIEndpoint,
-  parseAIConfiguration,
-} from '../../ai/configuration-policy';
+  isRetiredAIShortcutAction,
+  migrateRetiredShortcutActions,
+  parseBindingOverrides,
+} from '../../input/bindings';
+import { parseLocalRuleProfile } from '../../document-analysis/local-rules/profile';
 import { SettingsSnapshotError } from '../contracts';
 
 export interface TransferField {
@@ -50,31 +49,6 @@ export function safeEndpoint(value: string): boolean {
     return false;
   }
 }
-function jsonObject(raw: SettingsValue): { readonly [key: string]: SettingsValue } | null {
-  if (typeof raw !== 'string') return null;
-  try {
-    const parsed = JSON.parse(raw) as SettingsValue;
-    return object(parsed) ? parsed : null;
-  } catch {
-    return null;
-  }
-}
-export function validAI(value: SettingsValue): boolean {
-  const parsed = jsonObject(value);
-  if (
-    !parsed ||
-    Object.keys(parsed).some(
-      (key) => !['api', 'endpoint', 'model', 'maxOutputTokens', 'sendImages'].includes(key),
-    )
-  )
-    return false;
-  try {
-    parseAIConfiguration(parsed);
-    return true;
-  } catch {
-    return false;
-  }
-}
 export function validBindings(value: SettingsValue): boolean {
   if (
     !object(value) ||
@@ -94,8 +68,9 @@ export function validBindings(value: SettingsValue): boolean {
       return false;
     if (Number(value.schemaVersion) < BINDING_SCHEMA_VERSION) return true;
     const canonical = parseBindingOverrides(value.overrides);
+    const retained = Object.values(parsed).filter((item) => !isRetiredAIShortcutAction(item));
     return (
-      Object.keys(canonical).length === Object.keys(parsed).length &&
+      Object.keys(canonical).length === retained.length &&
       Object.values(canonical).every((action) => action === null || typeof action === 'string')
     );
   } catch {
@@ -127,7 +102,7 @@ export function migrateTransferBindings(value: SettingsValue): {
   });
   const canonical = {
     schemaVersion: BINDING_SCHEMA_VERSION,
-    overrides: String(saved.get('bindings') ?? ''),
+    overrides: migrateRetiredShortcutActions(String(saved.get('bindings') ?? '')),
   };
   if (!validBindings(canonical)) throw new Error('Invalid canonical binding schema');
   return canonical;
@@ -348,15 +323,6 @@ export function validFieldState(field: TransferField, state: SettingState): bool
     return false;
   if (!field.secret && typeof state.value === 'string' && CREDENTIAL_TEXT.test(state.value))
     return false;
-  if (field.key.startsWith('secret:ai:')) {
-    try {
-      normalizeAIEndpoint(field.key.slice(10));
-      if (typeof state.value !== 'string') return false;
-      normalizeAICredential(state.value);
-    } catch {
-      return false;
-    }
-  }
   if (field.key === 'sync.storage.scheme' && state.value !== 'https' && state.value !== 'http')
     return false;
   if (field.key === 'sync.storage.protocol' && state.value !== 'webdav' && state.value !== 'zotero')
@@ -387,13 +353,6 @@ export function normalizeTransferFieldState(
       'Setting value does not match its field policy.',
     );
   if (field.normalize) return field.normalize(state);
-  if (field.key.startsWith('secret:ai:')) {
-    try {
-      return { kind: 'set', value: normalizeAICredential(state.value as string) };
-    } catch {
-      throw new SettingsSnapshotError('invalid-field', 'AI credential is not transferable.');
-    }
-  }
   if (field.key === 'quickCopy:sites') {
     const rows = state.value as readonly { readonly domainPath: string; readonly format: string }[];
     return {

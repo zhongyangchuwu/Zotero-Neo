@@ -145,7 +145,6 @@ export const DEFAULT_BINDINGS = {
   'reader-normal:<Space>ob': 'openZoteroBases',
   'reader-normal:<Space>yy': 'mainYankCitekey',
   'reader-normal:<Space>ai': 'mainAddByIdentifier',
-  'reader-normal:<Space>aa': 'openAIQA',
   'reader-normal:<Space>fr': 'openReferences',
   'reader-select:s': 'flashText',
   'reader-select:a': 'openSelectionActions',
@@ -927,11 +926,14 @@ export function migrateRetiredReaderInsertOverrides(raw: unknown): string {
   return retained.length ? JSON.stringify(Object.fromEntries(retained)) : '';
 }
 
+export function isRetiredAIShortcutAction(action: unknown): boolean {
+  return action === 'openAIQA' || action === 'openReaderAI';
+}
+
 const RETIRED_SHORTCUT_ACTIONS = new Map<string, ActionId | null>([
   ['copyIdentifier', 'copyTarget'],
   ['followIdentifier', 'followLink'],
   ['focusReaderSidebar', 'focusReaderOutline'],
-  ['openReaderAI', 'openAIQA'],
   ['openSettingsTransfer', 'openSettingsSnapshots'],
   ['manageItemAttributes', null],
   ['editItemAttributes', null],
@@ -943,13 +945,16 @@ export function migrateRetiredShortcutActions(raw: unknown): string {
   const entries = parseBindingEntries(raw);
   if (
     !entries.some(
-      ([, action]) => typeof action === 'string' && RETIRED_SHORTCUT_ACTIONS.has(action),
+      ([, action]) =>
+        isRetiredAIShortcutAction(action) ||
+        (typeof action === 'string' && RETIRED_SHORTCUT_ACTIONS.has(action)),
     )
   )
     return raw;
   return JSON.stringify(
     Object.fromEntries(
       entries.flatMap(([key, action]) => {
+        if (isRetiredAIShortcutAction(action)) return [];
         const replacement =
           typeof action === 'string' ? RETIRED_SHORTCUT_ACTIONS.get(action) : undefined;
         return replacement === null ? [] : [[key, replacement ?? action]];

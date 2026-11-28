@@ -17,9 +17,9 @@ import {
   isRetiredNeoPreference,
   sameSettingState,
   validateSettingsSection,
+  withoutRetiredNeoEntries,
 } from '../document';
 import { BINDING_SCHEMA_VERSION } from '../../core/preferences';
-import { normalizeAIEndpoint } from '../../ai/configuration-policy';
 import {
   matchesNativeLibrary,
   nativeCustomThemeExists,
@@ -31,7 +31,6 @@ import {
   nativeStyleCollision,
   nativeStylePendingActivation,
   nativeConsumerStyleDependencies,
-  ownedAIEndpoint,
   prepareNativeSettingsSnapshot,
   readNativeResource,
   readSettledTransferCredential,
@@ -47,7 +46,6 @@ import {
   migrateTransferBindings,
   normalizeTransferFieldState,
   nativeResourceField,
-  safeEndpoint,
   type TransferField,
   validFieldState,
 } from './fields';
@@ -112,14 +110,6 @@ export class BuiltinSettingsAdapter implements SettingsAdapter {
       return {
         key,
         label: key === 'secret:mineru' ? 'MinerU token' : 'Semantic Scholar API key',
-        category: 'API credentials',
-        type: 'string',
-        secret: true,
-      };
-    if (key.startsWith('secret:ai:') && safeEndpoint(key.slice(10)))
-      return {
-        key,
-        label: 'AI endpoint API key',
         category: 'API credentials',
         type: 'string',
         secret: true,
@@ -210,15 +200,11 @@ export class BuiltinSettingsAdapter implements SettingsAdapter {
         ),
       );
     } else {
-      if (context.includeSecrets) {
-        supported.push('secret:mineru', 'secret:semantic-scholar');
-        const endpoint = ownedAIEndpoint();
-        if (endpoint && safeEndpoint(endpoint)) supported.push(`secret:ai:${endpoint}`);
-      }
+      if (context.includeSecrets) supported.push('secret:mineru', 'secret:semantic-scholar');
       issues.push(
         this.#issue(
           'neo-exclusions',
-          'Per-document marks, navigation history, analysis/AI artifacts, caches, diagnostics, and third-party translation provider preferences/credentials are not settings transferred by Neo',
+          'Per-document marks, navigation history, analysis artifacts, caches, and diagnostics are not settings transferred by Neo',
         ),
       );
     }
@@ -265,6 +251,14 @@ export class BuiltinSettingsAdapter implements SettingsAdapter {
   }
   async plan(section: SettingsSection, context: SettingsPlanContext): Promise<AdapterRestorePlan> {
     assertSettingsCurrent(context);
+    if (
+      this.id === 'zotero-neo' &&
+      section?.adapterID === this.id &&
+      Array.isArray(section.entries)
+    ) {
+      const entries = withoutRetiredNeoEntries(section.entries);
+      if (entries !== section.entries) section = { ...section, entries };
+    }
     validateSettingsSection(section);
     if (section.adapterID !== this.id || section.schemaVersion !== this.schemaVersion)
       throw new SettingsSnapshotError(
@@ -275,30 +269,8 @@ export class BuiltinSettingsAdapter implements SettingsAdapter {
     if (this.id === 'zotero') await prepareNativeSettingsSnapshot(context);
     const changes: SettingsChange[] = [],
       issues: SettingsIssue[] = [];
-    const entries: SettingsEntry[] = [];
-    const duplicateKeys = new Set<string>();
-    const keys = new Set<string>();
-    for (const entry of section.entries) {
-      try {
-        const key = entry.key.startsWith('secret:ai:')
-          ? `secret:ai:${normalizeAIEndpoint(entry.key.slice(10))}`
-          : entry.key;
-        if (keys.has(key)) duplicateKeys.add(key);
-        keys.add(key);
-        entries.push({ key, state: entry.state });
-      } catch {
-        issues.push(
-          this.#issue('invalid-field', 'An entry has an unsupported credential identity'),
-        );
-      }
-    }
+    const { entries } = section;
     for (const entry of entries) {
-      if (duplicateKeys.has(entry.key)) {
-        issues.push(
-          this.#issue('invalid-field', 'Duplicate canonical settings entries were rejected'),
-        );
-        continue;
-      }
       assertSettingsCurrent(context);
       const field = this.#field(entry.key);
       if (!field) {

@@ -16,7 +16,6 @@ import {
 import { SettingsSnapshotService, settingsChangeID } from '../../src/settings-snapshots/service';
 import { saveMinerUToken } from '../../src/platform/document-credentials';
 import { changeReferenceKey } from '../../src/platform/reference-credentials';
-import { changeAICredential } from '../../src/platform/ai-credentials';
 import { settingsSnapshotHostFixture } from './settings-snapshots-host-fixture';
 
 const context = () => {
@@ -123,23 +122,15 @@ describe('standalone built-in settings adapters at the native OS boundary', () =
 
   it('captures Neo settings, canonical binding schema, module and appearance options but no per-document state', async () => {
     const t = settingsSnapshotHostFixture();
-    const config = {
-      api: 'openai-responses',
-      endpoint: 'https://api.example/v1',
-      model: 'model',
-      maxOutputTokens: 2048,
-      sendImages: false,
-    };
     const values: Record<string, string | number | boolean> = {
       language: 'zh-CN',
       'tags.separator': '',
       'keyGuide.delayMs': 0,
       'smoothScroll.stopOnRelease': false,
-      'modules.translation.enabled': false,
+      'modules.references.enabled': false,
       'appearance.preset': 'terminal',
       'documentAnalysis.provider': 'mineru',
       'documentAnalysis.local.rules': '{"version":1,"rules":{"unruledTables":{"enabled":false}}}',
-      'ai.configuration': JSON.stringify(config),
       bindings: '{"reader-normal:x":"scrollDown"}',
       'bindings.schemaVersion': BINDING_SCHEMA_VERSION,
     };
@@ -161,13 +152,12 @@ describe('standalone built-in settings adapters at the native OS boundary', () =
     });
     expect(entries['tags.separator']).toEqual({ kind: 'set', value: '' });
     expect(entries['keyGuide.delayMs']).toEqual({ kind: 'set', value: 0 });
-    expect(entries['modules.translation.enabled']).toEqual({ kind: 'set', value: false });
+    expect(entries['modules.references.enabled']).toEqual({ kind: 'set', value: false });
     expect(entries['appearance.preset']).toEqual({ kind: 'set', value: 'terminal' });
     expect(entries['tabEnhancements.side']).toBeUndefined();
     expect(entries['modules.tab-enhancements.enabled']).toBeUndefined();
     expect(t.user.get('extensions.zotero-neo.tabEnhancements.side')).toBe('right');
     expect(t.user.get('extensions.zotero-neo.modules.tab-enhancements.enabled')).toBe(true);
-    expect(entries['ai.configuration']).toEqual({ kind: 'set', value: JSON.stringify(config) });
     expect(JSON.stringify(captured)).not.toMatch(/private-marks|private-trace/);
   });
 
@@ -232,6 +222,22 @@ describe('standalone built-in settings adapters at the native OS boundary', () =
     t.user.set(prefix + moduleFlag, true);
     t.user.set(prefix + legacyPreset, 'classic');
     t.user.set(prefix + legacyCss, 'local retired styles');
+    const retired = {
+      'modules.translation.enabled': true,
+      'extras.translation.enabled': true,
+      'modules.ai-qa.enabled': false,
+      'modules.reader-ai.enabled': true,
+      'pdf-translate.targetLanguage': 'de-DE',
+      'reader-ai.enabled': true,
+      'ai.configuration': JSON.stringify({
+        api: 'openai-responses',
+        endpoint: 'https://api.example/v1',
+        model: 'local-only',
+        maxOutputTokens: 2048,
+        sendImages: false,
+      }),
+    };
+    for (const [key, value] of Object.entries(retired)) t.user.set(prefix + key, value);
     const adapter = createSettingsAdapters(() => 'neo-target')[1]!;
     const service = new SettingsSnapshotService([adapter], () => ({
       neo: 'neo-target',
@@ -251,11 +257,17 @@ describe('standalone built-in settings adapters at the native OS boundary', () =
             reset(moduleFlag),
             set(legacyPreset, 'modern'),
             reset(legacyCss),
+            ...Object.keys(retired).map(reset),
+            reset(prefix + 'extras.translation.enabled'),
+            reset(prefix + 'reader-ai.enabled'),
+            set('secret:ai:https://api.example/v1', 'old credential'),
             set('language', 'zh-CN'),
             set('bindings', {
               schemaVersion: 22,
               overrides: JSON.stringify({
                 'reader-normal:x': 'scrollDown',
+                'reader-normal:aq': 'openReaderAI',
+                'reader-normal:<Space>aa': 'openAIQA',
                 'main-normal:<Space>pa': 'manageItemAttributes',
                 'main-normal:<Space>ia': 'editItemAttributes',
               }),
@@ -265,6 +277,7 @@ describe('standalone built-in settings adapters at the native OS boundary', () =
       }),
     );
     const plan = await service.plan(document, operation);
+    expect(plan.issues.map(({ code }) => code)).toEqual(['binding-migration']);
     expect(plan.plans.flatMap(({ changes }) => changes.map(({ key }) => key))).toEqual([
       'language',
       'bindings',
@@ -272,9 +285,16 @@ describe('standalone built-in settings adapters at the native OS boundary', () =
     const receipt = await service.apply(
       plan,
       new Set(
-        ['language', 'bindings', definitions, moduleFlag, legacyPreset, legacyCss].map((key) =>
-          settingsChangeID(adapter.id, key),
-        ),
+        [
+          'language',
+          'bindings',
+          definitions,
+          moduleFlag,
+          legacyPreset,
+          legacyCss,
+          ...Object.keys(retired),
+          'secret:ai:https://api.example/v1',
+        ].map((key) => settingsChangeID(adapter.id, key)),
       ),
       operation,
       async () => {},
@@ -287,13 +307,18 @@ describe('standalone built-in settings adapters at the native OS boundary', () =
     expect(t.mutations).not.toContain(prefix + moduleFlag);
     expect(t.mutations).not.toContain(prefix + legacyPreset);
     expect(t.mutations).not.toContain(prefix + legacyCss);
+    for (const [key, value] of Object.entries(retired)) {
+      expect(t.mutations).not.toContain(prefix + key);
+      expect(t.user.get(prefix + key)).toBe(value);
+    }
+    expect(t.records).toEqual([]);
     expect(t.user.get(prefix + definitions)).toBe('{"version":1,"fields":[]}');
     expect(t.user.get(prefix + moduleFlag)).toBe(true);
     expect(t.user.get(prefix + 'language')).toBe('zh-CN');
     expect(JSON.parse(String(t.user.get(prefix + 'bindings')))).toEqual({
       'reader-normal:x': 'scrollDown',
     });
-    const captured = await adapter.capture(captureContext());
+    const captured = await adapter.capture({ ...captureContext(), includeSecrets: true });
     expect(captured.section.entries.map(({ key }) => key).sort()).toEqual(['bindings', 'language']);
     expect(captured.issues.map(({ code }) => code)).not.toContain('excluded-or-unknown');
   });
@@ -423,9 +448,13 @@ describe('standalone built-in settings adapters at the native OS boundary', () =
     );
     expect(neoPlan.changes).toEqual([]);
     const retiredPlan = await neo!.plan(
+      // Direct adapter callers also ignore retired fields before entry validation.
       section('zotero-neo', [
         set('tabEnhancements.side', 'right'),
         set('modules.tab-enhancements.enabled', true),
+        { key: 'ai.configuration' } as SettingsEntry,
+        set('ai.configuration', 'legacy duplicate'),
+        set('secret:ai:not-an-endpoint', 'retired credential'),
       ]),
       context(),
     );
@@ -534,30 +563,17 @@ describe('standalone built-in settings adapters at the native OS boundary', () =
 
   it('round-trips named owned secrets only on explicit secret capture, never puts secret values into labels/issues/receipts', async () => {
     const t = settingsSnapshotHostFixture();
-    const endpoint = 'https://api.example/v1';
-    t.user.set(
-      'extensions.zotero-neo.ai.configuration',
-      JSON.stringify({
-        endpoint,
-        model: 'model',
-        api: 'openai-responses',
-        maxOutputTokens: 10,
-        sendImages: false,
-      }),
-    );
     await saveMinerUToken('source-mineru');
     await changeReferenceKey('source-reference');
-    await changeAICredential(endpoint, 'source-ai');
     const adapter = createSettingsAdapters(() => 'neo-target')[1]!;
     const excluded = await adapter.capture(captureContext());
     expect(excluded.section.entries.some((entry) => entry.key.startsWith('secret:'))).toBe(false);
     const included = await adapter.capture({ ...captureContext(), includeSecrets: true });
     expect(
       included.section.entries.filter((entry) => entry.key.startsWith('secret:')),
-    ).toHaveLength(3);
+    ).toHaveLength(2);
     await saveMinerUToken('');
     await changeReferenceKey(null);
-    await changeAICredential(endpoint, null);
     const plan = await adapter.plan(included.section, context());
     const secretChanges = plan.changes.filter((change) => change.secret);
     const receipts = await adapter.apply(selected(secretChanges), context());
@@ -568,9 +584,9 @@ describe('standalone built-in settings adapters at the native OS boundary', () =
         issues: plan.issues,
         receipts,
       }),
-    ).not.toMatch(/source-mineru|source-reference|source-ai/);
+    ).not.toMatch(/source-mineru|source-reference/);
     expect(t.records.map((login) => login.password)).toEqual(
-      expect.arrayContaining(['source-mineru', 'source-reference', 'source-ai']),
+      expect.arrayContaining(['source-mineru', 'source-reference']),
     );
     const repeated = await adapter.plan(included.section, context());
     expect(
@@ -796,7 +812,7 @@ describe('standalone built-in settings adapters at the native OS boundary', () =
     const adapter = createSettingsAdapters(() => 'neo-target')[1]!;
     const plan = await adapter.plan(
       section('zotero-neo', [
-        set('modules.translation.enabled', false),
+        set('modules.references.enabled', false),
         set('language', 'en'),
         set('keyGuide.delayMs', 0),
         set('secret:mineru', 'new-token'),
@@ -808,11 +824,11 @@ describe('standalone built-in settings adapters at the native OS boundary', () =
     );
     const receipts = await adapter.apply(selected(plan.changes), context());
     expect(receipts.find((receipt) => receipt.key === 'secret:mineru')!.status).toBe('failed');
-    expect(receipts.find((receipt) => receipt.key === 'modules.translation.enabled')).toMatchObject(
-      { status: 'skipped' },
-    );
-    expect(t.user.has('extensions.zotero-neo.modules.translation.enabled')).toBe(false);
-    expect(t.mutations).not.toContain('extensions.zotero-neo.modules.translation.enabled');
+    expect(receipts.find((receipt) => receipt.key === 'modules.references.enabled')).toMatchObject({
+      status: 'skipped',
+    });
+    expect(t.user.has('extensions.zotero-neo.modules.references.enabled')).toBe(false);
+    expect(t.mutations).not.toContain('extensions.zotero-neo.modules.references.enabled');
     expect(JSON.stringify(receipts)).not.toContain('new-token');
     expect(t.user.get('extensions.zotero-neo.language')).toBe('en');
   });
@@ -1086,55 +1102,32 @@ describe('standalone built-in settings adapters at the native OS boundary', () =
     expect(t.mutations).toEqual([]);
   });
 
-  it('canonicalizes AI credential realms with configuration and rejects invalid credentials without leaking values', async () => {
+  it('captures and plans current binding overrides with retired actions without discarding usable binds', async () => {
     const t = settingsSnapshotHostFixture();
     const adapter = createSettingsAdapters(() => 'neo-target')[1]!;
-    const endpoint = 'https://API.EXAMPLE:443/v1/';
-    const canonical = 'https://api.example/v1';
-    const input = section('zotero-neo', [
-      set(
-        'ai.configuration',
-        JSON.stringify({
-          endpoint,
-          model: 'model',
-          api: 'openai-chat-completions',
-          maxOutputTokens: 10,
-          sendImages: false,
-        }),
-      ),
-      set(`secret:ai:${endpoint}`, '  imported-ai  '),
+    const prefix = 'extensions.zotero-neo.';
+    const retained = { 'reader-normal:<Space>aa': 'scrollDown', 'reader-normal:j': null };
+    const overrides = JSON.stringify({
+      'reader-normal:aq': 'openReaderAI',
+      'reader-normal:ax': 'openAIQA',
+      ...retained,
+    });
+    t.user.set(prefix + 'bindings.schemaVersion', BINDING_SCHEMA_VERSION);
+    t.user.set(prefix + 'bindings', overrides);
+    const input = { schemaVersion: BINDING_SCHEMA_VERSION, overrides };
+    const canonical = { ...input, overrides: JSON.stringify(retained) };
+    const captured = await adapter.capture(captureContext());
+    expect(captured.section.entries).toEqual([set('bindings', canonical)]);
+    expect(captured.issues.map(({ code }) => code)).not.toContain('invalid-field');
+    const plan = await adapter.plan(section(adapter.id, [set('bindings', input)]), context());
+    expect(plan.changes).toMatchObject([
+      { key: 'bindings', after: { kind: 'set', value: canonical } },
     ]);
-    const plan = await adapter.plan(input, context());
-    expect(plan.changes.map((change) => change.key)).toContain(`secret:ai:${canonical}`);
-    expect(
-      (await adapter.apply(selected(plan.changes), context())).every(
-        (receipt) => receipt.status === 'applied',
-      ),
-    ).toBe(true);
-    expect(t.records.find((login) => login.password === 'imported-ai')!.httpRealm).toContain(
-      canonical,
-    );
-    const captured = await adapter.capture({ ...captureContext(), includeSecrets: true });
-    expect(captured.section.entries.some((entry) => entry.key === `secret:ai:${canonical}`)).toBe(
-      true,
-    );
-    for (const credential of ['x'.repeat(8193), 'bad\ncredential', '   ']) {
-      const invalid = await adapter.plan(
-        section('zotero-neo', [set(`secret:ai:${endpoint}`, credential)]),
-        context(),
-      );
-      expect(invalid.changes).toEqual([]);
-      expect(JSON.stringify(invalid.issues)).not.toContain(credential);
-    }
-    const duplicate = await adapter.plan(
-      section('zotero-neo', [
-        set(`secret:ai:${canonical}`, 'one'),
-        set(`secret:ai:${endpoint}`, 'two'),
-      ]),
-      context(),
-    );
-    expect(duplicate.changes).toEqual([]);
+    expect(plan.issues).toEqual([]);
+    expect(t.user.get(prefix + 'bindings')).toBe(overrides);
+    expect(t.mutations).toEqual([]);
   });
+
   it('blocks a replacement that would delete an earlier staged renamed style at native restart', async () => {
     const t = settingsSnapshotHostFixture();
     t.renamed['old-name'] = 'new-name';
@@ -1191,7 +1184,7 @@ describe('standalone built-in settings adapters at the native OS boundary', () =
         section('zotero-neo', [
           set('language', 'en'),
           set('keyGuide.delayMs', 0),
-          set('modules.translation.enabled', false),
+          set('modules.references.enabled', false),
         ]),
         c,
       );

@@ -63,7 +63,6 @@ import { isReaderNavigationAction } from '../modules/reader-navigation/actions';
 import { createReaderHintsModule, type ReaderHintsModule } from '../modules/reader-hints';
 import { createReaderLibraryModule, type ReaderLibraryModule } from '../modules/library/reader';
 import { createChapterNotesModule, type ChapterNotesModule } from '../modules/chapter-notes';
-import { createAIQAModule, type AIQAModule } from '../modules/ai-qa';
 import { createReferencesModule, type ReferencesModule } from '../modules/references';
 import { createReaderChaptersModule, type ReaderChaptersModule } from '../modules/reader-chapters';
 import { createReaderFiguresModule, type ReaderFiguresModule } from '../modules/reader-figures';
@@ -83,11 +82,6 @@ import {
 import { isReaderSelectionAction } from '../modules/reader-selection/actions';
 import { ReaderSelectionActionRegistry } from '../modules/reader-selection/registry';
 import {
-  createReaderTranslationModule,
-  type ReaderTranslationModule,
-} from '../modules/translation';
-import { SelectionTranslation } from '../modules/translation/selection-action';
-import {
   createReaderAnnotationsModule,
   type ReaderAnnotationsModule,
 } from '../modules/reader-annotations';
@@ -103,7 +97,6 @@ import { ReaderNativeInput } from './native-input';
 import {
   readerRegionPreview,
   readerSelectionIsFiltered,
-  isReaderTranslationControl,
   selectedAnnotationIDs,
 } from '../toolkit/reader';
 import {
@@ -126,7 +119,6 @@ import {
   readerIsClosed,
   readerViewForWindow,
   readerViewIsLive,
-  readerSelectionPopupSource,
   readerInventory,
   readerByTabID,
   readerSelectedTabID,
@@ -173,7 +165,6 @@ interface SessionSelectionBridge {
     context: ReaderSelectionContext,
     isCurrent: () => boolean,
   ) => readonly ReaderSelectionActionDefinition[];
-  readonly translation: (language: KeyGuideLanguage) => ReaderSelectionActionDefinition | null;
   readonly noteOwner: (session: ReaderSession) => void;
   readonly clearOwner: (session: ReaderSession) => void;
 }
@@ -242,10 +233,8 @@ export class ReaderController implements ReaderControllerApi {
   readonly #failedReaders = new WeakSet<ReaderRuntime>();
   #toolbarListener: ReaderEventListener | null = null;
   #selectionPopupListener: ReaderEventListener | null = null;
-  #annotationHeaderListener: ReaderEventListener | null = null;
   #pluginID: string | null = null;
   readonly #selectionActions = new ReaderSelectionActionRegistry();
-  #selectionTranslation: SelectionTranslation | null = null;
   #selectionOwner: ReaderSession | null = null;
 
   constructor(dependencies: ReaderControllerDependencies) {
@@ -261,18 +250,12 @@ export class ReaderController implements ReaderControllerApi {
     const selectionPopupListener: ReaderEventListener = (event) => {
       if (this.#selectionPopupListener === selectionPopupListener) this.#onSelectionPopup(event);
     };
-    const annotationHeaderListener: ReaderEventListener = (event) => {
-      if (this.#annotationHeaderListener === annotationHeaderListener)
-        this.#onAnnotationHeader(event);
-    };
     this.#toolbarListener = toolbarListener;
     this.#selectionPopupListener = selectionPopupListener;
-    this.#annotationHeaderListener = annotationHeaderListener;
     try {
       // Zotero returns no listener ID: teardown requires the exact event/handler pair.
       registerReaderEvent('renderToolbar', toolbarListener, pluginId);
       registerReaderEvent('renderTextSelectionPopup', selectionPopupListener, pluginId);
-      registerReaderEvent('renderSidebarAnnotationHeader', annotationHeaderListener, pluginId);
       this.#pluginID = pluginId;
       this.#dependencies.logger.debug('reader listeners registered');
       this.#dependencies.logger.diagnostic('reader listeners registered');
@@ -281,35 +264,17 @@ export class ReaderController implements ReaderControllerApi {
       const message = `reader listener registration failed: ${String(error)}`;
       this.#dependencies.logger.debug(message);
       this.#dependencies.logger.diagnostic(message);
-      return;
-    }
-    try {
-      this.#selectionTranslation = new SelectionTranslation(
-        this.#dependencies.preferences,
-        pluginId,
-      );
-    } catch (error) {
-      reportDiagnosticError(
-        this.#dependencies.logger,
-        'Selection translation initialization failed',
-        error,
-      );
     }
   }
 
   shutdown(): void {
     const toolbarListener = this.#toolbarListener;
     const selectionPopupListener = this.#selectionPopupListener;
-    const annotationHeaderListener = this.#annotationHeaderListener;
-    const selectionTranslation = this.#selectionTranslation;
     // Retire before touching the host registry so queued callbacks cannot reclaim input.
     this.#toolbarListener = null;
     this.#selectionPopupListener = null;
-    this.#annotationHeaderListener = null;
     this.#pluginID = null;
-    this.#selectionTranslation = null;
     const failure = new CleanupFailure();
-    if (selectionTranslation) failure.run(() => selectionTranslation.dispose());
     if (toolbarListener) {
       try {
         unregisterReaderEvent('renderToolbar', toolbarListener);
@@ -320,13 +285,6 @@ export class ReaderController implements ReaderControllerApi {
     if (selectionPopupListener) {
       try {
         unregisterReaderEvent('renderTextSelectionPopup', selectionPopupListener);
-      } catch {
-        // Host shutdown may already have discarded the reader registry.
-      }
-    }
-    if (annotationHeaderListener) {
-      try {
-        unregisterReaderEvent('renderSidebarAnnotationHeader', annotationHeaderListener);
       } catch {
         // Host shutdown may already have discarded the reader registry.
       }
@@ -437,15 +395,7 @@ export class ReaderController implements ReaderControllerApi {
     if (!params?.annotation || !reader || !instanceID) return;
     const session = this.#sessions.get(instanceID);
     if (session?.reader !== reader) return;
-    session.acceptTranslationPopup(event);
     if (params.onAddAnnotation) session.acceptSelectionParams(params);
-  }
-
-  #onAnnotationHeader(event: ReaderEventRuntime): void {
-    const reader = event.reader;
-    const instanceID = reader ? readerInstanceID(reader) : undefined;
-    const session = instanceID ? this.#sessions.get(instanceID) : null;
-    if (reader && session?.reader === reader) session.acceptAnnotationHeader(event);
   }
 
   #ensure(reader: ReaderRuntime): void {
@@ -488,7 +438,6 @@ export class ReaderController implements ReaderControllerApi {
           jumpHost: this.#jumpHost,
           selection: {
             registered: (context, isCurrent) => this.registeredSelectionActions(context, isCurrent),
-            translation: (language) => this.#selectionTranslation?.action(language) ?? null,
             noteOwner: (owner) => this.noteSelectionOwner(owner),
             clearOwner: (owner) => this.clearSelectionOwner(owner),
           },
@@ -601,14 +550,12 @@ export class ReaderSession {
   readonly #commentEditor: ReaderAnnotationsModule['commentEditor'] | null;
   readonly #nativeInput: ReaderNativeInput;
   readonly #selection: ReaderSelectionModule | null;
-  readonly #translation: ReaderTranslationModule | null;
   readonly #chapterNotes: ChapterNotesModule | null;
   readonly #chapters: ReaderChaptersModule | null;
   #figures: ReaderFiguresModule | null = null;
   readonly #comparison: DocumentComparisonModule | null;
   readonly #excerpts: ReaderExcerptsModule | null;
   readonly #preparation: DocumentPreparationModule | null;
-  readonly #ai: AIQAModule | null;
   readonly #references: ReferencesModule | null;
   readonly #flash: ReaderSelectionModule['flash'] | null;
   readonly #selectionRange: ReaderSelectionModule['range'] | null;
@@ -984,23 +931,9 @@ export class ReaderSession {
           language: () => this.keyGuideLanguage(),
           registeredActions: (context, isCurrent) =>
             this.#dependencies.selection?.registered(context, isCurrent) ?? [],
-          contributedActions: (window, language) => {
-            const actions = [
-              ...(this.#annotations?.selectionActions(window, language) ?? []),
-              ...(this.#ai?.selectionActions() ?? []),
-            ];
-            const translation = this.#dependencies.selection?.translation(language);
-            if (translation) actions.push(translation);
-            return actions;
-          },
+          contributedActions: (window, language) =>
+            this.#annotations?.selectionActions(window, language) ?? [],
           showStatus: (message, duration) => this.showStatus(message, duration),
-          debug: (message) => dependencies.controller.dependencies.logger.debug(message),
-        }),
-      );
-      this.#translation = this.#modules.activate('translation', () =>
-        createReaderTranslationModule(this.#modules.host, {
-          reader: dependencies.reader,
-          language: () => this.keyGuideLanguage(),
           debug: (message) => dependencies.controller.dependencies.logger.debug(message),
         }),
       );
@@ -1086,7 +1019,6 @@ export class ReaderSession {
           failure.run(() => this.#figures?.releaseView(pdfWindow));
           failure.run(() => this.#excerpts?.releaseView(pdfWindow));
           failure.run(() => this.#selection?.releaseView(pdfWindow));
-          failure.run(() => this.#translation?.releaseView(pdfWindow));
           failure.run(() => this.#chapterNotes?.releaseView(pdfWindow));
           failure.run(() => this.#references?.releaseView(pdfWindow));
           failure.run(() => this.#hints?.links.releaseView(pdfWindow));
@@ -1101,50 +1033,6 @@ export class ReaderSession {
           this.#jumpHistoryBridge.sync();
         },
       });
-      this.#ai = this.#modules.activate('ai-qa', () =>
-        createAIQAModule(
-          this.#modules.host,
-          dependencies.controller.dependencies.aiQA?.() ?? null,
-          {
-            reader: dependencies.reader,
-            openNote: async (itemID) => {
-              const owner = readerMainWindow(dependencies.reader);
-              if (this.#scope.disposed || !owner) throw new Error('Reader note host unavailable');
-              const openNote = mainItemOpening(owner).openNote;
-              if (!openNote) throw new Error('Reader note host cannot open notes');
-              await openNote(itemID);
-            },
-            captureSelection: () => this.selectionContext(),
-            captureView: () => {
-              const window = this.#navigationHost.activePdfWindow();
-              if (!window || !this.readerViewForWindow(window)) return null;
-              const isCurrent = this.captureViewLifetime(window);
-              return {
-                window,
-                pageIndex: this.#navigationHost.outlinePosition(window)?.pageIndex ?? null,
-                isCurrent,
-                jump: (location) => {
-                  if (!isCurrent() || !this.#navigationHost.canNavigate(window)) return false;
-                  this.#navigationHost.activatePdfWindow(window);
-                  if (this.#navigationHost.activePdfWindow() !== window) return false;
-                  return !!this.executeReaderNavigation(
-                    window,
-                    {
-                      cause: { kind: 'event', event: 'ai-qa.jump' },
-                      surface: 'reader',
-                      context: { readerPath: 'internal-link', isCurrent },
-                    },
-                    () => this.#navigationHost.navigateToRegion(window, { position: location }),
-                  );
-                },
-              };
-            },
-            language: () => this.keyGuideLanguage(),
-            themeRoot: (root) => this.themeRoot(root),
-            showStatus: (message) => this.showStatus(message),
-          },
-        ),
-      );
       this.#references = this.#modules.activate('references', () => {
         const referencePluginID = dependencies.controller.pluginID;
         if (!referencePluginID) throw new Error('Reader reference integration is inactive');
@@ -1595,18 +1483,6 @@ export class ReaderSession {
     if (this.#selection && this.mode === 'visual') this.#dependencies.selection?.noteOwner(this);
   }
 
-  acceptTranslationPopup(event: ReaderEventRuntime): void {
-    if (this.#scope.disposed || !this.#translation || !event.params?.annotation) return;
-    this.#viewLifecycle.sync();
-    const source = readerSelectionPopupSource(this.reader, event.params.annotation);
-    if (source && source.isCurrent())
-      this.#translation.showSave(event, source.window, source.isCurrent);
-  }
-
-  acceptAnnotationHeader(event: ReaderEventRuntime): void {
-    if (!this.#scope.disposed) this.#translation?.showSidebar(event);
-  }
-
   private clearNativeSelection(): void {
     this.state.selectionParams = null;
     this.#selectionView = null;
@@ -1634,20 +1510,12 @@ export class ReaderSession {
 
   nativeEditableFocused(): boolean {
     const active = readerWindow(this.#dependencies.reader)?.document.activeElement ?? null;
-    return isReaderTranslationControl(active) || isEditableElement(active);
+    return isEditableElement(active);
   }
 
   focusAndHandle(event: KeyboardEvent): void {
     if (this.#scope.disposed) return;
-    if (
-      !this.#nativeInput.ownsInput &&
-      isReaderTranslationControl(
-        readerWindow(this.#dependencies.reader)?.document.activeElement ?? null,
-      )
-    )
-      return;
     if (this.#references?.ownsTarget(event.target)) return;
-    if (this.#dependencies.controller.dependencies.aiQA?.()?.ownsTarget(event.target)) return;
     const pdfWindow = this.#navigationHost.activePdfWindow();
     if (!pdfWindow) return;
     const sidebarTarget = readerSidebarContainsTarget(this.#dependencies.reader, event.target);
@@ -1663,11 +1531,7 @@ export class ReaderSession {
       'focusin',
       ((event: Event) => {
         this.#interactionRevision += 1;
-        if (
-          !this.#commentEditor?.ownsInput ||
-          !(isReaderTranslationControl(event.target) || isEditableElement(asElement(event.target)))
-        )
-          return;
+        if (!this.#commentEditor?.ownsInput || !isEditableElement(asElement(event.target))) return;
         void this.handOverNativeEditor();
       }) as EventListener,
       true,
@@ -1682,8 +1546,6 @@ export class ReaderSession {
           this.input.reset();
           this.clearKeyGuide();
           this.updateIndicator();
-          if (isReaderTranslationControl(keyEvent.target) && keyString(keyEvent) === 'escape')
-            this.#navigationHost.activePdfWindow()?.focus();
           return;
         }
         const pdfWindow = this.#navigationHost.activePdfWindow();
@@ -1745,7 +1607,6 @@ export class ReaderSession {
     if (this.#scope.disposed) return;
     if (this.#references?.ownsTarget(event.target)) return;
     this.#references?.activateView(pdfWindow);
-    if (this.#dependencies.controller.dependencies.aiQA?.()?.ownsTarget(event.target)) return;
     if (this.#dependencies.controller.dependencies.documentPreparation?.handleKey(event)) return;
     if (this.#excerpts?.handleKey(event)) return;
     if (this.#chapterNotes?.handleKey(event)) return;
@@ -1926,12 +1787,6 @@ export class ReaderSession {
   private readerConsumesKey(key: string, pdfWindow: PdfWindow | undefined): boolean {
     if (!key) return false;
     if (this.#nativeInput.ownsInput) return key === 'escape';
-    if (
-      isReaderTranslationControl(
-        readerWindow(this.#dependencies.reader)?.document.activeElement ?? null,
-      )
-    )
-      return false;
     if (pdfWindow && this.#commentEditor?.ownsView(pdfWindow))
       return this.#commentEditor.consumesKey(key, pdfWindow);
     if (this.#selectionActions?.isOpen && pdfWindow && this.#selectionActions?.ownsView(pdfWindow))
@@ -2023,10 +1878,6 @@ export class ReaderSession {
     if (!pdfWindow) return;
     if (action === 'openReferences') {
       this.#references?.open();
-      return;
-    }
-    if (action === 'openAIQA') {
-      this.#ai?.open();
       return;
     }
     if (action === 'openChapterSearch') {

@@ -13,7 +13,6 @@ import {
 import { ZOTERO_NEO_PLUGIN_ID } from './host';
 import { ExtensionSourceWriteError, extensionErrorText, installExtension } from './operations';
 import {
-  CURATED_EXTENSIONS,
   ExtensionSourceError,
   parseExtensionSource,
   readSources,
@@ -67,21 +66,6 @@ const MAX_SOURCE_URL = 4096;
 const CONTROL = /[\u0000-\u001f\u007f]/u;
 const CREDENTIAL_SEGMENT =
   /(?:^|[;?&])(?:access[-_]?token|api[-_]?key|auth(?:entication|orization)?|credentials?|expires|password|private[-_]?key|secret|signature|signed|token|x-amz-[a-z-]+|x-goog-[a-z-]+)(?:$|[=;:])/i;
-const PINNED_EXTENSIONS = CURATED_EXTENSIONS.filter((entry) => 'candidate' in entry);
-
-function curatedSource(addonId: string | undefined, source: ExtensionSource) {
-  if (source.kind !== 'xpi') return undefined;
-  return PINNED_EXTENSIONS.find(({ candidate }) => {
-    const pinned = candidate.source;
-    return (
-      candidate.expectedID === addonId &&
-      pinned.kind === 'xpi' &&
-      source.url === pinned.url &&
-      source.hash === pinned.hash &&
-      source.expectedVersion === pinned.expectedVersion
-    );
-  });
-}
 
 function portablePath(path: string): boolean {
   try {
@@ -94,7 +78,7 @@ function portablePath(path: string): boolean {
   }
 }
 
-function portableSource(addonId: string, raw: unknown): ExtensionSource | null {
+function portableSource(raw: unknown): ExtensionSource | null {
   if (!record(raw)) return null;
   if (raw.kind === 'xpi' && (!text(raw.url, MAX_SOURCE_URL) || raw.url.includes('?'))) return null;
   if (
@@ -107,8 +91,6 @@ function portableSource(addonId: string, raw: unknown): ExtensionSource | null {
   const parsed = parseExtensionSource(raw);
   if (!parsed) return null;
   if (parsed.kind === 'github') return parsed;
-  const curated = curatedSource(addonId, parsed);
-  if (curated) return curated.candidate.source;
   if (parsed.hash !== undefined || parsed.expectedVersion !== undefined) return null;
   const url = safeExtensionHTTPSURL(parsed.url);
   return url && portablePath(url.pathname) ? { kind: 'xpi', url: url.href } : null;
@@ -173,7 +155,7 @@ export function validateWorkspaceExtensionManifest(value: unknown): WorkspaceExt
       name: item.name,
       version: item.version,
       enabled: item.enabled,
-      source: portableSource(item.addonId, item.source),
+      source: portableSource(item.source),
       ...(sensitiveKeys && { sensitiveKeys }),
     });
   }
@@ -214,15 +196,15 @@ export async function captureWorkspaceExtensions(
   });
 }
 
-function sourceLabel(addonId: string | undefined, source: ExtensionSource): string | undefined {
+function sourceLabel(source: ExtensionSource): string | undefined {
   const parsed = parseExtensionSource(source);
   if (!parsed) return undefined;
   if (parsed.kind === 'github') return `${parsed.owner}/${parsed.repo}`;
-  return curatedSource(addonId, parsed)?.label ?? safeExtensionHTTPSURL(parsed.url)?.hostname;
+  return safeExtensionHTTPSURL(parsed.url)?.hostname;
 }
 
 export function workspaceExtensionCandidateLabel(candidate: ExtensionCandidate): string {
-  return sourceLabel(candidate.expectedID, candidate.source) ?? 'XPI';
+  return sourceLabel(candidate.source) ?? 'XPI';
 }
 
 export async function inspectWorkspaceExtensions(
@@ -250,7 +232,7 @@ export async function inspectWorkspaceExtensions(
         entry,
         status,
         currentEnabled: current?.enabled,
-        sourceLabel: entry.source ? sourceLabel(entry.addonId, entry.source) : undefined,
+        sourceLabel: entry.source ? sourceLabel(entry.source) : undefined,
       };
     }),
   };
@@ -260,13 +242,8 @@ function bindCandidate(
   addonId: string,
   candidate: ExtensionCandidate,
 ): ExtensionCandidate | undefined {
-  const pinned = PINNED_EXTENSIONS.find((item) => item.candidate.url === candidate.url)?.candidate;
-  if (
-    (candidate.expectedID !== undefined && candidate.expectedID !== addonId) ||
-    (pinned && pinned.expectedID !== addonId)
-  )
-    return undefined;
-  return pinned ?? { ...candidate, expectedID: addonId };
+  if (candidate.expectedID !== undefined && candidate.expectedID !== addonId) return undefined;
+  return { ...candidate, expectedID: addonId };
 }
 
 export async function resolveWorkspaceExtensionInput(
@@ -288,11 +265,9 @@ async function savedCandidate(
   entry: WorkspaceExtension,
   signal: AbortSignal,
 ): Promise<ExtensionCandidate> {
-  const source = portableSource(entry.addonId, entry.source);
+  const source = portableSource(entry.source);
   if (!source) throw new ExtensionSourceError('invalid-source');
   if (source.kind === 'xpi') {
-    const curated = curatedSource(entry.addonId, source)?.candidate;
-    if (curated) return curated;
     const candidates = await resolveExtensionCandidates(source.url, signal);
     const bound =
       candidates.length === 1 &&

@@ -8,7 +8,6 @@ import { readerPresentationViews } from './presentation';
 export type ReaderEventName =
   | 'renderToolbar'
   | 'renderTextSelectionPopup'
-  | 'renderSidebarAnnotationHeader'
   | 'createViewContextMenu';
 export type ReaderEventListener = (event: ReaderEventRuntime) => void;
 
@@ -147,11 +146,6 @@ export function readerViewIsLive(
     readerPresentationViews(reader).includes(nativeView) &&
     (window === undefined || nativeView._iframeWindow === window)
   );
-}
-
-export function readerViewWindow(view: ReaderViewRuntime): Window | undefined {
-  const native = view as NativeReaderViewRuntime;
-  return native._iframeWindow;
 }
 
 /** Exact owner/tab eligibility used by native producer receipts. */

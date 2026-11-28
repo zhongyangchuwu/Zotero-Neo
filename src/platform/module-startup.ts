@@ -12,24 +12,18 @@ type ModuleStartupHost = typeof Zotero & { readonly [STARTUP_FLAGS]?: string };
 export function moduleStartupFlags(preferences: PreferenceReader): ModuleFlags {
   const host = Zotero as ModuleStartupHost;
   const saved = host[STARTUP_FLAGS];
-  if (saved !== undefined) {
-    const previous = JSON.parse(saved) as ModuleFlags;
-    return Object.freeze({
-      'reader-hints': previous['reader-hints'],
-      extensions: previous.extensions,
-      translation: previous.translation === true,
-      'ai-qa': previous['ai-qa'] === true,
-      references: previous.references === true,
-    });
-  }
+  const previous = saved === undefined ? undefined : (JSON.parse(saved) as Partial<ModuleFlags>);
   const flags = Object.freeze(
     Object.fromEntries(
       OPTIONAL_MODULE_IDS.map((id) => [
         id,
-        preferences.get(modulePreferenceKey(id), OPTIONAL_MODULE_DEFAULTS[id]) === true,
+        (previous
+          ? previous[id]
+          : preferences.get(modulePreferenceKey(id), OPTIONAL_MODULE_DEFAULTS[id])) === true,
       ]),
     ) as ModuleFlags,
   );
-  Object.defineProperty(host, STARTUP_FLAGS, { value: JSON.stringify(flags) });
+  if (saved === undefined)
+    Object.defineProperty(host, STARTUP_FLAGS, { value: JSON.stringify(flags) });
   return flags;
 }
