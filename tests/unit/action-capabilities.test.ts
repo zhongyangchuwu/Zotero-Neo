@@ -24,7 +24,6 @@ describe('action capability ownership', () => {
     expect(isReaderActionForMode('normal', 'showInLibrary')).toBe(true);
     expect(isReaderActionForMode('normal', 'mainAddByIdentifier')).toBe(true);
     expect(isReaderActionForMode('visual', 'mainAddByIdentifier')).toBe(false);
-    expect(actionsForBindingMode('note-normal')).not.toContain('mainAddByIdentifier');
     expect(actionsForBindingMode('main-select')).not.toContain('mainAddByIdentifier');
     expect(actionsForBindingMode('main-normal')).not.toContain('showInLibrary');
     expect(isReaderActionForMode('normal', 'toggleTagFilter')).toBe(false);
@@ -43,7 +42,7 @@ describe('action capability ownership', () => {
     expect(isReaderActionForMode('normal', 'openZoteroBases')).toBe(true);
     expect(actionsForBindingMode('main-normal')).toContain('openZoteroBases');
     expect(actionsForBindingMode('reader-normal')).toContain('openZoteroBases');
-    for (const mode of ['main-select', 'reader-select', 'note-normal', 'note-insert'] as const)
+    for (const mode of ['main-select', 'reader-select'] as const)
       expect(actionsForBindingMode(mode)).not.toContain('openZoteroBases');
   });
 });

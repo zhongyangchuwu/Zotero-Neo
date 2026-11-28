@@ -1,4 +1,4 @@
-export type ItemTargetSource = 'main' | 'reader' | 'note';
+export type ItemTargetSource = 'main' | 'reader';
 
 export type MainItemTargetOrigin = 'selection' | 'visual' | 'native-selection' | 'cursor';
 

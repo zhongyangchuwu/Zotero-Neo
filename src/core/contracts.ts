@@ -13,7 +13,7 @@ import type { SettingsSnapshotPort } from '../settings-snapshots/controller';
 /** Business owners use standard DOM windows; native Zotero fields stay in Toolkit. */
 export type MainWindow = Window;
 
-export type CommandPaletteMode = 'normal' | 'main' | 'note';
+export type CommandPaletteMode = 'normal' | 'main';
 
 export interface CommandPaletteContext {
   readonly mode: CommandPaletteMode;

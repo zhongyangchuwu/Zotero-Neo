@@ -1,16 +1,16 @@
 import type { MainWindow } from '../../core/contracts';
 import { isDeadObject } from '../../platform/cross-compartment';
-import { mainNoteEditorWindow, openSafeURI } from '../../toolkit';
+import { openSafeURI } from '../../toolkit';
 import { mountNoteLinks } from './index';
 
-/** Reuse Main's note discovery without depending on the optional Vim editor. */
+/** Link gestures belong to each native Note document, independent of keyboard routing. */
 export function createNoteLinkLifecycle(owner: MainWindow, reportError: (error: unknown) => void) {
-  let current: { window: Window; document: Document; dispose?: () => void } | null = null;
+  const mounted = new Map<Window, { document: Document; dispose?: () => void }>();
   let retired = false;
 
-  const release = (): void => {
-    const previous = current;
-    current = null;
+  const release = (window: Window): void => {
+    const previous = mounted.get(window);
+    mounted.delete(window);
     try {
       previous?.dispose?.();
     } catch (error) {
@@ -19,26 +19,34 @@ export function createNoteLinkLifecycle(owner: MainWindow, reportError: (error: 
   };
 
   return {
-    sync(): void {
+    sync(editors: readonly Window[]): void {
       if (retired) return;
-      const window = mainNoteEditorWindow(owner);
-      const document = window && !isDeadObject(window) ? window.document : null;
-      if (current && window === current.window && document === current.document) return;
-      release();
-      if (!window || !document || retired) return;
-      const next: NonNullable<typeof current> = { window, document };
-      current = next;
-      try {
-        const dispose = mountNoteLinks(window, (uri) => openSafeURI(uri, owner));
-        if (current === next) next.dispose = dispose;
-        else dispose();
-      } catch (error) {
-        reportError(error);
+      for (const [window, previous] of mounted) {
+        if (
+          !editors.includes(window) ||
+          isDeadObject(window) ||
+          window.document !== previous.document
+        )
+          release(window);
+      }
+      for (const window of editors) {
+        if (retired) return;
+        if (mounted.has(window) || isDeadObject(window)) continue;
+        const next: { document: Document; dispose?: () => void } = { document: window.document };
+        mounted.set(window, next);
+        try {
+          const dispose = mountNoteLinks(window, (uri) => openSafeURI(uri, owner));
+          if (mounted.get(window) === next) next.dispose = dispose;
+          else dispose();
+        } catch (error) {
+          if (mounted.get(window) === next) mounted.delete(window);
+          reportError(error);
+        }
       }
     },
     dispose(): void {
       retired = true;
-      release();
+      for (const window of mounted.keys()) release(window);
     },
   };
 }

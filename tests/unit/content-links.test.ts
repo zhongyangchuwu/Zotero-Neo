@@ -1,6 +1,7 @@
 // @vitest-environment jsdom
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import { mountNoteLinks, mountReaderCommentLinks } from '../../src/modules/content-links';
+import { createNoteLinkLifecycle } from '../../src/modules/content-links/note-lifecycle';
 
 let releases: (() => void)[];
 
@@ -328,4 +329,33 @@ describe('Note modifier links', () => {
       expect(style.isConnected).toBe(false);
     },
   );
+
+  it('keeps both Note documents mounted and disposes only the editor removed from view', () => {
+    const mainPane = document.createElement('iframe');
+    const readerPane = document.createElement('iframe');
+    const replacement = document.createElement('iframe');
+    document.body.append(mainPane, readerPane, replacement);
+    const mainEditor = mainPane.contentWindow!;
+    const readerEditor = readerPane.contentWindow!;
+    const replacementEditor = replacement.contentWindow!;
+    const reportError = vi.fn();
+    const lifecycle = createNoteLinkLifecycle(window, reportError);
+    releases.push(() => lifecycle.dispose());
+
+    lifecycle.sync([mainEditor, readerEditor]);
+    const mainStyle = mainEditor.document.head.querySelector('style')!;
+    const readerStyle = readerEditor.document.head.querySelector('style')!;
+    expect(mainStyle.isConnected).toBe(true);
+    expect(readerStyle.isConnected).toBe(true);
+
+    lifecycle.sync([readerEditor, replacementEditor]);
+    expect(mainStyle.isConnected).toBe(false);
+    expect(readerEditor.document.head.querySelector('style')).toBe(readerStyle);
+    const replacementStyle = replacementEditor.document.head.querySelector('style')!;
+    expect(replacementStyle.isConnected).toBe(true);
+    lifecycle.dispose();
+    expect(readerStyle.isConnected).toBe(false);
+    expect(replacementStyle.isConnected).toBe(false);
+    expect(reportError).not.toHaveBeenCalled();
+  });
 });

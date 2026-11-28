@@ -1,7 +1,6 @@
 import { afterEach, describe, expect, it, vi } from 'vitest';
 
 import type { MainWindow, ReaderJumpLocation } from '../../src/core/contracts';
-import { activeContextNoteItem } from '../../src/toolkit/main';
 import * as mainHost from '../../src/toolkit/main';
 import { MainNavigationExecutor, type LibrarySelectionOptions } from '../../src/main/jump-history';
 import { MainNavigation } from '../../src/main/navigation';
@@ -1272,7 +1271,7 @@ describe('Main jump history', () => {
     const h = harness();
     h.setPanel('collections');
     h.focusContextNote();
-    expect(activeContextNoteItem(h.window)).toBeDefined();
+    expect(mainHost.mainContextNoteFocused(h.window)).toBe(true);
     const selectionBefore = h.selection.values();
     expect(h.history.capture(h.window, h.session)).toMatchObject({
       kind: 'library',

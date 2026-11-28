@@ -49,10 +49,7 @@ function targetContext(targets: ItemTargetSet, language: AppLanguage): string {
       language,
     );
   }
-  return t(
-    targets.source === 'reader' ? 'workflow.itemTarget.reader' : 'workflow.itemTarget.note',
-    language,
-  );
+  return t('workflow.itemTarget.reader', language);
 }
 
 function targetLabel(targets: ItemTargetSet, count: number, language: AppLanguage): string {

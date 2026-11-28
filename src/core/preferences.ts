@@ -13,7 +13,6 @@ import {
   migrateMainSelectionCommandOverrides,
   migrateMainSpaceSelectionOverrides,
   migrateUnifiedSpaceLeaderOverrides,
-  migrateNoteBindingOverrides,
   migrateSemanticKeymapOverrides,
   migrateRetiredReaderInsertOverrides,
   migrateShortcutSystemOverrides,
@@ -54,12 +53,6 @@ export function pickerMouseEnabled(preferences: PreferenceReader): boolean {
   return preferences.get(PICKER_MOUSE_ENABLED_PREFERENCE_KEY, true);
 }
 
-export const NOTE_EDITOR_ENABLED_PREFERENCE_KEY = 'noteEditor.enabled' as const;
-
-export function noteEditorEnabled(preferences: PreferenceReader): boolean {
-  return preferences.get(NOTE_EDITOR_ENABLED_PREFERENCE_KEY, false);
-}
-
 export const MAIN_STARTUP_FOCUS_PREFERENCE_KEY = 'main.startupFocus' as const;
 export type MainStartupFocus = 'items' | 'quickSearch';
 
@@ -77,15 +70,12 @@ export type ScrollMode = 'step' | 'follow' | 'trapezoid';
 export type HighlightColorName = 'yellow' | 'red' | 'green' | 'blue' | 'purple';
 
 export const READER_VISUAL_MODE_ENABLED_PREFERENCE_KEY = 'mode.visual.enabled' as const;
-export const ANNOTATION_COMMENT_EDITOR_ENABLED_PREFERENCE_KEY =
-  'annotationCommentEditor.enabled' as const;
 export const READER_MARKS_PERSIST_PREFERENCE_KEY = 'marks.persist' as const;
 export const READER_DEFAULT_HIGHLIGHT_COLOR_PREFERENCE_KEY = 'defaultHighlightColor' as const;
 export const READER_SCROLL_MODE_PREFERENCE_KEY = 'scroll.mode' as const;
 export const READER_SCROLL_STOP_ON_RELEASE_PREFERENCE_KEY = 'smoothScroll.stopOnRelease' as const;
 
 const LEGACY_SMOOTH_SCROLL_PREFERENCE_KEY = 'smoothScroll' as const;
-const LEGACY_READER_INSERT_MODE_ENABLED_PREFERENCE_KEY = 'mode.insert.enabled' as const;
 
 export const READER_SCROLL_NUMBER_SPECS = {
   scrollStep: { key: 'scrollStep', defaultValue: 60, minimum: 10, maximum: 500 },
@@ -141,10 +131,6 @@ export function readerModeEnabled(
   _mode: ReaderModePreference,
 ): boolean {
   return preferences.get(READER_VISUAL_MODE_ENABLED_PREFERENCE_KEY, true);
-}
-
-export function annotationCommentEditorEnabled(preferences: PreferenceReader): boolean {
-  return preferences.get(ANNOTATION_COMMENT_EDITOR_ENABLED_PREFERENCE_KEY, true);
 }
 
 export function readerMarksPersist(preferences: PreferenceReader): boolean {
@@ -253,9 +239,6 @@ export function migrateInteractionPreferences(
   if (!preferences.has(PICKER_MOUSE_ENABLED_PREFERENCE_KEY)) {
     preferences.set(PICKER_MOUSE_ENABLED_PREFERENCE_KEY, !existingInstall);
   }
-  if (!preferences.has(NOTE_EDITOR_ENABLED_PREFERENCE_KEY)) {
-    preferences.set(NOTE_EDITOR_ENABLED_PREFERENCE_KEY, existingInstall);
-  }
   preferences.set('interaction.defaultsVersion', 1);
 }
 
@@ -271,7 +254,6 @@ export function migrateBindingPreferences(preferences: PreferenceWriter): void {
         ? migrateBindingModeOverrides(currentActions)
         : migrateLegacyBindingOverrides(currentActions);
   let migrated = canonical;
-  if (version < 9) migrated = migrateNoteBindingOverrides(migrated);
   if (version < 10) migrated = migrateFrozenKeymapOverrides(migrated);
   if (version < 11) migrated = migrateSemanticKeymapOverrides(migrated);
   if (version < 12) migrated = migrateMainDirectPrefixOverrides(migrated);
@@ -297,15 +279,6 @@ export function scrollModeFromPreferences(preferences: PreferenceReader): Scroll
 
 /** Migrates retired Reader preferences before runtime consumers read canonical values. */
 export function migrateReaderPreferences(preferences: PreferenceWriter): void {
-  if (preferences.has?.(LEGACY_READER_INSERT_MODE_ENABLED_PREFERENCE_KEY)) {
-    if (!preferences.has(ANNOTATION_COMMENT_EDITOR_ENABLED_PREFERENCE_KEY)) {
-      preferences.set(
-        ANNOTATION_COMMENT_EDITOR_ENABLED_PREFERENCE_KEY,
-        preferences.get(LEGACY_READER_INSERT_MODE_ENABLED_PREFERENCE_KEY, true),
-      );
-    }
-    preferences.clear(LEGACY_READER_INSERT_MODE_ENABLED_PREFERENCE_KEY);
-  }
   const configured = preferences.get(READER_SCROLL_MODE_PREFERENCE_KEY, '');
   if (isScrollMode(configured) || !preferences.has?.(LEGACY_SMOOTH_SCROLL_PREFERENCE_KEY)) return;
   preferences.set(

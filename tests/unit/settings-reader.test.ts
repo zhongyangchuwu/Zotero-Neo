@@ -3,7 +3,6 @@ import { beforeEach, describe, expect, it, vi } from 'vitest';
 import type { PreferenceStore } from '../../src/core/preference-store';
 import {
   READER_DEFAULT_HIGHLIGHT_COLOR_PREFERENCE_KEY as COLOR,
-  ANNOTATION_COMMENT_EDITOR_ENABLED_PREFERENCE_KEY as COMMENT,
   READER_MARKS_PERSIST_PREFERENCE_KEY as MARKS,
   READER_SCROLL_MODE_PREFERENCE_KEY as MODE,
   READER_VISUAL_MODE_ENABLED_PREFERENCE_KEY as VISUAL,
@@ -90,12 +89,10 @@ describe('Reader Settings', () => {
   it('writes preferences immediately, reports failures, observes external writes and releases observers', () => {
     const { page, preferences, changed } = mount();
     page.dispatch({ type: 'visual', value: false });
-    page.dispatch({ type: 'comment', value: false });
     page.dispatch({ type: 'marks', value: true });
     page.dispatch({ type: 'color', value: 'purple' });
     expect(preferences.writes).toEqual([
       [VISUAL, false],
-      [COMMENT, false],
       [MARKS, true],
       [COLOR, 'purple'],
     ]);

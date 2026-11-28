@@ -62,13 +62,10 @@
     ],
     "notes": [
       "notes layout navigation preview creation and open targets",
-      "context note Normal and Insert modes",
-      "standalone note Normal and Insert modes",
-      "Note Normal H/L tab switching preserves lowercase h/l motions",
-      "note motions operators text object line operations paste undo and redo",
-      "editable text receives ordinary input without interception",
-      "note listener follows editor replacement and cleans up",
-      "Note Normal colon command palette uses the main action layer"
+      "Main and Reader Space-f-n Note picker with shared navigation history",
+      "native typing, IME, paste, undo and Escape in Main and Reader notes and independent note windows",
+      "Main and Reader note link gestures survive editor replacement and clean up on close",
+      "Ctrl-h/j/k/l stays native when directional focus cannot move to another panel"
     ],
     "preferences": [
       "preference pane opens without script errors",

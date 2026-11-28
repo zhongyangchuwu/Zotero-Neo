@@ -10,18 +10,11 @@ import type {
 } from '../../src/core/contracts';
 import { BuiltinModuleRuntime } from '../../src/core/module-runtime';
 import { BUILTIN_MODULES } from '../../src/modules';
-import {
-  LANGUAGE_PREFERENCE_KEY,
-  NOTE_EDITOR_ENABLED_PREFERENCE_KEY,
-} from '../../src/core/preferences';
+import { LANGUAGE_PREFERENCE_KEY } from '../../src/core/preferences';
 import { KEY_GUIDE_CONFIG } from '../../src/input/key-guide-config';
 import { DEFAULT_BINDINGS, resolveBindings } from '../../src/input/bindings';
-import { InputRuntime } from '../../src/input/runtime';
 import { LibraryNavigation } from '../../src/modules/library/navigation';
 
-import { NoteEditor } from '../../src/main/note-editor';
-import { NoteSurfaceRuntime } from '../../src/main/note-runtime';
-import { NoteEditing } from '../../src/modules/notes/editor';
 import { createMainWindowController as composeMainWindowController } from '../../src/main/controller';
 import { MainFocusOwnership } from '../../src/main/focus-ownership';
 import { ReaderSession, createReaderController } from '../../src/reader/controller';
@@ -888,578 +881,141 @@ describe('directional pane focus', () => {
     expect(active).toBe(items);
   });
 
-  it('leaves Ctrl-h native when no reader target exists and consumes it after reader focus succeeds', () => {
-    const originalZotero = Reflect.get(globalThis, 'Zotero');
-    const focusReader = vi.fn();
-    const document = {
-      activeElement: null,
-      getElementById: () => null,
-      querySelector: () => null,
-    } as unknown as Document;
-    const window = {
-      document,
-      setTimeout,
-      clearTimeout,
-      Zotero_Tabs: { selectedID: 'reader-tab' },
-    } as unknown as MainWindow;
-    const session = {
-      note: new NoteSurfaceRuntime(window),
-    } as MainWindowSession;
-    const editor = new NoteEditor(
-      logger,
-      new MainNavigation(logger, () => {}),
-      () => DEFAULT_BINDINGS,
-      {
-        refresh: () => {},
-        clear: () => {},
-      },
-      () => null,
-      () => true,
-    );
-    const target = {
-      tagName: 'DIV',
-      localName: 'div',
-      isContentEditable: true,
-      parentElement: null,
-    } as unknown as EventTarget;
-    const keyEvent = () => {
-      const preventDefault = vi.fn();
-      const stopPropagation = vi.fn();
-      return {
-        event: {
-          key: 'h',
-          ctrlKey: true,
-          metaKey: false,
-          shiftKey: false,
-          target,
-          preventDefault,
-          stopPropagation,
-        } as unknown as KeyboardEvent,
-        preventDefault,
-        stopPropagation,
-      };
-    };
-    try {
-      Reflect.set(globalThis, 'Zotero', { Reader: { getByTabID: () => null } });
-      const missing = keyEvent();
-      editor.onKeyDown(missing.event, window, session, () => {});
-      expect(missing.preventDefault).not.toHaveBeenCalled();
-
-      Reflect.set(globalThis, 'Zotero', {
-        Reader: { getByTabID: () => ({ focus: focusReader }) },
-      });
-      const available = keyEvent();
-      editor.onKeyDown(available.event, window, session, () => {});
-      expect(focusReader).toHaveBeenCalledOnce();
-      expect(available.preventDefault).toHaveBeenCalledOnce();
-      expect(available.stopPropagation).toHaveBeenCalledOnce();
-    } finally {
-      if (originalZotero === undefined) Reflect.deleteProperty(globalThis, 'Zotero');
-      else Reflect.set(globalThis, 'Zotero', originalZotero);
-    }
-  });
-});
-
-describe('NoteEditor shared binding input', () => {
-  let originalComponents: unknown;
-  let originalServices: unknown;
-  beforeEach(() => {
-    originalComponents = Reflect.get(globalThis, 'Components');
-    originalServices = Reflect.get(globalThis, 'Services');
-    Reflect.set(globalThis, 'Services', { focus: { focusedWindow: null } });
-    Reflect.set(globalThis, 'Components', { utils: { isDeadWrapper: () => false } });
-  });
-  afterEach(() => {
-    if (originalComponents === undefined) Reflect.deleteProperty(globalThis, 'Components');
-    else Reflect.set(globalThis, 'Components', originalComponents);
-    if (originalServices === undefined) Reflect.deleteProperty(globalThis, 'Services');
-    else Reflect.set(globalThis, 'Services', originalServices);
-    vi.useRealTimers();
-  });
-
-  function harness(overrides: Readonly<Record<string, ActionId | null>> = {}) {
-    vi.useFakeTimers();
-    const main = {
-      setTimeout,
-      clearTimeout,
-      document: {
-        activeElement: null,
-        querySelector: () => null,
-        getElementById: () => null,
-        querySelectorAll: () => [frame],
-      },
-    } as unknown as MainWindow;
-    Reflect.set(main, 'getComputedStyle', () => ({ display: 'block', visibility: 'visible' }));
-    const document = {
-      body: { isContentEditable: true },
-      designMode: 'off',
-      addEventListener: () => {},
-      removeEventListener: () => {},
-      getSelection: () => null,
-      getElementById: () => null,
-      createElement: () => ({ id: '', textContent: '', remove: () => {} }),
-      head: { append: () => {} },
-      documentElement: { append: () => {}, classList: { toggle: () => {}, remove: () => {} } },
-    } as unknown as Document;
-    const editorWindow = {
-      document,
-      addEventListener: () => {},
-      removeEventListener: () => {},
-    } as unknown as Window;
-    const frame = {
-      contentWindow: editorWindow,
-      ownerDocument: main.document,
-      isConnected: true,
-      getBoundingClientRect: () => ({ width: 400, height: 300 }),
-    };
-    const target = {
-      tagName: 'DIV',
-      localName: 'div',
-      isContentEditable: true,
-      parentElement: null,
-      ownerDocument: document,
-    } as unknown as HTMLElement;
-    const session = {
-      window: main,
-      status: { textContent: '', style: { display: '', color: '', background: '' } },
-      cleanup: { add: () => {} },
-      note: new NoteSurfaceRuntime(main),
-    } as unknown as MainWindowSession;
-    const editing = new NoteEditing({ isCurrent: () => true, status: () => {} });
-    const bindings = resolveBindings(JSON.stringify(overrides));
-    const guide = { refresh: vi.fn(), clear: vi.fn() };
-    const editor = new NoteEditor(
-      logger,
-      new MainNavigation(logger, () => {}),
-      () => bindings,
-      guide,
-      () => editing,
-      () => true,
-    );
-    const sync = () => editor.sync(main, session, true);
-    sync();
-    const actions: [ActionId, number][] = [];
-    const press = (key: string, modifiers: Partial<KeyboardEvent> = {}) => {
-      const preventDefault = vi.fn();
-      const stopPropagation = vi.fn();
-      editor.onKeyDown(
-        {
-          key,
-          ctrlKey: false,
-          metaKey: false,
-          altKey: false,
-          shiftKey: false,
-          target,
-          preventDefault,
-          stopPropagation,
-          ...modifiers,
-        } as unknown as KeyboardEvent,
-        main,
-        session,
-        (action, count) => {
-          actions.push([action, count]);
-          return true;
+  it.each(['main', 'reader'] as const)(
+    'leaves native editing alone in a %s note and claims Ctrl-h only after focus moves',
+    (surface) => {
+      const host = pickerMainWindow();
+      const { window } = host;
+      let editorKeydown: EventListener | undefined;
+      const editorDocument = {
+        body: { isContentEditable: true },
+        defaultView: null,
+        addEventListener: (type: string, listener: EventListener) => {
+          if (type === 'keydown') editorKeydown = listener;
         },
-      );
-      return { preventDefault, stopPropagation };
-    };
-    return { editor, editing, session, target, main, actions, press, guide, sync };
-  }
-
-  it('resolves Note-scoped ambiguous leader remaps on continuation or timeout', () => {
-    const test = harness({
-      'note-normal:<Space>f': 'nextTab',
-      'note-normal:<Space>ff': 'previousTab',
-    });
-
-    test.press(' ');
-    test.press('f');
-    test.press('f');
-    expect(test.actions).toEqual([['previousTab', 0]]);
-    vi.advanceTimersByTime(KEY_GUIDE_CONFIG.idleTimeoutMs);
-    expect(test.actions).toEqual([['previousTab', 0]]);
-
-    test.press(' ');
-    test.press('f');
-    vi.advanceTimersByTime(KEY_GUIDE_CONFIG.idleTimeoutMs);
-    expect(test.actions).toEqual([
-      ['previousTab', 0],
-      ['nextTab', 0],
-    ]);
-    vi.useRealTimers();
-  });
-
-  it('uses one reducer state for local prefixes and counts', () => {
-    const test = harness();
-
-    test.press('3');
-    test.press('g');
-    expect(test.session.note.input.countBuffer).toBe('3');
-    expect(test.session.note.input.keyBuffer).toBe('g');
-
-    test.press('Escape');
-    expect(test.session.note.input.countBuffer).toBe('');
-    expect(test.session.note.input.keyBuffer).toBe('');
-    expect(test.actions).toEqual([]);
-    vi.useRealTimers();
-  });
-
-  it('invalidates an ambiguous timeout on close and starts later input clean', () => {
-    const test = harness({ 'note-normal:<Space>f': 'nextTab' });
-    test.press('2');
-    test.press(' ');
-    test.press('f');
-    test.editor.clear(test.session);
-    vi.advanceTimersByTime(KEY_GUIDE_CONFIG.idleTimeoutMs);
-    expect(test.actions).toEqual([]);
-    expect(test.session.note.input.keyBuffer).toBe('');
-    expect(test.session.note.input.countBuffer).toBe('');
-
-    test.sync();
-    test.press(' ');
-    test.press('f');
-    vi.advanceTimersByTime(KEY_GUIDE_CONFIG.idleTimeoutMs);
-    expect(test.actions).toEqual([['nextTab', 0]]);
-    vi.useRealTimers();
-  });
-
-  it('leaves a Note Normal leader pending across IME-owned Escape and Backspace', () => {
-    const test = harness();
-    test.press(' ');
-    test.press('f');
-    const escape = test.press('Escape', { isComposing: true });
-    const backspace = test.press('Backspace', { keyCode: 229 });
-    expect(escape.preventDefault).not.toHaveBeenCalled();
-    expect(backspace.preventDefault).not.toHaveBeenCalled();
-    expect(test.session.note.input.keyBuffer).toBe(' f');
-    test.press('Escape');
-    expect(test.session.note.input.keyBuffer).toBe('');
-    vi.useRealTimers();
-  });
-
-  it('keeps Note-local keys local while explicit global Note bindings dispatch externally', () => {
-    const test = harness();
-
-    const lowerH = test.press('h');
-    expect(lowerH.preventDefault).not.toHaveBeenCalled();
-    expect(test.actions).toEqual([]);
-
-    test.press('H');
-    expect(test.actions).toEqual([['previousTab', 0]]);
-
-    const retired = test.press('J');
-    expect(retired.preventDefault).not.toHaveBeenCalled();
-    expect(test.actions).toEqual([['previousTab', 0]]);
-    vi.useRealTimers();
-  });
-
-  it('keeps unbound Insert text native while Escape returns to Note Normal', () => {
-    const test = harness();
-
-    test.press('i');
-    expect(test.editing.mode).toBe('insert');
-
-    const native = test.press('f');
-    expect(native.preventDefault).not.toHaveBeenCalled();
-    expect(native.stopPropagation).not.toHaveBeenCalled();
-
-    const escape = test.press('Escape');
-    expect(test.editing.mode).toBe('normal');
-    expect(escape.preventDefault).toHaveBeenCalledOnce();
-    vi.useRealTimers();
-  });
-
-  it('leaves IME-owned Insert keydowns native, including Escape during composition', () => {
-    const test = harness();
-
-    test.press('i');
-    expect(test.editing.mode).toBe('insert');
-
-    const composingEscape = test.press('Escape', { isComposing: true });
-    expect(test.editing.mode).toBe('insert');
-    expect(composingEscape.preventDefault).not.toHaveBeenCalled();
-    expect(composingEscape.stopPropagation).not.toHaveBeenCalled();
-
-    const process = test.press('Process', { keyCode: 229 });
-    expect(test.editing.mode).toBe('insert');
-    expect(process.preventDefault).not.toHaveBeenCalled();
-    expect(process.stopPropagation).not.toHaveBeenCalled();
-    vi.useRealTimers();
-  });
-
-  it('launches the Note command palette action without propagating a count', () => {
-    const test = harness();
-    test.press('3');
-    const colon = test.press(':');
-
-    expect(test.actions).toEqual([['openCommandPalette', 0]]);
-    expect(colon.preventDefault).toHaveBeenCalledOnce();
-    expect(test.session.note.input.countBuffer).toBe('');
-    vi.useRealTimers();
-  });
-
-  it('keeps Ctrl-h native when no reader target exists and consumes after reader focus succeeds', () => {
-    const originalZotero = Reflect.get(globalThis, 'Zotero');
-    const focusReader = vi.fn();
-    const test = harness();
-    Reflect.set(test.main, 'Zotero_Tabs', { selectedID: 'reader-tab' });
-    try {
-      Reflect.set(globalThis, 'Zotero', { Reader: { getByTabID: () => null } });
-      const missing = test.press('h', { ctrlKey: true });
-      expect(missing.preventDefault).not.toHaveBeenCalled();
-
-      Reflect.set(globalThis, 'Zotero', {
-        Reader: { getByTabID: () => ({ focus: focusReader }) },
+        removeEventListener: (type: string, listener: EventListener) => {
+          if (type === 'keydown' && editorKeydown === listener) editorKeydown = undefined;
+        },
+      } as unknown as Document;
+      const editor = { document: editorDocument } as Window;
+      Reflect.set(editorDocument, 'defaultView', editor);
+      const frame = Object.assign(window.document.createElement('iframe'), {
+        contentWindow: editor,
+        getBoundingClientRect: () => ({
+          left: 400,
+          right: 600,
+          top: 0,
+          bottom: 300,
+          width: 200,
+          height: 300,
+        }),
       });
-      const available = test.press('h', { ctrlKey: true });
-      expect(focusReader).toHaveBeenCalledOnce();
-      expect(available.preventDefault).toHaveBeenCalledOnce();
-    } finally {
-      if (originalZotero === undefined) Reflect.deleteProperty(globalThis, 'Zotero');
-      else Reflect.set(globalThis, 'Zotero', originalZotero);
-      vi.useRealTimers();
-    }
-  });
-});
+      const text = {
+        nodeType: 1,
+        tagName: 'DIV',
+        localName: 'div',
+        ownerDocument: editorDocument,
+        isContentEditable: true,
+        blur: vi.fn(),
+      };
+      const destination = Object.assign(window.document.createElement('div'), {
+        getBoundingClientRect: () => ({
+          left: 0,
+          right: 200,
+          top: 0,
+          bottom: 300,
+          width: 200,
+          height: 300,
+        }),
+      });
+      let canFocus = false;
+      const focus = { focusedWindow: editor };
+      const readerWindow = {} as Window;
+      const focusPane = vi.fn(() => {
+        if (!canFocus) return;
+        if (surface === 'reader') focus.focusedWindow = readerWindow;
+        else Reflect.set(window.document, 'activeElement', destination);
+      });
+      Reflect.set(destination, 'focus', focusPane);
+      Reflect.set(window.document, 'activeElement', frame);
+      Reflect.set(window.document, 'querySelectorAll', () => (surface === 'main' ? [frame] : []));
+      Reflect.set(window, 'ZoteroContextPane', {
+        context: { activeEditor: { _iframe: frame } },
+      });
+      if (surface === 'main')
+        Reflect.set(window, 'ZoteroPane', { itemsView: { domEl: destination } });
+      vi.stubGlobal('Services', { focus });
+      vi.stubGlobal('Zotero', {
+        initialized: false,
+        Reader: { getByTabID: () => (surface === 'reader' ? { focus: focusPane } : null) },
+      });
+      const forwardKey = vi.fn();
+      const controller = createController({
+        preferences: {
+          has: () => false,
+          get: <T extends boolean | number | string>(_key: string, fallback: T): T => fallback,
+          set: () => {},
+          clear: () => {},
+        },
+        logger,
+        reader: {
+          rescan: () => {},
+          deactivateInactive: () => {},
+          forwardKey,
+          captureJumpLocation: () => null,
+          restoreJumpLocation: async () => null,
+        },
+      });
 
-describe('Note contextual Open', () => {
-  it('opens the Note parent rather than an unrelated Main selected item', async () => {
-    const originalZotero = Reflect.get(globalThis, 'Zotero');
-    const originalServices = Reflect.get(globalThis, 'Services');
-    const originalComponents = Reflect.get(globalThis, 'Components');
-    const host = pickerMainWindow();
-    let scanNote: () => void = () => {
-      throw new Error('Expected Note lifecycle scan');
-    };
-    Reflect.set(host.window, 'setInterval', (callback: () => void) => {
-      scanNote = callback;
-      return 0;
-    });
-    const pdf = {
-      id: 24,
-      libraryID: 1,
-      isAttachment: () => true,
-      isNote: () => false,
-    } as Zotero.Item;
-    const paper = {
-      id: 21,
-      libraryID: 1,
-      isAttachment: () => false,
-      isNote: () => false,
-      getBestAttachment: async () => pdf,
-      getAttachments: () => [],
-      getField: () => '',
-    } as unknown as Zotero.Item;
-    const note = {
-      id: 22,
-      libraryID: 1,
-      parentItemID: paper.id,
-      isAttachment: () => false,
-      isNote: () => true,
-    } as Zotero.Item;
-    const other = { id: 23, libraryID: 1, isAttachment: () => true } as Zotero.Item;
-    const viewAttachment = vi.fn();
-    const selectItem = vi.fn();
-    const editorDocument = {
-      body: { isContentEditable: true },
-      designMode: 'off',
-      head: { append: () => {} },
-      documentElement: { classList: { toggle: () => {}, remove: () => {} } },
-      getElementById: () => null,
-      createElement: () => ({ id: '', textContent: '', remove: () => {} }),
-      addEventListener: () => {},
-      removeEventListener: () => {},
-    } as unknown as Document;
-    let noteKeydown: EventListener | undefined;
-    const editorWindow = {
-      document: editorDocument,
-      addEventListener: (name: string, listener: EventListener) => {
-        if (name === 'keydown') noteKeydown = listener;
-      },
-      removeEventListener: () => {},
-    } as unknown as Window;
-    const frame = {
-      contentWindow: editorWindow,
-      ownerDocument: host.window.document,
-      isConnected: true,
-      getBoundingClientRect: () => ({ width: 400, height: 300 }),
-    };
-    Reflect.set(host.window, 'getComputedStyle', () => ({
-      display: 'block',
-      visibility: 'visible',
-    }));
-    const target = {
-      nodeType: 1,
-      tagName: 'DIV',
-      localName: 'div',
-      isContentEditable: true,
-      parentElement: null,
-      ownerDocument: editorDocument,
-    } as unknown as HTMLElement;
-    const noteEditor: {
-      item?: Zotero.Item;
-      contains(node: unknown): boolean;
-      _iframe: typeof frame;
-    } = {
-      item: note,
-      contains: (node) => node === target,
-      _iframe: frame,
-    };
-    Reflect.set(host.window.document, 'activeElement', target);
-    Reflect.set(host.window, 'ZoteroContextPane', { context: { activeEditor: noteEditor } });
-    Reflect.set(host.window, 'ZoteroPane', {
-      getSelectedItems: () => [other],
-      viewAttachment,
-      selectItem,
-    });
-    Reflect.set(globalThis, 'Zotero', {
-      Items: {
-        get: (id: number) =>
-          id === paper.id ? paper : id === note.id ? note : id === pdf.id ? pdf : other,
-      },
-      Reader: { getByTabID: () => null },
-      locale: 'en-US',
-      initialized: false,
-    });
-    Reflect.set(globalThis, 'Services', { focus: { focusedWindow: editorWindow } });
-    Reflect.set(globalThis, 'Components', { utils: { isDeadWrapper: () => false } });
-    const controller = createController({
-      preferences: {
-        has: (key) => key === 'noteEditor.enabled',
-        get: <T>(key: string, fallback: T): T =>
-          key === 'noteEditor.enabled' ? (true as T) : fallback,
-        set: () => {},
-        clear: () => {},
-      },
-      logger,
-      reader: {
-        rescan: () => {},
-        deactivateInactive: () => {},
-        forwardKey: () => {},
-        captureJumpLocation: () => null,
-        restoreJumpLocation: async () => null,
-      },
-    } as Omit<MainWindowControllerDependencies, 'modules'>);
-    try {
-      controller.addWindow(host.window);
-      const pressNote = (key: string): void => {
-        noteKeydown?.({
-          key,
-          target,
-          ctrlKey: false,
-          metaKey: false,
-          altKey: false,
-          shiftKey: false,
-          preventDefault: vi.fn(),
-          stopPropagation: vi.fn(),
-        } as unknown as Event);
+      const press = (fields: Partial<KeyboardEvent>) => {
+        const preventDefault = vi.fn();
+        const stopPropagation = vi.fn();
+        const event = {
+          ...fields,
+          target: text,
+          currentTarget: editorDocument,
+          preventDefault,
+          stopPropagation,
+        } as unknown as KeyboardEvent;
+        host.keydown(event);
+        editorKeydown?.(event);
+        return { preventDefault, stopPropagation };
       };
-      pressNote(':');
-      await vi.waitFor(() =>
-        expect(host.bodyChildren.some((child) => child.id === 'zv-picker-overlay')).toBe(true),
-      );
-      const overlay = host.bodyChildren.find((child) => child.id === 'zv-picker-overlay');
-      const view = nativeHosts.find(
-        (entry) => entry.root.parentElement === overlay && !entry.disposed,
-      );
-      if (!view) throw new Error('Expected Note command palette host');
-      await vi.waitFor(() => expect((view.model as PickerReactModel).loading).toBe(false));
-      const input = view.parts.get('query') as HTMLInputElement & { emit(type: string): void };
-      const results = view.parts.get('results')!;
-      input.value = 'mainOpenPDF';
-      input.emit('input');
-      await vi.waitFor(() => expect((view.model as PickerReactModel).rows).toHaveLength(1));
-      host.keydown({
-        key: 'Enter',
-        target: results,
-        ctrlKey: false,
-        metaKey: false,
-        altKey: false,
-        shiftKey: false,
-        preventDefault: vi.fn(),
-        stopPropagation: vi.fn(),
-      } as unknown as Event);
-      await vi.waitFor(() => expect(viewAttachment).toHaveBeenCalledWith(pdf.id));
-      expect(viewAttachment).toHaveBeenCalledTimes(1);
-      expect(viewAttachment).not.toHaveBeenCalledWith(other.id);
-      Reflect.set(host.window.document, 'activeElement', target);
-      pressNote(':');
-      await vi.waitFor(() =>
-        expect(host.bodyChildren.some((child) => child.id === 'zv-picker-overlay')).toBe(true),
-      );
-      const showOverlay = host.bodyChildren.find((child) => child.id === 'zv-picker-overlay');
-      const showView = nativeHosts.find(
-        (entry) => entry.root.parentElement === showOverlay && !entry.disposed,
-      );
-      if (!showView) throw new Error('Expected Note Show in Library host');
-      await vi.waitFor(() => expect((showView.model as PickerReactModel).loading).toBe(false));
-      const showInput = showView.parts.get('query') as HTMLInputElement & {
-        emit(type: string): void;
-      };
-      const showResults = showView.parts.get('results')!;
-      showInput.value = 'showInLibrary';
-      showInput.emit('input');
-      await vi.waitFor(() =>
-        expect((showView.model as PickerReactModel).previewBody).toContain('showInLibrary'),
-      );
-      host.keydown({
-        key: 'Enter',
-        target: showResults,
-        ctrlKey: false,
-        metaKey: false,
-        altKey: false,
-        shiftKey: false,
-        preventDefault: vi.fn(),
-        stopPropagation: vi.fn(),
-      } as unknown as Event);
-      await vi.waitFor(() => expect(selectItem).toHaveBeenCalledWith(paper.id));
-      expect(selectItem).toHaveBeenCalledTimes(1);
-      expect(selectItem).not.toHaveBeenCalledWith(other.id);
-
-      Reflect.set(host.window.document, 'activeElement', target);
-      noteEditor.item = undefined;
-      Reflect.set(globalThis, 'Services', { focus: { focusedWindow: editorWindow } });
-      scanNote();
-      pressNote(':');
-      await vi.waitFor(() =>
-        expect(host.bodyChildren.some((child) => child.id === 'zv-picker-overlay')).toBe(true),
-      );
-      const missingOverlay = host.bodyChildren.find((child) => child.id === 'zv-picker-overlay');
-      const missingView = nativeHosts.find(
-        (entry) => entry.root.parentElement === missingOverlay && !entry.disposed,
-      );
-      if (!missingView) throw new Error('Expected missing-context command palette host');
-      await vi.waitFor(() => expect((missingView.model as PickerReactModel).loading).toBe(false));
-      const missingInput = missingView.parts.get('query') as HTMLInputElement & {
-        emit(type: string): void;
-      };
-      const missingResults = missingView.parts.get('results')!;
-      missingInput.value = 'mainOpenPDF';
-      missingInput.emit('input');
-      await vi.waitFor(() => expect((missingView.model as PickerReactModel).rows).toHaveLength(1));
-      host.keydown({
-        key: 'Enter',
-        target: missingResults,
-        ctrlKey: false,
-        metaKey: false,
-        altKey: false,
-        shiftKey: false,
-        preventDefault: vi.fn(),
-        stopPropagation: vi.fn(),
-      } as unknown as Event);
-      await Promise.resolve();
-      expect(viewAttachment).toHaveBeenCalledTimes(1);
-      expect(viewAttachment).not.toHaveBeenCalledWith(other.id);
-    } finally {
-      controller.shutdown();
-      if (originalZotero === undefined) Reflect.deleteProperty(globalThis, 'Zotero');
-      else Reflect.set(globalThis, 'Zotero', originalZotero);
-      if (originalServices === undefined) Reflect.deleteProperty(globalThis, 'Services');
-      else Reflect.set(globalThis, 'Services', originalServices);
-      if (originalComponents === undefined) Reflect.deleteProperty(globalThis, 'Components');
-      else Reflect.set(globalThis, 'Components', originalComponents);
-    }
-  });
+      try {
+        controller.addWindow(window);
+        expect(editorKeydown).toBeDefined();
+        for (const fields of [
+          { key: 'i' },
+          { key: 'j' },
+          { key: ' ' },
+          { key: ':' },
+          { key: 'Escape' },
+          { key: 'z', ctrlKey: true },
+          { key: 'v', ctrlKey: true },
+          { key: 'h', ctrlKey: true, isComposing: true },
+        ]) {
+          const event = press(fields);
+          expect(event.preventDefault).not.toHaveBeenCalled();
+          expect(event.stopPropagation).not.toHaveBeenCalled();
+        }
+        expect(focusPane).not.toHaveBeenCalled();
+        expect(text.blur).not.toHaveBeenCalled();
+        expect(forwardKey).not.toHaveBeenCalled();
+        expect(press({ key: 'h', ctrlKey: true }).preventDefault).not.toHaveBeenCalled();
+        expect(focusPane).toHaveBeenCalledOnce();
+        canFocus = true;
+        const moved = press({ key: 'h', ctrlKey: true });
+        if (surface === 'reader') expect(focus.focusedWindow).toBe(readerWindow);
+        else expect(window.document.activeElement).toBe(destination);
+        expect(moved.preventDefault).toHaveBeenCalledOnce();
+        expect(moved.stopPropagation).toHaveBeenCalledOnce();
+      } finally {
+        controller.shutdown();
+        vi.unstubAllGlobals();
+      }
+      expect(editorKeydown).toBeUndefined();
+    },
+  );
 });
 
 describe('Main startup focus handoff', () => {
@@ -2980,8 +2536,7 @@ describe('repeated tab switching', () => {
     const dependencies = {
       preferences: {
         has: () => false,
-        get: (key: string, fallback: boolean | number | string) =>
-          key === NOTE_EDITOR_ENABLED_PREFERENCE_KEY ? false : fallback,
+        get: (_key: string, fallback: boolean | number | string) => fallback,
         set: () => {},
         clear: () => {},
       },
@@ -3037,8 +2592,7 @@ describe('repeated tab switching', () => {
     const dependencies = {
       preferences: {
         has: () => false,
-        get: (key: string, fallback: boolean | number | string) =>
-          key === NOTE_EDITOR_ENABLED_PREFERENCE_KEY ? false : fallback,
+        get: (_key: string, fallback: boolean | number | string) => fallback,
         set: () => {},
         clear: () => {},
       },
@@ -3107,17 +2661,15 @@ describe('main pending-prefix key guide', () => {
         preferences: {
           has: () => false,
           get: (key, fallback) =>
-            key === NOTE_EDITOR_ENABLED_PREFERENCE_KEY
-              ? false
-              : key === 'bindings'
-                ? JSON.stringify({
-                    'main-normal:x': 'nextTab',
-                    'main-normal:xy': 'previousTab',
-                    'main-normal:q': 'focusReaderSplitLeft',
-                    'main-normal:f': 'nextTab',
-                    'main-normal:ff': 'previousTab',
-                  })
-                : fallback,
+            key === 'bindings'
+              ? JSON.stringify({
+                  'main-normal:x': 'nextTab',
+                  'main-normal:xy': 'previousTab',
+                  'main-normal:q': 'focusReaderSplitLeft',
+                  'main-normal:f': 'nextTab',
+                  'main-normal:ff': 'previousTab',
+                })
+              : fallback,
           set: () => {},
           clear: () => {},
         },
@@ -3255,12 +2807,7 @@ describe('main pending-prefix key guide', () => {
     const controller = createController({
       preferences: {
         has: () => false,
-        get: (key, fallback) =>
-          key === NOTE_EDITOR_ENABLED_PREFERENCE_KEY
-            ? false
-            : key === 'keyGuide.fontSizePx'
-              ? 18
-              : fallback,
+        get: (key, fallback) => (key === 'keyGuide.fontSizePx' ? 18 : fallback),
         set: () => {},
         clear: () => {},
       },
@@ -3378,8 +2925,7 @@ describe('Reader Show in Library and owner routing', () => {
     const dependencies = {
       preferences: {
         has: () => false,
-        get: (key: string, fallback: boolean | number | string) =>
-          key === NOTE_EDITOR_ENABLED_PREFERENCE_KEY ? false : fallback,
+        get: (_key: string, fallback: boolean | number | string) => fallback,
         set: () => {},
         clear: () => {},
       },
@@ -3950,8 +3496,7 @@ describe('Main CurrentTarget routing', () => {
     const controller = createController({
       preferences: {
         has: () => false,
-        get: (key: string, fallback: boolean | number | string) =>
-          key === NOTE_EDITOR_ENABLED_PREFERENCE_KEY ? false : fallback,
+        get: (_key: string, fallback: boolean | number | string) => fallback,
         set: () => {},
         clear: () => {},
       },
@@ -4122,8 +3667,7 @@ describe('collection navigation repeat pacing', () => {
     const dependencies = {
       preferences: {
         has: () => false,
-        get: (key: string, fallback: boolean | number | string) =>
-          key === NOTE_EDITOR_ENABLED_PREFERENCE_KEY ? false : fallback,
+        get: (_key: string, fallback: boolean | number | string) => fallback,
         set: () => {},
         clear: () => {},
       },

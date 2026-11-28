@@ -5,18 +5,15 @@ import { advanceInput } from '../../src/input/engine';
 import { DEFAULT_BINDINGS, bindingsForMode } from '../../src/input/bindings';
 
 import {
-  ANNOTATION_COMMENT_EDITOR_ENABLED_PREFERENCE_KEY,
   BINDING_SCHEMA_VERSION,
   DEFAULT_TAG_SEPARATOR,
   KEY_GUIDE_DELAY_PREFERENCE_KEY,
   KEY_GUIDE_ENABLED_PREFERENCE_KEY,
   KEY_GUIDE_FONT_SIZE_PREFERENCE_KEY,
   LANGUAGE_PREFERENCE_KEY,
-  NOTE_EDITOR_ENABLED_PREFERENCE_KEY,
   PICKER_MOUSE_ENABLED_PREFERENCE_KEY,
   READER_SCROLL_MODE_PREFERENCE_KEY,
   TAG_SEPARATOR_PREFERENCE_KEY,
-  annotationCommentEditorEnabled,
   bindingsFromPreferences,
   configuredNeoLanguage,
   keyGuideConfig,
@@ -26,7 +23,6 @@ import {
   normalizeKeyGuideNumber,
   migrateReaderPreferences,
   normalizeReaderScrollNumber,
-  noteEditorEnabled,
   pickerMouseEnabled,
   readerDefaultHighlightColor,
   readerMarksPersist,
@@ -229,59 +225,22 @@ describe('scroll preferences', () => {
   });
 });
 
-describe('annotation comment editor preferences', () => {
-  it('defaults on and reads only the canonical feature preference', () => {
-    const fresh = new TestPreferences({});
-    migrateReaderPreferences(fresh);
-    expect(annotationCommentEditorEnabled(fresh)).toBe(true);
-    expect(fresh.has('mode.insert.enabled')).toBe(false);
+describe('retired editor preferences', () => {
+  it('ignores both former feature flags and preserves current interaction preferences', () => {
+    const preferences = new TestPreferences({
+      'noteEditor.enabled': true,
+      'annotationCommentEditor.enabled': false,
+      'mode.insert.enabled': true,
+      'scroll.mode': 'step',
+      'picker.mouse.enabled': true,
+    });
 
-    const preferences = new TestPreferences({ 'mode.insert.enabled': false });
-    expect(annotationCommentEditorEnabled(preferences)).toBe(true);
-    preferences.set(ANNOTATION_COMMENT_EDITOR_ENABLED_PREFERENCE_KEY, false);
-    expect(annotationCommentEditorEnabled(preferences)).toBe(false);
-  });
-
-  it.each([false, true])('migrates legacy enabled=%s and clears the retired key', (enabled) => {
-    const preferences = new TestPreferences({ 'mode.insert.enabled': enabled });
+    migrateInteractionPreferences(preferences);
     migrateReaderPreferences(preferences);
-    expect(preferences.has(ANNOTATION_COMMENT_EDITOR_ENABLED_PREFERENCE_KEY)).toBe(true);
-    expect(annotationCommentEditorEnabled(preferences)).toBe(enabled);
-    expect(preferences.has('mode.insert.enabled')).toBe(false);
 
-    preferences.set(ANNOTATION_COMMENT_EDITOR_ENABLED_PREFERENCE_KEY, !enabled);
-    migrateReaderPreferences(preferences);
-    expect(annotationCommentEditorEnabled(preferences)).toBe(!enabled);
-  });
-
-  it.each([false, true])(
-    'preserves canonical enabled=%s over a conflicting legacy value',
-    (enabled) => {
-      const preferences = new TestPreferences({
-        [ANNOTATION_COMMENT_EDITOR_ENABLED_PREFERENCE_KEY]: enabled,
-        'mode.insert.enabled': !enabled,
-        'scroll.mode': 'follow',
-      });
-      migrateReaderPreferences(preferences);
-      expect(annotationCommentEditorEnabled(preferences)).toBe(enabled);
-      expect(preferences.has('mode.insert.enabled')).toBe(false);
-      migrateReaderPreferences(preferences);
-      expect(annotationCommentEditorEnabled(preferences)).toBe(enabled);
-    },
-  );
-
-  it('retains the old value when canonical persistence fails so migration can resume', () => {
-    const preferences = new TestPreferences({ 'mode.insert.enabled': false });
-    preferences.failKey = ANNOTATION_COMMENT_EDITOR_ENABLED_PREFERENCE_KEY;
-    expect(() => migrateReaderPreferences(preferences)).toThrow('Write failed');
-    expect(preferences.has(ANNOTATION_COMMENT_EDITOR_ENABLED_PREFERENCE_KEY)).toBe(false);
-    expect(preferences.has('mode.insert.enabled')).toBe(true);
-    expect(preferences.get('mode.insert.enabled', true)).toBe(false);
-
-    preferences.failKey = null;
-    migrateReaderPreferences(preferences);
-    expect(annotationCommentEditorEnabled(preferences)).toBe(false);
-    expect(preferences.has('mode.insert.enabled')).toBe(false);
+    expect(preferences.writes).toEqual([['interaction.defaultsVersion', 1]]);
+    expect(scrollModeFromPreferences(preferences)).toBe('step');
+    expect(pickerMouseEnabled(preferences)).toBe(true);
   });
 });
 
@@ -336,15 +295,15 @@ describe('binding preferences', () => {
       'main-normal:j': null,
       'main-select:x': 'mainToggleSelection',
       'main-select:j': null,
-      'note-normal:x': 'noteDeleteLine',
-      'note-normal:j': null,
-      'note-insert:<C-x>': 'exitMode',
-      'note-insert:<Esc>': null,
     };
     const preferences = new TestPreferences({
       'bindings.schemaVersion': version,
       bindings: JSON.stringify({
         ...retained,
+        'note-normal:x': 'noteDeleteLine',
+        'note-normal:j': null,
+        'note-insert:<C-x>': 'exitMode',
+        'note-insert:<Esc>': null,
         'reader-insert:x': 'exitMode',
         'reader-insert:<Esc>': null,
         'insert:y': 'exitMode',
@@ -358,8 +317,6 @@ describe('binding preferences', () => {
     expect(Object.keys(resolved).some((key) => key.startsWith('reader-insert:'))).toBe(false);
     expect(resolved['reader-normal:j']).toBe('scrollUp');
     expect(resolved['reader-normal:k']).toBeUndefined();
-    expect(resolved['note-insert:<C-x>']).toBe('exitMode');
-    expect(resolved['note-insert:<Esc>']).toBeUndefined();
     const persisted = preferences.get('bindings', '');
     migrateBindingPreferences(preferences);
     expect(preferences.get('bindings', '')).toBe(persisted);
@@ -375,28 +332,28 @@ describe('binding preferences', () => {
   });
 
   it('leaves unrelated schema-16 binding storage unchanged', () => {
-    const raw = '{ "main-normal:x": "mainActivate", "note-insert:<Esc>": null }';
+    const raw = '{ "main-normal:x": "mainActivate" }';
     const preferences = new TestPreferences({ 'bindings.schemaVersion': 16, bindings: raw });
     migrateBindingPreferences(preferences);
     expect(preferences.get('bindings', '')).toBe(raw);
     expect(preferences.get('bindings.schemaVersion', 0)).toBe(BINDING_SCHEMA_VERSION);
   });
 
-  it('does not expose retired Insert bindings at runtime while keeping Note Insert', () => {
-    const bindings = bindingsFromPreferences(
-      new TestPreferences({
-        bindings: JSON.stringify({
-          'reader-insert:x': 'exitMode',
-          'insert:y': 'exitMode',
-          'note-insert:<C-x>': 'exitMode',
-        }),
+  it('silently ignores former editor shortcuts in a current-schema profile', () => {
+    const preferences = new TestPreferences({
+      'bindings.schemaVersion': BINDING_SCHEMA_VERSION,
+      bindings: JSON.stringify({
+        'reader-insert:x': 'exitMode',
+        'insert:y': 'exitMode',
+        'note-normal:x': 'findNotes',
+        'note-insert:<C-x>': 'exitMode',
+        'main-normal:x': 'noteDeleteLine',
+        'main-normal:<F12>': 'findNotes',
       }),
-    );
-    expect(bindings['reader-insert:x']).toBeUndefined();
-    expect(bindings['reader-insert:<Esc>']).toBeUndefined();
-    expect(bindings['insert:y']).toBeUndefined();
-    expect(bindings['note-insert:<C-x>']).toBe('exitMode');
-    expect(bindings['note-insert:<Esc>']).toBe('exitMode');
+    });
+    migrateBindingPreferences(preferences);
+    const bindings = bindingsFromPreferences(preferences);
+    expect(bindings).toEqual({ ...DEFAULT_BINDINGS, 'main-normal:<F12>': 'findNotes' });
   });
 
   it('merges valid custom bindings over the defaults', () => {
@@ -530,16 +487,12 @@ describe('binding preferences', () => {
       'main-normal:<Space>q': null,
       'main-normal:<Space>tf': null,
       'main-normal:custom-tab': 'switchTab',
-      'note-normal:<Space>,': null,
-      'note-normal:<Space>q': null,
       'reader-normal:<Space>,': null,
       'reader-normal:<Space>q': null,
     });
     const resolved = bindingsFromPreferences(preferences);
     expect(resolved['reader-normal:<Space>,']).toBeUndefined();
     expect(resolved['reader-normal:<Space>q']).toBeUndefined();
-    expect(resolved['note-normal:<Space>,']).toBeUndefined();
-    expect(resolved['note-normal:<Space>q']).toBeUndefined();
     expect(resolved['main-normal:<Space>,']).toBeUndefined();
     expect(resolved['main-normal:<Space>q']).toBeUndefined();
     expect(resolved['main-normal:<Space>tf']).toBeUndefined();
@@ -853,12 +806,8 @@ describe('interaction preference migration', () => {
     migrateBindingPreferences(preferences);
     migrateInteractionPreferences(preferences);
     expect(pickerMouseEnabled(preferences)).toBe(true);
-    expect(noteEditorEnabled(preferences)).toBe(false);
-
-    preferences.set(NOTE_EDITOR_ENABLED_PREFERENCE_KEY, true);
     preferences.set(PICKER_MOUSE_ENABLED_PREFERENCE_KEY, false);
     migrateInteractionPreferences(preferences);
-    expect(noteEditorEnabled(preferences)).toBe(true);
     expect(pickerMouseEnabled(preferences)).toBe(false);
   });
 
@@ -871,7 +820,6 @@ describe('interaction preference migration', () => {
     migrateBindingPreferences(preferences);
     migrateInteractionPreferences(preferences);
     expect(pickerMouseEnabled(preferences)).toBe(false);
-    expect(noteEditorEnabled(preferences)).toBe(true);
   });
 
   it.each([true, false])(
@@ -879,23 +827,20 @@ describe('interaction preference migration', () => {
     (value) => {
       const preferences = new TestPreferences({
         'bindings.schemaVersion': BINDING_SCHEMA_VERSION,
-        [NOTE_EDITOR_ENABLED_PREFERENCE_KEY]: value,
         [PICKER_MOUSE_ENABLED_PREFERENCE_KEY]: value,
       });
       migrateInteractionPreferences(preferences);
-      expect(noteEditorEnabled(preferences)).toBe(value);
       expect(pickerMouseEnabled(preferences)).toBe(value);
     },
   );
 
   it('can finish an interrupted migration without changing the original installation policy', () => {
     const preferences = new TestPreferences({ 'bindings.schemaVersion': BINDING_SCHEMA_VERSION });
-    preferences.failKey = NOTE_EDITOR_ENABLED_PREFERENCE_KEY;
+    preferences.failKey = 'interaction.defaultsVersion';
     expect(() => migrateInteractionPreferences(preferences)).toThrow('Write failed');
     preferences.failKey = null;
     migrateInteractionPreferences(preferences);
     expect(pickerMouseEnabled(preferences)).toBe(false);
-    expect(noteEditorEnabled(preferences)).toBe(true);
   });
 });
 

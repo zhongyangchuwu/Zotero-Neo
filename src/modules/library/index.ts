@@ -84,8 +84,8 @@ export interface LibraryModule {
   findItems(kind: 'all' | 'collection', surface: NavigationSurface): boolean;
   addByIdentifier(surface: 'main' | 'reader'): boolean;
   inspectMetadata(items: readonly Zotero.Item[], collection?: boolean): boolean;
-  yankCitekeys(targets: ItemTargetSet<'main'> | ItemTargetSet<'note'>): boolean;
-  openItem(item: Zotero.Item | null, surface: 'main' | 'note'): boolean;
+  yankCitekeys(targets: ItemTargetSet<'main'>): boolean;
+  openItem(item: Zotero.Item | null): boolean;
   activate(item: Zotero.Item | null): boolean;
   trash(request: LibraryTrashRequest, context: 'main-normal' | 'main-select'): boolean;
   restoreLastTrashed(): boolean;
@@ -236,10 +236,6 @@ export function createLibraryModule(host: ModuleHost, ports: LibraryModuleHost):
         all: bindFind('reader-normal', 'reader', 'all'),
         collection: bindFind('reader-normal', 'reader', 'collection'),
       },
-      note: {
-        all: bindFind('note-normal', 'note', 'all'),
-        collection: bindFind('note-normal', 'note', 'collection'),
-      },
     };
     const identifier = (context: BindingContext) =>
       host.bind<void>(scope, context, 'mainAddByIdentifier', () => {
@@ -256,18 +252,11 @@ export function createLibraryModule(host: ModuleHost, ports: LibraryModuleHost):
     const identifiers = { main: identifier('main-normal'), reader: identifier('reader-normal') };
     const copy = (targets: ItemTargetSet) =>
       status(batchStatus('citekeys', copyCitekeys(targets, ports.logger), ports.language()));
-    const yank = {
-      main: host.bind(scope, 'main-normal', 'mainYankCitekey', copy),
-      note: host.bind(scope, 'note-normal', 'mainYankCitekey', copy),
-    };
-    const open = (
-      item: Zotero.Item | null,
-      surface: 'main' | 'note',
-      action: 'mainOpenPDF' | 'mainActivate',
-    ) => {
+    const yank = host.bind<ItemTargetSet<'main'>>(scope, 'main-normal', 'mainYankCitekey', copy);
+    const open = (item: Zotero.Item | null, action: 'mainOpenPDF' | 'mainActivate') => {
       execute(
         { kind: 'action', action },
-        surface,
+        'main',
         {
           dispatch: 'serial-navigation',
           start: (attempt) => ({
@@ -279,15 +268,10 @@ export function createLibraryModule(host: ModuleHost, ports: LibraryModuleHost):
               ),
           }),
         },
-        surface === 'main' ? ports.panel() : undefined,
+        ports.panel(),
       );
     };
-    const openItems = {
-      main: bind<Zotero.Item | null>('mainOpenPDF', (item) => open(item, 'main', 'mainOpenPDF')),
-      note: host.bind<Zotero.Item | null>(scope, 'note-normal', 'mainOpenPDF', (item) =>
-        open(item, 'note', 'mainOpenPDF'),
-      ),
-    };
+    const openItem = bind<Zotero.Item | null>('mainOpenPDF', (item) => open(item, 'mainOpenPDF'));
     const activate = bind<Zotero.Item | null>('mainActivate', (item) => {
       if (ports.panel() === 'collections')
         execute(
@@ -296,7 +280,7 @@ export function createLibraryModule(host: ModuleHost, ports: LibraryModuleHost):
           ports.scopeActivation(),
           'collections',
         );
-      else open(item, 'main', 'mainActivate');
+      else open(item, 'mainActivate');
     });
     const trash = (request: LibraryTrashRequest): void => {
       void navigation
@@ -371,8 +355,8 @@ export function createLibraryModule(host: ModuleHost, ports: LibraryModuleHost):
       addByIdentifier: (surface) => identifiers[surface](),
       inspectMetadata: (items, collection = false) =>
         metadata[collection ? 'collection' : 'selected'](items),
-      yankCitekeys: (targets) => yank[targets.source](targets),
-      openItem: (item, surface) => openItems[surface](item),
+      yankCitekeys: yank,
+      openItem,
       activate,
       trash: (request, context) => trashBindings[context](request),
       restoreLastTrashed: () => restore(),

@@ -37,6 +37,9 @@ import type {
   SettingsTemplateCatalogPort,
 } from './settings-snapshots/ports';
 import { nativeObjectIdentity } from './platform/cross-compartment';
+import { rescueAnnotationCommentDrafts } from './platform/annotation-comment-drafts';
+import { alertChromeAction } from './platform/chrome-windows';
+import { t } from './i18n';
 
 export interface AddonContext {
   readonly id: string;
@@ -80,6 +83,7 @@ export class ZoteroNeoAddon implements ZoteroNeoController {
   #preferencesRegistered = false;
   #releaseNativeUI: (() => void) | null = null;
   #releaseMetadataReviewMenu: (() => void) | null = null;
+  #draftRescueStarted = false;
 
   constructor(preferences: ZoteroPreferenceStore) {
     this.#preferences = preferences;
@@ -233,6 +237,21 @@ export class ZoteroNeoAddon implements ZoteroNeoController {
       releaseSnapshots: this.#managedSnapshots.start(owner),
     });
     this.#main.addWindow(owner);
+    if (!this.#draftRescueStarted) {
+      this.#draftRescueStarted = true;
+      void rescueAnnotationCommentDrafts(async (path) => {
+        await Zotero.initializationPromise;
+        const current = Zotero.getMainWindow();
+        if (!this.#context || !current || current.closed)
+          throw new Error('Main window unavailable');
+        const language = neoCommandLanguage(this.#preferences, Zotero.locale ?? '');
+        alertChromeAction(
+          current,
+          t('comment.rescue.title', language),
+          t('comment.rescue.message', language).replace('{path}', () => path),
+        );
+      }).catch(() => this.#logger.debug('Could not complete old annotation draft rescue'));
+    }
   }
 
   removeFromWindow(window: MainWindow): void {

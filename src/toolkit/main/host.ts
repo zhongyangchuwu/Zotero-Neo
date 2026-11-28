@@ -4,6 +4,7 @@ import type { MainWindow } from '../../core/contracts';
 import type { TreeView } from './private-types';
 import type { ItemRef } from '../../core/item-ref';
 import { CleanupFailure } from '../../core/cleanup';
+import { isDeadObject } from '../../platform/cross-compartment';
 
 export type TagJson = _ZoteroTypes.Tags.TagJson;
 
@@ -177,7 +178,6 @@ type ItemCursorView = {
 };
 
 type ContextNoteEditor = {
-  readonly item?: Zotero.Item;
   readonly _iframe?: HTMLIFrameElement;
   contains?(node: Node | null): boolean;
 };
@@ -800,11 +800,10 @@ function activeContextNoteEditor(window: MainWindow): ContextNoteEditor | undefi
 }
 
 /** Mirrors Zotero's own focused-context-note test instead of treating any open note as active. */
-export function activeContextNoteItem(window: MainWindow): Zotero.Item | undefined {
+export function mainContextNoteFocused(window: MainWindow): boolean {
   const editor = activeContextNoteEditor(window);
   const active = window.document?.activeElement ?? null;
-  if (!editor?.item || !active || !editor.contains?.(active)) return undefined;
-  return editor.item;
+  return !!(editor && active && (active === editor._iframe || editor.contains?.(active)));
 }
 
 export function currentTagSelection(window: MainWindow): string[] {
@@ -831,9 +830,6 @@ export async function applyMainTagFilter(
   await pane.itemsView.setFilter('tags', new Set(tags));
   if (pane.tagSelector?.selectedTags) pane.tagSelector.selectedTags = new Set(tags);
   return pane.itemsView.objectRowCount;
-}
-export function activeContextEditorWindow(window: MainWindow): Window | undefined {
-  return activeContextNoteEditor(window)?._iframe?.contentWindow ?? undefined;
 }
 
 /** Preserve first-selected semantics, not the detached Scope Cursor. */
@@ -910,49 +906,17 @@ export function focusMainContextPane(window: MainWindow): boolean {
   return true;
 }
 
-export function mainNoteItemID(window: MainWindow, candidate: Window | null): number | null {
-  const editor = activeContextNoteEditor(window);
-  if (candidate && editor?._iframe?.contentWindow === candidate && editor.item?.id)
-    return editor.item.id;
-  const tab = selectedMainTabInfo(window);
-  const itemID = tab?.type?.startsWith('note') ? tab.data?.itemID : undefined;
-  return typeof itemID === 'number' && itemID > 0 ? itemID : null;
-}
-
-function likelyNoteWindow(
-  candidate: Window | null | undefined,
-  main: MainWindow,
-): candidate is Window {
-  if (
-    !candidate ||
-    candidate === main ||
-    ('PDFViewerApplication' in candidate && candidate.PDFViewerApplication)
-  )
-    return false;
-  const doc = candidate.document;
-  return !!(
-    doc.body?.isContentEditable ||
-    doc.querySelector('[contenteditable="true"],.ProseMirror,.editor-core,.editor') ||
-    doc.designMode.toLowerCase() === 'on'
-  );
-}
-
-/** Note editor discovery is host structure; bindings and modes remain business-owned. */
-export function mainNoteEditorWindow(main: MainWindow): Window | null {
+/** Visible editor frames in the Main window, including Zotero's active context editor. */
+export function mainNoteEditorWindows(main: MainWindow): Window[] {
   const frames = Array.from(
     main.document.querySelectorAll?.('browser,iframe') ?? [],
   ) as HTMLIFrameElement[];
   const contextFrame = activeContextNoteEditor(main)?._iframe;
   if (contextFrame && !frames.includes(contextFrame)) frames.push(contextFrame);
-  if (!frames.length) return null;
-  const focused =
-    typeof Services === 'undefined'
-      ? null
-      : (Services.focus?.focusedWindow as unknown as Window | null);
-  let first: Window | null = null;
+  const editors: Window[] = [];
   for (const frame of frames) {
-    if (frame.ownerDocument !== main.document || !frame.isConnected) continue;
-    const style = main.getComputedStyle(frame);
+    if (!frame.isConnected) continue;
+    const style = (frame.ownerDocument.defaultView ?? main).getComputedStyle?.(frame);
     if (!style) continue;
     if (
       style.display === 'none' ||
@@ -963,11 +927,14 @@ export function mainNoteEditorWindow(main: MainWindow): Window | null {
     const rect = frame.getBoundingClientRect();
     if (rect.width <= 0 || rect.height <= 0) continue;
     const candidate = frame.contentWindow;
-    if (!likelyNoteWindow(candidate, main)) continue;
-    if (candidate === focused) return candidate;
-    first ??= candidate;
+    if (!candidate || candidate === main || isDeadObject(candidate)) continue;
+    if (
+      frame === contextFrame ||
+      candidate.document?.querySelector?.('.primary-editor.ProseMirror')
+    )
+      editors.push(candidate);
   }
-  return first;
+  return editors;
 }
 
 /** Captures an invocation's focus baseline without leaking the native Quick Search node. */

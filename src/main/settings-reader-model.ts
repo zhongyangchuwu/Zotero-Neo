@@ -24,8 +24,6 @@ export interface ReaderPageModel {
     readonly input: string;
     readonly visual: string;
     readonly visualHint: string;
-    readonly comment: string;
-    readonly commentHint: string;
     readonly scrolling: string;
     readonly scrollingHint: string;
     readonly mode: string;
@@ -44,7 +42,6 @@ export interface ReaderPageModel {
     readonly off: string;
   };
   readonly visual: boolean;
-  readonly comment: boolean;
   readonly marks: boolean;
   readonly color: HighlightColorName;
   readonly scroll: ReaderScrollConfig;
@@ -53,7 +50,7 @@ export interface ReaderPageModel {
 }
 
 export type ReaderPageCommand =
-  | { readonly type: 'visual' | 'comment' | 'marks' | 'stop'; readonly value: boolean }
+  | { readonly type: 'visual' | 'marks' | 'stop'; readonly value: boolean }
   | { readonly type: 'mode'; readonly value: ScrollMode }
   | { readonly type: 'color'; readonly value: HighlightColorName }
   | { readonly type: 'number'; readonly setting: ReaderScrollNumberSetting; readonly value: string }

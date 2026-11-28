@@ -310,8 +310,6 @@ export class BuiltinModuleScope {
   available(context: BindingContext, action: ActionId): boolean {
     if (context === 'reader-select' && !this.enabled('reader-selection')) return false;
     if (context === 'main-select' && !this.enabled('worksets')) return false;
-    if ((context === 'note-normal' || context === 'note-insert') && !this.enabled('notes'))
-      return false;
     const contribution = actionContribution(context, action);
     if (!contribution) return this.isCurrent() && actionsForBindingMode(context).includes(action);
     const scope =

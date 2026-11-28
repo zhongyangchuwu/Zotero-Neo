@@ -2,6 +2,7 @@ import { BINDING_SCHEMA_VERSION, migrateBindingPreferences } from '../../core/pr
 import type { SettingState, SettingsValue } from '../contracts';
 import {
   isRetiredAIShortcutAction,
+  isRetiredNoteBinding,
   isRetiredDocumentShortcutAction,
   migrateRetiredShortcutActions,
   parseBindingOverrides,
@@ -68,8 +69,11 @@ export function validBindings(value: SettingsValue): boolean {
       return false;
     if (Number(value.schemaVersion) < BINDING_SCHEMA_VERSION) return true;
     const canonical = parseBindingOverrides(value.overrides);
-    const retained = Object.values(parsed).filter(
-      (item) => !isRetiredAIShortcutAction(item) && !isRetiredDocumentShortcutAction(item),
+    const retained = Object.entries(parsed).filter(
+      ([key, item]) =>
+        !isRetiredAIShortcutAction(item) &&
+        !isRetiredDocumentShortcutAction(item) &&
+        !isRetiredNoteBinding(key, item),
     );
     return (
       Object.keys(canonical).length === retained.length &&

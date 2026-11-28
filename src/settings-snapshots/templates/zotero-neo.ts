@@ -24,7 +24,7 @@ export const NEO_PREFERENCE_FIELDS: readonly TransferField[] = [
   ...fields(
     'boolean',
     'Interaction',
-    'picker.mouse.enabled noteEditor.enabled mode.visual.enabled annotationCommentEditor.enabled marks.persist smoothScroll.stopOnRelease keyGuide.enabled',
+    'picker.mouse.enabled mode.visual.enabled marks.persist smoothScroll.stopOnRelease keyGuide.enabled',
   ),
   ...fields(
     'string',

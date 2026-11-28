@@ -1,6 +1,6 @@
 import type { MainWindow } from '../core/contracts';
 import {
-  activeContextNoteItem,
+  mainContextNoteFocused,
   mainReaderForTab,
   selectedMainTabID,
   selectedMainTabInfo,
@@ -16,7 +16,7 @@ export type ActiveSurface =
  * No mutable current-surface state is stored by Neo.
  */
 export function resolveActiveSurface(window: MainWindow): ActiveSurface {
-  if (activeContextNoteItem(window)) return { kind: 'note' };
+  if (mainContextNoteFocused(window)) return { kind: 'note' };
 
   const tab = selectedMainTabInfo(window);
   if (tab?.type?.startsWith('note')) return { kind: 'note' };

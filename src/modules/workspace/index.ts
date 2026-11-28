@@ -24,21 +24,14 @@ export interface WorkspaceModuleHost {
     move: () => boolean,
     isCurrent: () => boolean,
   ): void;
-  selectInLibrary(
-    itemID: number,
-    surface: 'reader' | 'note',
-    isCurrent: () => boolean,
-  ): Promise<NavigationResult> | null;
+  selectInLibrary(itemID: number, isCurrent: () => boolean): Promise<NavigationResult> | null;
 }
 
 export interface WorkspaceModule {
   switchTab(surface: NavigationSurface): boolean;
   closeTab(surface: NavigationSurface): boolean;
   cycleTab(direction: -1 | 1, surface: NavigationSurface): boolean;
-  showInLibrary(
-    targets: ItemTargetSet<'reader'> | ItemTargetSet<'note'>,
-    surface: 'reader' | 'note',
-  ): boolean;
+  showInLibrary(targets: ItemTargetSet<'reader'>): boolean;
 }
 
 /** Owns tab and Show in Library workflows within one Main window lifetime. */
@@ -119,55 +112,52 @@ export function createWorkspaceModule(
     const surfaces = {
       main: bindSurface('main'),
       reader: bindSurface('reader'),
-      note: bindSurface('note'),
     };
 
-    const bindShow = (surface: 'reader' | 'note') =>
-      host.bind<ItemTargetSet<'reader'> | ItemTargetSet<'note'>>(
-        scope,
-        `${surface}-normal`,
-        'showInLibrary',
-        (targets) => {
-          const revision = ++workflowRevision;
-          const isCurrent = () => scope.isCurrent() && workflowRevision === revision;
-          const language = ports.language();
-          if (targets.missing || targets.total !== 1 || targets.items.length !== 1) {
-            ports.status(t('status.showInLibraryUnavailable', language));
+    const showInLibrary = host.bind<ItemTargetSet<'reader'>>(
+      scope,
+      'reader-normal',
+      'showInLibrary',
+      (targets) => {
+        const revision = ++workflowRevision;
+        const isCurrent = () => scope.isCurrent() && workflowRevision === revision;
+        const language = ports.language();
+        if (targets.missing || targets.total !== 1 || targets.items.length !== 1) {
+          ports.status(t('status.showInLibraryUnavailable', language));
+          return;
+        }
+        try {
+          const pending = ports.selectInLibrary(targets.items[0]!.id, isCurrent);
+          if (!pending) {
+            if (isCurrent()) ports.status(t('status.showInLibraryHostUnavailable', language));
             return;
           }
-          try {
-            const pending = ports.selectInLibrary(targets.items[0]!.id, surface, isCurrent);
-            if (!pending) {
-              if (isCurrent()) ports.status(t('status.showInLibraryHostUnavailable', language));
-              return;
-            }
-            void pending
-              .then((result) => {
-                if (!isCurrent()) return;
-                if (result.kind === 'completed')
-                  ports.status(t('status.showInLibraryComplete', language));
-                else if (result.kind === 'failed') {
-                  ports.logger.debug(`show in library failed: ${String(result.error)}`);
-                  ports.status(t('status.showInLibraryFailed', language));
-                }
-              })
-              .catch((error) => {
-                ports.logger.debug(`show in library failed: ${String(error)}`);
-                if (isCurrent()) ports.status(t('status.showInLibraryFailed', language));
-              });
-          } catch (error) {
-            ports.logger.debug(`show in library failed: ${String(error)}`);
-            if (isCurrent()) ports.status(t('status.showInLibraryFailed', language));
-          }
-        },
-      );
-    const show = { reader: bindShow('reader'), note: bindShow('note') };
+          void pending
+            .then((result) => {
+              if (!isCurrent()) return;
+              if (result.kind === 'completed')
+                ports.status(t('status.showInLibraryComplete', language));
+              else if (result.kind === 'failed') {
+                ports.logger.debug(`show in library failed: ${String(result.error)}`);
+                ports.status(t('status.showInLibraryFailed', language));
+              }
+            })
+            .catch((error) => {
+              ports.logger.debug(`show in library failed: ${String(error)}`);
+              if (isCurrent()) ports.status(t('status.showInLibraryFailed', language));
+            });
+        } catch (error) {
+          ports.logger.debug(`show in library failed: ${String(error)}`);
+          if (isCurrent()) ports.status(t('status.showInLibraryFailed', language));
+        }
+      },
+    );
     return {
       switchTab: (surface) => surfaces[surface].switchTab(),
       closeTab: (surface) => surfaces[surface].closeTab(),
       cycleTab: (direction, surface) =>
         (direction === -1 ? surfaces[surface].previous : surfaces[surface].next)(),
-      showInLibrary: (targets, surface) => show[surface](targets),
+      showInLibrary,
     };
   });
 }

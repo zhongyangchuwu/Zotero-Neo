@@ -76,7 +76,7 @@ function request(page: SettingsModules, id: OptionalModuleId, value: boolean): v
 
 describe('headless module settings', () => {
   it('saves each request immediately and shows restart notice until all requests match startup', () => {
-    const test = mount({ 'modules.library.enabled': false, 'noteEditor.enabled': false });
+    const test = mount({ 'modules.library.enabled': false });
     expect(test.page.model().notice).toBeUndefined();
     request(test.page, 'reader-hints', false);
     expect(test.preferences.values.get(modulePreferenceKey('reader-hints'))).toBe(false);
@@ -100,7 +100,6 @@ describe('headless module settings', () => {
     request(reopened, 'extensions', true);
     expect(reopened.model().notice).toBeUndefined();
     expect(test.preferences.values.get('modules.library.enabled')).toBe(false);
-    expect(test.preferences.values.get('noteEditor.enabled')).toBe(false);
     reopened.dispose();
   });
 

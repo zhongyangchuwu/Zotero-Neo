@@ -1,6 +1,5 @@
 import type { ModuleHost } from '../../core/module-host';
 import type { ReaderSelectionActionDefinition } from '../../core/contracts';
-import { CleanupFailure } from '../../core/cleanup';
 import { ACTION_LABELS } from '../../input/actions';
 import type { KeyGuideLanguage } from '../../input/key-guide-config';
 import { t } from '../../i18n';
@@ -10,6 +9,7 @@ import {
   clearAnnotationSelection,
   computeSelectionPosition,
   filteredReaderPdfSelection,
+  readerAnnotationCommentFocus,
   readerAnnotationWriteGuard,
   readerOwnerWindow,
   readerReadingMode,
@@ -30,16 +30,13 @@ import {
   type ReaderRuntime,
   type ReaderTimer,
 } from '../../reader/types';
-import { ReaderCommentEditor, type AnnotationCommentTarget } from './comment-editor';
 import { bindReaderAnnotationActions, type ReaderAnnotationAction } from './actions';
 export type { ReaderAnnotationAction } from './actions';
 
 export interface ReaderAnnotationsModulePorts {
   readonly reader: ReaderRuntime;
-  readonly activeWindow: () => PdfWindow | null;
   readonly capturePresentation: (window: PdfWindow) => () => boolean;
   readonly captureView: (window: PdfWindow) => () => boolean;
-  readonly captureViewLifetime: (window: PdfWindow) => () => boolean;
   readonly selectionParams: (window: PdfWindow) => AnnotationSelectionParams | null;
   readonly itemForReader: () => ItemRuntime | null;
   readonly selectedAnnotationKey: () => string | null;
@@ -47,23 +44,15 @@ export interface ReaderAnnotationsModulePorts {
   readonly clearAnnotation: (key?: string) => void;
   readonly clearNativeSelection: () => void;
   readonly setModeNormal: () => void;
-  readonly releaseNativeInput: () => void;
   readonly defaultHighlightColor: () => AnnotationColor;
-  readonly commentEnabled: () => boolean;
-  readonly themeRoot: (root: HTMLElement) => () => void;
-  readonly nativeEditableFocused: () => boolean;
-  readonly onNativeEditorFocus: () => void;
-  readonly onInputOwnerChanged: () => void;
-  readonly onCommentExit: (saved: boolean, window: PdfWindow) => void;
   readonly language: () => KeyGuideLanguage;
   readonly copyText: (text: string) => void;
-  readonly beginSelectionAction: () => void;
+  readonly beginSelectionAction: (closePanel?: boolean) => void;
   readonly showStatus: (message: string, duration?: number) => void;
   readonly debug: (message: string) => void;
 }
 
 export interface ReaderAnnotationsModule {
-  readonly commentEditor: ReaderCommentEditor;
   filterColor(): AnnotationColor | null;
   executeAction(action: ReaderAnnotationAction, window: PdfWindow): boolean;
   highlight(
@@ -73,7 +62,8 @@ export interface ReaderAnnotationsModule {
     annotationType?: 'highlight' | 'underline',
   ): Promise<void>;
   recolor(window: PdfWindow, color: AnnotationColor): Promise<void>;
-  openComment(): Promise<void>;
+  openComment(window: PdfWindow): boolean;
+  cancelCommentFocus(window?: PdfWindow): void;
   selectionActions(
     window: PdfWindow,
     language: KeyGuideLanguage,
@@ -82,14 +72,6 @@ export interface ReaderAnnotationsModule {
 
 interface AnnotationZoteroRuntime {
   readonly Item: new (type: 'annotation') => AnnotationDraft;
-  readonly Items: {
-    get(id: number): ItemRuntime | null | false;
-    getByLibraryAndKey?(libraryID: number, key: string): AnnotationRuntime | null | false;
-    getByLibraryAndKeyAsync?(
-      libraryID: number,
-      key: string,
-    ): Promise<AnnotationRuntime | null | false>;
-  };
 }
 
 type RecolorTarget = AnnotationRuntime & {
@@ -105,24 +87,20 @@ function annotationText(value: string): string {
   return value.normalize('NFKC').replace(/\n/g, ' ').replace(/ {2,}/g, ' ').trim();
 }
 
-/** Owns annotation operations and their child editor; the Surface owns target and view identity. */
+/** Owns annotation operations; the Surface owns target and view identity. */
 export function createReaderAnnotationsModule(
   host: ModuleHost,
   ports: ReaderAnnotationsModulePorts,
 ): ReaderAnnotationsModule {
   return host.activate('reader-annotations', (scope) => {
     let filter: AnnotationColor | null = null;
-    const timers = new Set<ReaderTimer>();
-    const clearTimer = (timer: ReaderTimer | null): void => {
-      if (timer !== null) timers.delete(timer);
-      clearTimeout(timer ?? undefined);
+    let commentFocus: { window: PdfWindow; timer?: ReaderTimer } | null = null;
+    const cancelCommentFocus = (window?: PdfWindow): void => {
+      if (!commentFocus || (window && window !== commentFocus.window)) return;
+      clearTimeout(commentFocus.timer);
+      commentFocus = null;
     };
-    scope.add(() => {
-      const failure = new CleanupFailure();
-      for (const timer of timers) failure.run(() => clearTimeout(timer));
-      timers.clear();
-      failure.rethrow();
-    });
+    scope.add(cancelCommentFocus);
     const captureView = (window: PdfWindow): (() => boolean) => {
       const current = ports.captureView(window);
       return () => scope.isCurrent() && current();
@@ -181,62 +159,60 @@ export function createReaderAnnotationsModule(
         return [];
       }
     };
-    const resolveAnnotation = async (key: string): Promise<AnnotationRuntime | null> => {
-      const attachment = ports.itemForReader();
-      if (!attachment) return null;
-      let annotation = attachment.getAnnotations?.().find((item) => item.key === key) ?? null;
-      if (!annotation && attachment.libraryID !== undefined)
-        annotation = zoteroRuntime().Items.getByLibraryAndKey?.(attachment.libraryID, key) || null;
-      if (annotation?.loadDataType) await annotation.loadDataType('annotation');
-      return annotation;
+    const requestCommentFocus = (
+      window: PdfWindow,
+      key: string,
+      current = captureView(window),
+    ): void => {
+      cancelCommentFocus();
+      if (!current()) return;
+      const request: NonNullable<typeof commentFocus> = { window };
+      commentFocus = request;
+      const ownsFocus = (): boolean => commentFocus === request && current();
+      const finish = (status?: string): void => {
+        if (commentFocus !== request) return;
+        cancelCommentFocus();
+        if (status && current()) statusText(status, 2000);
+      };
+      const deadline = Date.now() + 2000;
+      try {
+        const attempt = readerAnnotationCommentFocus(ports.reader, window, key);
+        if (!attempt) {
+          finish('comment.unavailable');
+          return;
+        }
+        const check = (): void => {
+          try {
+            if (!ownsFocus()) return finish();
+            if (Date.now() >= deadline) return finish('comment.unavailable');
+            const result = attempt();
+            if (!ownsFocus() || result === 'cancelled') return finish();
+            if (result === 'readOnly') return finish('comment.readOnly');
+            if (result === 'unavailable') return finish('comment.unavailable');
+            if (result === 'pending') {
+              request.timer = setTimeout(check, 25);
+              return;
+            }
+            // Retire before focus: focus/blur events synchronously hand input to Zotero.
+            finish();
+            try {
+              result.focus();
+            } catch (error) {
+              ports.debug(`focus native Reader comment failed: ${String(error)}`);
+            }
+            if (result.ownerDocument.activeElement !== result && current())
+              statusText('comment.unavailable', 2000);
+          } catch (error) {
+            ports.debug(`focus native Reader comment failed: ${String(error)}`);
+            if (commentFocus === request) finish('comment.unavailable');
+          }
+        };
+        check();
+      } catch (error) {
+        ports.debug(`resolve native Reader comment failed: ${String(error)}`);
+        finish('comment.unavailable');
+      }
     };
-    const annotationForSave = async (
-      target: AnnotationCommentTarget,
-    ): Promise<AnnotationRuntime | null> => {
-      const items = zoteroRuntime().Items;
-      let annotation: AnnotationRuntime | null = null;
-      if (target.itemID !== null) annotation = items.get(target.itemID) || null;
-      if (!annotation && target.libraryID !== null)
-        annotation = items.getByLibraryAndKey?.(target.libraryID, target.key) || null;
-      if (!annotation && target.libraryID !== null && items.getByLibraryAndKeyAsync)
-        annotation = (await items.getByLibraryAndKeyAsync(target.libraryID, target.key)) || null;
-      if (
-        annotation &&
-        (annotation.key !== target.key || annotation.libraryID !== target.libraryID)
-      )
-        return null;
-      if (annotation?.loadDataType) await annotation.loadDataType('annotation');
-      return annotation;
-    };
-    const commentEditor = new ReaderCommentEditor({
-      reader: ports.reader,
-      schedule: (delay, task) => {
-        const timer = setTimeout(() => {
-          if (!timers.delete(timer) || !scope.isCurrent()) return;
-          task();
-        }, delay);
-        timers.add(timer);
-        if (!scope.isCurrent()) clearTimer(timer);
-        return timer;
-      },
-      clearTimer,
-      captureView,
-      captureViewLifetime: (window) => {
-        const current = ports.captureViewLifetime(window);
-        return () => scope.isCurrent() && current();
-      },
-      themeRoot: ports.themeRoot,
-      activePdfWindow: ports.activeWindow,
-      resolveAnnotation,
-      annotationForSave,
-      nativeEditableFocused: ports.nativeEditableFocused,
-      onNativeEditorFocus: ports.onNativeEditorFocus,
-      onInputOwnerChanged: ports.onInputOwnerChanged,
-      onExit: ports.onCommentExit,
-      debug: ports.debug,
-      language: ports.language,
-    });
-    scope.add(() => commentEditor.dispose());
     const highlight = async (
       window: PdfWindow,
       color: AnnotationColor,
@@ -245,6 +221,7 @@ export function createReaderAnnotationsModule(
     ): Promise<void> => {
       const current = capturePresentation(window);
       if (!current()) return;
+      const focusCurrent = focusComment ? captureView(window) : null;
       const params = ports.selectionParams(window);
       const selection = window.getSelection();
       const hasDomSelection = selection && !selection.isCollapsed;
@@ -331,11 +308,9 @@ export function createReaderAnnotationsModule(
         if (!focusComment) ports.setModeNormal();
       }
       statusText('reader.annotation.created', 1200);
-      if (focusComment && current()) {
-        const viewCurrent = captureView(window);
-        ports.releaseNativeInput();
+      if (focusCurrent && focusCurrent() && current()) {
         ports.setModeNormal();
-        if (viewCurrent() && ports.activeWindow() === window) await commentEditor.open(key);
+        requestCommentFocus(window, key, focusCurrent);
       }
     };
     const deleteAnnotation = async (window: PdfWindow): Promise<void> => {
@@ -462,26 +437,24 @@ export function createReaderAnnotationsModule(
       if (current())
         ports.showStatus(batchStatus('readerAnnotationCopy', result, ports.language()), 1500);
     };
-    const openComment = async (): Promise<void> => {
-      const window = ports.activeWindow();
-      if (!window || !capturePresentation(window)()) return;
-      const key = ports.selectedAnnotationKey();
-      if (!key) {
-        statusText('reader.annotation.selectFirst', 2000);
-        return;
+    const openComment = (window: PdfWindow): boolean => {
+      let key: string | undefined;
+      try {
+        key = selectedAnnotationIDs(ports.reader)[0];
+      } catch (error) {
+        ports.debug(`read native Reader annotation selection failed: ${String(error)}`);
+        statusText('comment.unavailable', 2000);
+        return true;
       }
-      const viewCurrent = captureView(window);
-      ports.releaseNativeInput();
-      ports.setModeNormal();
-      if (!viewCurrent() || ports.activeWindow() !== window) return;
-      ports.rememberAnnotation(key);
-      await commentEditor.open(key);
+      if (!key) return false;
+      requestCommentFocus(window, key);
+      return true;
     };
     const execute = bindReaderAnnotationActions(host, scope, (action, window) => {
       if (!capturePresentation(window)()) return;
       switch (action) {
         case 'editAnnotation':
-          if (ports.commentEnabled()) void openComment();
+          if (!openComment(window)) statusText('reader.annotation.selectFirst', 2000);
           return;
         case 'deleteAnnotation':
           void deleteAnnotation(window);
@@ -552,12 +525,12 @@ export function createReaderAnnotationsModule(
       }
     });
     return {
-      commentEditor,
       filterColor: () => filter,
       executeAction: execute,
       highlight,
       recolor,
       openComment,
+      cancelCommentFocus,
       selectionActions: (window, language) => [
         {
           id: 'neo.underline',
@@ -571,7 +544,7 @@ export function createReaderAnnotationsModule(
           id: 'neo.add-note',
           label: ACTION_LABELS.addNote[language],
           run: () => {
-            ports.beginSelectionAction();
+            ports.beginSelectionAction(true);
             void highlight(window, ports.defaultHighlightColor(), true);
           },
         },

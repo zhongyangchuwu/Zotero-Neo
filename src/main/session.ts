@@ -13,7 +13,6 @@ import type { InteractionAppearanceManager } from './interaction-appearance';
 import { NavigationHistoryState } from '../navigation/history';
 import type { NavigationCoordinator } from '../navigation/coordinator';
 import { MainFocusOwnership } from './focus-ownership';
-import { NoteSurfaceRuntime } from './note-runtime';
 import { ZoteroWindowRuntime } from './window-runtime';
 import type { SettingsCenter } from './settings-center';
 import type { MainItemDecorationRegistration } from './item-state-decoration';
@@ -35,7 +34,6 @@ export class MainWindowSession {
   navigationCoordinator: NavigationCoordinator | null = null;
   readonly picker = new PickerRuntime();
   itemDecoration: MainItemDecorationRegistration | null = null;
-  readonly note: NoteSurfaceRuntime;
   constructor(
     window: MainWindow,
     preferences: PreferenceStore,
@@ -45,7 +43,6 @@ export class MainWindowSession {
     this.host = new ZoteroWindowRuntime(window, preferences, modules);
     this.input = new InputRuntime(window);
     this.prefixGuide = new PrefixGuideRuntime(window);
-    this.note = new NoteSurfaceRuntime(window);
     this.focusOwnership = new MainFocusOwnership(
       window,
       this,
@@ -59,7 +56,6 @@ export class MainWindowSession {
     (doc.body ?? doc.documentElement).append(this.status);
     this.cleanup.add(this.host.theme.add(this.status));
     this.cleanup.add(() => this.input.dispose());
-    this.cleanup.add(() => this.note.input.dispose());
     this.cleanup.add(() => this.prefixGuide.dispose());
     this.cleanup.add(() => {
       try {

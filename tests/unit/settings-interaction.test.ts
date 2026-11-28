@@ -2,9 +2,7 @@ import { describe, expect, it } from 'vitest';
 import type { PreferenceStore } from '../../src/core/preference-store';
 import {
   MAIN_STARTUP_FOCUS_PREFERENCE_KEY as STARTUP_FOCUS,
-  NOTE_EDITOR_ENABLED_PREFERENCE_KEY as NOTE,
   PICKER_MOUSE_ENABLED_PREFERENCE_KEY as PICKER,
-  noteEditorEnabled,
   pickerMouseEnabled,
 } from '../../src/core/preferences';
 import { settingsText } from '../../src/main/settings-i18n';
@@ -100,8 +98,8 @@ describe('Interaction Settings controller', () => {
     test.page.dispose();
   });
 
-  it('writes only whitelisted boolean commands immediately and keeps live helpers aligned', () => {
-    const test = mount({ [PICKER]: false, [NOTE]: true });
+  it('writes Picker settings immediately and ignores the retired Note control', () => {
+    const test = mount({ [PICKER]: false, 'noteEditor.enabled': true });
 
     test.page.dispatch({ type: 'value', id: 'pickerMouseEnabled', value: true });
     expect(test.preferences.writes).toEqual([[PICKER, true]]);
@@ -109,17 +107,15 @@ describe('Interaction Settings controller', () => {
     expect(pickerMouseEnabled(test.preferences)).toBe(true);
 
     test.page.dispatch({ type: 'value', id: 'noteEditorEnabled', value: false });
-    expect(test.preferences.writes).toEqual([
-      [PICKER, true],
-      [NOTE, false],
-    ]);
-    expect(field(test.page, 'noteEditorEnabled')).toMatchObject({ value: false });
-    expect(noteEditorEnabled(test.preferences)).toBe(false);
+    expect(test.preferences.values.get('noteEditor.enabled')).toBe(true);
+    expect(
+      test.page.model().groups.flatMap(({ fields }) => fields.map(({ id }) => id)),
+    ).not.toContain('noteEditorEnabled');
 
     test.page.dispatch({ type: 'value', id: PICKER, value: true });
     test.page.dispatch({ type: 'value', id: 'pickerMouseEnabled', value: 'true' });
     test.page.dispatch({ type: 'action', id: 'pickerMouseEnabled' });
-    expect(test.preferences.writes).toHaveLength(2);
+    expect(test.preferences.writes).toEqual([[PICKER, true]]);
     expect(test.changes()).toBeGreaterThan(0);
     test.page.dispose();
   });
@@ -138,19 +134,17 @@ describe('Interaction Settings controller', () => {
     test.preferences.failKey = null;
     test.page.dispatch({ type: 'value', id: 'pickerMouseEnabled', value: true });
     expect(test.page.model().status).toBeUndefined();
-    test.page.dispatch({ type: 'value', id: 'noteEditorEnabled', value: false });
     test.preferences.clear(PICKER);
     expect(field(test.page, 'pickerMouseEnabled')).toMatchObject({ value: true });
-    expect(field(test.page, 'noteEditorEnabled')).toMatchObject({ value: false });
     expect(test.page.model().status).toBeUndefined();
 
     const changesBeforeDispose = test.changes();
-    expect(test.preferences.listenerCount()).toBe(3);
+    expect(test.preferences.listenerCount()).toBe(2);
     test.page.dispose();
     expect(test.preferences.listenerCount()).toBe(0);
-    test.preferences.set(NOTE, true);
+    test.preferences.set(PICKER, false);
     test.page.dispatch({ type: 'value', id: 'pickerMouseEnabled', value: true });
     expect(test.changes()).toBe(changesBeforeDispose);
-    expect(test.preferences.writes).toHaveLength(3);
+    expect(test.preferences.writes).toHaveLength(2);
   });
 });

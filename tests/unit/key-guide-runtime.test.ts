@@ -85,14 +85,14 @@ describe('PrefixGuideRuntime', () => {
     expect(h.theme.add.mock.results[0]?.value).toHaveBeenCalledOnce();
   });
 
-  it('shows Note-owned leader groups without borrowing Main candidates', () => {
+  it('shows Reader-owned leader groups without borrowing Main candidates', () => {
     const h = guideHarness();
     const bindings: BindingMap = {
-      'note-normal:<Space>ff': 'findAllItems',
+      'reader-normal:<Space>ff': 'findAllItems',
       'main-normal:<Space>xx': 'nextTab',
     };
-    h.input.advance('note-normal', bindings, ' ', true);
-    h.update({ mode: 'note-normal', bindings });
+    h.input.advance('reader-normal', bindings, ' ', true);
+    h.update({ mode: 'reader-normal', bindings });
     h.guide.refresh(h.current);
     h.callbacks[0]();
     expect(h.mounted).toHaveLength(1);
@@ -112,7 +112,7 @@ describe('PrefixGuideRuntime', () => {
 
     h.input.advance('main-normal', h.bindings, 'x', true);
     h.guide.refresh(h.current);
-    h.update({ mode: 'note-normal', bindings: { 'note-normal:xx': 'switchTab' } });
+    h.update({ mode: 'reader-normal', bindings: { 'reader-normal:xx': 'switchTab' } });
     h.callbacks[1]();
     expect(h.mounted).toHaveLength(0);
 

@@ -1,5 +1,4 @@
 import { isActionId, type ActionId } from './actions';
-import { isNoteMigratableMainBindingAction, NOTE_LOCAL_DEFAULT_BINDINGS } from './note-actions';
 import {
   bindingSequenceTokens,
   canonicalBindingSequence,
@@ -12,8 +11,6 @@ export const BINDING_CONTEXTS = [
   'reader-select',
   'main-normal',
   'main-select',
-  'note-normal',
-  'note-insert',
   'reader-outline',
   'reader-marks',
   'reader-annotations',
@@ -169,35 +166,6 @@ export const DEFAULT_BINDINGS = {
   'reader-select:o': 'swapVisualEnds',
   'reader-select:v': 'exitMode',
   'reader-select:<Esc>': 'exitMode',
-  ...NOTE_LOCAL_DEFAULT_BINDINGS,
-  'note-normal:<C-o>': 'navigateBack',
-  'note-normal:<C-i>': 'navigateForward',
-  'note-normal:i': 'enterInsert',
-  'note-normal:<Esc>': 'exitMode',
-  'note-normal::': 'openCommandPalette',
-  'note-normal:<Space>ff': 'findAllItems',
-  'note-normal:<Space>fc': 'findCollectionItems',
-  'note-normal:<Space>,': 'switchTab',
-  'note-normal:<Space>ta': 'addTag',
-  'note-normal:<Space>tr': 'removeTag',
-  'note-normal:<Space>q': 'closeCurrentTab',
-  'note-normal:<Space>fn': 'findNotes',
-  'note-normal:<Space>pp': 'managePlugins',
-  'note-normal:<Space>ps': 'openNeoSettings',
-  'note-normal:<Space>e': 'mainFocusTree',
-  'note-normal:<Space>yy': 'mainYankCitekey',
-  'note-normal:<Space>o': 'mainOpenPDF',
-  'note-normal:H': 'previousTab',
-  'note-normal:L': 'nextTab',
-  'note-normal:<C-h>': 'focusReaderSplitLeft',
-  'note-normal:<C-j>': 'focusReaderSplitDown',
-  'note-normal:<C-k>': 'focusReaderSplitUp',
-  'note-normal:<C-l>': 'focusReaderSplitRight',
-  'note-insert:<Esc>': 'exitMode',
-  'note-insert:<C-h>': 'focusReaderSplitLeft',
-  'note-insert:<C-j>': 'focusReaderSplitDown',
-  'note-insert:<C-k>': 'focusReaderSplitUp',
-  'note-insert:<C-l>': 'focusReaderSplitRight',
   'main-normal:<C-o>': 'navigateBack',
   'main-normal:<C-i>': 'navigateForward',
   'main-normal:<Space>ff': 'findAllItems',
@@ -365,9 +333,6 @@ const PREFIX_LABELS = {
   view: { en: 'View', 'zh-CN': '视图' },
   filters: { en: 'Filters', 'zh-CN': '筛选' },
   delete: { en: 'Delete', 'zh-CN': '删除' },
-  yank: { en: 'Yank', 'zh-CN': '复制' },
-  change: { en: 'Change', 'zh-CN': '修改' },
-  inner: { en: 'Inner', 'zh-CN': '内部' },
   tags: { en: 'Tags', 'zh-CN': '标签' },
   collections: { en: 'Collections', 'zh-CN': '分类' },
   find: { en: 'Find', 'zh-CN': '查找' },
@@ -417,18 +382,6 @@ export const DEFAULT_PREFIX_BINDINGS = {
   'main-normal:<Space>s': prefix('selection'),
   'main-normal:<Space>y': prefix('citations'),
   'main-select:g': prefix('navigation'),
-  'note-normal:g': prefix('navigation'),
-  'note-normal:d': prefix('delete'),
-  'note-normal:di': prefix('inner'),
-  'note-normal:y': prefix('yank'),
-  'note-normal:yi': prefix('inner'),
-  'note-normal:c': prefix('change'),
-  'note-normal:ci': prefix('inner'),
-  'note-normal:<Space>': prefix('commands'),
-  'note-normal:<Space>f': prefix('find'),
-  'note-normal:<Space>t': prefix('tags'),
-  'note-normal:<Space>p': prefix('neo'),
-  'note-normal:<Space>y': prefix('citations'),
   'reader-marks:g': prefix('navigation'),
   'plugins-list:g': prefix('navigation'),
   'reader-outline:[': prefix('previous'),
@@ -589,12 +542,9 @@ const RETIRED_DEFAULT_BINDINGS = {
   'reader-normal: tp': 'switchTab',
   'main-normal: tp': 'switchTab',
   'reader-normal: ft': 'switchTab',
-  'note-normal: ft': 'switchTab',
   'main-normal: ft': 'switchTab',
   'reader-normal: td': 'closeCurrentTab',
-  'note-normal: td': 'closeCurrentTab',
   'main-normal: td': 'closeCurrentTab',
-  'note-normal: fT': 'toggleTagFilter',
   'main-normal: fT': 'toggleTagFilter',
   'main-normal:ctrl+u': 'mainRestoreTrashedItems',
 } as const;
@@ -669,39 +619,6 @@ export function migrateBindingModeOverrides(raw: unknown): string {
   return stringifyBindingOverrides(parseBindingOverrides(raw));
 }
 
-const NOTE_INHERITED_MAIN_SEQUENCES = new Set([
-  ':',
-  'H',
-  'L',
-  'ctrl+h',
-  'ctrl+j',
-  'ctrl+k',
-  'ctrl+l',
-  '<C-h>',
-  '<C-j>',
-  '<C-k>',
-  '<C-l>',
-]);
-
-function noteInheritedMainSequence(sequence: string): boolean {
-  return (
-    bindingSequenceTokens(sequence)?.[0] === ' ' || NOTE_INHERITED_MAIN_SEQUENCES.has(sequence)
-  );
-}
-
-/** Copies schema-8 Note-global Main overrides into the new explicit Note scope. */
-export function migrateNoteBindingOverrides(raw: unknown): string {
-  const overrides = parseBindingOverrides(raw);
-  for (const [key, action] of Object.entries({ ...overrides })) {
-    const binding = parseBindingKey(key);
-    if (binding?.mode !== 'main-normal' || !noteInheritedMainSequence(binding.sequence)) continue;
-    if (action !== null && !isNoteMigratableMainBindingAction(action)) continue;
-    const noteKey = 'note-normal:' + binding.sequence;
-    if (!(noteKey in overrides)) overrides[noteKey] = action;
-  }
-  return stringifyBindingOverrides(overrides);
-}
-
 /**
  * Migrates the 0.1.0 Reader yank-key freeze without losing explicit unbindings.
  *
@@ -727,8 +644,6 @@ export function migrateFrozenKeymapOverrides(raw: unknown): string {
  *
  * Schema 10 compact overrides may contain null tombstones for defaults that moved. Carry those
  * explicit unbindings to the new semantic key instead of silently re-enabling the action.
- * The old Note tag-filter action is intentionally dropped because Main view filtering is no longer
- * a Note capability.
  */
 export function migrateSemanticKeymapOverrides(raw: unknown): string {
   const overrides = parseBindingOverrides(raw);
@@ -739,18 +654,10 @@ export function migrateSemanticKeymapOverrides(raw: unknown): string {
   };
 
   moveNull('reader-normal:<Space>ft', 'reader-normal:<Space>,');
-  moveNull('note-normal:<Space>ft', 'note-normal:<Space>,');
   moveNull('main-normal:<Space>ft', 'main-normal:<Space>,');
   moveNull('reader-normal:<Space>td', 'reader-normal:<Space>q');
-  moveNull('note-normal:<Space>td', 'note-normal:<Space>q');
   moveNull('main-normal:<Space>td', 'main-normal:<Space>q');
   moveNull('main-normal:<Space>fT', 'main-normal:<Space>tf');
-
-  if (overrides['note-normal:<Space>fT'] === null) delete overrides['note-normal:<Space>fT'];
-  for (const [key, action] of Object.entries({ ...overrides })) {
-    const binding = parseBindingKey(key);
-    if (binding?.mode === 'note-normal' && action === 'toggleTagFilter') delete overrides[key];
-  }
 
   return stringifyBindingOverrides(overrides);
 }
@@ -834,7 +741,7 @@ export function migrateMainSpaceSelectionOverrides(raw: unknown): string {
 }
 
 /**
- * Restores one Space-led command namespace across Main/Reader/Note.
+ * Restores one Space-led command namespace across Main and Reader.
  *
  * Schema 14 used exact Main Space for Selection and direct Main semantic
  * prefixes. Schema 15 moves Selection/Visual commit to s and moves only
@@ -934,6 +841,67 @@ export function isRetiredDocumentShortcutAction(action: unknown): boolean {
   return typeof action === 'string' && Object.hasOwn(RETIRED_DOCUMENT_SHORTCUT_ACTIONS, action);
 }
 
+// Persisted compatibility only: these IDs are not actions or capabilities.
+const RETIRED_NOTE_ACTIONS: Readonly<Record<string, true>> = {
+  noteMoveLeft: true,
+  noteMoveDown: true,
+  noteMoveUp: true,
+  noteMoveRight: true,
+  noteMoveWordForward: true,
+  noteMoveWordBackward: true,
+  noteMoveLineStart: true,
+  noteMoveLineEnd: true,
+  noteMoveDocumentStart: true,
+  noteMoveDocumentEnd: true,
+  noteDeleteChar: true,
+  noteAppendAfter: true,
+  noteAppendLineEnd: true,
+  noteInsertLineStart: true,
+  noteOpenLineBelow: true,
+  noteOpenLineAbove: true,
+  noteUndo: true,
+  noteRedo: true,
+  notePutAfter: true,
+  notePutBefore: true,
+  noteDeleteLine: true,
+  noteYankLine: true,
+  noteDeleteLeft: true,
+  noteDeleteDown: true,
+  noteDeleteUp: true,
+  noteDeleteRight: true,
+  noteDeleteWordForward: true,
+  noteDeleteWordBackward: true,
+  noteDeleteToLineStart: true,
+  noteDeleteToLineEnd: true,
+  noteDeleteInnerWord: true,
+  noteYankLeft: true,
+  noteYankDown: true,
+  noteYankUp: true,
+  noteYankRight: true,
+  noteYankWordForward: true,
+  noteYankWordBackward: true,
+  noteYankToLineStart: true,
+  noteYankToLineEnd: true,
+  noteYankInnerWord: true,
+  noteChangeLeft: true,
+  noteChangeDown: true,
+  noteChangeUp: true,
+  noteChangeRight: true,
+  noteChangeWordForward: true,
+  noteChangeWordBackward: true,
+  noteChangeToLineStart: true,
+  noteChangeToLineEnd: true,
+  noteChangeInnerWord: true,
+};
+
+export function isRetiredNoteBinding(key: string, action: unknown): boolean {
+  return (
+    key.startsWith('note-normal:') ||
+    key.startsWith('note-insert:') ||
+    (typeof action === 'string' && Object.hasOwn(RETIRED_NOTE_ACTIONS, action))
+  );
+}
+
 const RETIRED_SHORTCUT_ACTIONS = new Map<string, ActionId | null>([
   ['copyIdentifier', 'copyTarget'],
   ['followIdentifier', 'followLink'],
@@ -950,7 +918,8 @@ export function migrateRetiredShortcutActions(raw: unknown): string {
   const entries = parseBindingEntries(raw);
   if (
     !entries.some(
-      ([, action]) =>
+      ([key, action]) =>
+        isRetiredNoteBinding(key, action) ||
         isRetiredAIShortcutAction(action) ||
         isRetiredDocumentShortcutAction(action) ||
         (typeof action === 'string' && RETIRED_SHORTCUT_ACTIONS.has(action)),
@@ -960,7 +929,12 @@ export function migrateRetiredShortcutActions(raw: unknown): string {
   return JSON.stringify(
     Object.fromEntries(
       entries.flatMap(([key, action]) => {
-        if (isRetiredAIShortcutAction(action) || isRetiredDocumentShortcutAction(action)) return [];
+        if (
+          isRetiredNoteBinding(key, action) ||
+          isRetiredAIShortcutAction(action) ||
+          isRetiredDocumentShortcutAction(action)
+        )
+          return [];
         const replacement =
           typeof action === 'string' ? RETIRED_SHORTCUT_ACTIONS.get(action) : undefined;
         return replacement === null ? [] : [[key, replacement ?? action]];

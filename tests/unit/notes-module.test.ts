@@ -3,6 +3,7 @@ import type { MainWindow } from '../../src/core/contracts';
 import { ModuleHost } from '../../src/core/module-host';
 import type { PickerOpenOptions } from '../../src/main/picker/types';
 import { createNotesModule } from '../../src/modules/notes';
+import type { NavigationSurface } from '../../src/navigation/types';
 
 afterEach(() => vi.unstubAllGlobals());
 
@@ -12,7 +13,7 @@ function harness() {
   const logger = { debug: vi.fn(), diagnostic: vi.fn() };
   const host = new ModuleHost(logger, () => true);
   const opened: number[] = [];
-  const selected: number[] = [];
+  const selected: [number, NavigationSurface][] = [];
   const window = {
     ZoteroPane: {
       openNote: (itemID: number) => {
@@ -26,7 +27,6 @@ function harness() {
     window,
     logger,
     language: () => 'en',
-    status: () => {},
     choose: (options) => {
       if (chooser?.open) return null;
       const invocation = { open: true, options };
@@ -37,23 +37,17 @@ function harness() {
         options.onClose?.('retire');
       };
     },
-    selectNote: async (itemID, _surface, isCurrent, afterSelection) => {
-      selected.push(itemID);
+    selectNote: async (itemID, surface, isCurrent, afterSelection) => {
+      selected.push([itemID, surface]);
       if (isCurrent()) await afterSelection();
       return { kind: 'completed', evidence: 'settled-change', recorded: true };
     },
   });
-  const document = {
-    createElement: () => ({ id: '', textContent: '', remove: () => {} }),
-    head: { append: () => {} },
-    documentElement: { classList: { toggle: () => {}, remove: () => {} } },
-  } as unknown as Document;
   return {
     host,
     notes,
     opened,
     selected,
-    target: { ownerDocument: document } as HTMLElement,
     get chooser() {
       return chooser;
     },
@@ -71,19 +65,18 @@ function harness() {
 const candidate = { id: 18, title: 'A note', search: 'a note', citekey: '', author: '', year: '' };
 
 describe('Notes module composition', () => {
-  it('keeps editing and Note navigation isolated when another window is retired', async () => {
+  it('keeps the Reader Note picker and navigation alive when another window is retired', async () => {
     const first = harness();
     const second = harness();
-    first.notes.editing.executeAction('enterInsert', first.target, 0);
+    first.notes.findNotes(null, 'main');
     second.notes.findNotes(null, 'reader');
-    expect(first.notes.editing.mode).toBe('insert');
-    expect(second.notes.editing.mode).toBe('normal');
 
     first.host.dispose();
     await second.chooser!.options.confirm!(candidate, false);
 
-    expect(first.notes.editing.mode).toBe('normal');
+    expect(first.chooser!.open).toBe(false);
     expect(first.selected).toEqual([]);
+    expect(second.selected).toEqual([[18, 'reader']]);
     expect(second.opened).toEqual([18]);
     expect(second.chooser!.open).toBe(true);
     second.host.dispose();
@@ -104,16 +97,17 @@ describe('Notes module composition', () => {
 
   it('cannot navigate from a cancelled invocation or disturb its replacement', async () => {
     const h = harness();
-    h.notes.findNotes(null, 'note');
+    h.notes.findNotes(null, 'main');
     const cancelled = h.chooser!;
     h.cancel();
-    h.notes.findNotes(null, 'note');
+    h.notes.findNotes(null, 'main');
     const replacement = h.chooser!;
 
     await cancelled.options.confirm!(candidate, false);
     expect(h.selected).toEqual([]);
     expect(replacement.open).toBe(true);
     await replacement.options.confirm!(candidate, false);
+    expect(h.selected).toEqual([[18, 'main']]);
     expect(h.opened).toEqual([18]);
     h.host.dispose();
   });
