@@ -2,7 +2,6 @@ import { afterEach, describe, expect, it, vi } from 'vitest';
 
 import type { MainWindow } from '../../src/core/contracts';
 import { MAIN_ITEM_TARGET } from '../../src/main/main-item-target';
-import { NOTE_ITEM_TARGET } from '../../src/main/note-item-target';
 import { READER_ITEM_TARGET } from '../../src/reader/item-target';
 import { SelectionStore } from '../../src/modules/worksets/selection-store';
 
@@ -95,43 +94,6 @@ describe('Surface-owned item target resolution', () => {
     });
   });
 
-  it('Note resolves the focused context note before a note tab item', () => {
-    const parent = item(1);
-    const focused = item(2, { parentItemID: 1, kind: 'note' });
-    const tabNote = item(3, { kind: 'note' });
-    install([parent, focused, tabNote]);
-    const s = session();
-    s.selection.add({ libraryID: 1, itemID: tabNote.id });
-
-    const active = {} as Element;
-    const window = {
-      document: { activeElement: active },
-      ZoteroContextPane: {
-        context: {
-          activeEditor: {
-            item: focused,
-            contains: (node: Node | null) => node === (active as unknown as Node),
-          },
-        },
-      },
-      Zotero_Tabs: {
-        selectedID: 'note-tab',
-        getTabInfo: () => ({ type: 'note', data: { itemID: tabNote.id } }),
-      },
-    } as unknown as MainWindow;
-
-    expect(NOTE_ITEM_TARGET.resolve(window)).toMatchObject({
-      source: 'note',
-      items: [{ id: parent.id }],
-    });
-    expect(s.selection.values()).toEqual([{ libraryID: 1, itemID: tabNote.id }]);
-    expect(MAIN_ITEM_TARGET.resolve(window, s.selection)).toMatchObject({
-      source: 'main',
-      items: [{ id: tabNote.id }],
-      total: 1,
-    });
-  });
-
   it('reports a missing contextual Reader item without falling back to Main', () => {
     const main = item(1);
     install([main]);
@@ -140,26 +102,6 @@ describe('Surface-owned item target resolution', () => {
 
     expect(READER_ITEM_TARGET.resolve({ itemID: 99 })).toMatchObject({
       source: 'reader',
-      items: [],
-      total: 1,
-      missing: 1,
-    });
-    expect(s.selection.values()).toEqual([{ libraryID: 1, itemID: main.id }]);
-  });
-  it('reports a missing Note item without borrowing the live Main workset', () => {
-    const main = item(1);
-    install([main]);
-    const s = session();
-    s.selection.add({ libraryID: 1, itemID: main.id });
-    const window = {
-      Zotero_Tabs: {
-        selectedID: 'note-tab',
-        getTabInfo: () => ({ type: 'note', data: { itemID: 99 } }),
-      },
-    } as unknown as MainWindow;
-
-    expect(NOTE_ITEM_TARGET.resolve(window)).toMatchObject({
-      source: 'note',
       items: [],
       total: 1,
       missing: 1,

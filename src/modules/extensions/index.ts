@@ -7,7 +7,7 @@ import type { KeyGuideLanguage } from '../../input/key-guide-config';
 import { PluginManagerPanel } from './panel';
 import { PluginManagerRuntime } from './runtime';
 
-type ExtensionsContext = 'main-normal' | 'reader-normal' | 'note-normal';
+type ExtensionsContext = 'main-normal' | 'reader-normal';
 
 export interface ExtensionsModuleHost {
   readonly window: MainWindow;
@@ -40,7 +40,6 @@ export function createExtensionsModule(
     const open = {
       'main-normal': host.bind<void>(scope, 'main-normal', 'managePlugins', () => panel.open()),
       'reader-normal': host.bind<void>(scope, 'reader-normal', 'managePlugins', () => panel.open()),
-      'note-normal': host.bind<void>(scope, 'note-normal', 'managePlugins', () => panel.open()),
     };
     return {
       get isOpen() {

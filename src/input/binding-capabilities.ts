@@ -1,5 +1,4 @@
 import { MAIN_NORMAL_ACTIONS, MAIN_SELECT_ACTIONS } from '../main/action-capabilities';
-import { NOTE_INSERT_ACTIONS, NOTE_NORMAL_ACTIONS } from '../main/note-action-capabilities';
 import {
   READER_LOCAL_VISUAL_ACTIONS,
   READER_NORMAL_ACTIONS,
@@ -22,10 +21,6 @@ export function actionsForBindingMode(mode: BindingContext): readonly ActionId[]
       return READER_LOCAL_VISUAL_ACTIONS;
     case 'main-normal':
       return MAIN_NORMAL_ACTIONS;
-    case 'note-normal':
-      return NOTE_NORMAL_ACTIONS;
-    case 'note-insert':
-      return NOTE_INSERT_ACTIONS;
     case 'main-select':
       return MAIN_SELECT_ACTIONS;
     case 'reader-outline':

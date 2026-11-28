@@ -23,7 +23,7 @@ export type NavigationLocation =
   | LibraryNavigationLocation
   | ReaderJumpLocation;
 
-export type NavigationSurface = 'main' | 'reader' | 'note';
+export type NavigationSurface = 'main' | 'reader';
 
 export type NavigationEventId =
   | 'main-local-find.confirm'

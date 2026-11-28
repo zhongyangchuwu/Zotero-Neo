@@ -90,6 +90,10 @@ export function isRetiredNeoPreference(key: unknown): boolean {
     name === 'modules.item-attributes.enabled' ||
     name === 'picker.theme' ||
     name === 'picker.customCss' ||
+    name === 'noteEditor.enabled' ||
+    name === 'annotationCommentEditor.enabled' ||
+    name === 'mode.insert.enabled' ||
+    name.startsWith('annotationComment.drafts.') ||
     name === 'modules.translation.enabled' ||
     name === 'extras.translation.enabled' ||
     name === 'modules.ai-qa.enabled' ||

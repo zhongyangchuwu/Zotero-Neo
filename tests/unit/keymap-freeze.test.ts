@@ -47,8 +47,7 @@ function press(mode: BindingContext, key: string, bindings: BindingMap = resolve
       keyBuffer: '',
       countBuffer: '',
       bindings,
-      allowCountPrefix:
-        mode === 'reader-normal' || mode === 'main-normal' || mode === 'note-normal',
+      allowCountPrefix: mode === 'reader-normal' || mode === 'main-normal',
     },
     key,
   );
@@ -65,16 +64,10 @@ describe('0.1.0 default keymap freeze', () => {
   it('keeps non-Normal mode keymaps exact with no sibling-mode inheritance', () => {
     const mainVisual = bindingsForMode(DEFAULT_BINDINGS, 'main-select');
     const readerVisual = bindingsForMode(DEFAULT_BINDINGS, 'reader-select');
-    const noteInsert = bindingsForMode(DEFAULT_BINDINGS, 'note-insert');
 
     expect(press('main-select', ':', mainVisual)).toMatchObject({ kind: 'pass' });
     expect(press('main-select', 'd', mainVisual)).toMatchObject({ kind: 'pass' });
     expect(press('reader-select', ':', readerVisual)).toMatchObject({ kind: 'pass' });
-    expect(press('note-insert', ':', noteInsert)).toMatchObject({ kind: 'pass' });
-    expect(press('note-insert', 'escape', noteInsert)).toMatchObject({
-      kind: 'execute',
-      action: 'exitMode',
-    });
   });
 
   it('keeps Main native View search actions under the shared Space Find group', () => {
@@ -83,15 +76,13 @@ describe('0.1.0 default keymap freeze', () => {
     expect(press('main-normal', ' ')).toMatchObject({ kind: 'pending' });
   });
 
-  it('resolves Space p s to Neo Settings in Main, Reader, and Note without a strict-prefix collision', () => {
+  it('resolves Space p s to Neo Settings in Main and Reader without a strict-prefix collision', () => {
     expect(DEFAULT_BINDINGS['main-normal:<Space>pp']).toBe('managePlugins');
     expect(DEFAULT_BINDINGS['main-normal:<Space>ps']).toBe('openNeoSettings');
     expect(DEFAULT_BINDINGS['reader-normal:<Space>pp']).toBe('managePlugins');
     expect(DEFAULT_BINDINGS['reader-normal:<Space>ps']).toBe('openNeoSettings');
-    expect(DEFAULT_BINDINGS['note-normal:<Space>pp']).toBe('managePlugins');
-    expect(DEFAULT_BINDINGS['note-normal:<Space>ps']).toBe('openNeoSettings');
     const bindings = resolveBindings('');
-    for (const mode of ['main-normal', 'reader-normal', 'note-normal'] as const) {
+    for (const mode of ['main-normal', 'reader-normal'] as const) {
       const start = advanceInput(
         { mode, keyBuffer: '', countBuffer: '', bindings, allowCountPrefix: true },
         ' ',
@@ -104,6 +95,11 @@ describe('0.1.0 default keymap freeze', () => {
     }
   });
 
+  it('keeps the Notes finder in both Main and Reader', () => {
+    expect(DEFAULT_BINDINGS['main-normal:<Space>fn']).toBe('findNotes');
+    expect(DEFAULT_BINDINGS['reader-normal:<Space>fn']).toBe('findNotes');
+  });
+
   it('opens Zotero Bases under Space o without changing item bindings', () => {
     const bindings = resolveBindings('{"main-normal:q":"openCommandPalette"}');
     const nodes = bindingNodesFromActions(bindings);
@@ -114,8 +110,6 @@ describe('0.1.0 default keymap freeze', () => {
       });
       expect(bindings[`${mode}:<Space>ob`]).toBe('openZoteroBases');
     }
-    expect(bindings['note-normal:<Space>o']).toBe('mainOpenPDF');
-    expect(bindings['note-normal:<Space>ob']).toBeUndefined();
     expect(bindings['main-normal:o']).toBe('mainOpenPDF');
   });
 
@@ -123,7 +117,6 @@ describe('0.1.0 default keymap freeze', () => {
     const bindings = resolveBindings('{"main-normal:q":"openCommandPalette"}');
     expect(bindings['main-normal:<Space>ps']).toBe('openNeoSettings');
     expect(bindings['reader-normal:<Space>ps']).toBe('openNeoSettings');
-    expect(bindings['note-normal:<Space>ps']).toBe('openNeoSettings');
   });
 
   it('shares collection membership keys with Reader item context', () => {

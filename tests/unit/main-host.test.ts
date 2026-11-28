@@ -6,6 +6,7 @@ import {
   currentTagSelection,
   currentMainItem,
   cycleMainTab,
+  mainNoteEditorWindows,
   mainTabList,
   selectMainTab,
   selectedMainTabID,
@@ -82,6 +83,34 @@ describe('main host adapter', () => {
       Items: { get: () => false },
     });
     expect(currentMainItem(window)).toBe(selectedItem);
+  });
+
+  it('finds the visible Main and Reader notes without claiming unrelated editable frames', () => {
+    const document = {
+      querySelectorAll: () => [mainFrame, unrelated, hidden],
+    } as unknown as Document;
+    const makeFrame = (isNote: boolean, width = 200) => ({
+      ownerDocument: document,
+      isConnected: true,
+      getBoundingClientRect: () => ({ width, height: 300 }),
+      contentWindow: {
+        document: { querySelector: () => (isNote ? {} : null), body: { isContentEditable: true } },
+      },
+    });
+    const mainFrame = makeFrame(true);
+    const readerFrame = makeFrame(false);
+    const hidden = makeFrame(true, 0);
+    const unrelated = makeFrame(false);
+    const window = {
+      document,
+      getComputedStyle: () => ({ visibility: 'visible' }),
+      ZoteroContextPane: { context: { activeEditor: { _iframe: readerFrame } } },
+    } as unknown as MainWindow;
+
+    expect(mainNoteEditorWindows(window)).toEqual([
+      mainFrame.contentWindow,
+      readerFrame.contentWindow,
+    ]);
   });
 
   it('snapshots and applies tag filters through the current items view', async () => {

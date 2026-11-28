@@ -86,7 +86,7 @@ describe('Library module composition', () => {
     const h = harness();
     h.onAcquire(() => h.host.dispose());
 
-    h.library.findItems('collection', 'note');
+    h.library.findItems('collection', 'reader');
     const chooser = h.chooser!;
     await chooser.options.confirm!(candidate, false);
 

@@ -15,7 +15,6 @@ export type NativeReactSurface =
   | 'extensions'
   | 'metadata-review'
   | 'settings-snapshots'
-  | 'annotation-comment'
   | 'selection-actions'
   | 'reader-sidebar'
   | 'reference-controls'

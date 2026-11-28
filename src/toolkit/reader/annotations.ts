@@ -1,9 +1,10 @@
 import { cloneInto, isDeadObject } from '../../platform/cross-compartment';
-import { asElement } from '../../platform/dom';
 import type { ReaderRuntime } from './contracts';
-import type { NativeReaderRuntime } from './private-types';
-import { readerWindow } from './host';
+import type { NativeReaderAnnotationRuntime, NativeReaderRuntime } from './private-types';
+import { readerIsClosed, readerWindow } from './host';
 import type { ReaderNativeNavigation } from './history-bridge';
+import { readerPresentationView } from './presentation';
+import { visibleElement } from './visibility';
 
 export function selectedAnnotationIDs(reader: ReaderRuntime): readonly string[] {
   return (reader as NativeReaderRuntime)._internalReader?._state?.selectedAnnotationIDs ?? [];
@@ -48,16 +49,6 @@ export function setAnnotationColorFilter(reader: ReaderRuntime, colors: readonly
   if (window && internal?.setFilter) internal.setFilter(cloneInto({ colors }, window));
 }
 
-export function navigateToAnnotation(
-  reader: ReaderRuntime,
-  key: string,
-  fallbackWindow: Window,
-): void | Promise<void> {
-  return (reader as NativeReaderRuntime)._internalReader?.navigate?.(
-    cloneInto({ annotationID: key }, readerWindow(reader) ?? fallbackWindow),
-  );
-}
-
 /** Reports native selection settlement, or routes its navigation through the admitted owner. */
 export function selectReaderAnnotation(
   reader: ReaderRuntime,
@@ -85,52 +76,87 @@ export function selectReaderAnnotation(
   return internal.navigate(request);
 }
 
-/** Retains the exact native owner, even if the Reader replaces it before release. */
-export function protectAnnotationCommentDeletion(reader: ReaderRuntime): (() => void) | null {
-  const internal = (reader as NativeReaderRuntime)._internalReader;
-  if (!internal) return null;
-  const previous = internal._enableAnnotationDeletionFromComment;
-  internal._enableAnnotationDeletionFromComment = false;
-  return () => {
-    if (!isDeadObject(internal)) internal._enableAnnotationDeletionFromComment = previous;
-  };
-}
+type CommentFocusAttempt = HTMLElement | 'pending' | 'readOnly' | 'unavailable' | 'cancelled';
 
-/** Dismisses only newly mounted native annotation popups while Neo owns comment input. */
-export function guardAnnotationCommentPopups(
+/** The pinned Reader renders both sidebar and split popups in its outer UI document. */
+export function readerAnnotationCommentFocus(
   reader: ReaderRuntime,
-  isCurrent: () => boolean,
-): MutationObserver | null {
-  const window = readerWindow(reader) as (Window & typeof globalThis) | undefined;
-  const root = window?.document.body;
-  if (!window || !root || typeof window.MutationObserver !== 'function') return null;
-  const guard = new window.MutationObserver((mutations) => {
-    if (!isCurrent()) return;
-    for (const mutation of mutations) {
-      for (const node of mutation.addedNodes) {
-        const element = asElement(node);
-        if (!element) continue;
-        const popup = element.matches('.annotation-popup')
-          ? element
-          : element.querySelector('.annotation-popup');
-        const input = popup?.querySelector<HTMLElement>('[contenteditable="true"],textarea,input');
-        input?.dispatchEvent(
-          new window.KeyboardEvent(
-            'keydown',
-            cloneInto(
-              {
-                key: 'Escape',
-                code: 'Escape',
-                bubbles: true,
-                cancelable: true,
-              },
-              window,
-            ),
-          ),
-        );
+  pdfWindow: Window,
+  key: string,
+): (() => CommentFocusAttempt) | null {
+  const window = readerWindow(reader);
+  const internal = (reader as NativeReaderRuntime)._internalReader;
+  if (!window || !internal || isDeadObject(window) || !/^[a-z0-9_-]+$/i.test(key)) return null;
+  const document = window.document;
+  const primary = readerPresentationView(reader, true)?._iframeWindow === pdfWindow;
+  const view = readerPresentationView(reader, primary);
+  if (!view || view._iframeWindow !== pdfWindow) return null;
+  let selected = internal._state?.selectedAnnotationIDs;
+  let catalog: readonly NativeReaderAnnotationRuntime[] | undefined;
+  let annotation: NativeReaderAnnotationRuntime | undefined;
+  return (): CommentFocusAttempt => {
+    if (
+      readerIsClosed(reader) ||
+      readerWindow(reader) !== window ||
+      isDeadObject(window) ||
+      isDeadObject(document) ||
+      window.document !== document ||
+      (reader as NativeReaderRuntime)._internalReader !== internal ||
+      isDeadObject(internal) ||
+      isDeadObject(view) ||
+      readerPresentationView(reader, primary) !== view ||
+      view._iframeWindow !== pdfWindow
+    )
+      return 'cancelled';
+    const state = internal._state;
+    if (state?.selectedAnnotationIDs !== selected) return 'cancelled';
+    if (state?.readOnly) return 'readOnly';
+    // AnnotationManager publishes fresh arrays; don't rescan while waiting on React.
+    if (state?.annotations !== catalog) {
+      catalog = state?.annotations;
+      annotation = undefined;
+      for (const candidate of catalog ?? []) {
+        if (candidate.id !== key) continue;
+        annotation = candidate;
+        break;
       }
     }
-  });
-  guard.observe(root, cloneInto({ childList: true, subtree: true }, window));
-  return guard;
+    // Newly saved annotations reach the Reader through Zotero's item notification.
+    if (!annotation) return 'pending';
+    if (annotation.readOnly) return 'readOnly';
+    if (annotation._hidden || annotation.type === 'ink') return 'unavailable';
+
+    const sidebarOpen = state?.sidebarOpen === true && state.sidebarView === 'annotations';
+    if (annotation.type === 'text' && !sidebarOpen) {
+      // Native text annotations expose their separate comment only in the sidebar.
+      if (!internal.setSidebarView || !internal.toggleSidebar) return 'unavailable';
+      internal.setSidebarView('annotations');
+      internal.toggleSidebar(true);
+      return 'pending';
+    }
+    if (selected?.length !== 1 || selected[0] !== key) {
+      if (!internal.setSelectedAnnotations) return 'unavailable';
+      // Omit triggeredFromView so Zotero doesn't schedule an unscoped autofocus.
+      // Selection updates the native annotation card and closes any prior popup.
+      internal.setSelectedAnnotations(cloneInto([key], window));
+      selected = internal._state?.selectedAnnotationIDs;
+      if (selected?.length !== 1 || selected[0] !== key) return 'unavailable';
+      return 'pending';
+    }
+    const popup = primary ? state?.primaryViewAnnotationPopup : state?.secondaryViewAnnotationPopup;
+    if (!sidebarOpen && popup?.annotation.id !== key) {
+      // This is the same native popup opener used by Zotero's PDF/DOM Enter handling.
+      if (!view._openAnnotationPopup) return 'unavailable';
+      view._openAnnotationPopup();
+      return 'pending';
+    }
+    const container = sidebarOpen
+      ? `#annotations [data-sidebar-annotation-id="${key}"]`
+      : `.${primary ? 'primary' : 'secondary'}-view .annotation-popup`;
+    const input = document.querySelector<HTMLElement>(
+      `${container} .comment .content[id="${key}"][role="textbox"][contenteditable="true"]:not([aria-readonly="true" i])`,
+    );
+    // Connected but hidden React trees are not ready; only settle once focus can land.
+    return input && visibleElement(window, input) ? input : 'pending';
+  };
 }

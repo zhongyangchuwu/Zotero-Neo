@@ -1,7 +1,6 @@
 import { actionText } from '../i18n';
-import { NOTE_ACTION_IDS, type NoteActionId } from './note-actions';
 
-const BASE_ACTION_IDS = [
+const ACTION_IDS_LIST = [
   'scrollDown',
   'scrollUp',
   'scrollLeft',
@@ -193,10 +192,9 @@ const BASE_ACTION_IDS = [
   'pluginsGitLog',
 ] as const;
 
-export type BaseActionId = (typeof BASE_ACTION_IDS)[number];
-export type ActionId = BaseActionId | NoteActionId;
+export type ActionId = (typeof ACTION_IDS_LIST)[number];
 
-export const ACTION_IDS = Object.freeze([...BASE_ACTION_IDS, ...NOTE_ACTION_IDS] as ActionId[]);
+export const ACTION_IDS = Object.freeze(ACTION_IDS_LIST);
 
 type ActionLabel = { readonly en: string; readonly 'zh-CN': string };
 

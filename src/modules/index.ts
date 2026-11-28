@@ -1,6 +1,5 @@
 import type { ActionId } from '../input/actions';
 import type { BindingContext } from '../input/bindings';
-import { NOTE_ACTION_IDS } from '../input/note-actions';
 import {
   READER_OUTLINE_ACTIONS,
   READER_MARKS_ACTIONS,
@@ -117,11 +116,6 @@ export const BUILTIN_MODULES: readonly BuiltinModuleDescriptor[] = [
       { host: 'main', context: 'main-select', actions: ['mainTrashItems'] },
       { host: 'main', context: 'reader-normal', actions: [...itemFind, 'mainAddByIdentifier'] },
       { host: 'reader', context: 'reader-normal', actions: ['mainYankCitekey'] },
-      {
-        host: 'main',
-        context: 'note-normal',
-        actions: [...itemFind, 'mainYankCitekey', 'mainOpenPDF'],
-      },
     ],
     selectionActions: [],
     ui: ['Item picker', 'Local find'],
@@ -159,7 +153,6 @@ export const BUILTIN_MODULES: readonly BuiltinModuleDescriptor[] = [
     contributions: [
       { host: 'main', context: 'main-normal', actions: TAG_MAIN_ACTIONS },
       { host: 'main', context: 'reader-normal', actions: TAG_ITEM_ACTIONS },
-      { host: 'main', context: 'note-normal', actions: TAG_ITEM_ACTIONS },
     ],
     selectionActions: [],
     ui: ['Tag picker'],
@@ -260,21 +253,15 @@ export const BUILTIN_MODULES: readonly BuiltinModuleDescriptor[] = [
     id: 'notes',
     names: { en: 'Notes', 'zh-CN': '笔记' },
     hosts: ['main'],
-    scopes: ['Main window', 'Note editor', 'Note picker'],
+    scopes: ['Main window', 'Note picker'],
     requires: [],
     optional: [],
     contributions: [
       { host: 'main', context: 'main-normal', actions: ['findNotes'] },
       { host: 'main', context: 'reader-normal', actions: ['findNotes'] },
-      {
-        host: 'main',
-        context: 'note-normal',
-        actions: ['findNotes', ...NOTE_ACTION_IDS, 'enterInsert', 'exitMode'],
-      },
-      { host: 'main', context: 'note-insert', actions: ['exitMode'] },
     ],
     selectionActions: [],
-    ui: ['Note editor', 'Note picker'],
+    ui: ['Note picker'],
   },
   {
     id: 'workspace',
@@ -286,7 +273,6 @@ export const BUILTIN_MODULES: readonly BuiltinModuleDescriptor[] = [
     contributions: [
       { host: 'main', context: 'main-normal', actions: tabs },
       { host: 'main', context: 'reader-normal', actions: [...tabs, 'showInLibrary'] },
-      { host: 'main', context: 'note-normal', actions: [...tabs, 'showInLibrary'] },
       { host: 'reader', context: 'reader-normal', actions: READER_WORKSPACE_ACTIONS },
     ],
     selectionActions: [],
@@ -302,7 +288,6 @@ export const BUILTIN_MODULES: readonly BuiltinModuleDescriptor[] = [
     contributions: [
       { host: 'main', context: 'main-normal', actions: EXTENSIONS_SURFACE_ACTIONS },
       { host: 'main', context: 'reader-normal', actions: EXTENSIONS_SURFACE_ACTIONS },
-      { host: 'main', context: 'note-normal', actions: EXTENSIONS_SURFACE_ACTIONS },
     ],
     selectionActions: [],
     ui: ['Plugin manager'],

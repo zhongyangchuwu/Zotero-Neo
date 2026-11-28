@@ -29,7 +29,7 @@ export function contextLabel(context: BindingContext, language: ShortcutLanguage
 }
 
 export function actionGroup(action: ActionId): ActionGroup {
-  if (action.startsWith('note')) return 'notes';
+  if (action === 'findNotes') return 'notes';
   if (action.startsWith('ui')) return 'interface';
   if (action.startsWith('plugins') || action === 'managePlugins') return 'plugins';
   if (/Annotation|^filter|^recolor/.test(action)) return 'annotations';

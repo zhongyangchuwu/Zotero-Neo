@@ -2,13 +2,11 @@ import type { MainWindow } from '../core/contracts';
 import type { PreferenceStore } from '../core/preference-store';
 import {
   READER_DEFAULT_HIGHLIGHT_COLOR_PREFERENCE_KEY,
-  ANNOTATION_COMMENT_EDITOR_ENABLED_PREFERENCE_KEY,
   READER_MARKS_PERSIST_PREFERENCE_KEY,
   READER_SCROLL_MODE_PREFERENCE_KEY,
   READER_SCROLL_NUMBER_SPECS,
   READER_SCROLL_STOP_ON_RELEASE_PREFERENCE_KEY,
   READER_VISUAL_MODE_ENABLED_PREFERENCE_KEY,
-  annotationCommentEditorEnabled,
   normalizeReaderScrollNumber,
   readerDefaultHighlightColor,
   readerMarksPersist,
@@ -59,7 +57,6 @@ export class SettingsReader {
     this.#input = input;
     const keys = [
       READER_VISUAL_MODE_ENABLED_PREFERENCE_KEY,
-      ANNOTATION_COMMENT_EDITOR_ENABLED_PREFERENCE_KEY,
       READER_MARKS_PERSIST_PREFERENCE_KEY,
       READER_DEFAULT_HIGHLIGHT_COLOR_PREFERENCE_KEY,
       READER_SCROLL_MODE_PREFERENCE_KEY,
@@ -96,11 +93,6 @@ export class SettingsReader {
           this.#language === 'zh-CN'
             ? '按 v 或用鼠标选中文字后，可用 Neo 的选区快捷键。'
             : 'Press v or select text with the mouse to use Neo’s selection shortcuts.',
-        comment: s('Annotation comment editing'),
-        commentHint:
-          this.#language === 'zh-CN'
-            ? '按 i 或 Enter 编辑所选批注的评论。'
-            : 'Press i or Enter to edit the selected annotation’s comment.',
         scrolling: s('Scrolling'),
         scrollingHint:
           this.#language === 'zh-CN'
@@ -145,7 +137,6 @@ export class SettingsReader {
         off: s('Off'),
       },
       visual: readerModeEnabled(this.#preferences, 'visual'),
-      comment: annotationCommentEditorEnabled(this.#preferences),
       marks: readerMarksPersist(this.#preferences),
       color: readerDefaultHighlightColor(this.#preferences),
       scroll: readerScrollConfig(this.#preferences),
@@ -199,13 +190,11 @@ export class SettingsReader {
     let value: string | number | boolean;
     switch (command.type) {
       case 'visual':
-      case 'comment':
       case 'marks':
       case 'stop':
         if (typeof command.value !== 'boolean') return;
         key = {
           visual: READER_VISUAL_MODE_ENABLED_PREFERENCE_KEY,
-          comment: ANNOTATION_COMMENT_EDITOR_ENABLED_PREFERENCE_KEY,
           marks: READER_MARKS_PERSIST_PREFERENCE_KEY,
           stop: READER_SCROLL_STOP_ON_RELEASE_PREFERENCE_KEY,
         }[command.type];

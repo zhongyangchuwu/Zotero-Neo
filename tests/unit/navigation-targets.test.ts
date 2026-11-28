@@ -3,7 +3,6 @@ import { afterEach, describe, expect, it, vi } from 'vitest';
 import type { MainWindow } from '../../src/core/contracts';
 import { LibraryNavigation } from '../../src/modules/library/navigation';
 import { MAIN_ITEM_TARGET } from '../../src/main/main-item-target';
-import { NOTE_ITEM_TARGET } from '../../src/main/note-item-target';
 import { READER_ITEM_TARGET } from '../../src/reader/item-target';
 import { copyCitekeys } from '../../src/operations/citekeys';
 import { batchStatus } from '../../src/i18n/batch-result';
@@ -421,28 +420,6 @@ describe('Main action target contracts', () => {
     copyCitekeys(READER_ITEM_TARGET.resolve({ itemID: reader.id }), logger);
 
     expect(h.copied).toEqual(['reader']);
-    expect(h.selection.values()).toEqual([{ libraryID: 1, itemID: main.id }]);
-  });
-
-  it('copies the Note parent after its picker takes focus without borrowing Main Selection', () => {
-    const main = attachment(10, 'main');
-    const paper = attachment(11, 'paper');
-    const note = attachment(12);
-    Reflect.set(note, 'isAttachment', () => false);
-    Reflect.set(note, 'isNote', () => true);
-    Reflect.set(note, 'parentItemID', paper.id);
-    const h = harness([main]);
-    h.install(paper, note);
-    h.selection.add({ libraryID: 1, itemID: main.id });
-    const active = h.window.document.activeElement;
-    Reflect.set(h.window, 'ZoteroContextPane', {
-      context: { activeEditor: { item: note, contains: (node: unknown) => node === active } },
-    });
-
-    const targets = NOTE_ITEM_TARGET.resolve(h.window);
-    Reflect.set(h.window.document, 'activeElement', null);
-    copyCitekeys(targets, logger);
-    expect(h.copied).toEqual(['paper']);
     expect(h.selection.values()).toEqual([{ libraryID: 1, itemID: main.id }]);
   });
 

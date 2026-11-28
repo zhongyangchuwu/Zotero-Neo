@@ -18,11 +18,6 @@ import type { LocalFindReactModel } from '../../modules/library/local-find-react
 import { mountExtensionsReactView, EXTENSIONS_REACT_CSS } from './surfaces/extensions';
 import type { ExtensionsReactModel } from '../../modules/extensions/react-model';
 import {
-  mountAnnotationCommentReactView,
-  ANNOTATION_COMMENT_REACT_CSS,
-} from './surfaces/annotation-comment';
-import type { AnnotationCommentReactModel } from '../../modules/reader-annotations/react-model';
-import {
   mountSelectionActionsReactView,
   SELECTION_ACTIONS_REACT_CSS,
 } from './surfaces/selection-actions';
@@ -62,7 +57,6 @@ const runtime: NativeUIRuntime = {
         EXTENSIONS_REACT_CSS +
         METADATA_REVIEW_CSS +
         SETTINGS_SNAPSHOTS_CSS +
-        ANNOTATION_COMMENT_REACT_CSS +
         SELECTION_ACTIONS_REACT_CSS +
         READER_SIDEBAR_REACT_CSS +
         MAIN_NOTICE_REACT_CSS +
@@ -128,12 +122,6 @@ const runtime: NativeUIRuntime = {
       case 'settings-snapshots':
         return mountSettingsSnapshotsView(root, model as SettingsSnapshotModel, (command) =>
           dispatch(command),
-        ) as ReactView<unknown>;
-      case 'annotation-comment':
-        return mountAnnotationCommentReactView(
-          root,
-          model as AnnotationCommentReactModel,
-          (command) => dispatch(command),
         ) as ReactView<unknown>;
       case 'selection-actions':
         return mountSelectionActionsReactView(

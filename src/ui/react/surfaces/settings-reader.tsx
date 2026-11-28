@@ -127,7 +127,7 @@ function CredentialField({
 export function ReaderPage({ model, dispatch }: { model: ReaderPageModel; dispatch: Dispatch }) {
   const l = model.labels;
   const toggle = (
-    type: 'visual' | 'comment' | 'marks' | 'stop',
+    type: 'visual' | 'marks' | 'stop',
     label: string,
     hint: string,
     checked: boolean,
@@ -153,7 +153,6 @@ export function ReaderPage({ model, dispatch }: { model: ReaderPageModel; dispat
       <section className="neo-reader-group">
         <h3>{l.input}</h3>
         {toggle('visual', l.visual, l.visualHint, model.visual)}
-        {toggle('comment', l.comment, l.commentHint, model.comment)}
       </section>
       <section className="neo-reader-group">
         <h3>{l.scrolling}</h3>

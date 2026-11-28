@@ -57,11 +57,7 @@ export function createCommandsProvider(context: CommandPaletteContext): PickerPr
   return {
     title: t('palette.title', context.language),
     placeholder: t(
-      context.mode === 'normal'
-        ? 'palette.readerPrompt'
-        : context.mode === 'note'
-          ? 'palette.notePrompt'
-          : 'palette.mainPrompt',
+      context.mode === 'normal' ? 'palette.readerPrompt' : 'palette.mainPrompt',
       context.language,
     ),
     load: async () => {

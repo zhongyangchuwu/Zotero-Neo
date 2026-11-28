@@ -197,7 +197,7 @@ Reader 和 Note 的目标来自各自上下文，绝不借用 Main Selection。S
 | --- | --- |
 | Cursor 移动和局部查找 | 仅 Cursor |
 | Main Items 中的 Open/Activate | 仅 Main Cursor，不论持久 Selection 或 Zotero 原生多选；Cursor 不可解析时拒绝。Items 面板的 Enter 同样遵循此规则；分类面板的 Enter 选择原生 Scope 游标并将焦点移至 Items。 |
-| Note Open | Note 上下文条目；如有书目父项则归一化到父项；不使用 Main Selection。 |
+| Note Open | 笔记选择器打开所选笔记；不使用 Main Selection。 |
 | Show in Library | Reader/Note 使用各自 Surface 的上下文条目；Selection Panel Reveal 使用面板中选中的确切 ItemRef。 |
 | Add/Remove Tag | Main 使用 MainItemTarget；Reader/Note 使用各自上下文中的单条目标。 |
 | Trash / restore | Trash 使用 MainItemTarget，并确认目标／数量且拒绝隐藏成员；restore 使用 Neo 最近一次 Trash 批次。 |
@@ -207,7 +207,7 @@ Reader 和 Note 的目标来自各自上下文，绝不借用 Main Selection。S
 | Quick/Advanced Search、标签筛选和排序 | 仅影响 View，不修改 Main Selection。 |
 | Citekey 复制 | Main 可通过 MainItemTarget 批量处理；Reader/Note 仍按各自上下文处理单个目标。 |
 
-Main Open/Activate 是普通 Main 条目 Operation 的一个特例，只以 Cursor 为目标：持久 Selection 和原生多选不会替代 Cursor。Cursor 无法解析时拒绝；绝不打开宿主选择集中的第一项。Note Open 使用自身上下文目标。这不是批量打开契约。
+Main Open/Activate 是普通 Main 条目 Operation 的一个特例，只以 Cursor 为目标：持久 Selection 和原生多选不会替代 Cursor。Cursor 无法解析时拒绝；绝不打开宿主选择集中的第一项。笔记选择器打开所选笔记，不执行批量打开。
 
 具体动作的归一化规则仍然重要。例如，为条目添加标签时可以有意将附件归一化到父项；删除该附件的动作则不能悄悄采用这种归一化。
 
@@ -257,9 +257,9 @@ Reader 和 Note 从各自当前 Surface 解析条目，不借用 Main Selection�
 
 ## 键位图方向
 
-Main 和 Reader 具有 Normal/Visual 交互；Note 具有 Normal/Insert。`BindingContext` 标识负责方及其能力集合，不是单独的 Surface 模式或领域状态。准确上下文和绑定见[命令参考](../COMMAND_REFERENCE.md)；模式不会继承其他模式或全局后备绑定。
+Main 和 Reader 具有 Normal/Visual 交互；Note 的文字编辑交给 Zotero 原生编辑器，不再有 Note Normal/Insert 模式或绑定上下文。`BindingContext` 标识负责方及其能力集合，不是单独的 Surface 模式或领域状态。准确上下文和绑定见[命令参考](../COMMAND_REFERENCE.md)；模式不会继承其他模式或全局后备绑定。
 
-功能输入负责方只在各自定义的目标和生命周期内优先处理输入。批注评论编辑器拥有其捕获的 PDF 视图。设置 → Reader → **批注评论编辑**偏好控制能否进入编辑器；关闭后，`i` 会使用 Reader 范围的原生输入透传，直到按 Escape 或交互停用。Enter 插入原生换行。输入后立即保存本机草稿，停止输入两秒后尝试保存到原生批注；Escape 或输入交接会提交最终草稿并关闭。Reader／视图销毁释放编辑器和定时器，但保留本机草稿，已接纳的保存仍可完成。原生冲突需要明确覆盖，本机持久化失败时阻止主动关闭；强制退休则提示复制未持久化文本。这不是 Reader Insert 模式。Note Insert 会将普通文字交给 Zotero 原生编辑器。输入法组合输入的所有权见[输入法说明](../TROUBLESHOOTING.md#为什么输入中文时-enter-或-esc-没有执行命令)。
+Reader Normal 的 `i` / `Enter` 对选中的可写批注显示并聚焦原生评论框；Select 的 `za` / `i` 和选区操作面板也可创建批注并聚焦该框。输入、输入法、保存和 Escape 由 Zotero 处理，只读批注不进入编辑。主栏和 Reader 侧栏笔记保留 Ctrl/⌘+Click 富文本及裸链接跳转；方向焦点仍可使用，普通文字输入、粘贴和撤销不由 Neo 接管。旧编辑器未提交的本机草稿在启动时安全导出后才清理旧存储；旧偏好、Note 绑定上下文及旧备份中的相关字段静默忽略。
 
 Reader 歧义短命令的超时执行绑定发起它的精确视图、Document 与焦点代次；切换分屏、替换文档或失焦后不将旧命令转交给新的活动窗格。
 
@@ -270,12 +270,12 @@ Reader 歧义短命令的超时执行绑定发起它的精确视图、Document �
 | 状态切换 | 保留 | 清除、归一化或释放 |
 | --- | --- | --- |
 | Main 停用 | Main Persistent Selection | Main Visual 范围、待处理输入、Prefix Guide；模式恢复为 Normal。 |
-| Reader 停用 | Reader session 和 Zotero PDF 状态 | Reader 激活期间的临时输入／Visual；活动批注编辑器通过保存／关闭流程交还输入权。 |
-| Note 停用 | Note 身份和 yank/register | 待处理输入及 Insert 模式；模式恢复为 Normal。 |
-| Note A → Note B 或编辑器宿主替换 | Zotero Note 数据 | 按 Note 条目 ID 和编辑器宿主身份重新绑定；重置 Note 模式、待处理输入和 yank/register。 |
+| Reader 停用 | Reader session 和 Zotero PDF 状态 | Reader 激活期间的临时输入／Visual；原生评论交互由 Zotero 管理。 |
+| Note 停用 | Zotero Note 数据 | Neo 不维护 Note 编辑模式或寄存器。 |
+| Note A → Note B 或编辑器宿主替换 | Zotero Note 数据 | 按 Note 条目和编辑器宿主身份切换原生编辑目标。 |
 | Reader 主 PDF 视图 → 次 PDF 视图 | 同一 Reader Surface/runtime | 只切换活动视图。 |
 | Reader A → Reader B | 两个仍存活的 `instanceID` runtime | 停用非活动 Reader 的临时交互状态。 |
 | Reader 关闭 | Zotero 数据 | 对账并释放该 Reader runtime。 |
 | MainWindow 关闭 | Zotero 应用数据 | 释放该窗口作用域中的 Main、Note 和 Reader runtime。 |
 
-即使上下文面板中的 Note 编辑器 DOM 由 MainWindow 承载，它仍属于 Note 交互。若复用的编辑器宿主改为显示另一条 Note，这属于身份切换，而不是原 Note 的 Neo 输入状态延续。
+即使上下文面板中的 Note 编辑器 DOM 由 MainWindow 承载，文字输入仍由 Zotero 原生编辑器处理。

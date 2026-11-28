@@ -62,8 +62,8 @@ function harness() {
 }
 
 const candidate = { id: 'a', title: 'First', search: 'first' };
-const targets = <S extends 'reader' | 'note'>(source: S, id: number) => ({
-  source,
+const targets = (id: number): ItemTargetSet<'reader'> => ({
+  source: 'reader',
   items: [{ id } as ItemTargetSet['items'][number]],
   total: 1,
   missing: 0,
@@ -87,7 +87,7 @@ describe('Workspace module lifetimes', () => {
 
   it('releases a late acquisition without closing its successor or admitting its confirmation', async () => {
     const h = harness();
-    h.onAcquire(() => h.workspace.switchTab('note'));
+    h.onAcquire(() => h.workspace.switchTab('reader'));
     h.workspace.switchTab('main');
     const [old, successor] = h.choosers;
     expect(old!.open).toBe(false);
@@ -121,23 +121,19 @@ describe('Workspace module lifetimes', () => {
     expect(h.selectTab).not.toHaveBeenCalled();
   });
 
-  it('selects only supplied Reader and Note targets and rejects invalid cardinality', () => {
+  it('selects only the supplied Reader target and rejects invalid cardinality', () => {
     const h = harness();
-    h.workspace.showInLibrary(targets('reader', 11), 'reader');
-    h.workspace.showInLibrary(targets('note', 22), 'note');
-    expect(h.selectInLibrary.mock.calls.map(([id, surface]) => [id, surface])).toEqual([
-      [11, 'reader'],
-      [22, 'note'],
-    ]);
-    const valid = targets('reader', 33);
+    h.workspace.showInLibrary(targets(11));
+    expect(h.selectInLibrary.mock.calls.map(([id]) => id)).toEqual([11]);
+    const valid = targets(33);
     for (const invalid of [
       { ...valid, missing: 1 },
       { ...valid, total: 2 },
       { ...valid, items: [] },
       { ...valid, items: [valid.items[0]!, valid.items[0]!] },
     ])
-      h.workspace.showInLibrary(invalid, 'reader');
-    expect(h.selectInLibrary).toHaveBeenCalledTimes(2);
+      h.workspace.showInLibrary(invalid);
+    expect(h.selectInLibrary).toHaveBeenCalledOnce();
   });
 
   it('does not present an old completion after a newer workflow or retirement', async () => {
@@ -149,8 +145,8 @@ describe('Workspace module lifetimes', () => {
           finish = resolve;
         }),
     );
-    h.workspace.showInLibrary(targets('reader', 11), 'reader');
-    h.workspace.showInLibrary(targets('note', 22), 'note');
+    h.workspace.showInLibrary(targets(11));
+    h.workspace.showInLibrary(targets(22));
     const statusCount = h.status.mock.calls.length;
     finish({ kind: 'completed', evidence: 'settled-change', recorded: true });
     await Promise.resolve();
@@ -162,7 +158,7 @@ describe('Workspace module lifetimes', () => {
           finish = resolve;
         }),
     );
-    h.workspace.showInLibrary(targets('note', 23), 'note');
+    h.workspace.showInLibrary(targets(23));
     h.host.dispose();
     finish({ kind: 'failed', error: new Error('late'), recorded: false });
     await Promise.resolve();

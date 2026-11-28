@@ -20,7 +20,6 @@ import type {
 import { CleanupFailure, CleanupScope } from '../core/cleanup';
 import type { BuiltinModuleScope } from '../core/module-runtime';
 import {
-  annotationCommentEditorEnabled,
   keyGuideConfig,
   neoCommandLanguage,
   readerDefaultHighlightColor,
@@ -541,7 +540,6 @@ export class ReaderSession {
   readonly #library: ReaderLibraryModule | null;
   readonly #hints: ReaderHintsModule | null;
   readonly #annotations: ReaderAnnotationsModule | null;
-  readonly #commentEditor: ReaderAnnotationsModule['commentEditor'] | null;
   readonly #nativeInput: ReaderNativeInput;
   readonly #selection: ReaderSelectionModule | null;
   readonly #references: ReferencesModule | null;
@@ -557,7 +555,6 @@ export class ReaderSession {
   #markJumpRevision = 0;
   #surfaceMode: ReaderMode = 'normal';
   #interactionRevision = 0;
-  #editorReleaseRevision = 0;
   #selectionView: ReaderViewRuntime | null = null;
   #selectionWindow: PdfWindow | null = null;
   readonly state: ReaderSessionState;
@@ -608,10 +605,17 @@ export class ReaderSession {
       this.#annotations = this.#modules.activate('reader-annotations', () =>
         createReaderAnnotationsModule(this.#modules.host, {
           reader: dependencies.reader,
-          activeWindow: () => this.#navigationHost.activePdfWindow(),
           capturePresentation: (window) => this.invocationCurrent(window),
-          captureView: (window) => this.invocationCurrent(window, null),
-          captureViewLifetime: (window) => this.captureViewLifetime(window),
+          captureView: (pdfWindow) => {
+            const current = this.invocationCurrent(pdfWindow, null);
+            const window = readerWindow(dependencies.reader);
+            if (window && isDeadObject(window)) return () => false;
+            const document = window?.document;
+            return () =>
+              current() &&
+              readerWindow(dependencies.reader) === window &&
+              (!window || (!isDeadObject(window) && window.document === document));
+          },
           selectionParams: (window) =>
             this.#selectionWindow === window &&
             this.#selectionView === this.readerViewForWindow(window)
@@ -624,64 +628,23 @@ export class ReaderSession {
           clearAnnotation: (key) => this.#annotationNavigation.clearAnnotation(key),
           clearNativeSelection: () => this.clearNativeSelection(),
           setModeNormal: () => this.setMode('normal'),
-          releaseNativeInput: () => this.#nativeInput.release(),
           defaultHighlightColor: () => this.defaultHighlightColor(),
-          commentEnabled: () =>
-            annotationCommentEditorEnabled(dependencies.controller.dependencies.preferences),
-          beginSelectionAction: () => {
+          beginSelectionAction: (closePanel) => {
             this.#interactionRevision += 1;
             this.#markJumpRevision += 1;
+            if (closePanel) this.#selectionActions?.close();
           },
-          themeRoot: (root) => this.themeRoot(root),
           copyText: copyToClipboard,
           showStatus: (message, duration) => this.showStatus(message, duration),
           language: () => this.keyGuideLanguage(),
-          nativeEditableFocused: () => this.nativeEditableFocused(),
-          onNativeEditorFocus: () => {
-            void this.handOverNativeEditor();
-          },
-          onInputOwnerChanged: () => {
-            this.#interactionRevision += 1;
-            if (!this.#commentEditor?.ownsInput)
-              this.#editorReleaseRevision = this.#interactionRevision;
-            this.input.reset();
-            this.clearKeyGuide();
-            this.#sidebar?.deactivate();
-            this.#smoothScroller?.stop(true);
-            this.updateIndicator();
-          },
-          onCommentExit: (saved, pdfWindow) => {
-            if (
-              this.#nativeInput.ownsInput ||
-              this.#commentEditor?.ownsInput ||
-              readerSidebarContainsTarget(
-                this.#dependencies.reader,
-                readerWindow(this.#dependencies.reader)?.document.activeElement ?? null,
-              ) ||
-              this.#interactionRevision !== this.#editorReleaseRevision ||
-              this.#navigationHost.activePdfWindow() !== pdfWindow
-            )
-              return;
-            pdfWindow.focus();
-            this.showStatus(
-              t(
-                saved ? 'reader.annotation.commentSaved' : 'reader.annotation.commentSaveFailed',
-                this.keyGuideLanguage(),
-              ),
-              saved ? 1200 : 2500,
-            );
-          },
           debug: (message) => dependencies.controller.dependencies.logger.debug(message),
         }),
       );
-      this.#commentEditor = this.#annotations?.commentEditor ?? null;
       this.#hostKeyBridge = new ReaderHostKeyBridge({
         reader: dependencies.reader,
         nativeEditableFocused: () => this.nativeEditableFocused(),
         consumesKey: (key, pdfWindow) => this.readerConsumesKey(key, pdfWindow),
-        featureInputFocused: (window) =>
-          (this.#commentEditor?.isInputFocused(window) ?? false) ||
-          (this.#references?.isInputFocused(window) ?? false),
+        featureInputFocused: (window) => this.#references?.isInputFocused(window) ?? false,
         debug: (message) => dependencies.controller.dependencies.logger.debug(message),
       });
       this.#jumpHistoryBridge = new ReaderJumpHistoryBridge({
@@ -775,7 +738,6 @@ export class ReaderSession {
                 if (
                   this.#scope.disposed ||
                   this.#nativeInput.ownsInput ||
-                  this.#commentEditor?.ownsInput ||
                   this.nativeEditableFocused() ||
                   this.#surfaceMode !== 'normal' ||
                   !this.readerViewForWindow(pdfWindow) ||
@@ -867,6 +829,7 @@ export class ReaderSession {
         onKeyDown: (event, pdfWindow) => this.handleKeyDown(event, pdfWindow),
         onKeyUp: (event) => this.handleKeyUp(event),
         onPointerDown: (pdfWindow, event) => {
+          this.#annotations?.cancelCommentFocus();
           if (
             event.button === 0 &&
             this.#surfaceMode === 'visual' &&
@@ -886,6 +849,7 @@ export class ReaderSession {
           this.#sidebar?.deactivate();
         },
         onBlur: (pdfWindow, event) => {
+          this.#annotations?.cancelCommentFocus(pdfWindow);
           this.#interactionRevision += 1;
           this.#smoothScroller?.stop(true);
           this.#flash?.onBlur(pdfWindow, event);
@@ -927,6 +891,7 @@ export class ReaderSession {
         },
         onTextLayerRendered: (pdfWindow) => this.#selection?.refreshLayout(pdfWindow),
         releaseView: (pdfWindow) => {
+          this.#annotations?.cancelCommentFocus(pdfWindow);
           this.#interactionRevision += 1;
           if (this.#selectionWindow === pdfWindow) this.clearNativeSelection();
           const failure = new CleanupFailure();
@@ -1399,6 +1364,7 @@ export class ReaderSession {
   }
 
   deactivateInteraction(): void {
+    this.#annotations?.cancelCommentFocus();
     this.#viewLifecycle.setBodySelectionActive(false);
     this.#references?.close();
     this.#markJumpRevision += 1;
@@ -1407,10 +1373,6 @@ export class ReaderSession {
     this.#hints?.links.close();
     this.#hints?.copy.close();
     this.#nativeInput.release();
-    if (this.#commentEditor?.ownsInput) {
-      void this.handOverNativeEditor();
-      return;
-    }
     this.setMode('normal');
   }
 
@@ -1430,18 +1392,33 @@ export class ReaderSession {
   }
 
   private installOuterReaderListeners(): void {
-    const document = readerWindow(this.#dependencies.reader)?.document;
+    const window = readerWindow(this.#dependencies.reader);
+    const document = window?.document;
     if (!document) return;
     this.#scope.addEventListener(
       document,
       'focusin',
-      ((event: Event) => {
+      () => {
         this.#interactionRevision += 1;
-        if (!this.#commentEditor?.ownsInput || !isEditableElement(asElement(event.target))) return;
-        void this.handOverNativeEditor();
-      }) as EventListener,
+        this.#annotations?.cancelCommentFocus();
+      },
       true,
     );
+    if (this.#annotations && typeof window.addEventListener === 'function') {
+      this.#scope.addEventListener(
+        window,
+        'pointerdown',
+        () => {
+          this.#interactionRevision += 1;
+          this.#annotations?.cancelCommentFocus();
+        },
+        true,
+      );
+      this.#scope.addEventListener(window, 'blur', () => {
+        this.#interactionRevision += 1;
+        this.#annotations?.cancelCommentFocus();
+      });
+    }
     this.#scope.addEventListener(
       document,
       'keydown',
@@ -1449,6 +1426,7 @@ export class ReaderSession {
         const keyEvent = asKeyboardEvent(event);
         if (!keyEvent) return;
         if (this.nativeEditableFocused() && !this.#nativeInput.ownsInput) {
+          this.#annotations?.cancelCommentFocus();
           this.input.reset();
           this.clearKeyGuide();
           this.updateIndicator();
@@ -1494,7 +1472,6 @@ export class ReaderSession {
     const failure = new CleanupFailure();
     failure.run(() => this.#flash?.releaseView(pdfWindow));
     failure.run(() => this.#smoothScroller?.releaseView(pdfWindow));
-    failure.run(() => this.#commentEditor?.releaseView(pdfWindow));
     const manager = this.#themeManagers.get(pdfWindow);
     this.#themeManagers.delete(pdfWindow);
     failure.run(() => manager?.dispose());
@@ -1511,6 +1488,7 @@ export class ReaderSession {
     sidebarTarget = readerSidebarContainsTarget(this.#dependencies.reader, event.target),
   ): void {
     if (this.#scope.disposed) return;
+    this.#annotations?.cancelCommentFocus();
     if (this.#references?.ownsTarget(event.target)) return;
     this.#references?.activateView(pdfWindow);
     if (!this.#nativeInput.ownsInput && sidebarTarget) {
@@ -1526,13 +1504,11 @@ export class ReaderSession {
     // Palette-owned busy/IME keys do not retire the action whose result is still pending.
     if (
       !this.#nativeInput.ownsInput &&
-      !this.#commentEditor?.ownsView(pdfWindow) &&
       this.#selectionActions?.isOpen &&
       this.#selectionActions?.handleKey(event, pdfWindow)
     )
       return;
     this.#interactionRevision += 1;
-    if (this.#commentEditor?.handleKey(event, pdfWindow)) return;
     if (this.#nativeInput.handleKey(event, pdfWindow)) return;
     if (this.#flash?.isOpen && this.#flash?.handleKey(event, pdfWindow)) return;
     if (this.#hints?.links.hasHints && this.#hints?.links.handleKey(event, pdfWindow)) return;
@@ -1620,8 +1596,8 @@ export class ReaderSession {
 
   /** Retires prior presentation work before admitting a jump in the initiating PDF view. */
   #beginCaptionJump(window: PdfWindow): (() => boolean) | null {
-    if (this.#scope.disposed || this.#nativeInput.ownsInput || this.#commentEditor?.ownsInput)
-      return null;
+    if (this.#scope.disposed || this.#nativeInput.ownsInput) return null;
+    this.#annotations?.cancelCommentFocus();
     this.#interactionRevision += 1;
     return this.invocationCurrent(window);
   }
@@ -1687,8 +1663,6 @@ export class ReaderSession {
   private readerConsumesKey(key: string, pdfWindow: PdfWindow | undefined): boolean {
     if (!key) return false;
     if (this.#nativeInput.ownsInput) return key === 'escape';
-    if (pdfWindow && this.#commentEditor?.ownsView(pdfWindow))
-      return this.#commentEditor.consumesKey(key, pdfWindow);
     if (this.#selectionActions?.isOpen && pdfWindow && this.#selectionActions?.ownsView(pdfWindow))
       return true;
     if (this.#flash?.isOpen && pdfWindow && this.#flash?.ownsView(pdfWindow)) return true;
@@ -1723,12 +1697,8 @@ export class ReaderSession {
   }
 
   private executeAction(action: ActionId, count: number, pdfWindow: PdfWindow | null): void {
-    if (
-      this.#scope.disposed ||
-      this.#nativeInput.ownsInput ||
-      (pdfWindow && this.#commentEditor?.ownsView(pdfWindow))
-    )
-      return;
+    if (this.#scope.disposed || this.#nativeInput.ownsInput) return;
+    this.#annotations?.cancelCommentFocus();
     // Drain a replaced view before a fresh action can acquire resources in its reused Window.
     this.#viewLifecycle.sync();
     if (!this.#modules.available(readerBindingMode(this.#surfaceMode), action)) return;
@@ -1918,12 +1888,7 @@ export class ReaderSession {
         break;
       }
       case 'enterInsert':
-        if (
-          this.#annotations &&
-          annotationCommentEditorEnabled(this.#dependencies.controller.dependencies.preferences)
-        )
-          void this.#annotations.openComment();
-        else this.enterNativeInput();
+        if (!this.#annotations?.openComment(pdfWindow)) this.enterNativeInput();
         break;
       default:
         return assertNever(action);
@@ -1956,6 +1921,7 @@ export class ReaderSession {
   }
 
   private setMode(mode: ReaderMode): void {
+    this.#annotations?.cancelCommentFocus();
     this.#interactionRevision += 1;
     const previousMode = this.#surfaceMode;
     if (this.#flash?.isOpen) this.#flash?.cancel();
@@ -1981,15 +1947,11 @@ export class ReaderSession {
   private refreshKeyGuide(): void {
     this.#prefixGuide.refresh(() => {
       const config = keyGuideConfig(this.#dependencies.controller.dependencies.preferences);
-      const pdfWindow = this.#navigationHost.activePdfWindow();
       return {
         input: this.input,
         mode: readerBindingMode(this.mode),
         bindings: this.availableBindings(),
-        enabled:
-          config.enabled &&
-          !this.#nativeInput.ownsInput &&
-          !(pdfWindow && this.#commentEditor?.ownsView(pdfWindow)),
+        enabled: config.enabled && !this.#nativeInput.ownsInput,
         language: this.keyGuideLanguage(),
         delayMs: config.delayMs,
         fontSizePx: config.fontSizePx,
@@ -2014,13 +1976,8 @@ export class ReaderSession {
     // A tab switch or the layout status timer can run before Zotero retires its Reader entry.
     if (readerIsClosed(reader) || (window && isDeadObject(window))) return;
     const pdfWindow = this.#navigationHost.activePdfWindow();
-    const inputOwner = this.#nativeInput.ownsInput
-      ? 'reader.mode.native'
-      : pdfWindow && this.#commentEditor?.ownsView(pdfWindow)
-        ? 'reader.mode.comment'
-        : null;
-    if (inputOwner) {
-      const label = t(inputOwner, this.keyGuideLanguage());
+    if (this.#nativeInput.ownsInput) {
+      const label = t('reader.mode.native', this.keyGuideLanguage());
       this.renderIndicator({ visible: true, text: `-- ${label} --`, kind: 'insert' });
       return;
     }
@@ -2173,12 +2130,7 @@ export class ReaderSession {
   }
 
   private readerViewCurrent(window: PdfWindow): boolean {
-    if (
-      this.#scope.disposed ||
-      this.#nativeInput.ownsInput ||
-      this.#commentEditor?.ownsView(window)
-    )
-      return false;
+    if (this.#scope.disposed || this.#nativeInput.ownsInput) return false;
     const reader = this.#dependencies.reader;
     const view = this.readerViewForWindow(window);
     if (!view || isDeadObject(window) || isDeadObject(view)) return false;
@@ -2190,7 +2142,7 @@ export class ReaderSession {
     );
   }
 
-  /** Final comment handoff may save a live original view after another tab or pane activates. */
+  /** Captures an exact view lifetime independently of its later focus or tab selection. */
   private captureViewLifetime(pdfWindow: PdfWindow): () => boolean {
     const reader = this.#dependencies.reader;
     const view = this.readerViewForWindow(pdfWindow);
@@ -2255,23 +2207,11 @@ export class ReaderSession {
   }
 
   private enterNativeInput(): void {
-    if (this.#commentEditor?.ownsInput) void this.handOverNativeEditor();
     this.setMode('normal');
     this.#nativeInput.enter();
     this.#sidebar?.deactivate();
     this.#smoothScroller?.stop(true);
     this.updateIndicator();
-  }
-
-  private async handOverNativeEditor(): Promise<void> {
-    this.setMode('normal');
-    try {
-      await this.#commentEditor?.handOver();
-    } catch (error) {
-      this.#dependencies.controller.dependencies.logger.debug(
-        `comment editor handoff failed: ${String(error)}`,
-      );
-    }
   }
 
   private availableBindings(): BindingMap {

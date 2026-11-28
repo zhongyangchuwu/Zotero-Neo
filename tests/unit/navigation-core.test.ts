@@ -172,11 +172,12 @@ describe('NavigationCoordinator', () => {
     }
   });
 
-  it('records Reader and Note chooser confirmations through their original surfaces', () => {
+  it('records chooser confirmations, including Notes from Main and Reader, in shared history', () => {
     const confirmations = [
       ['findAllItems', 'reader'],
       ['findCollectionItems', 'reader'],
-      ['findNotes', 'note'],
+      ['findNotes', 'main'],
+      ['findNotes', 'reader'],
     ] as const;
     for (const [action, surface] of confirmations) {
       const source = tab(`${surface}-source`);

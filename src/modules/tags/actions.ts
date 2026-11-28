@@ -17,7 +17,6 @@ function sameTag(left: string, right: string): boolean {
 
 function targetContext(targets: ItemTargetSet, language: string): string {
   if (targets.source === 'reader') return t('workflow.itemTarget.reader', language);
-  if (targets.source === 'note') return t('workflow.itemTarget.note', language);
   const origin = targets.presentation.origin;
   const context = origin === 'native-selection' ? 'nativeSelection' : origin;
   return t(`workflow.itemTarget.main.${context}`, language);

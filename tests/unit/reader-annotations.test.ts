@@ -1,3 +1,4 @@
+// @vitest-environment jsdom
 import { afterEach, describe, expect, it, vi } from 'vitest';
 import { textAdmissionFixture } from '../fixtures/reader-text-admission';
 import {
@@ -69,13 +70,11 @@ function annotationFixture(language: KeyGuideLanguage = 'en') {
   const host = new ModuleHost({ debug: vi.fn(), diagnostic: vi.fn() }, () => true);
   const ports: ReaderAnnotationsModulePorts = {
     reader,
-    activeWindow: () => window,
     capturePresentation: () => {
       const captured = revision;
       return () => captured === revision;
     },
     captureView: () => () => true,
-    captureViewLifetime: () => () => true,
     selectionParams: () => null,
     itemForReader: () => item,
     selectedAnnotationKey: () => state.selectedAnnotationIDs[0] ?? selected,
@@ -83,14 +82,7 @@ function annotationFixture(language: KeyGuideLanguage = 'en') {
     clearAnnotation,
     clearNativeSelection: vi.fn(),
     setModeNormal: vi.fn(),
-    releaseNativeInput: vi.fn(),
     defaultHighlightColor: () => COLORS.yellow,
-    commentEnabled: () => true,
-    themeRoot: () => () => undefined,
-    nativeEditableFocused: () => false,
-    onNativeEditorFocus: vi.fn(),
-    onInputOwnerChanged: vi.fn(),
-    onCommentExit: vi.fn(),
     language: () => language,
     copyText: vi.fn(),
     beginSelectionAction: vi.fn(),
@@ -121,6 +113,111 @@ function annotationFixture(language: KeyGuideLanguage = 'en') {
     erased: () => erased,
   };
 }
+
+describe('Reader native comment surfaces', () => {
+  afterEach(() => {
+    vi.useRealTimers();
+    document.body.replaceChildren();
+  });
+
+  it('waits for the selected native comment in the requesting split, not another editable field', () => {
+    vi.useFakeTimers();
+    const f = annotationFixture();
+    Reflect.set(f.ports.reader, '_iframeWindow', window);
+    const state = {
+      ...f.state,
+      selectedAnnotationIDs: ['first'],
+      annotations: [{ id: 'first', type: 'highlight' }],
+      primaryViewAnnotationPopup: { annotation: { id: 'first' } },
+      secondaryViewAnnotationPopup: { annotation: { id: 'other' } },
+    };
+    Reflect.set(f.ports.reader, '_internalReader', {
+      _state: state,
+      _primaryView: { _iframeWindow: {} },
+      _secondaryView: {
+        _iframeWindow: f.window,
+        _openAnnotationPopup: () => {
+          state.secondaryViewAnnotationPopup = { annotation: { id: 'first' } };
+        },
+      },
+    });
+    document.body.innerHTML = `
+      <section class="primary-view">
+        <div class="annotation-popup"><div class="comment">
+          <div id="first" class="content" role="textbox" tabindex="-1"
+            contenteditable="true" aria-readonly="false"></div>
+        </div></div>
+      </section>
+      <section class="secondary-view">
+        <div class="annotation-popup"><div class="comment">
+          <div id="other" class="content" role="textbox" tabindex="-1"
+            contenteditable="true" aria-readonly="false"></div>
+        </div></div>
+      </section>`;
+    f.module.executeAction('editAnnotation', f.window);
+    vi.advanceTimersByTime(25);
+    expect(document.activeElement).toBe(document.body);
+
+    const comment = document.querySelector('.secondary-view .comment')!;
+    comment.innerHTML = `
+      <div id="first" class="content" role="textbox" tabindex="-1"
+        contenteditable="false" aria-readonly="true"><span>Read-only preview</span></div>`;
+    vi.advanceTimersByTime(25);
+    expect(document.activeElement).toBe(document.body);
+
+    const input = comment.firstElementChild!;
+    const pane = comment.closest<HTMLElement>('.secondary-view')!;
+    pane.style.display = 'none';
+    vi.advanceTimersByTime(25);
+    expect(document.activeElement).toBe(document.body);
+
+    // Zotero 10.0.8 reports an empty aria-readonly value in writable popups.
+    input.setAttribute('contenteditable', 'true');
+    input.setAttribute('aria-readonly', '');
+    vi.advanceTimersByTime(25);
+    expect(document.activeElement).toBe(document.body);
+
+    pane.style.display = '';
+    vi.advanceTimersByTime(25);
+    expect(document.activeElement).toBe(input);
+    expect(f.status).not.toHaveBeenCalled();
+    input.remove();
+    vi.advanceTimersByTime(2500);
+    expect(document.activeElement).toBe(document.body);
+    expect(f.status).not.toHaveBeenCalled();
+    f.host.dispose();
+  });
+
+  it('releases the focus waiter immediately when the annotations module is disabled', () => {
+    vi.useFakeTimers();
+    const f = annotationFixture();
+    Reflect.set(f.ports.reader, '_iframeWindow', window);
+    Reflect.set(f.ports.reader, '_internalReader', {
+      _state: {
+        ...f.state,
+        annotations: [{ id: 'first', type: 'highlight' }],
+        selectedAnnotationIDs: ['first'],
+        sidebarOpen: true,
+        sidebarView: 'annotations',
+      },
+      _primaryView: { _iframeWindow: f.window },
+    });
+    f.module.executeAction('editAnnotation', f.window);
+    expect(vi.getTimerCount()).toBe(1);
+
+    f.host.release('reader-annotations');
+    expect(vi.getTimerCount()).toBe(0);
+    document.body.innerHTML = `
+      <section id="annotations"><div data-sidebar-annotation-id="first"><div class="comment">
+        <div id="first" class="content" role="textbox" tabindex="-1"
+          contenteditable="true" aria-readonly="false"></div>
+      </div></div></section>`;
+    vi.advanceTimersByTime(2500);
+    expect(document.activeElement).toBe(document.body);
+    expect(f.status).not.toHaveBeenCalled();
+    f.host.dispose();
+  });
+});
 
 describe('Reader annotation batches', () => {
   it.each(['yankAnnotation', 'yankAnnotationComment'] as const)(

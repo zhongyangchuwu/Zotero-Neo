@@ -5,10 +5,10 @@ import {
   DEFAULT_BINDINGS,
   bindingsForMode,
   encodeBindingOverrides,
+  isRetiredNoteBinding,
   migrateLegacyBindingOverrides,
   migrateBindingModeOverrides,
   migrateMainDirectPrefixOverrides,
-  migrateNoteBindingOverrides,
   migrateRetiredShortcutActions,
   parseBindingKey,
   parseBindingOverrides,
@@ -211,11 +211,8 @@ describe('binding parsing and overrides', () => {
       mode: 'main-normal',
       sequence: '<Space>gg',
     });
-    expect(parseBindingKey('note-normal:diw')).toEqual({ mode: 'note-normal', sequence: 'diw' });
-    expect(parseBindingKey('note-insert:<Esc>')).toEqual({
-      mode: 'note-insert',
-      sequence: '<Esc>',
-    });
+    expect(parseBindingKey('note-normal:diw')).toBeNull();
+    expect(parseBindingKey('note-insert:<Esc>')).toBeNull();
   });
 
   it('parses colon command bindings without widening their mode', () => {
@@ -364,7 +361,6 @@ describe('binding parsing and overrides', () => {
     const canonical = {
       'main-normal:<C-o>': null,
       'main-normal:x': 'navigateBack',
-      'note-normal:x': 'navigateForward',
       'reader-normal:<C-i>': 'navigateForward',
       'reader-normal:<C-o>': 'navigateBack',
       'reader-normal:z': 'scrollDown',
@@ -374,7 +370,6 @@ describe('binding parsing and overrides', () => {
     expect(JSON.parse(migrateBindingModeOverrides(legacy))).toEqual(canonical);
     expect(JSON.parse(migrateLegacyBindingOverrides(legacy))).toMatchObject({
       'main-normal:x': 'navigateBack',
-      'note-normal:x': 'navigateForward',
       'reader-normal:z': 'scrollDown',
     });
     const resolved = resolveBindings(legacy);
@@ -382,7 +377,7 @@ describe('binding parsing and overrides', () => {
     expect(resolved['reader-normal:<C-i>']).toBe('navigateForward');
     expect(resolved['main-normal:<C-o>']).toBeUndefined();
     expect(resolved['main-normal:x']).toBe('navigateBack');
-    expect(resolved['note-normal:x']).toBe('navigateForward');
+    expect(resolved['note-normal:x']).toBeUndefined();
   });
   it('honors explicit Reader zoom overrides', () => {
     const bindings = resolveBindings(
@@ -398,27 +393,27 @@ describe('binding parsing and overrides', () => {
     expect(bindings['reader-normal:z0']).toBe('zoomOut');
     expect(bindings['reader-normal:=']).toBe('zoomIn');
   });
-  it('copies schema-8 global Note overrides into explicit Note scope', () => {
-    const migrated = migrateNoteBindingOverrides(
-      JSON.stringify({
-        'main-normal:H': 'nextTab',
-        'main-normal:L': 'mainTrashItems',
-        'main-normal: ff': 'switchTab',
-        'main-normal:ctrl+h': null,
-        'main-normal:j': 'mainNavUp',
-      }),
-    );
-
-    expect(JSON.parse(migrated)).toEqual({
-      'main-normal:<Space>ff': 'switchTab',
-      'main-normal:H': 'nextTab',
-      'main-normal:L': 'mainTrashItems',
-      'main-normal:ctrl+h': null,
-      'main-normal:j': 'mainNavUp',
-      'note-normal:<Space>ff': 'switchTab',
-      'note-normal:H': 'nextTab',
-      'note-normal:ctrl+h': null,
+  it('silently removes retired Note overrides without removing shared commands in other scopes', () => {
+    const kept = {
+      'main-normal:<Space>fn': 'findNotes',
+      'reader-normal:i': 'enterInsert',
+      'reader-select:v': 'exitMode',
+      'main-normal:<C-h>': null,
+    };
+    const raw = JSON.stringify({
+      ...kept,
+      'note-normal:<Space>fn': 'findNotes',
+      'note-normal:x': 'noteDeleteChar',
+      'note-insert:<Esc>': null,
+      'main-normal:x': 'noteDeleteLine',
+      'reader-normal:x': 'notePutAfter',
     });
+
+    expect(JSON.parse(migrateRetiredShortcutActions(raw))).toEqual(kept);
+    expect(parseBindingOverrides(raw)).toEqual(kept);
+    expect(isActionId('noteDeleteLine')).toBe(false);
+    expect(isRetiredNoteBinding('note-normal:x', 'nextTab')).toBe(true);
+    expect(isRetiredNoteBinding('main-normal:x', 'noteUnknownAction')).toBe(false);
   });
 
   it('migrates Main explicit unbindings to the v0.2 direct-prefix defaults', () => {
@@ -560,32 +555,6 @@ describe('input matcher', () => {
       state: normalState(),
       consumed: true,
       action: 'scrollDown',
-      count: 0,
-    });
-  });
-
-  it('keeps Note word motion immediate instead of turning w into a prefix timeout', () => {
-    const bindings = resolveBindings('');
-    const state: InputState = {
-      mode: 'note-normal',
-      keyBuffer: '',
-      countBuffer: '',
-    };
-
-    expect(
-      advanceInput(
-        {
-          ...state,
-          bindings,
-          allowCountPrefix: true,
-        },
-        'w',
-      ),
-    ).toEqual({
-      kind: 'execute',
-      state,
-      consumed: true,
-      action: 'noteMoveWordForward',
       count: 0,
     });
   });

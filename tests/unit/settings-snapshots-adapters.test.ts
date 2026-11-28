@@ -372,6 +372,43 @@ describe('standalone built-in settings adapters at the native OS boundary', () =
     },
   );
 
+  it('restores live settings and shortcuts from snapshots with both retired editors', async () => {
+    const t = settingsSnapshotHostFixture();
+    const prefix = 'extensions.zotero-neo.';
+    const legacy = [
+      'noteEditor.enabled',
+      'annotationCommentEditor.enabled',
+      'mode.insert.enabled',
+      'annotationComment.drafts.1.ABCDEF12',
+    ];
+    for (const key of legacy) t.user.set(prefix + key, 'local value');
+    const adapter = createSettingsAdapters(() => 'neo-target')[1]!;
+    const live = { 'main-normal:<F12>': 'findNotes', 'reader-normal:j': null };
+    const plan = await adapter.plan(
+      section(adapter.id, [
+        ...legacy.map((key) => reset(prefix + key)),
+        set('bindings', {
+          schemaVersion: BINDING_SCHEMA_VERSION,
+          overrides: JSON.stringify({
+            'note-normal:x': 'findNotes',
+            'note-insert:<C-x>': null,
+            'main-normal:x': 'noteDeleteLine',
+            ...live,
+          }),
+        }),
+      ]),
+      context(),
+    );
+    expect(plan.issues).toEqual([]);
+    expect(plan.changes.map(({ key }) => key)).toEqual(['bindings']);
+    await adapter.apply(selected(plan.changes), context());
+    expect(JSON.parse(String(t.user.get(prefix + 'bindings')))).toEqual(live);
+    for (const key of legacy) expect(t.user.get(prefix + key)).toBe('local value');
+    const captured = await adapter.capture({ ...captureContext(), includeSecrets: true });
+    expect(captured.section.entries.map(({ key }) => key)).toEqual(['bindings']);
+    expect(captured.issues.map(({ code }) => code)).not.toContain('excluded-or-unknown');
+  });
+
   it('plans target versions, defaults conflicts unselected, preserves false/zero/empty/reset, and imports idempotently', async () => {
     const t = settingsSnapshotHostFixture();
     t.user.set('extensions.zotero.automaticTags', true);

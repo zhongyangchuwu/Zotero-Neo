@@ -32,12 +32,12 @@ Neo 的交互基座负责模式、按键、目标选择、跳转历史及接入 
 - `src/modules/reader-hints/`：按 ReaderSession 拥有 copy/link hints、候选与临时 UI，登记原有两个 Reader Normal 动作。精确视图路由、输入与模式策略仍由 Reader Surface 提供；异步导航意图同时检查模块作用域，沿用已有历史。共享标签辅助保留给 Flash，读取原生批注不依赖 Neo 批注功能。
 - `src/modules/worksets/`：按 MainWindow 拥有 Persistent Selection、Visual 和 Selection Panel，登记原有 Normal/Select 贡献。Main 保留 Cursor、原生多目标取消和共享行渲染；目标解析与成功操作后的成员移除只消费明确 Selection 端口，Reveal 沿用原导航协调器。模块退休后旧端口的 Selection 读取权限失效，外观/主题的晚到句柄立即释放。
 - `src/modules/library/`：按 MainWindow 拥有树导航、Local Find、搜索入口、条目候选、打开、标识符录入及最近回收批次；Reader citekey 贡献按 ReaderSession 登记。共享焦点、原生 View 端口、Picker 和唯一历史留在基座，工作集 Reveal、标签过滤和 Workspace 可独立于 Library 使用。
-- `src/modules/notes/`：按 MainWindow 拥有 Note 候选、打开编排、可选 Vim 编辑模式/寄存器及 caret UI。Surface 保留精确编辑器身份、输入 runtime、原生/IME 仲裁及共享焦点；Palette 和计时器绑定实际编辑器身份。Note 查找独立于 Vim 设置；候选 provider 提供候选，导航和写入由各自负责方处理。
+- `src/modules/notes/`：按 MainWindow 拥有 Note 候选和打开编排，Main/Reader 的笔记选择器沿用共享导航和历史。笔记输入、输入法、粘贴和撤销由 Zotero 原生编辑器处理；主栏及 Reader 侧栏保留 Ctrl/⌘+Click 链接跳转。
 - `src/modules/reader-navigation/`：按 ReaderSession 拥有导航动作、平滑滚动、marks、按需结构分析及原生侧栏增强；Normal 和四个侧栏上下文登记真实贡献。Surface 继续拥有精确视图、输入与唯一历史策略；分屏/焦点直接使用共享 Toolkit。已接纳 marks 保存继续完成，过期交互保留新状态；退出排空旧 RAF 与完成回调，让新视图继续运行。
 - `src/modules/reader-selection/`：按 ReaderSession 拥有 Select/DOM 范围与 motions、Flash、复制/搜索和选择动作面板；外部注册定义保持应用级寿命。交互绑定原 ReaderView/Document，作用域与原生 Find 状态共同保护后继界面，防止旧输入或延迟查询覆盖它。Surface 保留模式、输入、精确视图、共享滚动和历史；Note/批注写入仍由具名贡献负责。
-- `src/modules/reader-annotations/`：按 ReaderSession 拥有批注创建、删除、改色、过滤、复制及精确视图的评论编辑器，并向 Select 注入下划线和 Add note。Surface 保留 CurrentTarget、NativeInput 与 `i` / `zb` 的混合仲裁；已接纳保存继续完成，旧交互不恢复状态、选择或焦点。
+- `src/modules/reader-annotations/`：按 ReaderSession 拥有批注创建、删除、改色、过滤和复制，并向 Select 注入下划线和 Add note。评论动作对可写批注显示并聚焦 Zotero 原生评论框；输入、保存和退出交由宿主处理。
 - `settings-snapshots` 在 Main 提供设置快照入口；应用服务统一编排 Zotero／Neo 内置模板与本机审核插件模板、单插件／合并文件、差异预览和逐项回执。恢复前可复用导出保留当前设置，但恢复本身不保存文件。托管层按明确选择的可见附件发布单插件配置；JSON 可自动发布，age 禁止自动更新，均不自动恢复远端设置。窗口模块只持有本次展示和轮询窗口租约；语义文件与原生边界见[开发指南](../DEVELOPMENT.md#配置迁移格式与加密边界)。
-- `src/modules/workspace/`：MainWindow 拥有三个 Surface 的标签页候选、切换、循环、关闭及 Reader/Note 的 Show in Library；ReaderSession 拥有分屏切换与方向焦点。共享历史、原生标签页重扫、精确视图发现、NativeInput 及 Main/Note 通用面板焦点仍在基座；方向焦点实际成功才消费按键。
+- `src/modules/workspace/`：MainWindow 拥有标签页候选、切换、循环、关闭及 Reader/Note 的 Show in Library；ReaderSession 拥有分屏切换与方向焦点。共享历史、原生标签页重扫、精确视图发现及通用面板焦点仍在基座；方向焦点实际成功才消费按键，不接管笔记普通文字输入。
 
 `src/modules/index.ts` 提供静态描述与依赖校验，`src/core/module-runtime.ts` 组合实际宿主实例、失败状态和结构能力过滤。核心模块固定启用，旧核心偏好 `extensions.zotero-neo.modules.<core>.enabled=false` 被忽略；三项模块偏好控制可选增强。
 
@@ -71,12 +71,12 @@ AT 菜单分发先对整批目标执行一次，再逐项执行；Neo 委托 AT 
 | `collections` | 分类选择、成员添加/移除/移动、分类创建/重命名/删除、连续添加条目等现有工作流。 | `src/modules/collections/`、`src/operations/item-collections.ts`、`collections.ts` | 已按 MainWindow 接入，现有 Main/Reader 入口保留，不新增 Note 命令。无 `worksets` 硬依赖；目标由发起 Surface 明确提供。 |
 | `reader-navigation` | 页面、滚动、缩放、平移、PDF 搜索、批注位置遍历、Outline、标题/图表导航、原生侧栏增强和命名 marks。marks 数据及持久化策略归本模块。 | `src/modules/reader-navigation/` | 已按 ReaderSession 接入，调用与异步结果绑定精确 ReaderView。结构分析仍按需进行，不在启动时分析全部 PDF；输入、CurrentTarget 与共享历史留在 Surface/基座，分屏与方向焦点归 Workspace。 |
 | `reader-selection` | Reader Select、DOM 范围与 motions、Flash、复制/搜索所选文本、Selection Actions 展示及公共选择接口。 | `src/modules/reader-selection/` | 按 ReaderSession 接入；范围和界面绑定精确 ReaderView/Document。批注动作由宿主注入，外部动作由应用级注册表保留；复制和搜索不依赖导航或批注模块。 |
-| `reader-annotations` | 原生批注创建、删除、改色、颜色过滤、选中批注评论编辑；向 Select 提供高亮、下划线、Add note 等动作。 | `src/modules/reader-annotations/`、`src/operations/delete-annotation.ts` | 已按 ReaderSession 接入，评论交互绑定精确 ReaderView / Document；Select 贡献具名注入，原生批注操作本身不依赖选择模块。CurrentTarget 与 NativeInput 始终由 Surface 提供。 |
+| `reader-annotations` | 原生批注创建、删除、改色、颜色过滤、聚焦可写批注的原生评论框；向 Select 提供高亮、下划线、Add note 等动作。 | `src/modules/reader-annotations/`、`src/operations/delete-annotation.ts` | 已按 ReaderSession 接入，评论目标绑定精确视图；Select 贡献具名注入，原生批注操作本身不依赖选择模块。 |
 | `settings-snapshots` | 按插件模板审核、JSON／age 文件导出、可见附件托管、无写入预览、路径映射及确认后逐项恢复。 | `src/modules/settings-snapshots/`、`src/settings-snapshots/`、对应 platform 与 Main Toolkit 边界 | 应用持有服务、动态已审核适配器目录、托管发布和 codec；MainWindow 持有精确展示与调度租约。没有 Reader、同步账户或其他可选模块硬依赖，不接管 Zotero 同步。 |
 | `reader-hints` | 可选增强“链接与复制提示”：批注 Excerpt/Comment、DOI/arXiv/URL 等可见目标的复制，以及 PDF 链接/标识符跟随。 | `src/modules/reader-hints/` | 已按 ReaderSession 接入，保留精确 ReaderView 与单次提示交互。不依赖 `reader-annotations`：仍可读取 Zotero 已有批注。 |
 | `references` | 可选引用增强：在 PDF 中跳转到参考文献和识别到的引用位置，反向查看引用上下文；用户明确查询免费学术来源，或查找／添加本地条目。 | `src/modules/references/`、`src/references/`、`src/operations/references.ts`、`src/toolkit/reader/references.ts`、`src/platform/reference-credentials.ts` | ReaderSession / 精确 ReaderView；`openReferences` 属于 Reader Normal。元数据查询与本地分析分离。 |
-| `notes` | Note 选择器、Note 上下文打开/定位，以及现有可选 Vim Note 编辑。编辑模式和寄存器归本模块。 | `src/modules/notes/`；Surface 输入与身份保留在 `src/main/note-editor.ts`、`note-runtime.ts` | 已按 MainWindow 接入，附着到精确 NoteEditor 身份；`noteEditor.enabled` 只控制 Vim 编辑，不控制 Note 查找。 |
-| `workspace` | 标签页查找/切换/关闭、Reader 分屏创建与关闭、分屏焦点切换、Show in Library 等跨 Surface 定位。 | `src/modules/workspace/` | 已按 MainWindow / ReaderSession 接入，使用基座导航端口与唯一 Back/Forward 历史；不依赖 Library 或 Reader 导航模块。Main/Note 通用面板焦点含 Note Insert 仍由基座负责。 |
+| `notes` | Note 选择器及选择后的打开编排。 | `src/modules/notes/` | 已按 MainWindow 接入，Main/Reader 可查找笔记并沿用共享历史；文字编辑由 Zotero 原生编辑器处理。 |
+| `workspace` | 标签页查找/切换/关闭、Reader 分屏创建与关闭、分屏焦点切换、Show in Library 等跨 Surface 定位。 | `src/modules/workspace/` | 已按 MainWindow / ReaderSession 接入，使用基座导航端口与唯一 Back/Forward 历史；不依赖 Library 或 Reader 导航模块。通用面板方向焦点仍由基座负责。 |
 | `extensions` | 可选扩展管理面板：筛选、详情、刷新、允许的启停、安装、更新、设置及链接。 | `src/modules/extensions/`；`src/toolkit/main/plugins.ts` | 按 MainWindow 接入，Main/Reader/Note 进入实际所属窗口的独立面板。原生安装经明确确认，退休界面不接收晚到结果；不管理 Neo 内部模块。 |
 
 `references` 使用本地分析和用户明确发起的来源查询，不调用 AI。Toolkit 只把 PDF 原生全文数据投影为无宿主句柄的快照；只有来源版本匹配时才用 SDT 补充，编号参考文献提取不完整时保留 `partial` 状态。文库查询在本地进行；添加只在用户明确操作后执行，精确重复项保留原样，已有同名但身份不明确时不自动选定。详细 Reader 与来源边界见[架构](ARCHITECTURE.md)和[开发指南](../DEVELOPMENT.md#宿主能力-toolkit)。
@@ -98,7 +98,7 @@ AT 菜单分发先对整批目标执行一次，再逐项执行；Neo 委托 AT 
 | 能力 | 契约与所有权 | 不包含什么 |
 | --- | --- | --- |
 | 模块组合与生命周期 | 静态清单描述 ID、作用域、硬依赖和贡献；启动时验证依赖环及重复动作归属。组合根注入具名能力，创建各级子 scope，记录启用结果与失败原因。复用现有 `CleanupScope` 等机制。 | 动态包加载、版本求解、远程代码、模块市场、任意 `require(serviceName)`。 |
-| 输入与焦点仲裁 | 复用 `src/input/` 的归一化、count/sequence、精确 BindingContext 与本地绑定 runtime。Surface 输入宿主统一决定 IME、原生输入、Note Normal、局部交互的所有权；Reader 评论编辑器和引用上下文控件（包括原生预览内的按钮）通过既有 `featureInputFocused` / `_textAnnotationFocused` 接缝共享精确窗格的原生按键让出，不新增 Reader mode 或各模块独立 patch。 | 用统一的“所有 editable 一律透传”破坏 Note Normal，或把评论编辑/原生输入新增为 Reader mode。 |
+| 输入与焦点仲裁 | 复用 `src/input/` 的归一化、count/sequence、精确 BindingContext 与本地绑定 runtime。Surface 输入宿主协调 IME、原生输入和局部交互；笔记与批注评论使用 Zotero 原生输入，方向焦点仍可切换可用窗格。 | 为笔记编辑或评论输入新增 Neo 模式，或让各模块独立 patch Reader 按键。 |
 | 命令、绑定与可用性 | `src/input/actions.ts` 与现有默认绑定保持唯一。核心贡献固定参与结构能力过滤；只有可选增强可以按已应用请求关闭，再按上下文过滤后提供给匹配器、Prefix Guide、Palette 和提示。 | 新的动作 ID 体系、跨上下文继承、无实现的可执行菜单项、关闭增强后仍吞键。 |
 | 上下文与目标 | Main/Reader/Note 解析器产生显式目标；保留 `ItemTargetSet` 及原生 `Zotero.Item`，携带来源和当前性证据。跨异步边界的交互快照使用稳定身份，写入前重新验证。 | 全局可变 ActiveSurface、全局 Selection、把原生条目再包装成另一套数据模型。 |
 | 宿主能力与订阅 | Toolkit 提供具名的 Main、Note、Reader 能力，管理私有接缝、原生订阅、窗口/视图发现及释放。共享桥接由一个所有者按实际消费者安装。 | 每个模块单独 patch 同一个 PdfView，或把 `_tabs`、原生 tree、PDF/editor 私有对象交给业务代码。 |
@@ -190,7 +190,7 @@ AT 菜单分发先对整批目标执行一次，再逐项执行；Neo 委托 AT 
 | MainWindow | 一个物理窗口的 Settings、Picker、历史，以及各模块的窗口状态。 |
 | ReaderSession | Zotero `instanceID`；共享 Reader Surface 输入状态，但不混淆主/次 PDF 视图。 |
 | ReaderView | 精确视图及 Window/Document；拥有几何、提示、视图监听器和 patch 关联。 |
-| NoteEditor | editor Window、Document、Note ID；任一替换即退休旧输入所有者。 |
+| NoteEditor | editor Window、Document、Note ID；替换时原生编辑目标随宿主改变。 |
 | Interaction | 一次 Picker、Select、提示或编辑交互的子 scope；替换或取消后旧异步工作不能再更新新 UI。 |
 
 启动按硬依赖顺序进行；核心模块固定加入应用图，可选增强只在用户请求及实际宿主依赖允许时挂接。构造只描述依赖，激活才获取监听器、patch、UI 和后台工作。关闭可选增强可保留静态元数据、配置及公共 API 的外部注册定义，其功能会话则不会创建。
@@ -205,7 +205,7 @@ AT 菜单分发先对整批目标执行一次，再逐项执行；Neo 委托 AT 
 
 模块偏好沿用 `extensions.zotero-neo.modules.<id>.enabled` 键形，三项可选增强具有用户开关，规范默认值和依赖见[设置参考](../SETTINGS_GUIDE.md#开关可选功能)。核心分区固定启用，已有 `extensions.zotero-neo.modules.<core>.enabled=false` 值被忽略。
 
-可选开关立即保存，只在**真正重启 Zotero**后应用；关闭设置、重新打开 Reader 或 Neo 热重载都不切换当前运行时图。恢复默认恢复三项规范值，不改核心配置、快捷键、行为偏好、marks 或 Zotero 数据。旧启动快照缺少字段时，当前进程按关闭处理。`noteEditor.enabled` 仍只控制 Vim 风格笔记编辑，不关闭笔记查找；`annotationCommentEditor.enabled`、`marks.persist`、`mode.visual.enabled`、`keyGuide.enabled` 与 `picker.mouse.enabled` 也保留各自原义。
+可选开关立即保存，只在**真正重启 Zotero**后应用；关闭设置、重新打开 Reader 或 Neo 热重载都不切换当前运行时图。恢复默认恢复三项规范值，不改核心配置、快捷键、行为偏好、marks 或 Zotero 数据。旧启动快照缺少字段时，当前进程按关闭处理。旧 `noteEditor.enabled`、`annotationCommentEditor.enabled`、Note 绑定上下文及旧备份中的相关字段静默忽略；`marks.persist`、`mode.visual.enabled`、`keyGuide.enabled` 与 `picker.mouse.enabled` 保留各自原义。
 
 | 状态 | 当前会话行为 |
 | --- | --- |
@@ -248,7 +248,7 @@ src/
   i18n/                    共享本地化目录
 ```
 
-共享 Picker 实现位于 `src/main/picker/`，负责候选搜索、排序、展示、预览与输入；候选来源提供数据和展示，发起交互的功能负责确认语义与领域操作。它位于 MainWindow，由基座共享使用，机制不属于 `library`。Main/Reader controller 协调输入、宿主、目标和功能组合；`src/input/note-actions.ts` 等领域专用命令保留在输入层的唯一目录，由 `notes` 实现。
+共享 Picker 实现位于 `src/main/picker/`，负责候选搜索、排序、展示、预览与输入；候选来源提供数据和展示，发起交互的功能负责确认语义与领域操作。它位于 MainWindow，由基座共享使用，机制不属于 `library`。Main/Reader controller 协调输入、宿主、目标和功能组合；`notes` 提供笔记候选和打开编排。
 
 调整职责时采用干净切换：同步更新调用者、删除旧实现及转发导出。公共 API 和持久化键的兼容要求与内部源码路径分开维护，内部实现不建立兼容层。
 
@@ -260,7 +260,7 @@ src/
 | --- | --- | --- |
 | Main/Reader 添加标签 | 各自解析明确目标 → 关联 MainWindow 的 Picker → 标签动作确认 → `item-tags` Operation | Reader 不读取 Main Selection；`worksets` 是 Main 的可选目标来源，不是标签模块的硬依赖。 |
 | 分屏中的 copy hints | 精确 ReaderView → 原生可见目标 → 本次提示交互 → 当前性与可见性检查 → 复制 | 共享 ReaderSession 不等于两个视图可互换；读取原生批注不依赖 Neo 批注模块启用。 |
-| 原生输入与 Note Normal | Surface 输入宿主判定 IME/原生输入/显式 Note Normal → 当前上下文有效绑定 → 单一动作处理器 | 不让模块各自抢全局 keydown；不靠增加 Reader mode 处理评论输入，也不把所有 editable 都归 Neo。 |
+| 原生输入与笔记焦点 | Surface 输入宿主将文字和 IME 输入交给 Zotero 编辑器，方向聚焦使用共享面板导航 | 不让模块各自抢全局 keydown，也不为笔记或评论输入增加 Neo 模式。 |
 | 外部插件注册选择动作 | 当前公共 API → 领域注册表 → 当前选择快照 → 可用性判定与本次执行 → disposer | 不进入内部 ActionId 目录；外部插件释放自己的注册，旧 disposer 不能误删后来注册，Neo 私有宿主对象不外泄。 |
 
 契约评审要求这些现有路径均有明确的输入、输出、资源负责方和失败结果，并使用各 Surface 自己的目标及具名端口。若某条路径必须增加业务能力，只给真实调用双方增加具名端口，通用插件协议保持原范围。
@@ -271,10 +271,10 @@ src/
 
 每次变更按[main 验收规范](ACCEPTANCE.md)记录受影响行为的实际结果。当前边界必须满足：
 
-- 保留的 Main/Reader/Note 动作、无默认按键的命令、用户重绑定、模式与 IME 行为不变；已移除命令的旧绑定不参与匹配。
+- 保留的 Main/Reader 动作、无默认按键的命令、用户重绑定、模式与 IME 行为不变；已移除命令的旧绑定不参与匹配。
 - `worksets` 始终为核心模块，Main Visual 与 Persistent Selection 属于同一固定功能分区；关闭行为偏好不得被误写成关闭模块。
 - `reader-annotations`、`reader-selection` 与 `reader-navigation` 始终为核心模块；Select 复制/搜索、原生批注交互、hints 读取及导航的故障隔离不能依赖用户关闭核心分区。
-- `noteEditor.enabled` 关闭时，Note 原生输入与笔记查找仍可用；Vim 编辑模式的行为偏好保持原义。
+- Main/Reader 的笔记查找和共享历史仍可用，笔记文字、输入法、粘贴和撤销由 Zotero 原生处理；旧 Note 编辑偏好及绑定上下文被忽略。
 - 在双 MainWindow、Reader 分屏、独立 Reader 和 Note editor 替换场景中，状态、历史、焦点与退出都归实际宿主；隐藏/已退休 PDF 视图不能确认提示或写入。
 - Picker 排队期间候选改变、分类展开来源改变或交互被替换时，不写错目标；已提交写入仍有真实回执，不被当作取消或重复提交。
 - 每个原生桥接只有一个有效所有者；重复打开/关闭窗口或视图后无重复菜单、监听、定时器、patch 和回调。部分激活/释放失败可诊断，不污染下一次实例。

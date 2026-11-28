@@ -231,7 +231,7 @@ MainWindow 组合标签、扩展、分类、工作集、Library、Notes、Worksp
 
 `src/core/module-runtime.ts` 根据三项可选请求应用增强；`reader-hints`、`extensions` 与 `references` 默认开启。`src/platform/module-startup.ts` 在 Zotero 应用对象上保留请求的 JSON 快照，因此 Neo 热重载不会应用新请求，完全退出并重启 Zotero 后才会应用。旧启动快照缺少可选字段时，已应用值按关闭处理；旧核心键 `extensions.zotero-neo.modules.<core>.enabled=false` 不会关闭核心功能。
 
-实机核对模块配置时使用专用 profile 和自有数据，确认三项可选请求保存、Neo 热重载与 Zotero 完全退出／重启的差异。默认引用增强已启用，本地分析和文库查找不发起元数据请求，只有用户明确查询才访问来源。恢复默认后 `reader-hints`、`extensions`、`references` 开启；关闭全部三项可选增强后核心模块仍须可用，旧核心 `false` 偏好无效，恢复默认不改变行为偏好（包括 `noteEditor.enabled`）。故障只注入自有宿主并恢复原方法；回读自有数据与偏好，确认进程状态。完整用户状态说明见[模块设置](SETTINGS_GUIDE.md#开关可选功能)。
+实机核对模块配置时使用专用 profile 和自有数据，确认三项可选请求保存、Neo 热重载与 Zotero 完全退出／重启的差异。默认引用增强已启用，本地分析和文库查找不发起元数据请求，只有用户明确查询才访问来源。恢复默认后 `reader-hints`、`extensions`、`references` 开启；关闭全部三项可选增强后核心模块仍须可用，旧核心 `false` 偏好无效，恢复默认不改变行为偏好。故障只注入自有宿主并恢复原方法；回读自有数据与偏好，确认进程状态。完整用户状态说明见[模块设置](SETTINGS_GUIDE.md#开关可选功能)。
 
 结构不可用的绑定在 matcher/count/前缀、Guide 和 Palette 前过滤，不能改写保存的用户绑定或全局删除同名动作。Navigation 的 marks/侧栏获取必须在激活事务内，Base 启动失败释放未完成 session；失败实例不由定时重扫循环重建。模块清理错误通过显式 `CleanupFailure` 收集，不登记到会吞异常的通用清理层。
 
@@ -241,7 +241,7 @@ Library 按 Main session 拥有 Local Find 查询/界面及最近回收批次。
 
 共享 Picker 使用实际 Main session 的当前性端口；关闭先退休并清空运行时引用，再逐项释放资源。清理重入、异常或晚到的获取只能处理本次界面，不能关闭替换 Picker 或恢复旧焦点。Local Find 的主题句柄归单次界面，长期模块作用域不累计保留已关闭 DOM。
 
-Notes 按窗口拥有候选、选择后的打开编排及可选 Vim 编辑的模式、寄存器和 caret 样式。`NoteSurfaceRuntime` 只保留精确编辑器身份、输入 runtime 和退休代次；Surface 继续决定原生/IME 输入、count、前缀及焦点。Note 普通动作和 Insert 退出登记到原上下文；候选必须显式传给 Picker。共享导航提供选择完成后的宿主委托，沿用现有历史栈。
+Notes 按窗口拥有候选和选择后的打开编排，通过共享导航沿用现有历史栈。Main 和 Reader 可调用笔记选择器；笔记输入、输入法、粘贴和撤销由 Zotero 原生编辑器处理。主栏及 Reader 侧栏笔记保留 Ctrl/⌘+Click 链接跳转，方向焦点仍可切换可用窗格。
 
 输入缓冲和计时器由 `InputRuntime` 管理，Surface 负责原生输入／IME 仲裁与状态反馈；`PrefixGuideRuntime` 根据精确上下文和当前有效绑定投影后续键，支持 Space 以外的前缀。`keyGuideTimeout()` 只为不带独立动作的命令前缀提供 5 秒阅读时间，歧义短动作继续使用 matcher 超时，数字计数沿用现有解析器和指南时序。Escape 清除整条待完成输入，退格保留尚未删去的计数，并使被取消的动作计时器失效。
 
@@ -249,11 +249,11 @@ Reader 导航拥有页面/滚动/缩放/搜索、语义与批注位置遍历、m
 
 Reader 选择拥有 DOM 范围、文本 motions、Flash 输入/标签、复制/搜索及动作面板；Surface 仍保留模式、输入仲裁、精确视图和共享滚动。交互同时捕获 ReaderView 与 Document，新的动作/原生选择接纳前先退休替换视图；旧输入、可用性判断和晚到结果不能操作后继界面。临时样式、anchor、主题与监听均随所属交互释放，具体边界见[架构](internal/ARCHITECTURE.md#reader)。
 
-Reader 批注模块拥有创建/删除/改色/过滤/复制及评论编辑，Surface 保留 CurrentTarget、NativeInput 和混合按键路由。评论输入、系统按键、主题、popup guard 与计时器属于精确 ReaderView / Document；退休先释放界面，已接纳的保存可以完成，但不抢回后继界面的焦点。
+Reader 批注模块拥有创建、删除、改色、过滤和复制；评论动作显示目标批注并将焦点交给 Zotero 原生评论框。只有可写批注可进入编辑，输入、保存和 Escape 由宿主处理。
 
-批注改动需用专用 profile 的自有附件验证 Select 高亮、下划线、Add note、Normal 改色/过滤/删除确认，以及评论输入实际挂载和聚焦、Escape 保存、两秒自动保存和数据库回读。另查 `i` 的 NativeInput 偏好分支、无批注时 `zb` 的滚动回退、自动保存前换标签页仍保存最终评论，以及晚到保存不覆盖后继 Reader 或 Settings 焦点。程序化设置 DOM 选择后应让 selectionchange 与渲染帧完成，再发送下一次按键；原生模型字段已变不代表 `saveTx()` 已提交。
+批注改动需用专用 profile 的自有附件验证 Select 高亮、下划线、添加评论、Normal 改色/过滤/删除确认，以及 Normal `i` / `Enter`、Select `za` / `i` 和选区面板添加评论能聚焦原生输入并保存；还需核对只读批注、蓝色下划线链接和普通文字点击。升级时旧的未提交评论草稿在启动时安全导出后才清理旧存储，详见[编辑批注评论](READER_GUIDE.md#编辑批注评论)。
 
-Workspace 按 MainWindow 拥有标签页来源、确认与 Reader/Note 的 Show in Library，ReaderSession 拥有分屏切换和方向焦点。基座保留唯一历史、原生标签页重扫、精确视图发现、NativeInput 以及 Main/Note 通用面板焦点（含 Note Insert）。实机需确认三个 Surface 的标签页选择、关闭后的历史重开、主次分屏实际焦点及 Palette 路由；按键只有实际完成方向焦点移动才消费。Picker 应等待输入框实际聚焦后再发送 Enter；验证独立 Main 行选择时从 `itemsView.getSelectedItems(true)` 回读，`ZoteroPane.getSelectedItems(true)` 在 Reader 活跃时可能投影 Reader 条目，不能据此认定底层行选择相同。
+Workspace 按 MainWindow 拥有标签页来源、确认与 Reader/Note 的 Show in Library，ReaderSession 拥有分屏切换和方向焦点。基座保留唯一历史、原生标签页重扫、精确视图发现以及通用面板焦点；笔记普通文字输入由原生编辑器处理。实机需确认标签页选择、关闭后的历史重开、主次分屏实际焦点及 Palette 路由；按键只有实际完成方向焦点移动才消费。Picker 应等待输入框实际聚焦后再发送 Enter；验证独立 Main 行选择时从 `itemsView.getSelectedItems(true)` 回读，`ZoteroPane.getSelectedItems(true)` 在 Reader 活跃时可能投影 Reader 条目，不能据此认定底层行选择相同。
 
 ### 宿主能力 Toolkit
 
@@ -266,7 +266,7 @@ Workspace 按 MainWindow 拥有标签页来源、确认与 Reader/Note 的 Show 
 | Main 渲染行装饰 | `src/toolkit/main/rendered-items.ts` | 管理行标记与观察者；安装失败时先退休回调，再释放资源，保留原错误。 |
 | 已安装扩展与偏好 | `src/toolkit/main/plugins.ts` | 将 Mozilla AddonManager 和 Zotero 偏好注册表投影为元数据/能力；扩展管理策略仍属于 Plugin Manager。 |
 | Reader 注册、清单与身份 | `src/toolkit/reader/host.ts` | Reader 身份就是原生句柄；只有权威原生清单才能据此退休缺失 session。 |
-| Reader 按键转发 | `src/toolkit/reader/input-bridge.ts` | 包装私有 `PdfView._onKeyDown` 与 `_textAnnotationFocused`。Zotero 会在普通 DOM 传播之外转发 PDF 按键；ReaderSession 决定消费策略，Reader controller 将评论编辑器与引用控件的精确焦点汇总为 `featureInputFocused`，包括位于 Reader UI 文档中的原生预览按钮。模块不各自安装宿主 patch。 |
+| Reader 按键转发 | `src/toolkit/reader/input-bridge.ts` | 包装私有 `PdfView._onKeyDown` 与 `_textAnnotationFocused`。Zotero 会在普通 DOM 传播之外转发 PDF 按键；ReaderSession 决定消费策略，原生评论输入和引用控件的焦点需交还宿主处理。模块不各自安装宿主 patch。 |
 | PDF 视图监听与发现 | `src/toolkit/reader/view-lifecycle.ts` | 管理主/次 PDF 视图的附着与释放；注册绑定 ReaderView、Window 与 Document，复用 Window 不复活旧监听，部分获取失败仍释放先前句柄。 |
 | Reader 原生导航、搜索、缩放、分屏与焦点 | `src/toolkit/reader/navigation.ts` | 在当前原生视图执行操作，并将载荷克隆进其 realm。`prepareReaderSelectionSearch()` 返回精确 pane/原生 Find 状态的一次写入能力，不覆盖后续输入或重开的 Find；语义与历史仍由业务负责。 |
 | 跳转捕获、重开与完成桥接 | `src/toolkit/reader/jump-host.ts`、`history-bridge.ts` | 在宿主边界保留视图/历史身份与完成来源；共享历史策略属于 `src/navigation/`。 |

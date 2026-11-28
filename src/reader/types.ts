@@ -51,7 +51,6 @@ export interface AnnotationRuntime {
   annotationSortIndex?: string;
   annotationPageLabel?: string;
   readonly tags?: readonly { readonly tag: string }[];
-  loadDataType?(dataType: 'annotation'): Promise<unknown>;
   saveTx(): Promise<unknown>;
   eraseTx?(): Promise<unknown>;
 }

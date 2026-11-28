@@ -27,14 +27,13 @@ const ACTION_RULES: Partial<Record<ActionId, Rule>> = {
     isItems(intent) ? SETTLED_CHANGE : isReaderPath(intent, 'search') ? NATIVE_HARD : IGNORE,
   findPrevious: (intent) =>
     isItems(intent) ? SETTLED_CHANGE : isReaderPath(intent, 'search') ? NATIVE_HARD : IGNORE,
-  mainOpenPDF: (intent) => (intent.surface === 'note' || isItems(intent) ? SETTLED_CHANGE : IGNORE),
+  mainOpenPDF: (intent) => (isItems(intent) ? SETTLED_CHANGE : IGNORE),
   mainActivate: (intent) => (isMain(intent) && intent.context?.mainPanel ? SETTLED_CHANGE : IGNORE),
   findAllItems: () => SETTLED_CHANGE,
   findCollectionItems: () => SETTLED_CHANGE,
   findNotes: () => SETTLED_CHANGE,
   findCollections: (intent) => (isMain(intent) ? SETTLED_CHANGE : IGNORE),
-  showInLibrary: (intent) =>
-    intent.surface === 'reader' || intent.surface === 'note' ? SETTLED_CHANGE : IGNORE,
+  showInLibrary: (intent) => (intent.surface === 'reader' ? SETTLED_CHANGE : IGNORE),
   firstPage: (intent) => (isReaderPath(intent, 'explicit-page') ? NATIVE_HARD : IGNORE),
   lastPage: (intent) => (isReaderPath(intent, 'explicit-page') ? NATIVE_HARD : IGNORE),
   prevAnnotation: (intent) => (isReaderPath(intent, 'annotation') ? NATIVE_HARD : IGNORE),

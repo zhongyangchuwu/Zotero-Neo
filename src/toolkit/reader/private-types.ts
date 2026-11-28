@@ -24,6 +24,10 @@ interface NativeReaderFindState {
   readonly query?: string;
 }
 
+interface NativeReaderAnnotationPopup {
+  readonly annotation: { readonly id: string };
+}
+
 export interface InternalReaderRuntime {
   readonly _primarySDTView?: NativeReaderViewRuntime;
   readonly _secondarySDTView?: NativeReaderViewRuntime;
@@ -42,6 +46,8 @@ export interface InternalReaderRuntime {
     readonly primaryReadingModeEnabled?: boolean;
     readonly secondaryReadingModeEnabled?: boolean;
     readonly selectedAnnotationIDs?: readonly string[];
+    readonly primaryViewAnnotationPopup?: NativeReaderAnnotationPopup | null;
+    readonly secondaryViewAnnotationPopup?: NativeReaderAnnotationPopup | null;
     readonly primaryViewFindState?: NativeReaderFindState;
     readonly secondaryViewFindState?: NativeReaderFindState;
     readonly primary?: boolean;
@@ -53,7 +59,6 @@ export interface InternalReaderRuntime {
     readonly secondaryViewOverlayPopup?: unknown;
   };
   readonly splitType?: 'horizontal' | 'vertical' | null;
-  _enableAnnotationDeletionFromComment?: boolean;
   navigateToPreviousPage?(): void;
   navigateToNextPage?(): void;
   zoomIn?(): void;
@@ -140,6 +145,7 @@ export interface NativeReaderViewRuntime {
         querySelector?(selectors: string): Element | null;
       };
   _onKeyDown?: (event: KeyboardEvent) => unknown;
+  _openAnnotationPopup?(): void;
   _onOpenLink?: (url: string) => void | Promise<void>;
   _textAnnotationFocused?: () => boolean;
   _scrolling?: boolean;

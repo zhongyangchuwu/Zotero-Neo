@@ -4,7 +4,6 @@ import type { MainWindow } from '../../src/core/contracts';
 import type { PreferenceReader } from '../../src/core/preferences';
 import { MainNavigation } from '../../src/main/navigation';
 import { MAIN_ITEM_TARGET } from '../../src/main/main-item-target';
-import { NOTE_ITEM_TARGET } from '../../src/main/note-item-target';
 import { READER_ITEM_TARGET } from '../../src/reader/item-target';
 import type { PickerItem } from '../../src/main/picker/model';
 import type { PickerOpenOptions } from '../../src/main/picker/types';
@@ -390,43 +389,6 @@ describe('semantic Tag actions', () => {
 
     expect(main.hasTag('robotics')).toBe(false);
     expect(reader.hasTag('robotics')).toBe(true);
-    expect(h.selection.values()).toEqual([{ libraryID: 1, itemID: main.id }]);
-  });
-
-  it('adds a Note tag to its parent item without touching Main Selection', async () => {
-    const main = tagItem(1);
-    const parent = tagItem(2);
-    const note = tagItem(3);
-    Reflect.set(note, 'isNote', () => true);
-    Reflect.set(note, 'parentItemID', parent.id);
-    installZotero([main, parent, note], [{ tag: 'robotics' }]);
-    const h = harness({ items: [main] });
-    const active = {} as Element;
-    Reflect.set(h.window.document, 'activeElement', active);
-    Reflect.set(h.window, 'ZoteroContextPane', {
-      context: { activeEditor: { item: note, contains: (node: unknown) => node === active } },
-    });
-
-    const noteTargets = NOTE_ITEM_TARGET.resolve(h.window);
-    Reflect.set(h.window.document, 'activeElement', null);
-    h.actions.add(noteTargets);
-    const picker = h.open();
-    expect(picker.options.source?.title).toContain('Note context item');
-    expect(picker.options.source?.title).not.toContain('Neo work set');
-    await picker.options.confirm?.(
-      {
-        id: 'tag:robotics',
-        title: 'robotics',
-        search: 'robotics',
-        tagName: 'robotics',
-        tagCandidate: 'tag',
-      } as PickerItem,
-      false,
-    );
-
-    expect(parent.hasTag('robotics')).toBe(true);
-    expect(note.hasTag('robotics')).toBe(false);
-    expect(main.hasTag('robotics')).toBe(false);
     expect(h.selection.values()).toEqual([{ libraryID: 1, itemID: main.id }]);
   });
 

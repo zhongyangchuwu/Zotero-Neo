@@ -1,6 +1,5 @@
 import { describe, expect, it, vi } from 'vitest';
 import type { MainWindow, MainWindowControllerDependencies } from '../../src/core/contracts';
-import { NOTE_EDITOR_ENABLED_PREFERENCE_KEY } from '../../src/core/preferences';
 import { createMainWindowController as composeMainWindowController } from '../../src/main/controller';
 import { BuiltinModuleRuntime } from '../../src/core/module-runtime';
 
@@ -179,12 +178,7 @@ function harness(
   const controller = createController({
     preferences: {
       has: () => false,
-      get: (key, fallback) =>
-        key === NOTE_EDITOR_ENABLED_PREFERENCE_KEY
-          ? false
-          : key === 'bindings'
-            ? bindingOverrides
-            : fallback,
+      get: (key, fallback) => (key === 'bindings' ? bindingOverrides : fallback),
       set: () => {},
       clear: () => {},
     },

@@ -24,12 +24,7 @@ import {
   isMainExecutableAction,
   type MainExecutableAction,
 } from './action-capabilities';
-import {
-  keyGuideConfig,
-  neoCommandLanguage,
-  noteEditorEnabled,
-  pickerMouseEnabled,
-} from '../core/preferences';
+import { keyGuideConfig, neoCommandLanguage, pickerMouseEnabled } from '../core/preferences';
 import {
   bindingsForMode,
   resolveBindings,
@@ -43,8 +38,8 @@ import {
   keyGuideTimeout,
   type KeyGuideLanguage,
 } from '../input/key-guide-config';
-import type { InputRuntime } from '../input/runtime';
 import { keyString } from '../input/keys';
+import { isDeadObject } from '../platform/cross-compartment';
 import { asElement, isEditableElement } from '../platform/dom';
 import { runActionsTagsAction } from '../platform/actions-tags';
 import { zoteroBasesApi, ZOTERO_BASES_PLUGIN_ID } from '../platform/zotero-bases';
@@ -52,8 +47,6 @@ import { resolveActiveSurface } from './active-surface';
 import { MainWindowSession } from './session';
 import { MainNavigation } from './navigation';
 import { FuzzyPicker } from './picker';
-import { NoteEditor, type NoteBindingMode } from './note-editor';
-import { NOTE_COMMAND_PALETTE_ACTIONS } from './note-action-capabilities';
 import { createTagModule, type TagModule } from '../modules/tags';
 import { createWorksetsModule, type WorksetsModule } from '../modules/worksets';
 import { createLibraryModule, type LibraryModule } from '../modules/library';
@@ -67,7 +60,7 @@ import {
 import type { PickerOpenOptions } from './picker/types';
 import {
   mainLibrarySelection,
-  mainNoteItemID,
+  mainNoteEditorWindows,
   mainItem,
   mainReaderForTab,
   selectedMainTabID,
@@ -88,7 +81,6 @@ import {
 } from '../toolkit/main';
 import { mainCursorItem, resolveMainEffectiveTargets } from './action-targets';
 import { MAIN_ITEM_TARGET } from './main-item-target';
-import { NOTE_ITEM_TARGET } from './note-item-target';
 import { createExtensionsModule, type ExtensionsModule } from '../modules/extensions';
 import { MainItemStateDecoration } from './item-state-decoration';
 import { MainNavigationExecutor } from './jump-history';
@@ -109,7 +101,6 @@ export class MainWindowController implements MainWindowControllerApi {
   readonly #retiredSessions = new WeakSet<MainWindowSession>();
   readonly #navigation: MainNavigation;
   readonly #picker: FuzzyPicker;
-  readonly #noteEditor: NoteEditor;
   readonly #modules = new WeakMap<
     MainWindowSession,
     {
@@ -151,19 +142,6 @@ export class MainWindowController implements MainWindowControllerApi {
       () => this.bindings(),
       (session) => this.#sessions.get(session.window) === session && !session.cleanup.disposed,
       () => this.keyGuideLanguage(),
-    );
-    this.#noteEditor = new NoteEditor(
-      dependencies.logger,
-      this.#navigation,
-      (session) => this.sessionBindings(session),
-      {
-        refresh: (window, session) => {
-          this.refreshKeyGuide(window, session, session.note.input);
-        },
-        clear: (window, session) => this.clearKeyGuide(window, session),
-      },
-      (session) => this.#modules.get(session)?.notes?.editing ?? null,
-      (session) => this.#sessions.get(session.window) === session && !session.cleanup.disposed,
     );
   }
 
@@ -372,8 +350,6 @@ export class MainWindowController implements MainWindowControllerApi {
           window,
           logger: this.#dependencies.logger,
           language: () => this.keyGuideLanguage(),
-          status: (message, milliseconds) =>
-            this.#navigation.status(session, message, milliseconds),
           choose: chooseNotes,
           selectNote: async (itemID, surface, isCurrent, afterSelection) => {
             const pane = mainLibrarySelection(window);
@@ -416,7 +392,7 @@ export class MainWindowController implements MainWindowControllerApi {
           closeTab: () => this.#navigation.closePDF(window),
           navigate: (cause, surface, move, isCurrent) =>
             this.executeImmediateNavigation(window, session, cause, surface, move, { isCurrent }),
-          selectInLibrary: (itemID, surface, isCurrent) => {
+          selectInLibrary: (itemID, isCurrent) => {
             const pane = mainLibrarySelection(window);
             if (!pane?.selectItem) return null;
             const execution = this.#navigationExecutor.execute(
@@ -424,7 +400,7 @@ export class MainWindowController implements MainWindowControllerApi {
               session,
               {
                 cause: { kind: 'action', action: 'showInLibrary' },
-                surface,
+                surface: 'reader',
                 context: { isCurrent },
               },
               this.#navigationExecutor.librarySelection(itemID, pane),
@@ -534,6 +510,22 @@ export class MainWindowController implements MainWindowControllerApi {
       reportDiagnosticError(this.#dependencies.logger, 'Note links failed', error),
     );
     session.cleanup.add(() => noteLinks.dispose());
+    const noteFrames = new Map<Window, Document>();
+    const noteFocusKeydown: EventListener = (event) => {
+      const document = event.currentTarget as Document;
+      const editor = document.defaultView;
+      if (!isCurrent() || !editor || noteFrames.get(editor) !== document) return;
+      this.handleNativeNoteFocusKey(event as KeyboardEvent, window, session);
+    };
+    session.cleanup.add(() => {
+      const failure = new CleanupFailure();
+      for (const document of noteFrames.values()) {
+        if (!isDeadObject(document))
+          failure.run(() => document.removeEventListener('keydown', noteFocusKeydown, true));
+      }
+      noteFrames.clear();
+      failure.rethrow();
+    });
     try {
       this.attachModules(window, session);
       if (!isCurrent()) return;
@@ -596,15 +588,22 @@ export class MainWindowController implements MainWindowControllerApi {
           readerScanFailed = true;
         }
         if (!isCurrent()) return;
-        noteLinks.sync();
+        const editors = mainNoteEditorWindows(window);
+        noteLinks.sync(editors);
         if (!isCurrent()) return;
-        this.#noteEditor.sync(
-          window,
-          session,
-          this.notesModule(session) !== null && noteEditorEnabled(this.#dependencies.preferences),
-          (action, count, target, mode, bindings) =>
-            this.executeFromNote(action, count, target, mode, bindings, window, session),
-        );
+        for (const [editor, document] of noteFrames) {
+          if (editors.includes(editor) && editor.document === document) continue;
+          noteFrames.delete(editor);
+          if (!isDeadObject(document))
+            document.removeEventListener('keydown', noteFocusKeydown, true);
+        }
+        for (const editor of editors) {
+          if (!isCurrent()) return;
+          if (noteFrames.has(editor) || isDeadObject(editor)) continue;
+          const document = editor.document;
+          noteFrames.set(editor, document);
+          document.addEventListener('keydown', noteFocusKeydown, true);
+        }
         if (!isCurrent()) return;
         this.syncSurfaceActivation(window, session);
       };
@@ -619,7 +618,7 @@ export class MainWindowController implements MainWindowControllerApi {
         if (!isCurrent()) return;
       }
       const keydown: EventListener = (event) =>
-        this.onKeyDown(event as KeyboardEventWithHandled, window, session);
+        this.onKeyDown(event as KeyboardEventWithHandled, window, session, noteFrames);
       const pickerKeydown: EventListener = (event) => {
         if (
           this.#sessions.get(window) === session &&
@@ -639,7 +638,6 @@ export class MainWindowController implements MainWindowControllerApi {
         this.syncSurfaceActivation(window, session);
       });
       if (!isCurrent()) return;
-      session.cleanup.add(() => this.#noteEditor.clear(session));
       session.cleanup.add(() => this.#picker.close(session));
     } catch (error) {
       try {
@@ -743,7 +741,6 @@ export class MainWindowController implements MainWindowControllerApi {
   private syncSurfaceActivation(window: MainWindow, session: MainWindowSession): void {
     const active = resolveActiveSurface(window);
     if (active.kind !== 'main') this.deactivateMainSurface(window, session);
-    if (active.kind !== 'note') this.#noteEditor.deactivateInteraction(window, session);
     this.#dependencies.reader.deactivateInactive(
       window,
       active.kind === 'reader' ? active.tabID : null,
@@ -940,7 +937,7 @@ export class MainWindowController implements MainWindowControllerApi {
 
   showReaderItemInLibrary(ownerWindow: MainWindow | null, targets: ItemTargetSet<'reader'>): void {
     this.withReaderWindow(ownerWindow, 'showInLibrary', (_window, session) => {
-      this.workspaceModule(session)?.showInLibrary(targets, 'reader');
+      this.workspaceModule(session)?.showInLibrary(targets);
     });
   }
 
@@ -1063,6 +1060,7 @@ export class MainWindowController implements MainWindowControllerApi {
     event: KeyboardEventWithHandled,
     window: MainWindow,
     session: MainWindowSession,
+    noteFrames: ReadonlyMap<Window, Document>,
   ): void {
     if (this.#sessions.get(window) !== session) return;
     if (this.#dependencies.settingsSnapshots?.handleKey(event)) return;
@@ -1102,18 +1100,22 @@ export class MainWindowController implements MainWindowControllerApi {
       this.#picker.onKeyDown(event, window, session);
       return;
     }
-    if (
-      this.notesModule(session) !== null &&
-      noteEditorEnabled(this.#dependencies.preferences) &&
-      this.#noteEditor.isStandalone(window)
-    ) {
-      this.#noteEditor.onKeyDown(event, window, session, (action, count, target, mode, bindings) =>
-        this.executeFromNote(action, count, target, mode, bindings, window, session),
-      );
+    const target = asElement(event.target);
+    const targetWindow = target?.ownerDocument?.defaultView;
+    if (targetWindow && noteFrames.get(targetWindow) === target?.ownerDocument) return;
+    const active = window.document.activeElement;
+    const activeFrame =
+      active?.localName === 'iframe' || active?.localName === 'browser'
+        ? (active as HTMLIFrameElement).contentWindow
+        : null;
+    const activeSurface = resolveActiveSurface(window);
+    if ((activeFrame && noteFrames.has(activeFrame)) || activeSurface.kind === 'note') {
+      // Leave the note in charge of editing, including Escape. The iframe
+      // listener handles commands dispatched inside that separate document.
+      if (!targetWindow || targetWindow === window)
+        this.handleNativeNoteFocusKey(event, window, session);
       return;
     }
-    const active = window.document.activeElement;
-    const target = asElement(event.target);
     // Embedded Reader events still reach their view listener. Blurring its Flash input here
     // would cancel the interaction before the Reader can handle Escape or composition.
     if (
@@ -1132,8 +1134,7 @@ export class MainWindowController implements MainWindowControllerApi {
       }
       return;
     }
-    const tabID = selectedMainTabID(window);
-    if (active?.localName === 'browser' || (tabID && this.isReaderTab(tabID))) {
+    if (active?.localName === 'browser' || activeSurface.kind === 'reader') {
       this.#dependencies.reader.forwardKey(event, window);
       return;
     }
@@ -1229,29 +1230,15 @@ export class MainWindowController implements MainWindowControllerApi {
     session.prefixGuide.clear();
   }
 
-  private refreshKeyGuide(
-    window: MainWindow,
-    session: MainWindowSession,
-    input: InputRuntime = session.input,
-  ): void {
+  private refreshKeyGuide(window: MainWindow, session: MainWindowSession): void {
     session.prefixGuide.refresh(() => {
-      const fromNote = input === session.note.input;
-      let active: { mode: BindingContext; bindings: BindingMap };
-      if (fromNote) active = this.#noteEditor.activeBindings(session);
-      else {
-        const mode = this.bindingMode(window);
-        active = { mode, bindings: this.activeBindings(mode, session) };
-      }
+      const mode = this.bindingMode(window);
       const config = keyGuideConfig(this.#dependencies.preferences);
       return {
-        input,
-        mode: active.mode,
-        bindings: active.bindings,
-        enabled:
-          config.enabled &&
-          (fromNote
-            ? noteEditorEnabled(this.#dependencies.preferences) && active.mode === 'note-normal'
-            : !this.#noteEditor.isStandalone(window)),
+        input: session.input,
+        mode,
+        bindings: this.activeBindings(mode, session),
+        enabled: config.enabled,
         language: this.keyGuideLanguage(),
         delayMs: config.delayMs,
         fontSizePx: config.fontSizePx,
@@ -1268,157 +1255,48 @@ export class MainWindowController implements MainWindowControllerApi {
     );
   }
 
-  private isReaderTab(tabID: string): boolean {
-    return !!mainReaderForTab(tabID);
-  }
-
-  private executeFromNote(
-    action: ActionId,
-    count: number,
-    target: HTMLElement,
-    bindingMode: NoteBindingMode,
-    bindings: BindingMap,
+  /** The only Neo key handling allowed in a native Note editor. */
+  private handleNativeNoteFocusKey(
+    event: KeyboardEvent,
     window: MainWindow,
     session: MainWindowSession,
-  ): boolean {
-    if (!this.#modules.get(session)?.scope.available(bindingMode, action)) return false;
-    const local = this.#noteEditor.executeAction(action, target, window, session, count);
-    if (local !== null) return local;
+  ): void {
+    if (
+      event.defaultPrevented ||
+      !event.ctrlKey ||
+      event.metaKey ||
+      event.altKey ||
+      event.shiftKey ||
+      !/^[hjkl]$/.test(event.key) ||
+      compositionOwnsKey(event, false)
+    )
+      return;
 
-    if (action === 'openCommandPalette') {
-      const noteTargets = NOTE_ITEM_TARGET.resolve(window);
-      const isEditorCurrent = this.#noteEditor.captureCurrent(session);
-      const noteItemID = mainNoteItemID(window, target.ownerDocument.defaultView);
-      this.openCommandPalette(window, {
-        mode: 'note',
-        bindingMode,
-        actions:
-          bindingMode === 'note-normal'
-            ? NOTE_COMMAND_PALETTE_ACTIONS
-            : actionsForBindingMode(bindingMode),
-        bindings,
-        language: this.keyGuideLanguage(),
-        actionsTagsTarget: noteItemID
-          ? { itemIDs: [noteItemID], isCurrent: isEditorCurrent }
-          : undefined,
-        execute: (nextAction, nextCount) => {
-          if (!isEditorCurrent()) return;
-          const nextLocal = this.#noteEditor.executeAction(
-            nextAction,
-            target,
-            window,
-            session,
-            nextCount,
-          );
-          if (nextLocal !== null) return;
-          if (nextAction === 'openCommandPalette') {
-            this.executeFromNote(
-              nextAction,
-              nextCount,
-              target,
-              bindingMode,
-              bindings,
-              window,
-              session,
-            );
-            return;
-          }
-          this.executeNoteSurfaceAction(nextAction, window, session, noteTargets);
-        },
-      });
-      return true;
-    }
+    const tabID = selectedMainTabID(window);
+    const reader = tabID ? mainReaderForTab(tabID) : null;
+    const mode = reader ? 'reader-normal' : 'main-normal';
+    const direction = focusDirectionForAction(this.bindings()[`${mode}:<C-${event.key}>`]);
+    if (!direction) return;
 
-    return this.executeNoteSurfaceAction(action, window, session, undefined, count);
-  }
-
-  private executeNoteSurfaceAction(
-    action: ActionId,
-    window: MainWindow,
-    session: MainWindowSession,
-    resolvedTargets?: ItemTargetSet<'note'>,
-    count = 1,
-  ): boolean {
-    switch (action) {
-      case 'addTag':
-      case 'removeTag': {
-        const targets = resolvedTargets ?? NOTE_ITEM_TARGET.resolve(window);
-        if (action === 'addTag') this.tagModule(session)?.add(targets);
-        else this.tagModule(session)?.remove(targets);
-        return true;
+    const focus = typeof Services === 'undefined' ? undefined : Services.focus;
+    const elementBefore = window.document.activeElement;
+    const windowBefore = focus?.focusedWindow;
+    if (direction === 'left' && reader?.focus) {
+      try {
+        void Promise.resolve(reader.focus()).catch((error) => {
+          this.#dependencies.logger.debug(`focus reader error: ${String(error)}`);
+        });
+      } catch (error) {
+        this.#dependencies.logger.debug(`focus reader error: ${String(error)}`);
       }
-      case 'mainYankCitekey':
-        this.libraryModule(session)?.yankCitekeys(
-          resolvedTargets ?? NOTE_ITEM_TARGET.resolve(window),
-        );
-        return true;
-      case 'mainOpenPDF': {
-        const targets = resolvedTargets ?? NOTE_ITEM_TARGET.resolve(window);
-        if (targets.missing || targets.items.length !== 1) {
-          this.#navigation.status(session, t('status.openNoItem', this.keyGuideLanguage()));
-          return true;
-        }
-        this.libraryModule(session)?.openItem(targets.items[0]!, 'note');
-        return true;
-      }
-      case 'showInLibrary':
-        this.workspaceModule(session)?.showInLibrary(
-          resolvedTargets ?? NOTE_ITEM_TARGET.resolve(window),
-          'note',
-        );
-        return true;
-      case 'findAllItems':
-        this.libraryModule(session)?.findItems('all', 'note');
-        return true;
-      case 'findCollectionItems':
-        this.libraryModule(session)?.findItems('collection', 'note');
-        return true;
-      case 'findNotes':
-        this.openNotesPickerForSurface(window, session, 'note');
-        return true;
-      case 'managePlugins':
-        this.extensionsModule(session)?.open('note-normal');
-        return true;
-      case 'openNeoSettings':
-        this.openSettings(window);
-        return true;
-      case 'navigateBack':
-      case 'navigateForward':
-        this.executeTraversal(window, session, action, 'note', count);
-        return true;
-      case 'mainFocusTree':
-      case 'mainFocusLeft':
-        this.#navigation.focusPanel(window, session, 'collections');
-        return true;
-      case 'mainFocusItems':
-      case 'mainFocusRight':
-        this.#navigation.focusPanel(window, session, 'items');
-        return true;
-      case 'focusReaderSplitLeft':
-        this.#navigation.focusDirection(window, session, 'left');
-        return true;
-      case 'focusReaderSplitDown':
-        this.#navigation.focusDirection(window, session, 'down');
-        return true;
-      case 'focusReaderSplitUp':
-        this.#navigation.focusDirection(window, session, 'up');
-        return true;
-      case 'focusReaderSplitRight':
-        this.#navigation.focusDirection(window, session, 'right');
-        return true;
-      case 'switchTab':
-        this.workspaceModule(session)?.switchTab('note');
-        return true;
-      case 'closeCurrentTab':
-        this.workspaceModule(session)?.closeTab('note');
-        return true;
-      case 'previousTab':
-      case 'nextTab':
-        this.workspaceModule(session)?.cycleTab(action === 'previousTab' ? -1 : 1, 'note');
-        return true;
-      default:
-        return false;
+    } else {
+      this.#navigation.focusDirection(window, session, direction);
     }
+    // Only synchronous focus movement can claim this native key event.
+    if (window.document.activeElement === elementBefore && focus?.focusedWindow === windowBefore)
+      return;
+    event.preventDefault();
+    event.stopPropagation();
   }
 
   private openNotesPickerForSurface(
@@ -1431,8 +1309,6 @@ export class MainWindowController implements MainWindowControllerApi {
       const tabID = selectedMainTabID(window);
       const reader = tabID ? mainReaderForTab(tabID) : null;
       baseItem = reader?.itemID ? (mainItem(reader.itemID) ?? null) : null;
-    } else if (surface === 'note') {
-      baseItem = NOTE_ITEM_TARGET.resolve(window).items[0] ?? null;
     } else {
       baseItem = mainCursorItem(window) ?? null;
     }
@@ -1641,7 +1517,7 @@ export class MainWindowController implements MainWindowControllerApi {
         break;
       }
       case 'mainOpenPDF':
-        this.libraryModule(session)?.openItem(mainCursorItem(window) ?? null, 'main');
+        this.libraryModule(session)?.openItem(mainCursorItem(window) ?? null);
         break;
       case 'mainActivate':
         this.libraryModule(session)?.activate(mainCursorItem(window) ?? null);

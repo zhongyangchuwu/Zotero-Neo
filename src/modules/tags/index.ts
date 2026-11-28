@@ -52,12 +52,10 @@ export function createTagModule(host: ModuleHost, ports: TagModuleHost): TagModu
     const add = {
       main: bindItems('main-normal', true),
       reader: bindItems('reader-normal', true),
-      note: bindItems('note-normal', true),
     };
     const remove = {
       main: bindItems('main-normal', false),
       reader: bindItems('reader-normal', false),
-      note: bindItems('note-normal', false),
     };
     return {
       add: (targets) => add[targets.source](targets),
