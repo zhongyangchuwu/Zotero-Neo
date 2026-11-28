@@ -1957,7 +1957,11 @@ export class ReaderSession {
 
   private updateIndicator(): void {
     const indicator = this.state.indicator;
-    if (!indicator) return;
+    if (!indicator || isDeadObject(indicator)) return;
+    const reader = this.#dependencies.reader;
+    const window = readerWindow(reader);
+    // A tab switch or the layout status timer can run before Zotero retires its Reader entry.
+    if (readerIsClosed(reader) || (window && isDeadObject(window))) return;
     const pdfWindow = this.#navigationHost.activePdfWindow();
     const inputOwner = this.#nativeInput.ownsInput
       ? 'reader.mode.native'

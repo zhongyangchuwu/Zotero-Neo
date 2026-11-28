@@ -663,6 +663,8 @@ describe('Reader event lifecycle', () => {
     const live = createHistorySession();
     const { service, dependencies } = createReaderRegistryHarness();
     const closedView = closed.reader._internalReader!._primaryView!;
+    const closedPresentation = closed.reader._internalReader!;
+    const closedWindow = closed.reader._iframeWindow!;
     const liveView = live.reader._internalReader!._primaryView!;
     const nativeNavigate = vi.fn(() => Promise.resolve());
     const nativeKey = vi.fn();
@@ -674,6 +676,12 @@ describe('Reader event lifecycle', () => {
     service._readers = [closed.reader, live.reader];
     const controller = createReaderController(dependencies);
     let destroyed = false;
+    Object.defineProperty(closedPresentation, '_primarySDTView', {
+      get: () => {
+        if (destroyed) throw new TypeError("can't access dead object");
+        return undefined;
+      },
+    });
     Object.defineProperty(closedView, '_iframeWindow', {
       configurable: true,
       get: () => {
@@ -687,13 +695,16 @@ describe('Reader event lifecycle', () => {
         unwaiveXrays: <T>(value: T) => value,
         waiveXrays: <T>(value: T) => value,
         isDeadWrapper: (value: object) =>
-          destroyed && (value === closedView || value === closed.pdfWindow),
+          destroyed &&
+          (value === closedWindow || value === closedView || value === closed.pdfWindow),
       },
     });
     try {
       controller.start('zotero-neo@zotero-neo');
       controller.rescan(live.ownerWindow);
       destroyed = true;
+      // Zotero can deliver Main activation before its inventory reflects the closed tab.
+      controller.deactivateInactive(live.ownerWindow, null);
       service._readers = [live.reader];
 
       controller.rescan(live.ownerWindow);
