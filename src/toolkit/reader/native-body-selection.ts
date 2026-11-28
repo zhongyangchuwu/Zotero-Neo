@@ -428,7 +428,7 @@ function mountNativeBodySelection(
   const onAdd = view._onAddAnnotation;
   const tagged = new WeakMap<ReaderSelectionPart['position'], TaggedProposal>();
   const paintMethods = new Map<PagePaint, () => void>();
-  const emptyPaint = cloneInto<NativeRanges>([], owner);
+  const emptyPaint = nativeObjectIdentity(cloneInto<NativeRanges>([], owner));
   let gesture: Gesture | null = null;
   let painting = false;
   let renderSnapshot: Snapshot | null | undefined;
@@ -607,16 +607,18 @@ function mountNativeBodySelection(
           const cached = snapshot.paint.get(page.pageIndex);
           projected =
             cached ??
-            cloneInto<NativeRanges>(
-              [
-                {
-                  ...fence.range,
-                  sortIndex: pageData.sortIndex,
-                  text: pageData.text,
-                  position: { pageIndex: pageData.pageIndex, rects: pageData.rects },
-                },
-              ],
-              owner,
+            nativeObjectIdentity(
+              cloneInto<NativeRanges>(
+                [
+                  {
+                    ...fence.range,
+                    sortIndex: pageData.sortIndex,
+                    text: pageData.text,
+                    position: { pageIndex: pageData.pageIndex, rects: pageData.rects },
+                  },
+                ],
+                owner,
+              ),
             );
           if (!cached) snapshot.paint.set(page.pageIndex, projected);
         }
@@ -695,7 +697,8 @@ function mountNativeBodySelection(
         '_getAnnotationFromSelectionRanges',
         owner,
         (raw: NativeRanges, type?: string, color?: string) => {
-          const snapshot = !painting && raw === view._selectionRanges ? sync() : null;
+          const snapshot =
+            !painting && nativeObjectIdentity(raw) === view._selectionRanges ? sync() : null;
           const original = nativeProposal.call(view, raw, type, color);
           if (!original || !snapshot?.projection) return original;
           const projected = cloneInto({ ...original, ...snapshot.projection.parts[0] }, owner);
@@ -872,7 +875,7 @@ function mountNativeBodySelection(
         intent.ending = true;
         sync();
         // Native pointerup builds the SelectionPopup (or saves the active annotation tool) synchronously.
-        queueMicrotask(() => {
+        void Promise.resolve().then(() => {
           if (gesture !== intent) return;
           const selection = sync();
           if (!selection) return retire(true);
@@ -967,7 +970,7 @@ function mountNativeBodySelection(
       (event) => {
         if (event.target !== window || !gesture) return;
         const intent = gesture;
-        queueMicrotask(() => {
+        void Promise.resolve().then(() => {
           if (gesture !== intent || !attached()) return;
           const active = ownerDocument.activeElement;
           if (

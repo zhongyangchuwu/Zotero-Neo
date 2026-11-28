@@ -18,7 +18,13 @@ beforeEach(() => {
   vi.stubGlobal('Components', {
     utils: {
       cloneInto: <T>(value: T, _target: Window, options?: { cloneFunctions?: boolean }) => {
-        if (!options?.cloneFunctions) return structuredClone(value);
+        if (!options?.cloneFunctions) {
+          const cloned = structuredClone(value);
+          if (!Array.isArray(cloned)) return cloned;
+          const wrapped = cloned.slice();
+          realmAliases.set(wrapped, cloned);
+          return wrapped as T;
+        }
         const wrapped = {};
         // Gecko hides callable properties through the holder's Xray.
         realmAliases.set(wrapped, value as object);
@@ -153,6 +159,7 @@ function harness(pageTexts = ['AxBxC', 'DuE', 'z', 'Unused', 'FG']) {
       }
     },
   }));
+  let selectionRanges: Range[] = [];
   const view = {
     _primary: true,
     _iframe: iframe,
@@ -160,7 +167,12 @@ function harness(pageTexts = ['AxBxC', 'DuE', 'z', 'Unused', 'FG']) {
     _selectedAnnotationIDs: [] as string[],
     _tool: { type: 'pointer' },
     action: null as { type: string } | null,
-    _selectionRanges: [] as Range[],
+    get _selectionRanges() {
+      return selectionRanges;
+    },
+    set _selectionRanges(ranges: Range[]) {
+      selectionRanges = (realmAliases.get(ranges) as Range[] | undefined) ?? ranges;
+    },
     _pdfPages: textPages,
     _pages: pages,
     _textAnnotationFocused: () => commentFocused,
@@ -234,7 +246,9 @@ function harness(pageTexts = ['AxBxC', 'DuE', 'z', 'Unused', 'FG']) {
         data.setData('text/plain', view._selectionRanges.map(({ text }) => text).join('\n'));
         return;
       }
-      const proposal = view._getAnnotationFromSelectionRanges(view._selectionRanges, 'highlight');
+      const wrapped = view._selectionRanges.slice();
+      realmAliases.set(wrapped, view._selectionRanges);
+      const proposal = view._getAnnotationFromSelectionRanges(wrapped, 'highlight');
       if (!proposal) return;
       data.setData('text/plain', proposal.text);
       data.setData('text/html', `<p>${proposal.text}</p>`);
