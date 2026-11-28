@@ -161,7 +161,10 @@ function installMethod<T extends object>(
   callback: T,
 ): () => void {
   const previous = Object.getOwnPropertyDescriptor(object, key);
-  const method = nativeObjectIdentity(cloneIntoWithFunctions({ callback }, owner).callback);
+  // Gecko Xrays hide function-valued properties on the cloned holder.
+  const { callback: exported } = nativeObjectIdentity(cloneIntoWithFunctions({ callback }, owner));
+  if (typeof exported !== 'function') throw new Error(`Cannot export native Reader method ${key}`);
+  const method = nativeObjectIdentity(exported);
   Object.defineProperty(object, key, { configurable: true, writable: true, value: method });
   return () => {
     if (isDeadObject(object)) return;

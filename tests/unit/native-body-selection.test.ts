@@ -17,8 +17,13 @@ const realmAliases = new WeakMap<object, object>();
 beforeEach(() => {
   vi.stubGlobal('Components', {
     utils: {
-      cloneInto: <T>(value: T, _target: Window, options?: { cloneFunctions?: boolean }) =>
-        options?.cloneFunctions ? value : structuredClone(value),
+      cloneInto: <T>(value: T, _target: Window, options?: { cloneFunctions?: boolean }) => {
+        if (!options?.cloneFunctions) return structuredClone(value);
+        const wrapped = {};
+        // Gecko hides callable properties through the holder's Xray.
+        realmAliases.set(wrapped, value as object);
+        return wrapped as T;
+      },
       waiveXrays: <T extends object>(value: T) =>
         (realmAliases.get(value) as T | undefined) ?? value,
     },
