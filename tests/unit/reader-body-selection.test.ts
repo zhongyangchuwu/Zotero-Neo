@@ -5,6 +5,8 @@ import {
   type BodySelectionHost,
 } from '../../src/modules/reader-selection/body-selection';
 import {
+  beginReaderTextSelection,
+  captureReaderTextAdmission,
   leaseReaderTextAdmission,
   readerSelectedTextRanges,
   readerSelectionIsFiltered,
@@ -16,6 +18,7 @@ import { leaseReaderPresentation } from '../../src/toolkit/reader/presentation';
 import { computeSelectionPosition } from '../../src/toolkit/reader/selection-geometry';
 import { readerTextBoundaryPosition, readerTextSpans } from '../../src/toolkit/reader/text-source';
 import type { DocumentRegion } from '../../src/document-analysis/contracts';
+import type { ReaderVisibleLayout } from '../../src/reader/local-layout';
 import { textAdmissionFixture } from '../fixtures/reader-text-admission';
 const originalComponents = Reflect.get(globalThis, 'Components');
 beforeEach(() => Reflect.set(globalThis, 'Components', { utils: { isDeadWrapper: () => false } }));
@@ -38,11 +41,96 @@ function bodyHost(layout: BodySelectionHost['layout']): BodySelectionHost {
   return {
     layout,
     isCurrent: () => true,
-    capturePresentation: () => () => true,
     captureView: () => () => true,
-    showStatus: vi.fn(),
-    text: (key) => key,
     debug: vi.fn(),
+  };
+}
+
+function selectionFixture(reading = false) {
+  const t = textAdmissionFixture(reading);
+  const root = t.document.documentElement;
+  const styles = new Set<object>();
+  Reflect.set(root, 'appendChild', (style: object) => styles.add(style));
+  Reflect.set(t.document, 'createElement', () => ({
+    setAttribute: () => {},
+    remove() {
+      styles.delete(this);
+    },
+  }));
+
+  let marker: object | null = {};
+  const layer = { querySelector: () => marker };
+  const [firstPage] = Reflect.get(t.window, 'PDFViewerApplication').pdfViewer._pages;
+  Reflect.set(firstPage, 'div', { querySelector: () => layer });
+  let layerNodes = t.nodes;
+  const createTreeWalker = t.document.createTreeWalker.bind(t.document);
+  Reflect.set(t.document, 'createTreeWalker', (node: Node, flags: number) => {
+    if (node !== (layer as unknown as Node)) return createTreeWalker(node, flags);
+    let index = 0;
+    return { nextNode: () => layerNodes[index++] ?? null };
+  });
+  let next = 0;
+  const frames = new Map<number, FrameRequestCallback>();
+  const timers = new Map<number, () => void>();
+  Reflect.set(t.window, 'requestAnimationFrame', (fn: FrameRequestCallback) => {
+    frames.set(++next, fn);
+    return next;
+  });
+  Reflect.set(t.window, 'cancelAnimationFrame', (id: number) => frames.delete(id));
+  Reflect.set(t.window, 'setTimeout', (fn: () => void) => {
+    timers.set(++next, fn);
+    return next;
+  });
+  Reflect.set(t.window, 'clearTimeout', (id: number) => timers.delete(id));
+  const frame = (): void => {
+    const callbacks = [...frames.values()];
+    frames.clear();
+    for (const callback of callbacks) callback(0);
+  };
+  const afterPaint = (): void => {
+    const callbacks = [...timers.values()];
+    timers.clear();
+    for (const callback of callbacks) callback();
+  };
+  return {
+    ...t,
+    styles,
+    frame,
+    afterPaint,
+    paint: () => {
+      frame();
+      afterPaint();
+    },
+    render: (complete = true) => {
+      marker = complete ? {} : null;
+    },
+    renderedNodes: (nodes: Text[]) => {
+      layerNodes = nodes;
+    },
+  };
+}
+
+function layoutFixture(regions?: readonly DocumentRegion[]) {
+  let snapshot: ReaderVisibleLayout = {
+    pages: [0],
+    ready: new Map(regions ? [[0, regions]] : []),
+  };
+  let current = true;
+  const layout = {
+    ensureVisible: vi.fn(async () => {}),
+    visibleRegions: () => [],
+    visibleSnapshot: vi.fn(() => snapshot),
+    isCurrent: () => current,
+    prepareVisiblePage: vi.fn<BodySelectionHost['layout']['prepareVisiblePage']>(async () => {}),
+  } satisfies BodySelectionHost['layout'];
+  return {
+    layout,
+    publish: (next: ReaderVisibleLayout) => {
+      snapshot = next;
+    },
+    retire: () => {
+      current = false;
+    },
   };
 }
 
@@ -89,15 +177,17 @@ describe('body text admission', () => {
   });
 
   it('refuses a filtered snapshot after source change, lease replacement, selection change or view retirement', async () => {
-    const t = textAdmissionFixture();
-    t.document.documentElement.setAttribute('data-zv-select-active', '');
+    const t = selectionFixture();
     const pending = Promise.withResolvers<boolean>();
+    let validate: () => boolean | Promise<boolean> = () => true;
     const release = leaseReaderTextAdmission(
       t.window,
       bodyTextAdmission([chart]),
       () => true,
-      () => pending.promise,
+      () => validate(),
     );
+    const end = beginReaderTextSelection(t.window, t.nodes[0]!)!;
+    validate = () => pending.promise;
     const checking = validateReaderSelection(t.window);
     const successor = leaseReaderTextAdmission(t.window, bodyTextAdmission([chart]), () => true);
     pending.resolve(true);
@@ -105,66 +195,84 @@ describe('body text admission', () => {
     expect(readerSelectionIsFiltered(t.window)).toBe(true);
     release();
     successor();
+    end();
+    validate = () => true;
     const failed = leaseReaderTextAdmission(
       t.window,
       bodyTextAdmission([chart]),
       () => true,
-      async () => false,
+      () => validate(),
     );
+    const endFailed = beginReaderTextSelection(t.window, t.nodes[0]!)!;
+    validate = () => false;
     expect(await validateReaderSelection(t.window)).toBe(false);
-    expect(readerSelectionIsFiltered(t.window)).toBe(false);
+    expect(t.styles.size).toBe(0);
+    endFailed();
     failed();
     let current = true;
+    validate = () => true;
     const retired = leaseReaderTextAdmission(
       t.window,
       bodyTextAdmission([chart]),
       () => current,
-      async () => {
-        current = false;
-        return true;
-      },
+      () => validate(),
     );
+    const endRetired = beginReaderTextSelection(t.window, t.nodes[0]!)!;
+    validate = () => {
+      current = false;
+      return true;
+    };
     expect(await validateReaderSelection(t.window)).toBe(false);
+    endRetired();
     retired();
+    validate = () => true;
     const changed = leaseReaderTextAdmission(
       t.window,
       bodyTextAdmission([chart]),
       () => true,
-      async () => {
-        Reflect.set(t.selection, 'focusOffset', 1);
-        return true;
-      },
+      () => validate(),
     );
+    const endChanged = beginReaderTextSelection(t.window, t.nodes[0]!)!;
+    validate = () => {
+      Reflect.set(t.selection, 'focusOffset', 1);
+      return true;
+    };
     expect(await validateReaderSelection(t.window)).toBe(false);
+    endChanged();
     changed();
   });
 
   it.each(['source', 'layout'] as const)(
     'refuses a filtered write when its %s changes before the next viewport refresh',
     async (changed) => {
-      const t = textAdmissionFixture();
-      let regions: readonly DocumentRegion[] = [chart];
-      let sourceCurrent = true;
-      const layout = {
-        ensureVisible: vi.fn(async () => {}),
-        visibleRegions: () => regions,
-        isCurrent: () => sourceCurrent,
-      };
+      const t = selectionFixture();
+      const { layout, publish, retire } = layoutFixture([chart]);
       const owner = new ReaderBodySelection(bodyHost(layout));
-      await owner.toggle(t.window);
-      t.document.documentElement.setAttribute('data-zv-select-active', '');
+      owner.refreshLayout(t.window);
+      t.paint();
+      const held = captureReaderTextAdmission(t.window)!;
+      const end = beginReaderTextSelection(t.window, t.nodes[0]!)!;
       expect(readerTextNodeAllowed(t.window, t.nodes[1]!)).toBe(false);
       expect(await validateReaderSelection(t.window)).toBe(true);
-      if (changed === 'source') sourceCurrent = false;
-      else regions = [];
+
+      t.render();
+      owner.refreshLayout(t.window);
+      t.paint();
+      expect(held.current()).toBe(true);
+      expect(await validateReaderSelection(t.window)).toBe(true);
+      if (changed === 'source') retire();
+      else publish({ pages: [1], ready: new Map() });
+      expect(held.current()).toBe(false);
       expect(await validateReaderSelection(t.window)).toBe(false);
       expect(readerTextNodeAllowed(t.window, t.nodes[1]!)).toBe(true);
+      end();
       owner.dispose();
     },
   );
   it('resolves an element caret across excluded text to the next or previous admitted edge', () => {
-    const t = textAdmissionFixture();
+    const t = selectionFixture();
     const release = leaseReaderTextAdmission(t.window, bodyTextAdmission([chart]), () => true);
+    const end = beginReaderTextSelection(t.window, t.nodes[0]!)!;
     const boundary = { nodeType: 1 } as Node;
     expect(readerTextBoundaryPosition(t.window, boundary, 1, 'forward')).toEqual({
       textNode: t.nodes[2],
@@ -174,6 +282,7 @@ describe('body text admission', () => {
       textNode: t.nodes[0],
       offset: 5,
     });
+    end();
     release();
   });
   it('excludes chart and margin text while keeping body formulas and unknown source geometry', () => {
@@ -210,12 +319,14 @@ describe('body text admission', () => {
     let current = true;
     t.elements[1]!.setAttribute('data-zv-text-excluded', 'external');
     const first = leaseReaderTextAdmission(t.window, bodyTextAdmission([chart]), () => current);
-    expect(readerTextNodeAllowed(t.window, t.nodes[1]!)).toBe(false);
+    expect(readerTextNodeAllowed(t.window, t.nodes[1]!)).toBe(true);
+    expect(t.elements[1]!.getAttribute('data-zv-text-excluded')).not.toBe('external');
     current = false;
     expect(readerTextNodeAllowed(t.window, t.nodes[1]!)).toBe(true);
     const second = leaseReaderTextAdmission(t.window, bodyTextAdmission([chart]), () => true);
     first();
-    expect(readerTextNodeAllowed(t.window, t.nodes[1]!)).toBe(false);
+    expect(readerTextNodeAllowed(t.window, t.nodes[1]!)).toBe(true);
+    expect(t.elements[1]!.getAttribute('data-zv-text-excluded')).not.toBe('external');
     second();
     expect(t.elements[1]!.getAttribute('data-zv-text-excluded')).toBe('external');
   });
@@ -228,25 +339,21 @@ describe('body text admission', () => {
     for (let i = 0; i < 128; i++) readerTextNodeAllowed(t.window, t.nodes[0]!);
     expect(t.elements[1]!.getAttribute('data-zv-text-excluded')).toBeNull();
     Reflect.set(t.elements[1]!, 'isConnected', true);
-    expect(readerTextNodeAllowed(t.window, t.nodes[1]!)).toBe(false);
+    expect(readerTextNodeAllowed(t.window, t.nodes[1]!)).toBe(true);
+    expect(t.elements[1]!.getAttribute('data-zv-text-excluded')).not.toBeNull();
     release();
     expect(t.elements[1]!.getAttribute('data-zv-text-excluded')).toBeNull();
   });
 
   it('filters text and annotation geometry together, but leaves Normal-mode native selection unchanged', () => {
-    const t = textAdmissionFixture();
+    const t = selectionFixture();
     const release = leaseReaderTextAdmission(t.window, bodyTextAdmission([chart]), () => true);
-    expect(readerTextSpans(t.window).map((span) => span.text)).toEqual(['alpha', 'omega']);
+    expect(readerTextSpans(t.window).map((span) => span.text)).toEqual(['alpha', 'CHART', 'omega']);
     expect(readerSelectionIsFiltered(t.window)).toBe(false);
     expect(readerSelectionText(t.window, t.selection)).toBe('alphaCHARTomega');
-    t.document.documentElement.setAttribute('data-zv-select-active', '');
+    const end = beginReaderTextSelection(t.window, t.nodes[0]!)!;
+    expect(readerTextSpans(t.window).map((span) => span.text)).toEqual(['alpha', 'omega']);
     expect(readerSelectionText(t.window, t.selection)).toBe('alpha omega');
-    expect(
-      readerSelectionText(t.window, {
-        ...t.selection,
-        toString: () => 'alpha\nomega',
-      } as Selection),
-    ).toBe('alpha\nomega');
     expect(readerSelectedTextRanges(t.window, t.selection)).toHaveLength(2);
     const computed = computeSelectionPosition(t.window, t.selection)!;
     expect(JSON.parse(computed.position!)).toEqual({
@@ -256,20 +363,20 @@ describe('body text admission', () => {
         [10, 760, 50, 770],
       ],
     });
-    t.document.documentElement.removeAttribute('data-zv-select-active');
+    end();
     const native = computeSelectionPosition(t.window, t.selection)!;
     expect(JSON.parse(native.position!).rects).toHaveLength(3);
     release();
   });
 
   it('merges every admitted Reading Mode fragment and rejects partial native mapping', () => {
-    const t = textAdmissionFixture(true);
-    t.document.documentElement.setAttribute('data-zv-select-active', '');
+    const t = selectionFixture(true);
     const release = leaseReaderTextAdmission(
       t.window,
       (source) => source.sourceBlockId !== 'native:1',
       () => true,
     );
+    const end = beginReaderTextSelection(t.window, t.nodes[0]!)!;
     const mapping = vi.fn((range: Range) => ({
       position: {
         pageIndex: 0,
@@ -314,86 +421,157 @@ describe('body text admission', () => {
       failure: 'unsupported-page-span',
     });
     unlease();
+    end();
     release();
   });
 
-  it('never warms while off and cannot install a late layout after the toggle view retires', async () => {
-    const t = textAdmissionFixture();
-    let invocation = true;
+  it('waits for rendered text and a paint, coalesces scroll, and never takes over a cold gesture', async () => {
+    const t = selectionFixture();
+    t.render(false);
+    const { layout, publish } = layoutFixture();
     const pending = Promise.withResolvers<void>();
-    const regions = [chart];
-    const layout = {
-      ensureVisible: vi.fn(async () => {}).mockReturnValueOnce(pending.promise),
-      visibleRegions: () => regions,
-      isCurrent: () => true,
-    };
-    const owner = new ReaderBodySelection({
-      ...bodyHost(layout),
-      capturePresentation: () => () => invocation,
-    });
-    owner.refreshLayout(t.window);
-    expect(layout.ensureVisible).not.toHaveBeenCalled();
-    const loading = owner.toggle(t.window);
-    expect(layout.ensureVisible).toHaveBeenCalledWith(t.window);
-    invocation = false;
-    pending.resolve();
-    await loading;
-    t.document.documentElement.setAttribute('data-zv-select-active', '');
-    expect(readerSelectionIsFiltered(t.window)).toBe(false);
-    invocation = true;
-    await owner.toggle(t.window);
-    expect(readerTextNodeAllowed(t.window, t.nodes[1]!)).toBe(false);
-    await owner.toggle(t.window);
-    expect(readerTextNodeAllowed(t.window, t.nodes[1]!)).toBe(true);
-    owner.dispose();
-  });
-
-  it('falls open with no eligible geometry and installs masks only when a later viewport has them', async () => {
-    const t = textAdmissionFixture();
-    const pending = Promise.withResolvers<void>();
-    let regions: readonly DocumentRegion[] = [];
-    const layout = {
-      ensureVisible: vi.fn(async () => {}).mockReturnValueOnce(pending.promise),
-      visibleRegions: () => regions,
-      isCurrent: () => true,
-    };
+    layout.prepareVisiblePage.mockReturnValueOnce(pending.promise);
     const owner = new ReaderBodySelection(bodyHost(layout));
-    t.document.documentElement.setAttribute('data-zv-select-active', '');
-    const loading = owner.toggle(t.window);
+    owner.refreshLayout(t.window);
+    owner.refreshLayout(t.window);
+    expect(layout.visibleSnapshot).not.toHaveBeenCalled();
+    t.frame();
+    expect(layout.prepareVisiblePage).not.toHaveBeenCalled();
+    t.afterPaint();
+    expect(layout.prepareVisiblePage).not.toHaveBeenCalled();
+
+    t.render();
+    owner.refreshLayout(t.window);
+    t.frame();
+    expect(layout.prepareVisiblePage).not.toHaveBeenCalled();
+    t.afterPaint();
+    expect(layout.prepareVisiblePage).toHaveBeenCalledOnce();
+    expect(beginReaderTextSelection(t.window, t.nodes[0]!)).toBeNull();
+    for (let i = 0; i < 5; i++) owner.refreshLayout(t.window);
+    t.paint();
+    expect(layout.prepareVisiblePage).toHaveBeenCalledOnce();
+    publish({ pages: [0], ready: new Map([[0, [chart]]]) });
     pending.resolve();
-    await loading;
-    expect(readerSelectionIsFiltered(t.window)).toBe(false);
-    expect(readerTextNodeAllowed(t.window, t.nodes[1]!)).toBe(true);
-
-    regions = [chart];
-    owner.refreshLayout(t.window);
-    expect(readerSelectionIsFiltered(t.window)).toBe(true);
-    expect(readerTextNodeAllowed(t.window, t.nodes[1]!)).toBe(false);
-    expect(layout.ensureVisible).toHaveBeenCalledTimes(2);
-    regions = [];
-    owner.refreshLayout(t.window);
-    expect(readerSelectionIsFiltered(t.window)).toBe(false);
+    await pending.promise;
+    t.paint();
+    expect(t.elements[1]!.getAttribute('data-zv-text-excluded')).not.toBeNull();
+    expect(t.styles.size).toBe(0);
+    expect(readerSelectionText(t.window, t.selection)).toBe('alphaCHARTomega');
+    expect(beginReaderTextSelection(t.window, t.nodes[1]!)).toBeNull();
+    const end = beginReaderTextSelection(t.window, t.nodes[0]!)!;
+    expect(readerSelectionText(t.window, t.selection)).toBe('alpha omega');
+    end();
+    owner.dispose();
     expect(t.elements[1]!.getAttribute('data-zv-text-excluded')).toBeNull();
-    owner.dispose();
   });
 
-  it('keeps native Reading Mode text selectable without requesting layout', async () => {
-    const t = textAdmissionFixture(true);
-    const ensureVisible = vi.fn(async () => {});
-    const options = bodyHost({ ensureVisible, visibleRegions: () => [], isCurrent: () => true });
-    const owner = new ReaderBodySelection(options);
-    await owner.toggle(t.window);
+  it('retires pending work for a page left behind and admits only the replacement page', async () => {
+    const t = selectionFixture();
+    const pages = Reflect.get(t.window, 'PDFViewerApplication').pdfViewer._pages;
+    pages.push({ ...pages[0] });
+    const { layout, publish } = layoutFixture();
+    const pending = Promise.withResolvers<void>();
+    layout.prepareVisiblePage
+      .mockReturnValueOnce(pending.promise)
+      .mockImplementationOnce(async () => {
+        publish({ pages: [1], ready: new Map([[1, []]]) });
+      });
+    const owner = new ReaderBodySelection(bodyHost(layout));
     owner.refreshLayout(t.window);
-    t.document.documentElement.setAttribute('data-zv-select-active', '');
-    expect(readerSelectionIsFiltered(t.window)).toBe(false);
-    expect(readerTextNodeAllowed(t.window, t.nodes[1]!)).toBe(true);
-    expect(ensureVisible).not.toHaveBeenCalled();
-    expect(options.showStatus).toHaveBeenCalledWith('unavailable');
+    t.paint();
+    publish({ pages: [1], ready: new Map() });
+    owner.refreshLayout(t.window);
+    t.paint();
+    expect(layout.prepareVisiblePage).toHaveBeenCalledOnce();
+    expect(layout.prepareVisiblePage.mock.calls[0]?.[3]?.()).toBe(false);
+
+    pending.resolve();
+    await pending.promise;
+    t.paint();
+    await Promise.resolve();
+    t.paint();
+    const held = captureReaderTextAdmission(t.window)!;
+    const ink = { rect: chart.rect, sourceBlockId: null };
+    expect(held.ready({ ...ink, pageIndex: 0 })).toBe(false);
+    expect(held.ready({ ...ink, pageIndex: 1 })).toBe(true);
+    expect(held.current()).toBe(true);
     owner.dispose();
   });
 
-  it('filters complete native blocks only on the source pages mapped from the visible text', async () => {
-    const t = textAdmissionFixture(true);
+  it('cancels an exact view before paint and cannot publish afterward from a retired request', async () => {
+    const t = selectionFixture();
+    const { layout, publish } = layoutFixture();
+    const pending = Promise.withResolvers<void>();
+    layout.prepareVisiblePage.mockReturnValueOnce(pending.promise);
+    const owner = new ReaderBodySelection(bodyHost(layout));
+    owner.refreshLayout(t.window);
+    t.frame();
+    owner.releaseView(t.window);
+    t.afterPaint();
+    expect(layout.prepareVisiblePage).not.toHaveBeenCalled();
+
+    owner.refreshLayout(t.window);
+    t.paint();
+    expect(layout.prepareVisiblePage).toHaveBeenCalledOnce();
+    owner.releaseView(t.window);
+    expect(layout.prepareVisiblePage.mock.calls[0]?.[3]?.()).toBe(false);
+    publish({ pages: [0], ready: new Map([[0, [chart]]]) });
+    pending.resolve();
+    await pending.promise;
+    t.paint();
+    expect(captureReaderTextAdmission(t.window)).toBeNull();
+    expect(t.elements[1]!.getAttribute('data-zv-text-excluded')).toBeNull();
+
+    owner.refreshLayout(t.window);
+    t.paint();
+    expect(t.elements[1]!.getAttribute('data-zv-text-excluded')).not.toBeNull();
+    owner.dispose();
+    expect(t.elements[1]!.getAttribute('data-zv-text-excluded')).toBeNull();
+  });
+
+  it('treats computed empty geometry as ready without masking or rescanning the page', () => {
+    const t = selectionFixture();
+    const { layout } = layoutFixture([]);
+    const owner = new ReaderBodySelection(bodyHost(layout));
+    owner.refreshLayout(t.window);
+    t.paint();
+    const end = beginReaderTextSelection(t.window, t.nodes[0]!);
+    expect(end).not.toBeNull();
+    expect(t.elements.every((element) => !element.getAttribute('data-zv-text-excluded'))).toBe(
+      true,
+    );
+    expect(layout.prepareVisiblePage).not.toHaveBeenCalled();
+    end?.();
+    owner.dispose();
+  });
+
+  it('yields between chunks before marking text near the end of a large painted layer', () => {
+    const t = selectionFixture();
+    t.renderedNodes([...Array<Text>(500).fill(t.nodes[0]!), t.nodes[1]!]);
+    const { layout } = layoutFixture([chart]);
+    const owner = new ReaderBodySelection(bodyHost(layout));
+    owner.refreshLayout(t.window);
+    t.paint();
+    expect(t.elements[1]!.getAttribute('data-zv-text-excluded')).toBeNull();
+    for (let i = 0; i < 5; i++) t.paint();
+    expect(t.elements[1]!.getAttribute('data-zv-text-excluded')).not.toBeNull();
+    owner.dispose();
+  });
+
+  it('keeps unmapped native Reading Mode text selectable without requesting layout', () => {
+    const t = selectionFixture(true);
+    const { layout } = layoutFixture();
+    const owner = new ReaderBodySelection(bodyHost(layout));
+    owner.refreshLayout(t.window);
+    t.paint();
+    expect(beginReaderTextSelection(t.window, t.nodes[0]!)).toBeNull();
+    expect(readerSelectionText(t.window, t.selection)).toBe('alphaCHARTomega');
+    expect(layout.prepareVisiblePage).not.toHaveBeenCalled();
+    owner.dispose();
+  });
+
+  it('filters only complete visible Reading Mode blocks whose source page is ready', async () => {
+    const t = selectionFixture(true);
     Reflect.set(t.window, 'innerHeight', 29);
     const map = vi.fn((range: Range) => ({
       position: {
@@ -404,41 +582,50 @@ describe('body text admission', () => {
       pageLabel: '1',
     }));
     const release = leaseReaderPresentation(t.window, { getAnnotationFromRange: map }, () => true);
-    const regions = [chart];
-    const ensureVisible = vi.fn(async () => {});
-    const owner = new ReaderBodySelection(
-      bodyHost({ ensureVisible, visibleRegions: () => regions, isCurrent: () => true }),
+    const { layout, publish } = layoutFixture();
+    layout.prepareVisiblePage.mockImplementationOnce(async () => {
+      publish({ pages: [0], ready: new Map([[0, [chart]]]) });
+    });
+    const owner = new ReaderBodySelection(bodyHost(layout));
+    owner.refreshLayout(t.window);
+    t.paint();
+    expect(beginReaderTextSelection(t.window, t.nodes[0]!)).toBeNull();
+    await Promise.resolve();
+    t.paint();
+    expect(layout.prepareVisiblePage).toHaveBeenCalledExactlyOnceWith(
+      t.window,
+      0,
+      [0],
+      expect.any(Function),
     );
-    await owner.toggle(t.window);
-    expect(ensureVisible).toHaveBeenCalledWith(t.window, [0]);
     expect(map).toHaveBeenCalledTimes(2);
-    expect(readerTextNodeAllowed(t.window, t.nodes[1]!)).toBe(false);
-    expect(readerTextNodeAllowed(t.window, t.nodes[2]!)).toBe(true);
+    expect(t.elements[1]!.getAttribute('data-zv-text-excluded')).not.toBeNull();
+    expect(beginReaderTextSelection(t.window, t.nodes[1]!)).toBeNull();
+    expect(beginReaderTextSelection(t.window, t.nodes[2]!)).toBeNull();
     expect(readerSelectionText(t.window, t.selection)).toBe('alphaCHARTomega');
-    t.document.documentElement.setAttribute('data-zv-select-active', '');
+    const end = beginReaderTextSelection(t.window, t.nodes[0]!)!;
     expect(readerSelectionText(t.window, t.selection)).toBe('alpha omega');
     release();
     expect(await validateReaderSelection(t.window)).toBe(false);
+    end();
     owner.dispose();
   });
 
-  it('keeps ambiguous native fragments selectable without warming their pages', async () => {
-    const t = textAdmissionFixture(true);
+  it('keeps ambiguous native fragments selectable without warming their pages', () => {
+    const t = selectionFixture(true);
     const map = vi.fn(() => ({
       position: { pageIndex: 0, rects: [chart.rect], nextPageRects: [chart.rect] },
       sortIndex: '00000|00001|00010',
       pageLabel: '1',
     }));
     const release = leaseReaderPresentation(t.window, { getAnnotationFromRange: map }, () => true);
-    const ensureVisible = vi.fn(async () => {});
-    const owner = new ReaderBodySelection(
-      bodyHost({ ensureVisible, visibleRegions: () => [], isCurrent: () => true }),
-    );
-    await owner.toggle(t.window);
-    t.document.documentElement.setAttribute('data-zv-select-active', '');
+    const { layout } = layoutFixture();
+    const owner = new ReaderBodySelection(bodyHost(layout));
+    owner.refreshLayout(t.window);
+    t.paint();
     expect(map).toHaveBeenCalledTimes(3);
-    expect(ensureVisible).not.toHaveBeenCalled();
-    expect(readerSelectionIsFiltered(t.window)).toBe(false);
+    expect(layout.prepareVisiblePage).not.toHaveBeenCalled();
+    expect(beginReaderTextSelection(t.window, t.nodes[0]!)).toBeNull();
     expect(readerTextNodeAllowed(t.window, t.nodes[1]!)).toBe(true);
     release();
     owner.dispose();

@@ -62,6 +62,7 @@ function harness(
   });
   const pdf = { numPages: pages.length, fingerprints: ['live-fingerprint', null], getData };
   let visible = [1];
+  let splitVisible = [2];
   const app = {
     pdfDocument: pdf,
     pdfViewer: { _getVisiblePages: () => ({ views: visible.map((id) => ({ id })) }) },
@@ -70,16 +71,34 @@ function harness(
   const overlay = { document: {} } as PdfWindow;
   const secondaryApp = {
     pdfDocument: { ...pdf },
-    pdfViewer: { _getVisiblePages: () => ({ views: [{ id: 2 }] }) },
+    pdfViewer: { _getVisiblePages: () => ({ views: splitVisible.map((id) => ({ id })) }) },
   };
   const secondary = { document: {}, PDFViewerApplication: secondaryApp } as unknown as PdfWindow;
   const internal = {
     _primaryView: { _iframeWindow: primary },
     _secondaryView: { _iframeWindow: secondary },
   };
-  const reader = { _window: { Function }, _internalReader: internal, itemID: 21 } as ReaderRuntime;
+  let nextTask = 0;
+  const tasks = new Set<number>();
+  const schedule = (callback: () => void): number => {
+    const id = ++nextTask;
+    tasks.add(id);
+    queueMicrotask(() => {
+      if (tasks.delete(id)) callback();
+    });
+    return id;
+  };
+  const host = {
+    Function,
+    requestAnimationFrame: schedule,
+    cancelAnimationFrame: (id: number) => tasks.delete(id),
+    setTimeout: schedule,
+    clearTimeout: (id: number) => tasks.delete(id),
+  };
+  const reader = { _window: host, _internalReader: internal, itemID: 21 } as ReaderRuntime;
   return {
     layout: new ReaderLocalLayout(reader),
+    host,
     bytes,
     getData,
     getPage,
@@ -91,6 +110,9 @@ function harness(
     overlay,
     show: (...pages: number[]) => {
       visible = pages;
+    },
+    showSplit: (...pages: number[]) => {
+      splitVisible = pages;
     },
     reflow: () => Reflect.set(internal, '_primarySDTView', { _iframeWindow: overlay }),
     replacePdf: () => {
@@ -259,6 +281,92 @@ describe('Reader-local PDF layout', () => {
     expect(first.getOperatorList).not.toHaveBeenCalled();
     expect(second.getOperatorList).toHaveBeenCalledOnce();
     expect(t.layout.visibleRegions(t.primary).map((region) => region.pageIndex)).toEqual([1]);
+    t.layout.dispose();
+  });
+
+  it('limits admission to the two most visible pages and preserves readiness for empty geometry', async () => {
+    const t = harness([page([]), page(), page()]);
+    t.show(3, 1, 2);
+    const cold = t.layout.visibleSnapshot(t.primary)!;
+    expect(cold.pages).toEqual([2, 0]);
+    expect(cold.ready.size).toBe(0);
+    await t.layout.prepareVisiblePage(t.primary, 1);
+    expect(t.getPage).not.toHaveBeenCalled();
+    await t.layout.prepareVisiblePage(t.primary, 0);
+    const partial = t.layout.visibleSnapshot(t.primary)!;
+    expect(partial).not.toBe(cold);
+    expect(partial.ready.get(0)).toEqual([]);
+    expect(partial.ready.has(2)).toBe(false);
+    await t.layout.prepareVisiblePage(t.secondary, 1);
+    t.show(1, 3, 2);
+    expect(t.layout.visibleSnapshot(t.primary)).toBe(partial);
+
+    await t.layout.prepareVisiblePage(t.primary, 2);
+    expect(t.layout.visibleSnapshot(t.primary)?.ready.size).toBe(2);
+    expect(t.getPage.mock.calls).toEqual([[1], [2], [3]]);
+    t.show(2, 1, 3);
+    expect(t.layout.visibleSnapshot(t.primary)?.ready.has(1)).toBe(true);
+    t.layout.dispose();
+  });
+
+  it('does not cache geometry completed after the exact warm viewport is retired', async () => {
+    const source = page();
+    const t = harness([source, page()]);
+    const started = Promise.withResolvers<void>();
+    const operators = Promise.withResolvers<{ fnArray: number[]; argsArray: never[] }>();
+    source.getOperatorList.mockImplementationOnce(() => {
+      started.resolve();
+      return operators.promise;
+    });
+    let wanted = true;
+    const old = t.layout.prepareVisiblePage(t.primary, 0, undefined, () => wanted);
+    await started.promise;
+    wanted = false;
+    t.show(2);
+    await t.layout.prepareVisiblePage(t.primary, 1);
+    operators.resolve({ fnArray: [], argsArray: [] });
+    await old;
+    t.show(1);
+    expect(t.layout.visibleSnapshot(t.primary)?.ready.has(0)).toBe(false);
+    await t.layout.prepareVisiblePage(t.primary, 0);
+    expect(t.layout.visibleSnapshot(t.primary)?.ready.has(0)).toBe(true);
+    expect(t.getPage.mock.calls).toEqual([[1], [2], [1]]);
+    t.layout.dispose();
+  });
+
+  it('lets explicit caption navigation take over when a warmer is waiting for idle', async () => {
+    const source = page([item('Figure 1: Overview', 50, 380, 200)]);
+    const t = harness([source]);
+    const idleRequested = Promise.withResolvers<void>();
+    Reflect.set(t.host, 'requestIdleCallback', () => {
+      idleRequested.resolve();
+      return 1;
+    });
+    const cancelIdle = vi.fn();
+    Reflect.set(t.host, 'cancelIdleCallback', cancelIdle);
+    const warming = t.layout.prepareVisiblePage(t.primary, 0);
+    await idleRequested.promise;
+    expect(t.layout.visibleSnapshot(t.primary)?.ready.has(0)).toBe(false);
+    const [captions] = await Promise.all([t.layout.figures(), warming]);
+    expect(captions.map((caption) => caption.text)).toEqual(['Figure 1: Overview']);
+    expect(t.layout.visibleSnapshot(t.primary)?.ready.has(0)).toBe(true);
+    expect(source.getTextContent).toHaveBeenCalledOnce();
+    expect(source.getOperatorList).toHaveBeenCalledOnce();
+    expect(cancelIdle).toHaveBeenCalledOnce();
+    t.layout.dispose();
+  });
+
+  it('keeps a visible admission snapshot current even when offscreen work evicts its LRU entry', async () => {
+    const t = harness(Array.from({ length: 18 }, () => page()));
+    await t.layout.prepareVisiblePage(t.primary, 0);
+    const held = t.layout.visibleSnapshot(t.primary);
+    expect(held?.ready.get(0)).toHaveLength(1);
+    for (let page = 2; page <= 18; page++) {
+      t.showSplit(page);
+      await t.layout.ensureVisible(t.secondary);
+    }
+    expect(t.layout.visibleRegions(t.primary)).toEqual([]);
+    expect(t.layout.visibleSnapshot(t.primary)).toBe(held);
     t.layout.dispose();
   });
 

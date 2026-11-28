@@ -1,7 +1,88 @@
 import type { ComputedAnnotationPosition, PdfWindow } from './contracts';
 import type { NativePdfWindow } from './private-types';
 import { currentReaderPresentation, readerReadingMode } from './presentation';
-import { readerSelectedTextRanges, readerSelectionIsFiltered } from './text-admission';
+import {
+  readerSelectedTextRanges,
+  readerSelectionIsFiltered,
+  readerTextRangeText,
+} from './text-admission';
+import {
+  groupReaderSelectionPages,
+  type ReaderSelectionPage,
+  type ReaderSelectionPart,
+} from './selection-pages';
+
+/** Use the same page partition as native selection. Never bound several runs with one rectangle. */
+export function filteredReaderPdfSelection(
+  window: PdfWindow,
+  selection: Selection,
+): readonly ReaderSelectionPart[] | null {
+  const viewer = (window as NativePdfWindow).PDFViewerApplication?.pdfViewer;
+  if (!viewer || !readerSelectionIsFiltered(window)) return null;
+  const pages = new Map<number, ReaderSelectionPage & { rects: number[][]; text: string }>();
+  for (const fragment of readerSelectedTextRanges(window, selection)) {
+    const start = fragment.startContainer;
+    const page = (start as Text).parentElement?.closest<HTMLElement>('.page[data-page-number]');
+    const index = Number(page?.dataset.pageNumber) - 1;
+    const viewport = viewer._pages?.[index]?.viewport ?? viewer.getPageView?.(index)?.viewport;
+    if (!page || !Number.isInteger(index) || index < 0 || !viewport?.convertToPdfPoint) return null;
+    const bounds = page.getBoundingClientRect();
+    const rects: number[][] = [];
+    const convert = (range: Range): boolean => {
+      const clientRects = range.getClientRects();
+      if (!clientRects) return false;
+      for (const rect of clientRects) {
+        if (!(rect.width > 1 && rect.height > 1)) continue;
+        const a = viewport.convertToPdfPoint!(rect.left - bounds.left, rect.top - bounds.top);
+        const b = viewport.convertToPdfPoint!(rect.right - bounds.left, rect.bottom - bounds.top);
+        if (!a || !b) return false;
+        const values = [
+          Math.min(a[0], b[0]),
+          Math.min(a[1], b[1]),
+          Math.max(a[0], b[0]),
+          Math.max(a[1], b[1]),
+        ].map((value) => Math.round(value * 1000) / 1000);
+        if (!values.every(Number.isFinite) || values[2]! <= values[0]! || values[3]! <= values[1]!)
+          return false;
+        rects.push(values);
+      }
+      return true;
+    };
+    if (start === fragment.endContainer) {
+      if (!convert(fragment)) return null;
+    } else {
+      const walker = window.document.createTreeWalker(fragment.commonAncestorContainer, 4);
+      walker.currentNode = start;
+      const piece = window.document.createRange();
+      for (let node: Node | null = start; node; node = walker.nextNode()) {
+        const last = node === fragment.endContainer;
+        if (node.nodeType !== 3) return null;
+        piece.setStart(node, node === start ? fragment.startOffset : 0);
+        piece.setEnd(node, last ? fragment.endOffset : (node as Text).length);
+        if (!convert(piece)) return null;
+        if (last) break;
+      }
+    }
+    const text = readerTextRangeText(fragment).normalize('NFC').replace(/\s+/gu, ' ').trim();
+    if (!text) continue;
+    if (!rects.length) return null;
+    const existing = pages.get(index);
+    if (existing) {
+      existing.text += ` ${text}`;
+      for (const rect of rects) existing.rects.push(rect);
+    } else {
+      const y = Math.max(0, Math.floor((viewport.height ?? 0) - rects[0]![3]!));
+      pages.set(index, {
+        pageIndex: index,
+        rects,
+        text,
+        sortIndex: `${String(index).padStart(5, '0')}|000000|${String(y).padStart(5, '0')}`,
+        pageLabel: viewer._pageLabels?.[index] ?? String(index + 1),
+      });
+    }
+  }
+  return pages.size ? groupReaderSelectionPages([...pages.values()]) : null;
+}
 
 /** Converts only selected text-node fragments; canvas/page boxes are not annotation text. */
 export function computeSelectionPosition(
@@ -57,6 +138,15 @@ export function computeSelectionPosition(
           pageLabel: annotation.pageLabel,
         }
       : null;
+  }
+  if (readerSelectionIsFiltered(pdfWindow)) {
+    const parts = filteredReaderPdfSelection(pdfWindow, selection);
+    if (!parts?.length) return { position: null, pageLabel: '', failure: 'invalid-geometry' };
+    const first = parts[0]!;
+    if (parts.length > 1)
+      return { position: null, pageLabel: first.pageLabel, failure: 'unsupported-page-span' };
+    const { position, sortIndex, pageLabel } = first;
+    return { position: JSON.stringify(position), sortIndex, pageLabel };
   }
   const viewer = (pdfWindow as NativePdfWindow).PDFViewerApplication?.pdfViewer;
   if (!viewer) return null;

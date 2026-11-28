@@ -40,7 +40,6 @@ const BASE_ACTION_IDS = [
   'nextBookmark',
   'clearSearch',
   'enterVisual',
-  'toggleBodySelection',
   'openSelectionActions',
   'enterInsert',
   'exitMode',

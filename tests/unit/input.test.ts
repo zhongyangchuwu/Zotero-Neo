@@ -135,9 +135,32 @@ describe('binding parsing and overrides', () => {
     expect(resolveBindings(legacy)).toMatchObject({
       'reader-normal:<Space>rd': 'openReferences',
       'main-normal:<Space>ru': 'openNeoSettings',
-      'reader-normal:<Space>rb': 'toggleBodySelection',
     });
     expect(resolveBindings(legacy)['reader-normal:<Space>rr']).toBeUndefined();
+  });
+
+  it('ignores the retired body selection action without reserving its old shortcut', () => {
+    const retired = JSON.stringify({
+      'reader-normal:<Space>rb': 'toggleBodySelection',
+      'reader-normal:x': 'toggleBodySelection',
+      'reader-normal:<Space>ro': 'toggleBodySelection',
+    });
+    expect(isActionId('toggleBodySelection')).toBe(false);
+    expect(resolveBindings('')['reader-normal:<Space>rb']).toBeUndefined();
+    expect(parseBindingOverrides(retired)).toEqual({});
+    expect(JSON.parse(migrateRetiredShortcutActions(retired))).toEqual({});
+    expect(migrateLegacyBindingOverrides(retired)).toBe('');
+    expect(resolveBindings(retired)['reader-normal:x']).toBeUndefined();
+    expect(resolveBindings(retired)['reader-normal:<Space>ro']).toBe('focusReaderOutline');
+
+    const replacement = JSON.stringify({ 'reader-normal:<Space>rb': 'openReferences' });
+    expect(parseBindingOverrides(replacement)).toEqual({
+      'reader-normal:<Space>rb': 'openReferences',
+    });
+    expect(JSON.parse(migrateRetiredShortcutActions(replacement))).toEqual({
+      'reader-normal:<Space>rb': 'openReferences',
+    });
+    expect(resolveBindings(replacement)['reader-normal:<Space>rb']).toBe('openReferences');
   });
 
   it('executes token defaults while keeping separate character fallback actions', () => {

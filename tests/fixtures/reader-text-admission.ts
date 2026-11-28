@@ -19,8 +19,10 @@ export function textAdmissionFixture(reading = false) {
       hasAttribute: (name: string) => attributes.has(name),
       setAttribute: (name: string, value: string) => attributes.set(name, value),
       removeAttribute: (name: string) => attributes.delete(name),
+      appendChild: (element: Element) => element,
     },
     getElementById: () => (reading ? reflowRoot : null),
+    createElement: () => ({ setAttribute: () => {}, remove: () => {} }),
     querySelectorAll: (selector: string) =>
       selector.startsWith('.page') && !selector.includes('.textLayer') ? [page] : elements,
     createTreeWalker: (container: Node) => {
@@ -147,6 +149,8 @@ export function textAdmissionFixture(reading = false) {
     anchorOffset: 0,
     focusNode: nodes[2],
     focusOffset: 5,
+    isCollapsed: false,
+    removeAllRanges: () => {},
     rangeCount: 1,
     getRangeAt: () => selected,
     toString: () =>
@@ -161,6 +165,7 @@ export function textAdmissionFixture(reading = false) {
     document,
     innerHeight: 800,
     getSelection: () => selection,
+    focus: () => {},
     PDFViewerApplication: {
       pdfViewer: {
         _pages: [

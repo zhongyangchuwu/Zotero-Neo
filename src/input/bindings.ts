@@ -118,7 +118,6 @@ export const DEFAULT_BINDINGS = {
   'reader-normal:<C-l>': 'focusReaderSplitRight',
   'reader-normal:<Esc>': 'clearSearch',
   'reader-normal:<Space>rr': 'toggleReadingMode',
-  'reader-normal:<Space>rb': 'toggleBodySelection',
   'reader-normal:<Space>ro': 'focusReaderOutline',
   'reader-normal:<Space>rm': 'focusReaderMarks',
   'reader-normal:<Space>ra': 'focusReaderAnnotations',
@@ -942,6 +941,7 @@ const RETIRED_SHORTCUT_ACTIONS = new Map<string, ActionId | null>([
   ['openSettingsTransfer', 'openSettingsSnapshots'],
   ['manageItemAttributes', null],
   ['editItemAttributes', null],
+  ['toggleBodySelection', null],
 ]);
 
 /** Translate or remove persisted retired IDs before earlier schema steps parse ActionIds. */

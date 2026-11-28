@@ -1,10 +1,11 @@
 import { CleanupFailure } from '../../core/cleanup';
 import {
+  beginReaderTextSelection,
   decorateReaderSelection,
   firstReaderTextPosition,
   readerTextParagraphs,
-  readerTextNodeAllowed,
   readerSelectionIsFiltered,
+  readerTextNodeAllowed,
   readerTextBoundaryPosition,
 } from '../../toolkit/reader';
 import { indexedStructuralTextPosition } from './text-boundary-motion';
@@ -67,6 +68,7 @@ export class ReaderSelectionRange {
   #disposed = false;
   #revision = 0;
   #preferredX: number | null = null;
+  #releaseFilter: (() => void) | null = null;
   readonly #styledViews = new Map<PdfWindow, SelectionStyleLease>();
 
   constructor(host: ReaderSelectionRangeHost) {
@@ -76,6 +78,9 @@ export class ReaderSelectionRange {
   enter(pdfWindow: PdfWindow): void {
     if (!this.#current(pdfWindow)) return;
     const current = this.#host.captureView(pdfWindow);
+    const releaseFilter = this.#releaseFilter;
+    this.#releaseFilter = null;
+    releaseFilter?.();
     const selection = pdfWindow.getSelection();
     this.#anchor = null;
     this.#anchorWindow = null;
@@ -87,12 +92,12 @@ export class ReaderSelectionRange {
       isTextNode(selection.anchorNode) &&
       !isDeadObject(selection.anchorNode) &&
       selection.anchorNode.isConnected &&
-      selection.anchorNode.ownerDocument === pdfWindow.document &&
-      readerTextNodeAllowed(pdfWindow, selection.anchorNode)
+      selection.anchorNode.ownerDocument === pdfWindow.document
     ) {
       this.#anchor = { textNode: selection.anchorNode, offset: selection.anchorOffset };
       this.#anchorWindow = pdfWindow;
       this.#anchorCurrent = current;
+      this.#startFilter(pdfWindow, selection.anchorNode);
       this.#host.setModeVisual();
       if (!this.#current(pdfWindow) || !current() || this.#anchorWindow !== pdfWindow) return;
       this.refresh(pdfWindow, true);
@@ -131,6 +136,7 @@ export class ReaderSelectionRange {
       this.#anchor = target.start;
       this.#anchorWindow = pdfWindow;
       this.#anchorCurrent = current;
+      this.#startFilter(pdfWindow, target.start.textNode);
       this.#host.setModeVisual();
       if (!this.#current(pdfWindow) || !current() || this.#anchorWindow !== pdfWindow) return;
       selection.setBaseAndExtent(
@@ -436,6 +442,9 @@ export class ReaderSelectionRange {
     const styles = [...this.#styledViews.values()];
     this.#styledViews.clear();
     const failure = new CleanupFailure();
+    const releaseFilter = this.#releaseFilter;
+    this.#releaseFilter = null;
+    failure.run(() => releaseFilter?.());
     for (const lease of styles) failure.run(() => this.#releaseStyle(lease));
     failure.rethrow();
   }
@@ -446,16 +455,25 @@ export class ReaderSelectionRange {
   }
 
   releaseView(pdfWindow: PdfWindow): void {
+    const failure = new CleanupFailure();
     if (this.#anchorWindow === pdfWindow) {
+      const releaseFilter = this.#releaseFilter;
+      this.#releaseFilter = null;
       this.#anchor = null;
       this.#anchorWindow = null;
       this.#anchorCurrent = null;
       this.#preferredX = null;
+      failure.run(() => releaseFilter?.());
     }
     const lease = this.#styledViews.get(pdfWindow);
-    if (!lease) return;
     this.#styledViews.delete(pdfWindow);
-    this.#releaseStyle(lease);
+    if (lease) failure.run(() => this.#releaseStyle(lease));
+    failure.rethrow();
+  }
+
+  #startFilter(pdfWindow: PdfWindow, anchor: Text): void {
+    this.#releaseFilter?.();
+    this.#releaseFilter = beginReaderTextSelection(pdfWindow, anchor);
   }
 
   #current(pdfWindow: PdfWindow): boolean {

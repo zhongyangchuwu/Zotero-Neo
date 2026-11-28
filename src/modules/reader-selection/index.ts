@@ -91,10 +91,7 @@ export function createReaderSelectionModule(
     const body = new ReaderBodySelection({
       layout: ports.layout,
       isCurrent: () => scope.isCurrent(),
-      capturePresentation: ports.capturePresentation,
       captureView: ports.captureView,
-      showStatus,
-      text: (key) => t(`bodySelection.${key}`, ports.language()),
       debug: ports.debug,
       onChange: ports.updateIndicator,
     });
@@ -178,11 +175,6 @@ export function createReaderSelectionModule(
     const run = (action: ReaderSelectionAction, window: PdfWindow): void => {
       if (!isCurrent(window)) return;
       switch (action) {
-        case 'toggleBodySelection':
-          void body.toggle(window).catch((error: unknown) => {
-            ports.debug(`body selection cleanup failed: ${String(error)}`);
-          });
-          return;
         case 'enterVisual':
           if (ports.enabled()) range.enter(window);
           return;

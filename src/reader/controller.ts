@@ -81,7 +81,14 @@ import {
 } from '../modules/workspace/reader';
 import { isReaderWorkspaceAction } from '../modules/workspace/reader-actions';
 import { ReaderNativeInput } from './native-input';
-import { readerSelectionIsFiltered, selectedAnnotationIDs } from '../toolkit/reader';
+import {
+  leaseNativeBodySelection,
+  readerHasNativeBodyGesture,
+  readerReadingMode,
+  readerSelectionIsFiltered,
+  readerTabIsActive,
+  selectedAnnotationIDs,
+} from '../toolkit/reader';
 import {
   mainItemOpening,
   openSafeURI,
@@ -169,6 +176,11 @@ function annotationText(value: string): string {
 function assertNever(value: never): never {
   throw new Error(`Unhandled Reader action: ${String(value)}`);
 }
+
+function canFilterReaderBody(reader: ReaderRuntime): boolean {
+  return reader.tabID ? readerTabIsActive(reader) : !readerIsClosed(reader);
+}
+
 function readerBindingMode(
   mode: ReaderMode,
 ): Extract<BindingContext, 'reader-normal' | 'reader-select'> {
@@ -304,7 +316,10 @@ export class ReaderController implements ReaderControllerApi {
         ownerWindow ? ownerWindow !== window : activeReader ? session.reader !== activeReader : true
       )
         continue;
-      if (activeReader && session.reader === activeReader) continue;
+      if (activeReader && session.reader === activeReader) {
+        session.activateInteraction();
+        continue;
+      }
       session.deactivateInteraction();
     }
   }
@@ -851,7 +866,15 @@ export class ReaderSession {
         timerWindow: dependencies.firstPdfWindow,
         onKeyDown: (event, pdfWindow) => this.handleKeyDown(event, pdfWindow),
         onKeyUp: (event) => this.handleKeyUp(event),
-        onPointerDown: (pdfWindow) => {
+        onPointerDown: (pdfWindow, event) => {
+          if (
+            event.button === 0 &&
+            this.#surfaceMode === 'visual' &&
+            readerSelectionIsFiltered(pdfWindow) &&
+            !this.#flash?.ownsView(pdfWindow) &&
+            !this.#selectionActions?.ownsView(pdfWindow)
+          )
+            this.setMode('normal');
           this.#references?.activateView(pdfWindow);
           this.#markJumpRevision += 1;
           this.#interactionRevision += 1;
@@ -887,7 +910,22 @@ export class ReaderSession {
           this.#hints?.links.onViewportChange(pdfWindow);
           this.#hints?.copy.onViewportChange(pdfWindow);
         },
-        onReady: (pdfWindow) => this.#selection?.refreshLayout(pdfWindow),
+        attachBodySelection: (pdfWindow, current) => {
+          const release = leaseNativeBodySelection(
+            dependencies.reader,
+            pdfWindow,
+            () => current() && canFilterReaderBody(dependencies.reader),
+            (message) => dependencies.controller.dependencies.logger.debug(message),
+          );
+          this.#selection?.refreshLayout(pdfWindow);
+          return () => {
+            const failure = new CleanupFailure();
+            failure.run(release);
+            failure.run(() => this.#selection?.releaseView(pdfWindow));
+            failure.rethrow();
+          };
+        },
+        onTextLayerRendered: (pdfWindow) => this.#selection?.refreshLayout(pdfWindow),
         releaseView: (pdfWindow) => {
           this.#interactionRevision += 1;
           if (this.#selectionWindow === pdfWindow) this.clearNativeSelection();
@@ -1274,6 +1312,7 @@ export class ReaderSession {
     if (this.state.indicator)
       this.state.indicatorThemeCleanup = this.themeRoot(this.state.indicator);
     this.#viewLifecycle.start();
+    this.activateInteraction();
     this.installOuterReaderListeners();
     this.#startNavigation();
     const reader = this.#dependencies.reader;
@@ -1337,7 +1376,13 @@ export class ReaderSession {
     this.#selectionView = view;
     this.#selectionWindow = pdfWindow;
     this.state.selectionParams = params;
-    if (this.#selection && this.mode === 'normal' && this.modeEnabled('visual'))
+    if (
+      this.#selection &&
+      this.mode === 'normal' &&
+      this.modeEnabled('visual') &&
+      !readerHasNativeBodyGesture(pdfWindow) &&
+      !readerReadingMode(pdfWindow)
+    )
       this.setMode('visual');
     if (this.#selection && this.mode === 'visual') this.#dependencies.selection?.noteOwner(this);
   }
@@ -1348,7 +1393,13 @@ export class ReaderSession {
     this.#selectionWindow = null;
   }
 
+  activateInteraction(): void {
+    if (this.#scope.disposed) return;
+    this.#viewLifecycle.setBodySelectionActive(canFilterReaderBody(this.#dependencies.reader));
+  }
+
   deactivateInteraction(): void {
+    this.#viewLifecycle.setBodySelectionActive(false);
     this.#references?.close();
     this.#markJumpRevision += 1;
     this.#interactionRevision += 1;

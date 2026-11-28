@@ -1,6 +1,9 @@
 import { afterEach, describe, expect, it, vi } from 'vitest';
 import { textAdmissionFixture } from '../fixtures/reader-text-admission';
-import { leaseReaderTextAdmission } from '../../src/toolkit/reader/text-admission';
+import {
+  beginReaderTextSelection,
+  leaseReaderTextAdmission,
+} from '../../src/toolkit/reader/text-admission';
 import { bodyTextAdmission } from '../../src/modules/reader-selection/body-text';
 
 afterEach(() => vi.unstubAllGlobals());
@@ -302,8 +305,8 @@ describe('Reader annotation operation retirement', () => {
           }
         },
       });
-      t.document.documentElement.setAttribute('data-zv-select-active', '');
       const pending = Promise.withResolvers<boolean>();
+      let savingStarted = false;
       const release = leaseReaderTextAdmission(
         f.window,
         bodyTextAdmission([
@@ -319,8 +322,10 @@ describe('Reader annotation operation retirement', () => {
           },
         ]),
         () => true,
-        () => pending.promise,
+        () => (savingStarted ? pending.promise : true),
       );
+      const end = beginReaderTextSelection(f.window, t.nodes[0]!);
+      savingStarted = true;
       const saving = f.module.highlight(f.window, COLORS.yellow);
       expect(saves).toEqual([]);
       if (outcome === 'view-retired') f.selectNewer();
@@ -334,6 +339,7 @@ describe('Reader annotation operation retirement', () => {
           [10, 760, 50, 770],
         ]);
       } else expect(saves).toEqual([]);
+      end?.();
       release();
       f.host.dispose();
     },

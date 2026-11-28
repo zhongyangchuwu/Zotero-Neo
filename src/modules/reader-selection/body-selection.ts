@@ -1,220 +1,320 @@
 import { CleanupFailure } from '../../core/cleanup';
-import type { DocumentRegion } from '../../document-analysis/contracts';
-import type { ReaderLocalLayout } from '../../reader/local-layout';
+import { scheduleAfterPaint } from '../../platform/after-paint';
+import type { ReaderLocalLayout, ReaderVisibleLayout } from '../../reader/local-layout';
 import type { PdfWindow } from '../../reader/types';
 import {
   leaseReaderTextAdmission,
   projectReadingViewport,
+  readerPaintedTextLayer,
   readerReadingMode,
   readerTextNodeAllowed,
-  readerTextSpans,
+  type ReaderPaintedTextLayer,
   type ReaderReadingViewport,
+  type ReaderTextSourceLocation,
 } from '../../toolkit/reader';
 import { bodyTextAdmission, isBodyExclusion } from './body-text';
 
 export type SelectionLayout = Pick<
   ReaderLocalLayout,
-  'ensureVisible' | 'visibleRegions' | 'isCurrent'
+  'ensureVisible' | 'visibleRegions' | 'visibleSnapshot' | 'prepareVisiblePage' | 'isCurrent'
 >;
 
 export interface BodySelectionHost {
   readonly layout: SelectionLayout;
   readonly isCurrent: () => boolean;
-  readonly capturePresentation: (window: PdfWindow) => () => boolean;
   readonly captureView: (window: PdfWindow) => () => boolean;
-  readonly showStatus: (message: string) => void;
-  readonly text: (key: string) => string;
   readonly debug: (message: string) => void;
   readonly onChange?: () => void;
 }
 
-interface BodyView {
-  readonly current: () => boolean;
-  regions?: readonly DocumentRegion[];
-  dispose?: () => void;
-  reading?: ReaderReadingViewport;
-  publishedReading?: ReaderReadingViewport;
-  preparing?: Promise<void>;
+interface BodyLease {
+  readonly snapshot: ReaderVisibleLayout;
+  readonly reading: ReaderReadingViewport | undefined;
+  readonly readyPages: readonly number[];
+  readonly release: () => void;
+  layers: ReadonlyMap<number, ReaderPaintedTextLayer>;
+  marking?: Iterator<Text>;
 }
 
-/** A Reader-session switch owns source preparation and exact-view leases; native mouse selection is unchanged. */
+interface BodyView {
+  readonly current: () => boolean;
+  cancel?: () => void;
+  preparing?: Promise<void>;
+  snapshot?: ReaderVisibleLayout | null;
+  reading?: ReaderReadingViewport;
+  lease?: BodyLease;
+}
+
+const MARK_BATCH = 192;
+
+function* pdfText(
+  window: PdfWindow,
+  layers: ReadonlyMap<number, ReaderPaintedTextLayer>,
+  pages: ReadonlySet<number>,
+): IterableIterator<Text> {
+  for (const page of pages) {
+    const layer = layers.get(page);
+    if (!layer) continue;
+    const walker = window.document.createTreeWalker(layer.node, 4);
+    for (let node = walker.nextNode(); node; node = walker.nextNode()) yield node as Text;
+  }
+}
+
+type BlockAdmission = 'body' | 'excluded' | 'unmapped';
+
+function readingAdmission(
+  reading: ReaderReadingViewport,
+  snapshot: ReaderVisibleLayout,
+  accepts: (source: ReaderTextSourceLocation) => boolean,
+): ReadonlyMap<string, BlockAdmission> {
+  const result = new Map<string, BlockAdmission>();
+  for (const blocks of reading.blocks.values()) {
+    for (const { id, position } of blocks) {
+      const previous = result.get(id);
+      if (!position?.rects.length || !snapshot.ready.has(position.pageIndex)) {
+        result.set(id, 'unmapped');
+      } else if (previous !== 'unmapped' && previous !== 'body') {
+        const excluded = position.rects.every(
+          (rect) => !accepts({ pageIndex: position.pageIndex, rect, sourceBlockId: null }),
+        );
+        result.set(id, excluded ? 'excluded' : 'body');
+      }
+    }
+  }
+  return result;
+}
+
+function* readingText(
+  reading: ReaderReadingViewport,
+  blocks: ReadonlyMap<string, BlockAdmission>,
+): IterableIterator<Text> {
+  for (const groups of reading.blocks.values())
+    for (const { id, nodes } of groups) if (blocks.get(id) === 'excluded') yield* nodes;
+}
+
+function readingPageVisible(
+  window: PdfWindow,
+  reading: ReaderReadingViewport | undefined,
+  page: number,
+): boolean {
+  if (!reading?.isCurrent()) return false;
+  for (const [block, groups] of reading.blocks) {
+    if (!groups.some(({ position }) => position?.pageIndex === page)) continue;
+    const bounds = block.getBoundingClientRect();
+    if (bounds.height > 0 && bounds.bottom > 0 && bounds.top < window.innerHeight) return true;
+  }
+  return false;
+}
+
+/** Warm only the exact Reader presentation's rendered viewport, one page at a time. */
 export class ReaderBodySelection {
   readonly #host: BodySelectionHost;
   readonly #views = new Map<PdfWindow, BodyView>();
-  #enabled = false;
-  #pending = false;
-  #refreshPending = false;
   #disposed = false;
-  #revision = 0;
 
   constructor(host: BodySelectionHost) {
     this.#host = host;
   }
 
-  async toggle(window: PdfWindow): Promise<void> {
-    if (this.#disposed || !this.#host.isCurrent()) return;
-    if (this.#enabled || this.#pending) {
-      this.#reset();
-      this.#host.showStatus(this.#host.text('all'));
-      return;
-    }
-    const revision = this.#revision;
-    const current = this.#host.capturePresentation(window);
-    this.#pending = true;
-    this.#host.showStatus(this.#host.text('preparing'));
-    try {
-      const reflow = readerReadingMode(window);
-      const reading = reflow ? projectReadingViewport(window) : undefined;
-      const hasPages = !reflow || !!reading?.pages.length;
-      if (hasPages) {
-        if (reading) await this.#host.layout.ensureVisible(window, reading.pages);
-        else await this.#host.layout.ensureVisible(window);
-        if (!this.#current(revision) || !current()) return;
-        if (!this.#host.layout.isCurrent()) throw new Error('Document source changed');
-      }
-      this.#enabled = true;
-      const view = this.#view(window);
-      if (view) {
-        view.reading = reading;
-        this.#publish(window, view);
-      }
-      if (this.#refreshPending) this.refreshLayout(window);
-      this.#host.onChange?.();
-      this.#host.showStatus(this.#host.text(hasPages ? 'body' : 'unavailable'));
-    } catch (error) {
-      if (this.#current(revision) && current()) {
-        this.#reset();
-        this.#unavailable(error);
-      }
-    } finally {
-      if (revision === this.#revision) this.#pending = this.#refreshPending = false;
-    }
-  }
-
   refreshLayout(window: PdfWindow): void {
     if (this.#disposed || !this.#host.isCurrent()) return;
-    if (!this.#enabled) {
-      if (this.#pending) this.#refreshPending = true;
-      return;
+    let view = this.#views.get(window);
+    if (!view?.current()) {
+      if (view) this.releaseView(window);
+      const current = this.#host.captureView(window);
+      if (!current()) return;
+      const owner: BodyView = {
+        current: () =>
+          this.#views.get(window) === owner &&
+          !this.#disposed &&
+          this.#host.isCurrent() &&
+          current(),
+      };
+      this.#views.set(window, owner);
+      view = owner;
     }
-    const view = this.#view(window);
-    if (!view) return;
-    const reflow = readerReadingMode(window);
-    view.reading = reflow ? projectReadingViewport(window, view.reading) : undefined;
-    this.#publish(window, view);
-    if (reflow && !view.reading?.pages.length) return;
-    const layout = this.#host.layout;
-    const prepared = view.reading
-      ? layout.ensureVisible(window, view.reading.pages)
-      : layout.ensureVisible(window);
-    if (view.preparing === prepared) return;
-    view.preparing = prepared;
-    void prepared
-      .then(() => {
-        if (view.current() && view.preparing === prepared) this.#publish(window, view);
-      })
-      .catch((error: unknown) => {
-        if (view.current() && view.preparing === prepared) this.#unavailable(error);
-      })
-      .finally(() => {
-        if (view.preparing === prepared) view.preparing = undefined;
-      });
-  }
-
-  dispose(): void {
-    this.#disposed = true;
-    this.#reset();
+    this.#enqueue(window, view);
   }
 
   releaseView(window: PdfWindow): void {
     const view = this.#views.get(window);
+    if (!view) return;
     this.#views.delete(window);
-    view?.dispose?.();
-  }
-
-  #current(revision: number): boolean {
-    return !this.#disposed && revision === this.#revision && this.#host.isCurrent();
-  }
-
-  #unavailable(error: unknown): void {
-    this.#host.showStatus(this.#host.text('unavailable'));
-    this.#host.debug(`body selection unavailable: ${String(error)}`);
-  }
-
-  #reset(): void {
-    this.#revision++;
-    this.#enabled = this.#pending = this.#refreshPending = false;
-    const views = [...this.#views.values()];
-    this.#views.clear();
+    const { cancel, lease } = view;
+    view.cancel = undefined;
+    view.preparing = undefined;
+    view.snapshot = undefined;
+    view.reading = undefined;
+    view.lease = undefined;
     const failure = new CleanupFailure();
-    for (const view of views) failure.run(() => view.dispose?.());
-    if (!this.#disposed) failure.run(() => this.#host.onChange?.());
+    failure.run(() => cancel?.());
+    failure.run(() => lease?.release());
     failure.rethrow();
   }
 
-  #view(window: PdfWindow): BodyView | null {
-    const old = this.#views.get(window);
-    if (old?.current()) return old;
-    if (old) this.releaseView(window);
-    const revision = this.#revision;
-    const current = this.#host.captureView(window);
-    if (!current()) return null;
-    const view: BodyView = {
-      current: () =>
-        this.#views.get(window) === view && this.#current(revision) && this.#enabled && current(),
-    };
-    this.#views.set(window, view);
-    return view;
+  dispose(): void {
+    this.#disposed = true;
+    const failure = new CleanupFailure();
+    for (const window of this.#views.keys()) failure.run(() => this.releaseView(window));
+    failure.rethrow();
   }
 
-  #publish(window: PdfWindow, view: BodyView): void {
-    const { layout } = this.#host;
-    const reading = view.reading;
-    const regions = layout.visibleRegions(window, reading?.pages);
-    if (regions === view.regions && view.publishedReading === reading) return;
-    view.dispose?.();
-    view.dispose = undefined;
-    view.regions = regions;
-    view.publishedReading = reading;
-    if (!regions.some(isBodyExclusion)) return;
-    const acceptsGeometry = bodyTextAdmission(regions);
-    const excluded = reading ? new Map<string, boolean>() : null;
-    if (reading && excluded) {
-      for (const blocks of reading.blocks.values()) {
-        for (const { id, position } of blocks) {
-          excluded.set(
-            id,
-            excluded.get(id) !== false &&
-              !!position?.rects.length &&
-              position.rects.every(
-                (rect) =>
-                  !acceptsGeometry({ pageIndex: position.pageIndex, rect, sourceBlockId: null }),
-              ),
-          );
-        }
+  #enqueue(window: PdfWindow, view: BodyView): void {
+    if (view.cancel) return;
+    view.cancel = scheduleAfterPaint(window, (deadline) => {
+      view.cancel = undefined;
+      if (this.#views.get(window) !== view) return;
+      if (!view.current()) {
+        this.releaseView(window);
+        return;
       }
-      for (const [id, reject] of excluded) if (!reject) excluded.delete(id);
-      if (!excluded.size) return;
-    }
-    view.dispose = leaseReaderTextAdmission(
-      window,
-      excluded ? (source) => !excluded.has(source.sourceBlockId ?? '') : acceptsGeometry,
-      view.current,
-      async () => {
-        const valid =
-          view.current() &&
-          layout.isCurrent() &&
-          view.reading === reading &&
-          (!reading || reading.isCurrent()) &&
-          layout.visibleRegions(window, reading?.pages) === regions;
-        if (!valid && view.regions === regions) view.regions = undefined;
-        return valid;
+      try {
+        this.#refresh(window, view, deadline);
+      } catch (error) {
+        this.#host.debug(`body selection unavailable: ${String(error)}`);
+      }
+    });
+  }
+
+  #refresh(window: PdfWindow, view: BodyView, deadline?: IdleDeadline): void {
+    const { layout } = this.#host;
+    const reflow = readerReadingMode(window);
+    const reading = reflow ? projectReadingViewport(window, view.reading) : undefined;
+    const snapshot =
+      reflow && !reading?.pages.length ? null : layout.visibleSnapshot(window, reading?.pages);
+    view.reading = reading;
+    view.snapshot = snapshot;
+
+    const layers = new Map<number, ReaderPaintedTextLayer>();
+    if (!reading && snapshot)
+      for (const page of snapshot.pages) {
+        const layer = readerPaintedTextLayer(window, page);
+        if (layer) layers.set(page, layer);
+      }
+    this.#publish(window, view, layers);
+    if (view.lease && this.#mark(window, view.lease, deadline)) this.#enqueue(window, view);
+
+    if (!snapshot || view.preparing) return;
+    const page = snapshot.pages.find(
+      (index) => !snapshot.ready.has(index) && (reading || layers.has(index)),
+    );
+    if (page === undefined) return;
+    const wanted = (): boolean =>
+      view.current() &&
+      view.snapshot?.pages.includes(page) === true &&
+      (reflow
+        ? readingPageVisible(window, view.reading, page)
+        : !!readerPaintedTextLayer(window, page));
+    const preparing = layout.prepareVisiblePage(window, page, reading?.pages, wanted);
+    view.preparing = preparing;
+    void preparing.then(
+      () => {
+        view.preparing = undefined;
+        if (view.current()) this.#enqueue(window, view);
+      },
+      (error: unknown) => {
+        view.preparing = undefined;
+        if (view.current()) this.#host.debug(`body selection unavailable: ${String(error)}`);
       },
     );
-    if (reading && excluded) {
-      for (const blocks of reading.blocks.values())
-        for (const { id, nodes } of blocks)
-          if (excluded.has(id)) for (const node of nodes) readerTextNodeAllowed(window, node);
-    } else readerTextSpans(window, new Set(regions.map((region) => region.pageIndex)));
+  }
+
+  #publish(
+    window: PdfWindow,
+    view: BodyView,
+    layers: ReadonlyMap<number, ReaderPaintedTextLayer>,
+  ): void {
+    const { layout } = this.#host;
+    const { snapshot, reading, lease } = view;
+    const readyPages =
+      snapshot?.pages.filter((page) => snapshot.ready.has(page) && (reading || layers.has(page))) ??
+      [];
+    if (
+      lease &&
+      snapshot === lease.snapshot &&
+      reading === lease.reading &&
+      readyPages.length === lease.readyPages.length &&
+      readyPages.every((page, index) => page === lease.readyPages[index])
+    ) {
+      if (
+        !reading &&
+        readyPages.some((page) => layers.get(page)?.marker !== lease.layers.get(page)?.marker)
+      ) {
+        lease.marking = this.#pdfMarks(window, lease.snapshot, layers, readyPages);
+        lease.layers = layers;
+      }
+      return;
+    }
+
+    view.lease = undefined;
+    lease?.release();
+    if (!snapshot || !readyPages.length) {
+      if (lease) this.#host.onChange?.();
+      return;
+    }
+
+    const regions = readyPages.flatMap((page) => snapshot.ready.get(page) ?? []);
+    const acceptsGeometry = bodyTextAdmission(regions);
+    const blocks = reading && readingAdmission(reading, snapshot, acceptsGeometry);
+    const ready = (source: ReaderTextSourceLocation): boolean => {
+      if (blocks) {
+        const block = blocks.get(source.sourceBlockId ?? '');
+        return block !== undefined && block !== 'unmapped';
+      }
+      return (
+        source.pageIndex !== null && source.rect !== null && readyPages.includes(source.pageIndex)
+      );
+    };
+    const next: BodyLease = {
+      snapshot,
+      reading,
+      readyPages,
+      layers,
+      release: leaseReaderTextAdmission(
+        window,
+        blocks
+          ? (source) => blocks.get(source.sourceBlockId ?? '') !== 'excluded'
+          : acceptsGeometry,
+        () => view.lease === next && view.current() && layout.isCurrent(),
+        () =>
+          (!reading || reading.isCurrent()) &&
+          layout.visibleSnapshot(window, reading?.pages) === snapshot &&
+          (!!reading || readyPages.every((page) => !!readerPaintedTextLayer(window, page))),
+        ready,
+      ),
+      marking:
+        reading && blocks
+          ? readingText(reading, blocks)
+          : this.#pdfMarks(window, snapshot, layers, readyPages),
+    };
+    view.lease = next;
+    this.#host.onChange?.();
+  }
+
+  #pdfMarks(
+    window: PdfWindow,
+    snapshot: ReaderVisibleLayout,
+    layers: ReadonlyMap<number, ReaderPaintedTextLayer>,
+    readyPages: readonly number[],
+  ): Iterator<Text> {
+    return pdfText(
+      window,
+      layers,
+      new Set(readyPages.filter((page) => snapshot.ready.get(page)?.some(isBodyExclusion))),
+    );
+  }
+
+  #mark(window: PdfWindow, lease: BodyLease, deadline?: IdleDeadline): boolean {
+    if (!lease.marking) return false;
+    for (let i = 0; i < MARK_BATCH; i++) {
+      if (i > 0 && deadline && deadline.timeRemaining() < 1) return true;
+      const node = lease.marking.next();
+      if (node.done) {
+        lease.marking = undefined;
+        return false;
+      }
+      if (node.value.isConnected && node.value.length) readerTextNodeAllowed(window, node.value);
+    }
+    return true;
   }
 }
